@@ -40,6 +40,3 @@ Leonardo Rangel Castro — Backend Web
 Pamela Rodríguez de la Rosa — Datos / Algoritmos
 Fernando Olivares del Valle — Apps cliente
 
-## Documentación
-Ver carpeta `docs/`.
-
