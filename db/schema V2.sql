@@ -28,7 +28,13 @@ BEGIN;
 -- ---------------------------------------------------------------------
 -- Extensiones
 -- ---------------------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid()
+-- gen_random_uuid() es una función nativa del núcleo desde PostgreSQL 13
+-- (dejó de requerir la extensión pgcrypto). Como el proyecto usa
+-- PostgreSQL 16, NO se necesita CREATE EXTENSION pgcrypto aquí. Si en
+-- algún entorno usan una versión anterior a la 13, descomenta la línea
+-- siguiente (requiere que el paquete contrib esté instalado en el
+-- servidor, ej. `postgresql-contrib` / `postgresql16-contrib`):
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ---------------------------------------------------------------------
 -- Función utilitaria: mantiene updated_at en cada UPDATE
