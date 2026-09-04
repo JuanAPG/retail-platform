@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UsuarioEntity } from '../entities/usuario.entity';
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { MunicipioEntity } from '../entities/municipio.entity';
 import { ZonaEntity } from '../entities/zona.entity';
@@ -19,8 +18,6 @@ import { ProductoEntity } from '../entities/producto.entity';
 @Injectable()
 export class CatalogoService {
   constructor(
-    @InjectRepository(UsuarioEntity)
-    private readonly usuariosRepo: Repository<UsuarioEntity>,
     @InjectRepository(ProveedorEntity)
     private readonly proveedoresRepo: Repository<ProveedorEntity>,
     @InjectRepository(MunicipioEntity)
@@ -34,14 +31,6 @@ export class CatalogoService {
     @InjectRepository(ProductoEntity)
     private readonly productosRepo: Repository<ProductoEntity>,
   ) {}
-
-  async findUsuarios() {
-    const usuarios = await this.usuariosRepo.find({ order: { nombre: 'ASC' } });
-    return usuarios.map(({ passwordHash, ...resto }) => ({
-      ...resto,
-      rol: resto.rol?.nombre,
-    }));
-  }
 
   findProveedores() {
     return this.proveedoresRepo.find({ order: { razonSocial: 'ASC' } });

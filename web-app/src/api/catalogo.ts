@@ -1,7 +1,8 @@
 import { apiClient } from './client';
-import { Usuario, Tienda, Zona, Municipio, CategoriaProducto, Producto, Proveedor } from '../types';
+import { Tienda, Zona, Municipio, CategoriaProducto, Producto, Proveedor } from '../types';
 
-export const getUsuarios = () => apiClient.get<Usuario[]>('/usuarios').then((r) => r.data);
+// Los usuarios viven en api/usuarios.ts junto con su CRUD.
+
 export const getTiendas = () => apiClient.get<Tienda[]>('/tiendas').then((r) => r.data);
 export const getZonas = () => apiClient.get<Zona[]>('/zonas').then((r) => r.data);
 export const getMunicipios = () => apiClient.get<Municipio[]>('/municipios').then((r) => r.data);

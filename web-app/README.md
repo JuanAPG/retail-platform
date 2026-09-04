@@ -25,6 +25,14 @@ Abre `http://localhost:5173`.
 
 **Importante:** el backend (`auth-service`) debe estar corriendo antes de probar el login (`npm run start:dev` dentro de esa carpeta), y con CORS habilitado — ya lo está por defecto (`app.enableCors()` en `main.ts`).
 
+## Manejo de la sesión
+
+- Al iniciar sesión se guardan `accessToken`, `refreshToken` y `usuario` en `localStorage`.
+- Al **recargar la página**, la app no confía en lo que quedó guardado: llama a `GET /auth/me` para confirmar que el token sigue vigente y que el usuario sigue activo. Mientras tanto se muestra una pantalla de "Verificando sesión…".
+- Si el token expiró, el secreto rotó o el Administrador desactivó la cuenta, la sesión se limpia sola y se redirige a `/login`.
+- Un 401 en `/auth/login` se muestra como error del formulario y **no** borra la sesión (eso solo aplica a rutas protegidas).
+- Si el backend no responde, el mensaje lo dice explícitamente en vez de culpar a las credenciales.
+
 ## Build de producción
 
 ```bash
@@ -36,13 +44,24 @@ npm run preview  # sirve dist/ localmente para probarlo
 
 | Rol                     | Ruta          | Qué muestra |
 |--------------------------|---------------|-------------|
-| Administrador            | `/admin`      | Usuarios, Tiendas, Zonas, Proveedores (datos reales); Auditoría (vacío) |
+| Administrador            | `/admin`      | **Inicio** (panel de bienvenida con indicadores), **Usuarios (CRUD completo)**, Tiendas, Zonas, Proveedores (datos reales); Auditoría (vacío) |
 | Analista comercial       | `/analista`   | Transacciones/Segmentos/Canastas/Reglas/Accesibilidad (vacío, sin API aún); Productos y Tiendas de referencia (datos reales) |
 | Gerente de categoría     | `/catalogo`   | Productos y Categorías (datos reales); Aprobaciones/Comparación/Reportes (vacío) |
 | Responsable de precios   | `/catalogo`   | Mismo portal que Gerente, con secciones distintas: Precios/Aprobaciones/Elasticidad (vacío) |
 | Planeador                | `/planeador`  | Nueva simulación/Historial (vacío); Productos de referencia (datos reales) |
 | Auditor                  | `/auditor`    | Bitácora (vacío); Usuarios de referencia (datos reales) |
 | Proveedor                | `/proveedor`  | Mis productos (filtrado por correo), Proponer alta, Mis solicitudes, Mi perfil |
+
+### CRUD de usuarios (Portal Admin → Usuarios)
+
+Es la única pantalla con operaciones de escritura conectadas al backend:
+
+- **Crear**: botón "Nuevo usuario" → nombre, correo, contraseña, rol y estado.
+- **Leer**: tabla con búsqueda por nombre/correo y filtros por rol y estado.
+- **Actualizar**: "Editar" (solo manda los campos que cambiaron; la contraseña se conserva si se deja vacía) y "Activar/Desactivar" en un clic.
+- **Eliminar**: con diálogo de confirmación. Si el backend responde que la cuenta tiene registros asociados, el diálogo muestra el motivo y sugiere desactivarla.
+
+Sobre tu propia cuenta no se puede desactivar, cambiar de rol ni eliminar: esos botones aparecen deshabilitados y el backend lo rechaza igual.
 
 Las pantallas marcadas como "vacío" NO tienen datos porque las tablas correspondientes (`transacciones`, `auditoria`, simulaciones, `precios`) no fueron pobladas en `data_retail.sql` ni tienen un endpoint todavía — muestran un estado vacío explicativo en vez de datos inventados. Los endpoints de creación/edición (formularios reales conectados) tampoco existen aún: eso es el siguiente paso, módulo por módulo.
 

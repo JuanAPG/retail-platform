@@ -1,0 +1,182 @@
+# Entorno de desarrollo local de la Plataforma de Análisis de Ingreso
+# y Patrones de Consumo Minorista.
+#
+# Cumple dos propósitos:
+#   1. Documentar la estructura del sistema: qué piezas lo componen.
+#   2. Levantar un entorno reproducible con un solo comando.
+#
+# Estado actual: solo `postgres`, `api` y `web` tienen código que los use.
+# `mongodb`, `redis` y sus consolas quedan declarados porque forman parte
+# del stack del proyecto, pero todavía NO hay código que los consulte.
+# Si solo quieres lo que está en uso:
+#   docker compose up -d postgres pgadmin api web
+
+name: retail-platform
+
+services:
+  # ---------------------------------------------------------------
+  # Base de datos principal (en uso)
+  # ---------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: retail_postgres
+    environment:
+      POSTGRES_DB: retaildb
+      POSTGRES_USER: retail_user
+      POSTGRES_PASSWORD: retail_pass_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # El schema y los datos de prueba se aplican solos la PRIMERA vez
+      # que se crea el volumen. Van numerados porque Postgres ejecuta
+      # estos archivos en orden alfabético: sin el prefijo, data_retail
+      # correría antes que el schema y fallaría por tablas inexistentes.
+      - "./db/schema V2.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
+      - "./db/data_retail.sql:/docker-entrypoint-initdb.d/02-data.sql:ro"
+    healthcheck:
+      # Permite que `api` espere a que Postgres acepte conexiones de
+      # verdad, no solo a que el contenedor exista.
+      test: ["CMD-SHELL", "pg_isready -U retail_user -d retaildb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - retail_net
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: retail_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@retail.com
+      PGADMIN_DEFAULT_PASSWORD: admin_pass_2026
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - retail_net
+
+  # ---------------------------------------------------------------
+  # Backend NestJS — monolito modular (en uso)
+  # ---------------------------------------------------------------
+  api:
+    image: node:20
+    container_name: retail_api
+    working_dir: /app
+    volumes:
+      - ./auth-service:/app
+      # Volumen anónimo: impide que el node_modules del host tape al del
+      # contenedor. Sin esto, bcrypt (módulo nativo compilado para el SO
+      # del host) truena al arrancar dentro de Linux.
+      - /app/node_modules
+    environment:
+      PORT: 3001
+      # `postgres` es el nombre del servicio; dentro de la red de Compose
+      # eso resuelve al contenedor. `localhost` apuntaría al propio api.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+      # Secretos de desarrollo. En la VM de GCP deben ser otros y venir
+      # de un .env que no se versione (openssl rand -base64 48).
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: dev_refresh_secret_solo_para_local
+      JWT_REFRESH_EXPIRES_IN: 7d
+      BCRYPT_SALT_ROUNDS: 12
+    ports:
+      - "3001:3001"
+    # Se usa la imagen oficial de node en vez de auth-service/Dockerfile
+    # a propósito: aquí interesa el modo desarrollo con recarga en
+    # caliente. El Dockerfile es para construir la imagen de despliegue.
+    command: sh -c "npm install && npm run start:dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - retail_net
+
+  # ---------------------------------------------------------------
+  # Frontend React/Vite (en uso)
+  # ---------------------------------------------------------------
+  web:
+    image: node:20
+    container_name: retail_web
+    working_dir: /app
+    volumes:
+      - ./web-app:/app
+      - /app/node_modules
+    environment:
+      # Esta URL la resuelve el NAVEGADOR, que corre en tu máquina y no
+      # dentro de la red de Compose: por eso es localhost y no
+      # http://api:3001, que solo funcionaría entre contenedores.
+      VITE_API_URL: http://localhost:3001
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    depends_on:
+      - api
+    networks:
+      - retail_net
+
+  # ---------------------------------------------------------------
+  # Declarados para el Parcial 2 — todavía sin código que los use
+  # ---------------------------------------------------------------
+  mongodb:
+    image: mongo:7
+    container_name: retail_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: retail_admin
+      MONGO_INITDB_ROOT_PASSWORD: retail_pass_2026
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - retail_net
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: retail_mongo_express
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/
+      ME_CONFIG_MONGODB_ADMINUSERNAME: retail_admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: retail_pass_2026
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin_pass_2026
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    # mongo-express suele arrancar antes de que Mongo acepte conexiones
+    # y se cae; con esto se reintenta solo.
+    restart: unless-stopped
+    networks:
+      - retail_net
+
+  redis:
+    image: redis:7
+    container_name: retail_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - retail_net
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  mongo_data:
+  redis_data:
+
+networks:
+  retail_net:
+    driver: bridge

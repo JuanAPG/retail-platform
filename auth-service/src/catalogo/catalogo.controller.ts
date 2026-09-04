@@ -22,11 +22,8 @@ import { CatalogoService } from './catalogo.service';
 export class CatalogoController {
   constructor(private readonly catalogoService: CatalogoService) {}
 
-  @Get('usuarios')
-  @Roles('Administrador', 'Auditor')
-  findUsuarios() {
-    return this.catalogoService.findUsuarios();
-  }
+  // `GET /usuarios` vive en UsersController (users.module): ahí está el
+  // CRUD completo y la ruta debe tener un solo dueño.
 
   @Get('tiendas')
   @Roles(
