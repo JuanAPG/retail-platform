@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { portalDelRol } from './routes/portalPorRol';
+import { PantallaCargando } from './components/PantallaCargando';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterProveedorPage } from './pages/RegisterProveedorPage';
 import { AdminPortal } from './pages/AdminPortal';
@@ -19,6 +20,16 @@ function RaizAutenticada() {
 }
 
 function AppRoutes() {
+  const { cargandoSesion } = useAuth();
+
+  // Hasta que /auth/me confirme (o descarte) la sesión guardada no se
+  // pintan las rutas: si no, al recargar /admin el ProtectedRoute vería
+  // `usuario === null` por un instante y patearía al login a un usuario
+  // con sesión perfectamente válida.
+  if (cargandoSesion) {
+    return <PantallaCargando />;
+  }
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

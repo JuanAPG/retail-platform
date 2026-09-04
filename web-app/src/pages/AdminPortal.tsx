@@ -5,23 +5,32 @@ import { DataTable } from '../components/DataTable';
 import { Badge } from '../components/Badge';
 import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
-import { getUsuarios, getTiendas, getZonas, getProveedores } from '../api/catalogo';
-
-type Tab = 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'auditoria';
+import { getTiendas, getZonas, getProveedores } from '../api/catalogo';
+import { getUsuarios } from '../api/usuarios';
+import { BienvenidaPanel, TabAdmin } from './admin/BienvenidaPanel';
+import { UsuariosPanel } from './admin/UsuariosPanel';
 
 export function AdminPortal() {
-  const [tab, setTab] = useState<Tab>('usuarios');
+  const [tab, setTab] = useState<TabAdmin>('inicio');
 
   const usuarios = useFetch(getUsuarios, []);
   const tiendas = useFetch(getTiendas, []);
   const zonas = useFetch(getZonas, []);
   const proveedores = useFetch(getProveedores, []);
 
+  const proveedoresPendientes = proveedores.data?.filter((p) => !p.activo).length;
+
   const sidebarItems = [
+    { label: 'Inicio', active: tab === 'inicio', onClick: () => setTab('inicio') },
     { label: 'Usuarios', active: tab === 'usuarios', onClick: () => setTab('usuarios') },
     { label: 'Tiendas', active: tab === 'tiendas', onClick: () => setTab('tiendas') },
     { label: 'Zonas', active: tab === 'zonas', onClick: () => setTab('zonas') },
-    { label: 'Proveedores', active: tab === 'proveedores', onClick: () => setTab('proveedores') },
+    {
+      label: 'Proveedores',
+      active: tab === 'proveedores',
+      onClick: () => setTab('proveedores'),
+      contador: proveedoresPendientes || undefined,
+    },
     {
       label: 'Auditoría',
       nivel: 'lectura' as const,
@@ -32,35 +41,17 @@ export function AdminPortal() {
 
   return (
     <PortalLayout breadcrumb="Portal Admin" rolLabel="Administrador" sidebarItems={sidebarItems}>
-      {tab === 'usuarios' && (
-        <section>
-          <SectionHeader
-            title="Gestión de Usuarios"
-            description="Todos los roles internos del sistema."
-          />
-          {usuarios.loading && <p className="text-sm text-slate-500">Cargando usuarios…</p>}
-          {usuarios.error && <p className="text-sm text-rose-600">{usuarios.error}</p>}
-          {usuarios.data && (
-            <DataTable
-              rowKey={(u) => u.id}
-              rows={usuarios.data}
-              columns={[
-                { header: 'Nombre', render: (u) => u.nombre },
-                { header: 'Correo', render: (u) => u.email },
-                { header: 'Rol', render: (u) => u.rol },
-                {
-                  header: 'Estado',
-                  render: (u) => (
-                    <Badge tone={u.activo ? 'positive' : 'neutral'}>
-                      {u.activo ? 'Activo' : 'Inactivo'}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </section>
+      {tab === 'inicio' && (
+        <BienvenidaPanel
+          usuarios={usuarios}
+          tiendas={tiendas}
+          zonas={zonas}
+          proveedores={proveedores}
+          onIrA={setTab}
+        />
       )}
+
+      {tab === 'usuarios' && <UsuariosPanel estado={usuarios} />}
 
       {tab === 'tiendas' && (
         <section>

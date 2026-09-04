@@ -34,13 +34,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('El usuario no existe o está inactivo.');
     }
 
-    // Esto queda disponible como `request.user` en los controladores.
+    // Esto queda disponible como `request.user` en los controladores y es
+    // lo que responde GET /auth/me, que el front usa para rehidratar la
+    // sesión al recargar: debe tener la misma forma que el `usuario` del
+    // login (incluido `activo`).
     return {
       id: usuario.id,
       email: usuario.email,
       nombre: usuario.nombre,
       rol: usuario.rol.nombre,
       rolId: usuario.rolId,
+      activo: usuario.activo,
     };
   }
 }

@@ -3,9 +3,16 @@ export interface Usuario {
   nombre: string;
   email: string;
   rol: string;
+  rolId: number;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Rol {
+  id: number;
+  nombre: string;
+  descripcion: string;
 }
 
 export interface Proveedor {

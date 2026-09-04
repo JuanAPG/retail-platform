@@ -1,26 +1,34 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { portalDelRol } from '../routes/portalPorRol';
+import { mensajeDeError } from '../api/errores';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, usuario, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Si ya hay sesión válida (p. ej. se entró a /login escribiendo la URL),
+  // no tiene sentido pedir credenciales otra vez.
+  useEffect(() => {
+    if (isAuthenticated && usuario) {
+      navigate(portalDelRol(usuario.rol), { replace: true });
+    }
+  }, [isAuthenticated, usuario, navigate]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      const usuario = await login(email, password);
-      navigate(portalDelRol(usuario.rol), { replace: true });
-    } catch (err: any) {
-      const mensaje = err?.response?.data?.message ?? 'No se pudo iniciar sesión.';
-      setError(Array.isArray(mensaje) ? mensaje.join(' ') : mensaje);
+      const usuarioAutenticado = await login(email, password);
+      navigate(portalDelRol(usuarioAutenticado.rol), { replace: true });
+    } catch (err) {
+      setError(mensajeDeError(err, 'No se pudo iniciar sesión.'));
     } finally {
       setSubmitting(false);
     }

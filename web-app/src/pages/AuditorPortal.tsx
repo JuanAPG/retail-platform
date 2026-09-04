@@ -5,7 +5,7 @@ import { DataTable } from '../components/DataTable';
 import { Badge } from '../components/Badge';
 import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
-import { getUsuarios } from '../api/catalogo';
+import { getUsuarios } from '../api/usuarios';
 
 type Tab = 'bitacora' | 'usuarios';
 
