@@ -14,6 +14,7 @@ type Tab =
   | 'productos'
   | 'categorias'
   | 'aprobaciones'
+  | 'aprobaciones-precio'
   | 'precios'
   | 'elasticidad'
   | 'comparacion'
@@ -21,7 +22,14 @@ type Tab =
 
 export function CatalogoPortal() {
   const { usuario } = useAuth();
-  const esGerente = usuario?.rol === 'Gerente de categoría';
+
+  // Este portal lo comparten dos roles con secciones distintas. El
+  // Administrador entra a los dos conjuntos: no se le recorta la vista,
+  // aunque lo que pueda ESCRIBIR lo sigue decidiendo el backend.
+  const esAdmin = usuario?.rol === 'Administrador';
+  const seccionesCatalogo = esAdmin || usuario?.rol === 'Gerente de categoría';
+  const seccionesPrecios = esAdmin || usuario?.rol === 'Responsable de precios';
+
   const [tab, setTab] = useState<Tab>('productos');
 
   const productos = useFetch(getProductos, []);
@@ -30,7 +38,7 @@ export function CatalogoPortal() {
   const sidebarItems = [
     { label: 'Catálogo de productos', active: tab === 'productos', onClick: () => setTab('productos') },
     { label: 'Categorías', active: tab === 'categorias', onClick: () => setTab('categorias') },
-    ...(esGerente
+    ...(seccionesCatalogo
       ? [
           {
             label: 'Aprobaciones de proveedor',
@@ -45,7 +53,9 @@ export function CatalogoPortal() {
           },
           { label: 'Reportes', active: tab === 'reportes', onClick: () => setTab('reportes') },
         ]
-      : [
+      : []),
+    ...(seccionesPrecios
+      ? [
           {
             label: 'Gestión de precios',
             active: tab === 'precios',
@@ -54,20 +64,27 @@ export function CatalogoPortal() {
           {
             label: 'Aprobaciones de precio',
             nivel: 'aprueba' as const,
-            active: tab === 'aprobaciones',
-            onClick: () => setTab('aprobaciones'),
+            active: tab === 'aprobaciones-precio',
+            onClick: () => setTab('aprobaciones-precio'),
           },
           {
             label: 'Elasticidad',
             active: tab === 'elasticidad',
             onClick: () => setTab('elasticidad'),
           },
-        ]),
+        ]
+      : []),
   ];
+
+  const breadcrumb = esAdmin
+    ? 'Catálogo y precios — vista de Administrador'
+    : seccionesCatalogo
+      ? 'Catálogo — Gerente de Categoría'
+      : 'Precios — Responsable de Precios';
 
   return (
     <PortalLayout
-      breadcrumb={esGerente ? 'Catálogo — Gerente de Categoría' : 'Precios — Responsable de Precios'}
+      breadcrumb={breadcrumb}
       rolLabel={usuario?.rol ?? ''}
       sidebarItems={sidebarItems}
     >
@@ -113,18 +130,17 @@ export function CatalogoPortal() {
         </section>
       )}
 
-      {tab === 'aprobaciones' &&
-        (esGerente ? (
-          <AprobacionesPanel />
-        ) : (
-          <section>
-            <SectionHeader title="Aprobaciones de precio" badge="APRUEBA" />
-            <EmptyState
-              title="No hay solicitudes pendientes"
-              description="Cuando un proveedor proponga un precio nuevo, aparecerá aquí para tu revisión."
-            />
-          </section>
-        ))}
+      {tab === 'aprobaciones' && <AprobacionesPanel />}
+
+      {tab === 'aprobaciones-precio' && (
+        <section>
+          <SectionHeader title="Aprobaciones de precio" badge="APRUEBA" />
+          <EmptyState
+            title="No hay solicitudes pendientes"
+            description="Cuando un proveedor proponga un precio nuevo, aparecerá aquí para tu revisión."
+          />
+        </section>
+      )}
 
       {tab === 'precios' && (
         <section>

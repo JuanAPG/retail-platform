@@ -16,6 +16,13 @@ const UNIDADES = ['pieza', 'kg', 'litro', 'paquete'];
 
 export function ProveedorPortal() {
   const { usuario } = useAuth();
+
+  // El Administrador puede entrar aquí para revisar el portal, pero su
+  // cuenta no está ligada a ninguna empresa proveedora: el backend no
+  // le recorta el catálogo (el recorte solo aplica al rol Proveedor) y
+  // no puede proponer altas. Se dice explícitamente en pantalla en vez
+  // de mostrarle el catálogo completo bajo el rótulo "Mis productos".
+  const esProveedor = usuario?.rol === 'Proveedor';
   const [tab, setTab] = useState<Tab>('mis-productos');
 
   // El recorte por empresa lo hace el backend a partir del token: esta
@@ -35,13 +42,33 @@ export function ProveedorPortal() {
   ];
 
   return (
-    <PortalLayout breadcrumb="Portal del Proveedor" rolLabel="Proveedor Externo" sidebarItems={sidebarItems}>
+    <PortalLayout
+      breadcrumb={
+        esProveedor
+          ? 'Portal del Proveedor'
+          : 'Portal del Proveedor — vista de Administrador'
+      }
+      rolLabel={esProveedor ? 'Proveedor Externo' : (usuario?.rol ?? '')}
+      sidebarItems={sidebarItems}
+    >
+      {!esProveedor && (
+        <div className="mb-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Estás viendo el portal del Proveedor con una cuenta de{' '}
+          <strong>{usuario?.rol}</strong>. Como esta cuenta no pertenece a
+          ninguna empresa proveedora, el listado muestra el catálogo completo
+          en vez de acotarse, y no es posible enviar propuestas de alta.
+        </div>
+      )}
       {tab === 'mis-productos' && (
         <section>
           <SectionHeader
-            title="Mis productos en catálogo"
+            title={esProveedor ? 'Mis productos en catálogo' : 'Productos en catálogo'}
             badge="SOLO LECTURA"
-            description="Productos aprobados de tu empresa. El catálogo de otros proveedores no es visible desde este portal."
+            description={
+              esProveedor
+                ? 'Productos aprobados de tu empresa. El catálogo de otros proveedores no es visible desde este portal.'
+                : 'Catálogo completo: esta cuenta no está acotada a una empresa proveedora.'
+            }
           />
           {productos.loading && <p className="text-sm text-slate-500">Cargando…</p>}
           {productos.error && <p className="text-sm text-rose-600">{productos.error}</p>}
@@ -71,7 +98,17 @@ export function ProveedorPortal() {
         </section>
       )}
 
-      {tab === 'proponer' && (
+      {tab === 'proponer' && !esProveedor && (
+        <section>
+          <SectionHeader title="Proponer alta de producto" badge="PROPONE" />
+          <EmptyState
+            title="Solo un Proveedor puede enviar propuestas"
+            description="El alta queda ligada a la empresa proveedora del usuario que la envía, así que este formulario únicamente está disponible al iniciar sesión con una cuenta de rol Proveedor."
+          />
+        </section>
+      )}
+
+      {tab === 'proponer' && esProveedor && (
         <FormularioPropuesta
           categorias={categorias.data ?? []}
           cargandoCategorias={categorias.loading}

@@ -81,7 +81,7 @@ Reglas que aplica el servicio:
 ```bash
 curl -X POST http://localhost:3001/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"mlopez@retail.mx","password":"TuPassword123"}'
+  -d '{"email":"admin@retail.mx","password":"Passw0rd123!"}'
 ```
 
 Respuesta:
@@ -93,7 +93,7 @@ Respuesta:
   "usuario": {
     "id": "b3f1...",
     "nombre": "María López Herrera",
-    "email": "mlopez@retail.mx",
+    "email": "admin@retail.mx",
     "activo": true,
     "rol": "Administrador"
   }
