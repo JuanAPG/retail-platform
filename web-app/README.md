@@ -46,11 +46,11 @@ npm run preview  # sirve dist/ localmente para probarlo
 |--------------------------|---------------|-------------|
 | Administrador            | `/admin`      | **Inicio** (panel de bienvenida con indicadores), **Usuarios (CRUD completo)**, Tiendas, Zonas, Proveedores (datos reales); Auditoría (vacío) |
 | Analista comercial       | `/analista`   | Transacciones/Segmentos/Canastas/Reglas/Accesibilidad (vacío, sin API aún); Productos y Tiendas de referencia (datos reales) |
-| Gerente de categoría     | `/catalogo`   | Productos y Categorías (datos reales); Aprobaciones/Comparación/Reportes (vacío) |
+| Gerente de categoría     | `/catalogo`   | Productos y Categorías (datos reales); **Aprobaciones de proveedor (aprobar/rechazar, funcional)**; Comparación/Reportes (vacío) |
 | Responsable de precios   | `/catalogo`   | Mismo portal que Gerente, con secciones distintas: Precios/Aprobaciones/Elasticidad (vacío) |
 | Planeador                | `/planeador`  | Nueva simulación/Historial (vacío); Productos de referencia (datos reales) |
 | Auditor                  | `/auditor`    | Bitácora (vacío); Usuarios de referencia (datos reales) |
-| Proveedor                | `/proveedor`  | Mis productos (filtrado por correo), Proponer alta, Mis solicitudes, Mi perfil |
+| Proveedor                | `/proveedor`  | **Mis productos (acotado por el backend), Proponer alta (funcional), Mis solicitudes** con el motivo de rechazo, Mi perfil |
 
 ### CRUD de usuarios (Portal Admin → Usuarios)
 
@@ -62,6 +62,16 @@ Es la única pantalla con operaciones de escritura conectadas al backend:
 - **Eliminar**: con diálogo de confirmación. Si el backend responde que la cuenta tiene registros asociados, el diálogo muestra el motivo y sugiere desactivarla.
 
 Sobre tu propia cuenta no se puede desactivar, cambiar de rol ni eliminar: esos botones aparecen deshabilitados y el backend lo rechaza igual.
+
+### Acceso diferenciado por perfil
+
+Además de decidir a qué portal entra cada rol, la aplicación diferencia el acceso en **tres niveles**, y los tres se aplican en el servidor:
+
+1. **Por ruta** — el `RolesGuard` decide quién puede llamar a cada endpoint (`403` si no).
+2. **Por dato** — `GET /productos` es la misma ruta para todos, pero un Proveedor recibe **solo los productos de su empresa**. El recorte lo hace la consulta SQL, no el navegador.
+3. **Por acción** — leer y escribir están separados: Auditor, Analista y Planeador no tienen ninguna ruta de escritura habilitada.
+
+El flujo que cruza dos perfiles y sirve para demostrarlo: **el Proveedor propone** un alta (queda `pendiente_aprobacion`) y **el Gerente de categoría la aprueba o la rechaza** con un motivo, que el proveedor ve de vuelta en «Mis solicitudes».
 
 Las pantallas marcadas como "vacío" NO tienen datos porque las tablas correspondientes (`transacciones`, `auditoria`, simulaciones, `precios`) no fueron pobladas en `data_retail.sql` ni tienen un endpoint todavía — muestran un estado vacío explicativo en vez de datos inventados. Los endpoints de creación/edición (formularios reales conectados) tampoco existen aún: eso es el siguiente paso, módulo por módulo.
 
@@ -76,8 +86,11 @@ gercategoria@retail.mx
 precios@retail.mx
 planeador@retail.mx
 auditor@retail.mx
-contacto@bioorganicos.mx   (rol Proveedor)
+contacto@bioorganicos.mx    (rol Proveedor - BioOrgánicos)
+ventas@lacteosdelnorte.mx   (rol Proveedor - Lácteos del Norte)
 ```
+
+Hay **dos** proveedores a propósito: entrar con uno y luego con el otro demuestra que cada quien ve solo su propio catálogo.
 
 ## Estructura
 
@@ -89,5 +102,7 @@ src/
   components/   # TopBar, Sidebar, PortalLayout, DataTable, Badge, EmptyState, StatCard
   hooks/        # useFetch (GET con loading/error)
   pages/        # LoginPage, RegisterProveedorPage, y los 6 portales
+    admin/      # panel de bienvenida y CRUD de usuarios
+    catalogo/   # bandeja de aprobaciones del Gerente de categoría
   types/        # interfaces calcadas de las entidades del backend
 ```

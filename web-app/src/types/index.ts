@@ -69,9 +69,28 @@ export interface Producto {
   categoria: CategoriaProducto;
   unidadMedida: string;
   esCanastaBasica: boolean;
-  estatus: 'activo' | 'pendiente_aprobacion' | 'rechazado' | 'inactivo';
+  estatus: EstatusProducto;
   proveedorId: string | null;
   proveedor: Proveedor | null;
+  /** Usuario que resolvió la propuesta; null mientras está pendiente. */
+  aprobadoPor: string | null;
+  motivoRechazo: string | null;
+  createdAt: string;
+}
+
+export type EstatusProducto =
+  | 'activo'
+  | 'pendiente_aprobacion'
+  | 'rechazado'
+  | 'inactivo';
+
+/** Lo que un Proveedor puede mandar al proponer un alta. */
+export interface NuevaPropuestaProducto {
+  sku: string;
+  nombre: string;
+  descripcion?: string;
+  categoriaId: number;
+  unidadMedida: string;
 }
 
 export interface AuthUser {

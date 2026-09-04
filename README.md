@@ -119,7 +119,14 @@ Entrar en http://localhost:5173 con `admin@retail.mx` / `Passw0rd123!`.
 
 ## Despliegue en GCP
 
-El backend escucha en el puerto **3001** (`PORT` en `auth-service/.env`). Ese puerto **no está abierto por omisión**: hay que habilitarlo en **dos capas independientes**. Si falta cualquiera de las dos, el navegador reporta el mismo síntoma engañoso — "No se pudo conectar con el servidor" — aunque el servicio esté corriendo perfectamente dentro de la VM.
+La aplicación expone **dos puertos**, y ninguno de los dos está abierto por omisión. Cada uno hay que habilitarlo en **dos capas independientes** (regla de VPC en GCP + `firewalld` dentro de la VM); si falta cualquiera de las cuatro combinaciones, el servicio parece caído aunque esté corriendo perfecto dentro de la VM.
+
+| Puerto | Quién lo usa | Síntoma si está cerrado |
+|--------|--------------|--------------------------|
+| **3001** | `auth-service` (API NestJS) | La página **sí carga**, pero el login responde "No se pudo conectar con el servidor" |
+| **5173** | `web-app` (Vite en modo dev) | El navegador **se queda cargando en blanco** y nunca muestra nada |
+
+Los dos síntomas son distintos y sirven para saber cuál puerto revisar. Abrir solo el 3001 —el caso más común, porque es el que suele documentarse— deja el front inaccesible desde fuera de la VM.
 
 ### 1. Regla de firewall de la VPC (nivel GCP)
 
@@ -135,11 +142,26 @@ gcloud compute firewall-rules create allow-auth-service-3001 \
   --source-ranges=0.0.0.0/0 \
   --description="auth-service (NestJS) - API de la plataforma retail"
 
-# Etiquetar la VM para que la regla le aplique
+# Crear la regla de ingreso para el puerto 5173 (front en modo dev)
+gcloud compute firewall-rules create allow-web-app-5173 \
+  --direction=INGRESS \
+  --action=ALLOW \
+  --rules=tcp:5173 \
+  --target-tags=retail-api \
+  --source-ranges=0.0.0.0/0 \
+  --description="web-app (Vite dev server) - front de la plataforma retail"
+
+# Etiquetar la VM para que las reglas le apliquen
 gcloud compute instances add-tags NOMBRE_DE_LA_VM \
   --tags=retail-api \
   --zone=ZONA_DE_LA_VM
+
+# Verificar que las reglas existen y con qué puertos quedaron
+gcloud compute firewall-rules list --filter="targetTags.list():retail-api" \
+  --format="table(name,allowed[].map().firewall_rule().list(),targetTags.list())"
 ```
+
+> El error más fácil de cometer aquí es abrir un puerto equivocado (por ejemplo `5001` en vez de `5173`). La regla se crea sin quejarse y todo *parece* configurado, pero el tráfico real sigue descartándose. El `firewall-rules list` de arriba muestra el puerto que quedó realmente guardado.
 
 También se puede hacer desde la consola web: **VPC network → Firewall → Create firewall rule**, con `Targets: Specified target tags` = `retail-api`, `Source IPv4 ranges` = `0.0.0.0/0` y `Protocols and ports: TCP 3001`.
 
@@ -156,12 +178,13 @@ sudo firewall-cmd --get-active-zones      # en una VM de GCP suele ser "public"
 
 # 2. Abrir el puerto de forma permanente en esa zona
 sudo firewall-cmd --permanent --zone=public --add-port=3001/tcp
+sudo firewall-cmd --permanent --zone=public --add-port=5173/tcp
 
 # 3. Aplicar los cambios (sin --reload, la regla permanente NO entra en vigor)
 sudo firewall-cmd --reload
 
 # 4. Verificar
-sudo firewall-cmd --zone=public --list-ports   # debe incluir 3001/tcp
+sudo firewall-cmd --zone=public --list-ports   # debe incluir 3001/tcp y 5173/tcp
 ```
 
 Dos detalles de `firewalld` que cuestan tiempo si se pasan por alto:
@@ -174,25 +197,36 @@ Dos detalles de `firewalld` que cuestan tiempo si se pasan por alto:
 ### 3. Verificar que quedó abierto
 
 ```bash
-# Dentro de la VM: el proceso debe escuchar en 0.0.0.0:3001, no en 127.0.0.1
-ss -tlnp | grep 3001
+# Dentro de la VM: ambos procesos deben escuchar en 0.0.0.0, no en 127.0.0.1
+ss -tlnp | grep -E '3001|5173'
 
-# Dentro de la VM: el servicio responde
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/docs
+# Dentro de la VM: los servicios responden localmente
+curl -s -o /dev/null -w "api  -> %{http_code}\n" http://localhost:3001/docs
+curl -s -o /dev/null -w "web  -> %{http_code}\n" http://localhost:5173/
 
 # Desde tu máquina: la misma respuesta a través de la IP externa
-curl -s -o /dev/null -w "%{http_code}\n" http://IP_EXTERNA_DE_LA_VM:3001/docs
+curl -s -o /dev/null -w "api  -> %{http_code}\n" http://IP_EXTERNA_DE_LA_VM:3001/docs
+curl -s -o /dev/null -w "web  -> %{http_code}\n" http://IP_EXTERNA_DE_LA_VM:5173/
 ```
 
-Si el primer comando responde y el último no, el problema es de firewall (una de las dos capas). Si `ss` muestra `127.0.0.1:3001` en vez de `0.0.0.0:3001`, el servicio solo acepta conexiones locales: NestJS escucha en todas las interfaces por omisión, así que eso apuntaría a un proxy o a un `HOST` mal configurado.
+Si responde dentro de la VM pero no desde fuera, el problema es de firewall (una de las dos capas). Si `ss` muestra `127.0.0.1:5173` en vez de `0.0.0.0:5173`, el dev server solo acepta conexiones locales: por eso `web-app/vite.config.ts` fija `server.host = true` (equivalente a `npm run dev -- --host`). NestJS ya escucha en todas las interfaces por omisión.
 
 Para distinguir **cuál** de las dos capas está bloqueando, desde tu máquina:
 
 ```bash
-# Si esto queda colgado (timeout) → falta la regla de la VPC en GCP
-# Si responde "Connection refused" → la VPC deja pasar, el bloqueo es de firewalld o el servicio no está arriba
 nc -zv IP_EXTERNA_DE_LA_VM 3001
+nc -zv IP_EXTERNA_DE_LA_VM 5173
 ```
+
+Cómo leer el resultado — la diferencia importa:
+
+| Resultado | Significado |
+|-----------|-------------|
+| `succeeded!` | El puerto está abierto en las dos capas y hay algo escuchando |
+| **Se queda colgado** (timeout) | Los paquetes se **descartan**: falta la regla de la VPC en GCP, o está creada con otro puerto/etiqueta |
+| `Connection refused` | La VPC deja pasar; el bloqueo es de `firewalld` (que rechaza) o el servicio no está arriba |
+
+El timeout es exactamente el síntoma que produce la página "cargando para siempre" en el navegador: sin respuesta que rechace la conexión, el navegador espera hasta agotar su propio tiempo límite.
 
 ### 4. Apuntar el frontend a la VM
 
@@ -202,7 +236,11 @@ En `web-app/.env`:
 VITE_API_URL=http://IP_EXTERNA_DE_LA_VM:3001
 ```
 
-Vite congela esta variable **en el momento del build**: si se cambia, hay que volver a correr `npm run build`. Conviene que la IP externa de la VM sea estática, o el front dejará de encontrar al backend cada vez que se reinicie la máquina.
+**`localhost` aquí no sirve.** Esta URL la resuelve el **navegador**, que corre en la máquina de quien entra a la página — no dentro de la VM. Si queda `http://localhost:3001`, el navegador buscará un backend en la computadora del usuario y el login fallará con "No se pudo conectar con el servidor", aunque la API esté perfecta en la VM.
+
+Vite lee esta variable **al arrancar**, no en caliente: hay que reiniciar `npm run dev` (o volver a correr `npm run build` si se sirve el `dist/`) para que el cambio tenga efecto. Conviene reservar una IP externa **estática** en GCP; con una IP efímera hay que reescribir el `.env` y reiniciar el front cada vez que se reinicia la VM.
+
+> El `vite` en modo dev es cómodo para la demo, pero no está pensado para exponerse a internet. Para la entrega final: `npm run build` y servir `dist/` con nginx en el puerto 80.
 
 ### Nota sobre Docker
 

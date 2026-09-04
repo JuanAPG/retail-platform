@@ -7,13 +7,16 @@
 --
 -- Contenido (1 registro por tipo, salvo donde se indica):
 --   1. roles               -> los 7 roles del sistema
---   2. usuarios            -> 1 usuario por cada uno de los 7 roles
---   3. proveedores         -> 1 proveedor
+--   2. usuarios            -> 1 usuario por rol, + un 2o proveedor
+--   3. proveedores         -> 2 proveedores (para poder demostrar que
+--                             cada uno solo ve SUS productos)
 --   4. tiendas             -> 1 tienda
 --   5. municipios          -> 1 municipio
 --   6. zonas               -> 1 zona
---   7. categorias_producto -> 1 categoría
---   8. productos           -> 1 producto
+--   7. categorias_producto -> 3 categorías
+--   8. productos           -> 6 productos repartidos entre alta
+--                             interna y los dos proveedores, con
+--                             propuestas pendientes de aprobación
 --
 -- Todas las inserciones usan subconsultas (por nombre/email/sku) en
 -- vez de UUIDs fijos, para no depender de que gen_random_uuid()
@@ -52,7 +55,8 @@ FROM (VALUES
     ('Laura Vega Campos',   'precios@retail.mx',     '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Responsable de precios',TRUE),
     ('Jorge Soto Ramos',    'planeador@retail.mx',   '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Planeador',             TRUE),
     ('Ana Torres Medina',   'auditor@retail.mx',     '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Auditor',               TRUE),
-    ('Elena Ruiz Domínguez','contacto@bioorganicos.mx','$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',           TRUE)
+    ('Elena Ruiz Domínguez','contacto@bioorganicos.mx','$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',           TRUE),
+    ('Hugo Cantú Salinas', 'ventas@lacteosdelnorte.mx','$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',           TRUE)
 ) AS v(nombre, email, password_hash, rol_nombre, activo)
 JOIN roles r ON r.nombre = v.rol_nombre
 ON CONFLICT (email) DO NOTHING;
@@ -64,15 +68,11 @@ ON CONFLICT (email) DO NOTHING;
 --    AuthService.registerProveedor() (usuarios ya no tiene FK directa
 --    a proveedores desde el cambio de schema).
 -- ---------------------------------------------------------------------
-INSERT INTO proveedores (razon_social, rfc, contacto_nombre, email, telefono, activo)
-VALUES (
-    'BioOrgánicos S.A.P.I. de C.V.',
-    'BOR210615AB3',
-    'Elena Ruiz Domínguez',
-    'contacto@bioorganicos.mx',
-    '81 1234 5678',
-    TRUE
-)
+INSERT INTO proveedores (razon_social, rfc, contacto_nombre, email, telefono, activo) VALUES
+    ('BioOrgánicos S.A.P.I. de C.V.', 'BOR210615AB3', 'Elena Ruiz Domínguez',
+     'contacto@bioorganicos.mx',   '81 1234 5678', TRUE),
+    ('Lácteos del Norte S.A. de C.V.', 'LNO180903KZ9', 'Hugo Cantú Salinas',
+     'ventas@lacteosdelnorte.mx',  '81 8765 4321', TRUE)
 ON CONFLICT (email) DO NOTHING;
 
 -- ---------------------------------------------------------------------
@@ -115,30 +115,66 @@ WHERE z.nombre = 'Zona Valle';
 -- 7. CATEGORÍAS DE PRODUCTO (1)
 -- ---------------------------------------------------------------------
 INSERT INTO categorias_producto (nombre, descripcion) VALUES
-    ('Abarrotes', 'Productos básicos de despensa: granos, semillas y cereales.')
+    ('Abarrotes', 'Productos básicos de despensa: granos, semillas y cereales.'),
+    ('Lácteos',   'Leche, quesos, yogures y derivados.'),
+    ('Bebidas',   'Bebidas no alcohólicas envasadas.')
 ON CONFLICT (nombre) DO NOTHING;
 
 -- ---------------------------------------------------------------------
--- 8. PRODUCTOS (1)
---    proveedor_id se deja en NULL (alta interna, no propuesta por un
---    proveedor); aprobado_por referencia al usuario Gerente de
---    categoría creado en el paso 2, como correspondería en el flujo
---    real de aprobación de catálogo.
+-- 8. PRODUCTOS (6)
+--    Repartidos a propósito para poder DEMOSTRAR el acceso por perfil:
+--
+--      * 1 alta interna (proveedor_id NULL) -> la ve todo perfil interno
+--      * 2 de BioOrgánicos y 3 de Lácteos del Norte -> cada proveedor
+--        debe ver únicamente los suyos al entrar a su portal
+--      * 2 en 'pendiente_aprobacion' (uno por proveedor) -> son los que
+--        le aparecen al Gerente de categoría en su bandeja de revisión
+--
+--    aprobado_por solo se llena en los ya aprobados, apuntando al
+--    usuario Gerente de categoría, como en el flujo real.
 -- ---------------------------------------------------------------------
-INSERT INTO productos (sku, nombre, descripcion, categoria_id, unidad_medida, es_canasta_basica, estatus, aprobado_por)
+INSERT INTO productos (sku, nombre, descripcion, categoria_id, unidad_medida,
+                       es_canasta_basica, estatus, proveedor_id, aprobado_por)
 SELECT
-    'P-001-001',
-    'Frijol negro 1 kg',
-    'Frijol negro a granel, empaque de 1 kilogramo.',
+    v.sku,
+    v.nombre,
+    v.descripcion,
     c.id,
-    'kg',
-    TRUE,
-    'activo',
-    u.id
-FROM categorias_producto c
-CROSS JOIN usuarios u
-WHERE c.nombre = 'Abarrotes'
-  AND u.email = 'gercategoria@retail.mx'
+    v.unidad_medida,
+    v.es_canasta_basica,
+    v.estatus::estatus_producto,
+    (SELECT p.id FROM proveedores p WHERE p.email = v.proveedor_email),
+    CASE WHEN v.estatus = 'activo'
+         THEN (SELECT u.id FROM usuarios u WHERE u.email = 'gercategoria@retail.mx')
+         ELSE NULL
+    END
+FROM (VALUES
+    ('P-001-001', 'Frijol negro 1 kg',
+     'Frijol negro a granel, empaque de 1 kilogramo.',
+     'Abarrotes', 'kg', TRUE, 'activo', NULL::VARCHAR),
+
+    ('BIO-QUI-500', 'Quinoa orgánica 500 g',
+     'Quinoa blanca orgánica certificada, bolsa de 500 gramos.',
+     'Abarrotes', 'kg', FALSE, 'activo', 'contacto@bioorganicos.mx'),
+
+    ('BIO-AMA-300', 'Amaranto inflado 300 g',
+     'Amaranto inflado sin azúcar añadida.',
+     'Abarrotes', 'kg', FALSE, 'pendiente_aprobacion', 'contacto@bioorganicos.mx'),
+
+    ('LDN-LEC-1L', 'Leche entera 1 L',
+     'Leche entera pasteurizada, envase de 1 litro.',
+     'Lácteos', 'litro', TRUE, 'activo', 'ventas@lacteosdelnorte.mx'),
+
+    ('LDN-YOG-900', 'Yogur natural 900 g',
+     'Yogur natural sin azúcar, envase de 900 gramos.',
+     'Lácteos', 'kg', FALSE, 'pendiente_aprobacion', 'ventas@lacteosdelnorte.mx'),
+
+    ('LDN-QUE-400', 'Queso panela 400 g',
+     'Queso panela fresco, pieza de 400 gramos.',
+     'Lácteos', 'kg', FALSE, 'activo', 'ventas@lacteosdelnorte.mx')
+) AS v(sku, nombre, descripcion, categoria_nombre, unidad_medida,
+       es_canasta_basica, estatus, proveedor_email)
+JOIN categorias_producto c ON c.nombre = v.categoria_nombre
 ON CONFLICT (sku) DO NOTHING;
 
 COMMIT;
