@@ -50,6 +50,15 @@ export class ProductoEntity {
   @JoinColumn({ name: 'proveedor_id' })
   proveedor: ProveedorEntity | null;
 
+  /**
+   * Usuario (Gerente de categoría o Administrador) que resolvió la
+   * propuesta. Se guarda como UUID suelto y no como relación: el
+   * usuario que aprueba vive en el módulo de usuarios y este módulo
+   * solo necesita el identificador para dejar rastro de quién decidió.
+   */
+  @Column({ name: 'aprobado_por', type: 'uuid', nullable: true })
+  aprobadoPor: string | null;
+
   @Column({ name: 'motivo_rechazo', type: 'text', nullable: true })
   motivoRechazo: string | null;
 

@@ -54,6 +54,28 @@ Reglas que aplica el servicio:
 - Si el usuario tiene registros asociados (`productos.aprobado_por`, etc.), el `DELETE` devuelve `409` sugiriendo desactivarlo, en lugar de romper la integridad referencial o responder `500`.
 - `password_hash` nunca sale en una respuesta.
 
+### Catálogo y flujo de alta de producto (acceso diferenciado)
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| GET | `/productos` | Todos | **Devuelve distinto según el perfil**: un Proveedor recibe únicamente los productos de su propia empresa; los perfiles internos ven el catálogo completo. |
+| GET | `/productos/pendientes` | Administrador, Gerente de categoría | Bandeja de propuestas por revisar. |
+| POST | `/productos` | **Proveedor** | Propone un alta. Nace en `pendiente_aprobacion` y ligada a su empresa. |
+| PATCH | `/productos/:id/aprobar` | Administrador, Gerente de categoría | Pasa la propuesta a `activo` y registra quién la resolvió. |
+| PATCH | `/productos/:id/rechazar` | Administrador, Gerente de categoría | Pasa a `rechazado`; exige `motivoRechazo`. |
+| GET | `/tiendas`, `/zonas`, `/municipios` | Los 6 perfiles internos | Referencia territorial; el Proveedor no accede. |
+| GET | `/categorias-producto` | Todos | Única lectura abierta al Proveedor: la necesita para elegir categoría al proponer. |
+| GET | `/proveedores` | Administrador, Analista comercial, Gerente de categoría, Auditor | Padrón de empresas proveedoras. |
+
+Reglas que aplica el servicio:
+
+- **El recorte por proveedor se hace en la consulta, no en el front.** Filtrar en el navegador sería cosmético: la respuesta HTTP seguiría trayendo el catálogo de todos y bastaría abrir la pestaña de red para verlo.
+- El vínculo usuario↔empresa es el **correo** (`usuarios.email` = `proveedores.email`, ambos UNIQUE); `usuarios` no tiene FK a `proveedores`.
+- `proveedorId` y `estatus` **no se aceptan en el cuerpo** de `POST /productos`: los fija el servidor a partir del token. Mandarlos hace que el `ValidationPipe` global (`forbidNonWhitelisted`) rechace la petición — si no, un proveedor podría dar de alta productos a nombre de otro.
+- `esCanastaBasica` tampoco lo decide el proveedor: es una clasificación de negocio (RN-04) del Gerente de categoría.
+- Una propuesta ya resuelta no se puede volver a resolver → `409`, para que dos revisores no se sobrescriban.
+- Proveedor con empresa inactiva → `403`; SKU duplicado → `409`; categoría inexistente → `400`.
+
 ### Ejemplo — login
 
 ```bash

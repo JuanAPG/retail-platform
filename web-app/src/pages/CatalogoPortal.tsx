@@ -6,6 +6,8 @@ import { Badge } from '../components/Badge';
 import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
+import { EstatusProductoBadge } from '../components/EstatusProductoBadge';
+import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
 import { getProductos, getCategorias } from '../api/catalogo';
 
 type Tab =
@@ -16,20 +18,6 @@ type Tab =
   | 'elasticidad'
   | 'comparacion'
   | 'reportes';
-
-const ESTATUS_TONE: Record<string, 'positive' | 'warning' | 'negative' | 'neutral'> = {
-  activo: 'positive',
-  pendiente_aprobacion: 'warning',
-  rechazado: 'negative',
-  inactivo: 'neutral',
-};
-
-const ESTATUS_LABEL: Record<string, string> = {
-  activo: 'Activo',
-  pendiente_aprobacion: 'Pendiente de aprobación',
-  rechazado: 'Rechazado',
-  inactivo: 'Inactivo',
-};
 
 export function CatalogoPortal() {
   const { usuario } = useAuth();
@@ -100,14 +88,7 @@ export function CatalogoPortal() {
                   header: 'Canasta básica',
                   render: (p) => (p.esCanastaBasica ? <Badge tone="positive">Sí</Badge> : 'No'),
                 },
-                {
-                  header: 'Estatus',
-                  render: (p) => (
-                    <Badge tone={ESTATUS_TONE[p.estatus] ?? 'neutral'}>
-                      {ESTATUS_LABEL[p.estatus] ?? p.estatus}
-                    </Badge>
-                  ),
-                },
+                { header: 'Estatus', render: (p) => <EstatusProductoBadge estatus={p.estatus} /> },
               ]}
             />
           )}
@@ -132,18 +113,18 @@ export function CatalogoPortal() {
         </section>
       )}
 
-      {tab === 'aprobaciones' && (
-        <section>
-          <SectionHeader
-            title={esGerente ? 'Aprobaciones de proveedor' : 'Aprobaciones de precio'}
-            badge="APRUEBA"
-          />
-          <EmptyState
-            title="No hay solicitudes pendientes"
-            description="Cuando un proveedor proponga un producto o un precio nuevo, aparecerá aquí para tu revisión."
-          />
-        </section>
-      )}
+      {tab === 'aprobaciones' &&
+        (esGerente ? (
+          <AprobacionesPanel />
+        ) : (
+          <section>
+            <SectionHeader title="Aprobaciones de precio" badge="APRUEBA" />
+            <EmptyState
+              title="No hay solicitudes pendientes"
+              description="Cuando un proveedor proponga un precio nuevo, aparecerá aquí para tu revisión."
+            />
+          </section>
+        ))}
 
       {tab === 'precios' && (
         <section>
