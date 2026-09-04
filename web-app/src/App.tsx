@@ -47,7 +47,7 @@ function AppRoutes() {
       <Route
         path="/catalogo"
         element={
-          <ProtectedRoute allowedRoles={['Gerente de categoría', 'Responsable de precios']}>
+          <ProtectedRoute allowedRoles={['Administrador', 'Gerente de categoría', 'Responsable de precios']}>
             <CatalogoPortal />
           </ProtectedRoute>
         }
@@ -55,7 +55,7 @@ function AppRoutes() {
       <Route
         path="/analista"
         element={
-          <ProtectedRoute allowedRoles={['Analista comercial']}>
+          <ProtectedRoute allowedRoles={['Administrador', 'Analista comercial']}>
             <AnalistaPortal />
           </ProtectedRoute>
         }
@@ -63,7 +63,7 @@ function AppRoutes() {
       <Route
         path="/auditor"
         element={
-          <ProtectedRoute allowedRoles={['Auditor']}>
+          <ProtectedRoute allowedRoles={['Administrador', 'Auditor']}>
             <AuditorPortal />
           </ProtectedRoute>
         }
@@ -71,7 +71,7 @@ function AppRoutes() {
       <Route
         path="/planeador"
         element={
-          <ProtectedRoute allowedRoles={['Planeador']}>
+          <ProtectedRoute allowedRoles={['Administrador', 'Planeador']}>
             <PlaneadorPortal />
           </ProtectedRoute>
         }
@@ -79,7 +79,7 @@ function AppRoutes() {
       <Route
         path="/proveedor"
         element={
-          <ProtectedRoute allowedRoles={['Proveedor']}>
+          <ProtectedRoute allowedRoles={['Administrador', 'Proveedor']}>
             <ProveedorPortal />
           </ProtectedRoute>
         }

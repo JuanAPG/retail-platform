@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SelectorDePortal } from './SelectorDePortal';
 
 interface TopBarProps {
   breadcrumb: string;
@@ -35,6 +36,7 @@ export function TopBar({ breadcrumb }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {usuario?.rol === 'Administrador' && <SelectorDePortal />}
         <button
           type="button"
           aria-label="Notificaciones"

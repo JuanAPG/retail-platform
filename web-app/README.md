@@ -44,7 +44,7 @@ npm run preview  # sirve dist/ localmente para probarlo
 
 | Rol                     | Ruta          | Qué muestra |
 |--------------------------|---------------|-------------|
-| Administrador            | `/admin`      | **Inicio** (panel de bienvenida con indicadores), **Usuarios (CRUD completo)**, Tiendas, Zonas, Proveedores (datos reales); Auditoría (vacío) |
+| Administrador            | `/admin`      | **Inicio** (panel de bienvenida con indicadores), **Usuarios (CRUD completo)**, Tiendas, Zonas, Proveedores (datos reales); Auditoría (vacío). Además **entra a todos los demás portales** con el selector «Ver como» de la barra superior. |
 | Analista comercial       | `/analista`   | Transacciones/Segmentos/Canastas/Reglas/Accesibilidad (vacío, sin API aún); Productos y Tiendas de referencia (datos reales) |
 | Gerente de categoría     | `/catalogo`   | Productos y Categorías (datos reales); **Aprobaciones de proveedor (aprobar/rechazar, funcional)**; Comparación/Reportes (vacío) |
 | Responsable de precios   | `/catalogo`   | Mismo portal que Gerente, con secciones distintas: Precios/Aprobaciones/Elasticidad (vacío) |
@@ -62,6 +62,17 @@ Es la única pantalla con operaciones de escritura conectadas al backend:
 - **Eliminar**: con diálogo de confirmación. Si el backend responde que la cuenta tiene registros asociados, el diálogo muestra el motivo y sugiere desactivarla.
 
 Sobre tu propia cuenta no se puede desactivar, cambiar de rol ni eliminar: esos botones aparecen deshabilitados y el backend lo rechaza igual.
+
+### El Administrador entra a todos los portales
+
+La barra superior muestra un selector **«Ver como»** únicamente al Administrador, que le permite saltar entre los seis portales sin cerrar sesión. Es una ayuda de navegación, no un permiso extra: lo que puede hacer en cada pantalla lo sigue decidiendo el backend.
+
+Dos pantallas se comportan distinto cuando entra el Administrador:
+
+- **`/catalogo`** lo comparten Gerente de categoría y Responsable de precios con secciones distintas. El Administrador ve la **unión** de ambas, así que «Aprobaciones de proveedor» y «Aprobaciones de precio» aparecen como entradas separadas.
+- **`/proveedor`** muestra un aviso: como la cuenta del Administrador no pertenece a ninguna empresa proveedora, el listado trae el catálogo completo en vez de acotarse, y el formulario de propuesta queda deshabilitado. `POST /productos` es exclusivo del rol Proveedor, porque el alta tiene que quedar ligada a una empresa.
+
+Los demás roles siguen entrando solo a su portal: escribir la ruta a mano los manda a «No tienes acceso a esta pantalla».
 
 ### Acceso diferenciado por perfil
 

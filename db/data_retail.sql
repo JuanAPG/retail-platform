@@ -109,7 +109,13 @@ SELECT
     FALSE,
     TRUE
 FROM zonas z
-WHERE z.nombre = 'Zona Valle';
+WHERE z.nombre = 'Zona Valle'
+  -- `tiendas` no tiene UNIQUE sobre el nombre, así que sin este guardia
+  -- volver a ejecutar el archivo insertaría una sucursal duplicada. El
+  -- resto de los INSERT ya son idempotentes vía ON CONFLICT.
+  AND NOT EXISTS (
+      SELECT 1 FROM tiendas t WHERE t.nombre = 'Super Valle Centro'
+  );
 
 -- ---------------------------------------------------------------------
 -- 7. CATEGORÍAS DE PRODUCTO (1)
