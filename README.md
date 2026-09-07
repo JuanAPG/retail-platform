@@ -5,9 +5,9 @@ canastas de consumo por zona, ingreso y precio.
 
 ## Tecnologías
 
-Hoy la aplicación son **dos piezas**: un backend modular (`auth-service`) y una SPA (`web-app`) que lo consume. Esto es lo que usa cada una realmente.
+Hoy la aplicación son **dos piezas**: un backend NestJS monolítico y modular (`api`) y una SPA (`web`) que lo consume. Esto es lo que usa cada una realmente.
 
-### Backend — `auth-service`
+### Backend — `api`
 
 | Tecnología | Versión | Para qué se usa |
 |---|---|---|
@@ -29,7 +29,7 @@ Hoy la aplicación son **dos piezas**: un backend modular (`auth-service`) y una
 - `CatalogoModule` — lecturas de tiendas, zonas, municipios, categorías, productos y proveedores.
 - `common/` — `JwtAuthGuard`, `RolesGuard`, decoradores `@Roles()` y `@CurrentUser()`.
 
-### Frontend — `web-app`
+### Frontend — `web`
 
 | Tecnología | Versión | Para qué se usa |
 |---|---|---|
@@ -42,12 +42,12 @@ Hoy la aplicación son **dos piezas**: un backend modular (`auth-service`) y una
 
 ### Base de datos
 
-- **PostgreSQL 16** — esquema versionado en `db/schema V2.sql`: UUID con `gen_random_uuid()`, tipos `ENUM` (`estatus_producto`, `formato_tienda`, `nivel_permiso`…), `CHECK` constraints y `TIMESTAMPTZ`.
+- **PostgreSQL 16** — esquema versionado en `db/schema.sql`: 49 tablas, 10 vistas, 23 tipos `ENUM`, UUID con `gen_random_uuid()`, `CHECK` constraints, columnas generadas y `TIMESTAMPTZ`. Todo el modelo analítico (canastas, indicadores, Apriori, elasticidad, accesibilidad, simulación) vive aquí; MongoDB y Redis quedan fuera hasta el Parcial 2.
 - Datos de prueba en `db/data_retail.sql` (7 roles, 7 usuarios, tiendas, zonas, productos). Contraseña de todos los usuarios sembrados: `Passw0rd123!`.
 
 ### Infraestructura
 
-- **Docker** — `auth-service/Dockerfile`, build multi-etapa sobre `node:20-alpine`.
+- **Docker** — `api/Dockerfile`, build multi-etapa sobre `node:20-alpine`.
 - **GCP Compute Engine** — VM donde se expone el backend (ver despliegue abajo).
 
 ### Declarado en el proyecto, aún no usado
@@ -65,13 +65,13 @@ git clone <url-del-repo>
 cd retail-platform
 
 # Solo los servicios que hoy tienen código que los use
-docker compose up -d postgres pgadmin api web
+docker compose -f infra/docker-compose.yml up -d postgres pgadmin api web
 
 # Seguir el arranque (la primera vez tarda: instala dependencias)
-docker compose logs -f api
+docker compose -f infra/docker-compose.yml logs -f api
 ```
 
-Cuando el log del `api` diga `auth-service escuchando en http://localhost:3001`, entrar a http://localhost:5173 con `admin@retail.mx` / `Passw0rd123!`.
+Cuando el log del `api` diga `API escuchando en http://localhost:3001`, entrar a http://localhost:5173 con `admin@retail.mx` / `Passw0rd123!`.
 
 | Servicio | URL | Notas |
 |---|---|---|
@@ -80,26 +80,26 @@ Cuando el log del `api` diga `auth-service escuchando en http://localhost:3001`,
 | PostgreSQL | `localhost:5432` | `retaildb` / `retail_user` / `retail_pass_2026` |
 | pgAdmin | http://localhost:5050 | `admin@retail.com` / `admin_pass_2026` |
 
-**El esquema y los datos de prueba se aplican solos** la primera vez que se crea el volumen de Postgres: `docker-compose.yml` monta `db/schema V2.sql` y `db/data_retail.sql` en `/docker-entrypoint-initdb.d`. No hay que correr `psql` a mano.
+**El esquema y los datos de prueba se aplican solos** la primera vez que se crea el volumen de Postgres: `docker-compose.yml` monta `db/schema.sql` y `db/data_retail.sql` en `/docker-entrypoint-initdb.d`. No hay que correr `psql` a mano.
 
 > Ese `initdb` **solo corre cuando el volumen se crea desde cero**. Si ya levantaste Postgres antes y cambias el SQL, hay que borrar el volumen para que se vuelva a aplicar:
 > ```bash
-> docker compose down -v && docker compose up -d postgres api web
+> docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d postgres api web
 > ```
 > Cuidado: `-v` borra los datos. Es lo que quieres en desarrollo, nunca en la VM.
 
-Para levantar además Mongo, Redis y sus consolas (declarados para el Parcial 2, todavía sin código que los use): `docker compose up -d`.
+Para levantar además Mongo, Redis y sus consolas (declarados para el Parcial 2, todavía sin código que los use): `docker compose -f infra/docker-compose.yml up -d`.
 
 ### Opción B — sin Docker, todo en el host
 
 1. **Base de datos** — con PostgreSQL 16 corriendo, aplicar el esquema y los datos:
    ```bash
-   psql -U retail_user -d retaildb -f "db/schema V2.sql"
+   psql -U retail_user -d retaildb -f "db/schema.sql"
    psql -U retail_user -d retaildb -f db/data_retail.sql
    ```
 2. **Backend** (puerto **3001**):
    ```bash
-   cd auth-service
+   cd api
    npm install
    cp .env.example .env    # editar DB_* y los secretos JWT
    npm run start:dev
@@ -107,7 +107,7 @@ Para levantar además Mongo, Redis y sus consolas (declarados para el Parcial 2,
    Swagger queda en http://localhost:3001/docs
 3. **Frontend** (puerto **5173**):
    ```bash
-   cd web-app
+   cd web
    npm install
    cp .env.example .env     # VITE_API_URL=http://localhost:3001
    npm run dev
@@ -115,7 +115,7 @@ Para levantar además Mongo, Redis y sus consolas (declarados para el Parcial 2,
 
 Entrar en http://localhost:5173 con `admin@retail.mx` / `Passw0rd123!`.
 
-> Las dos opciones se pueden mezclar: es común levantar solo la base con `docker compose up -d postgres pgadmin` y correr la API y el front en el host. Por eso las credenciales de `auth-service/.env.example` coinciden con las del `docker-compose.yml`.
+> Las dos opciones se pueden mezclar: es común levantar solo la base con `docker compose -f infra/docker-compose.yml up -d postgres pgadmin` y correr la API y el front en el host. Por eso las credenciales de `auth-service/.env.example` coinciden con las del `docker-compose.yml`.
 
 ## Despliegue en GCP
 
@@ -123,8 +123,8 @@ La aplicación expone **dos puertos**, y ninguno de los dos está abierto por om
 
 | Puerto | Quién lo usa | Síntoma si está cerrado |
 |--------|--------------|--------------------------|
-| **3001** | `auth-service` (API NestJS) | La página **sí carga**, pero el login responde "No se pudo conectar con el servidor" |
-| **5173** | `web-app` (Vite en modo dev) | El navegador **se queda cargando en blanco** y nunca muestra nada |
+| **3001** | `api` (backend NestJS) | La página **sí carga**, pero el login responde "No se pudo conectar con el servidor" |
+| **5173** | `web` (Vite en modo dev) | El navegador **se queda cargando en blanco** y nunca muestra nada |
 
 Los dos síntomas son distintos y sirven para saber cuál puerto revisar. Abrir solo el 3001 —el caso más común, porque es el que suele documentarse— deja el front inaccesible desde fuera de la VM.
 
@@ -140,7 +140,7 @@ gcloud compute firewall-rules create allow-auth-service-3001 \
   --rules=tcp:3001 \
   --target-tags=retail-api \
   --source-ranges=0.0.0.0/0 \
-  --description="auth-service (NestJS) - API de la plataforma retail"
+  --description="API NestJS - backend de la plataforma retail"
 
 # Crear la regla de ingreso para el puerto 5173 (front en modo dev)
 gcloud compute firewall-rules create allow-web-app-5173 \
@@ -149,7 +149,7 @@ gcloud compute firewall-rules create allow-web-app-5173 \
   --rules=tcp:5173 \
   --target-tags=retail-api \
   --source-ranges=0.0.0.0/0 \
-  --description="web-app (Vite dev server) - front de la plataforma retail"
+  --description="Vite dev server - front de la plataforma retail"
 
 # Etiquetar la VM para que las reglas le apliquen
 gcloud compute instances add-tags NOMBRE_DE_LA_VM \
@@ -230,7 +230,7 @@ El timeout es exactamente el síntoma que produce la página "cargando para siem
 
 ### 4. Apuntar el frontend a la VM
 
-En `web-app/.env`:
+En `web/.env`:
 
 ```
 VITE_API_URL=http://IP_EXTERNA_DE_LA_VM:3001
@@ -244,7 +244,7 @@ Vite lee esta variable **al arrancar**, no en caliente: hay que reiniciar `npm r
 
 ### Nota sobre Docker
 
-`auth-service/Dockerfile` expone el 3001, pero antes de usarlo en la VM hay dos detalles pendientes:
+`api/Dockerfile` expone el 3001, pero antes de usarlo en la VM hay dos detalles pendientes:
 
 - `bcrypt` es un módulo nativo y `node:20-alpine` (musl) no tiene binarios precompilados: hay que agregar `RUN apk add --no-cache python3 make g++` en la etapa de build, cambiar a `node:20-slim`, o migrar a `bcryptjs`.
 - La imagen final no incluye `.env`, así que las variables (`DB_*`, secretos JWT) deben pasarse con `-e` o `--env-file`. Sin los secretos JWT el contenedor no arranca. Y `DB_HOST=localhost` dentro de un contenedor apunta al contenedor mismo, no al host.
@@ -253,24 +253,58 @@ Vite lee esta variable **al arrancar**, no en caliente: hay que reiniciar `npm r
 
 ```
 retail-platform/
-├── auth-service/       # Backend NestJS (auth + usuarios + catálogo) — puerto 3001
+├── api/                    # Backend NestJS — MONOLITO MODULAR, puerto 3001
 │   ├── src/
+│   │   ├── common/         # guards, decoradores y nombres de rol compartidos
+│   │   ├── config/         # configuración de BD y JWT
+│   │   ├── entities/       # entidades TypeORM (compartidas entre módulos)
+│   │   ├── auth/           # M01 · autenticación JWT
+│   │   ├── users/          # M01 · CRUD de usuarios
+│   │   ├── stores/         # M02 · tiendas
+│   │   ├── zones/          # M03 · zonas y municipios
+│   │   ├── products/       # M04 · productos, categorías y alta por proveedor
+│   │   ├── segments/       # M05 · segmentos de ingreso
+│   │   ├── transactions/   # M06 · transacciones e importación CSV
+│   │   ├── baskets/        # M07 · canastas de consumo
+│   │   ├── prices/         # M08 · precios e histórico
+│   │   ├── analytics/      # M09 · analítica descriptiva
+│   │   ├── association/    # M10 · reglas de asociación (Apriori)
+│   │   ├── elasticity/     # M11 · elasticidad y sustitución
+│   │   ├── accessibility/  # M12 · accesibilidad
+│   │   ├── simulation/     # M13 · simulación de escenarios
+│   │   ├── recommendations/# M14 · recomendaciones
+│   │   └── audit/          # M15 · bitácora de auditoría
 │   └── Dockerfile
-├── web-app/            # Frontend React/Vite — puerto 5173
+├── web/                    # Frontend React/Vite — puerto 5173
 │   └── src/
 ├── db/
-│   ├── schema V2.sql   # DDL de PostgreSQL
-│   └── data_retail.sql # Datos de prueba
-├── docker-compose.yml  # Entorno de desarrollo completo
-├── .gitignore
-├── README.md
-└── CONTRIBUTING.md
+│   ├── schema.sql          # DDL de PostgreSQL (49 tablas, 10 vistas)
+│   └── data_retail.sql     # Datos de prueba
+├── infra/
+│   └── docker-compose.yml  # Entorno de desarrollo completo
+├── CLAUDE.md               # Contexto del proyecto para asistentes de código
+├── CONTRIBUTING.md         # Ramas, commits, PR y reparto de módulos
+└── README.md
 ```
 
-Planeado para el Parcial 2, todavía sin código en el repo: `mobile/` (Kotlin), `desktop/` (Electron), `services/` (microservicios independientes) y `docs/` (diagramas C4, modelo de datos, matriz de perfiles y permisos).
+De M05 en adelante los módulos existen pero están **vacíos**: solo tienen el
+`@Module({})` y la documentación de su alcance. Están registrados en
+`app.module.ts` desde ahora a propósito, para que nadie tenga que editar ese
+archivo al implementar el suyo — si las cuatro ramas lo tocaran, todas
+chocarían ahí al mergear.
+
+Planeado para el Parcial 2, todavía sin código en el repo: `mobile/` (Kotlin),
+`desktop/` (Electron) y `docs/` (diagramas C4, modelo de datos, matriz de
+perfiles y permisos). `services/` (microservicios independientes) **no se crea
+todavía**: la extracción está pospuesta a propósito.
 
 ## Equipo
-Juan Angel Galván Navarro — Arquitectura / DevOps
-Leonardo Rangel Castro — Backend Web
-Pamela Rodríguez de la Rosa — Datos / Algoritmos
-Fernando Olivares del Valle — Apps cliente
+
+| Integrante | Rol técnico | Módulos de este sprint |
+|---|---|---|
+| Juan Angel Galván Navarro | Arquitectura, DevOps, Seguridad | M06 Transacciones + CSV, M15 Auditoría, refactor a monolito modular |
+| Pamela Rodríguez de la Rosa | Backend Web | M02 Tiendas, M03 Zonas, M04 Productos, M05 Segmentos, M08 Precios |
+| Leonardo Rangel Castro | Datos y Algoritmos | M09 Analítica, M10 Apriori, M11 Elasticidad y sustitución |
+| Fernando Olivares del Valle | Aplicaciones Cliente | M07 Canastas, M12 Accesibilidad, M13 Simulación, M14 Recomendaciones |
+
+El reparto por módulo y las ramas correspondientes están en [CONTRIBUTING.md](CONTRIBUTING.md).
