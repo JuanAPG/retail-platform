@@ -1,8 +1,83 @@
 -- =====================================================================
 -- Plataforma de Análisis de Ingreso y Patrones de Consumo Minorista
--- Esquema relacional (PostgreSQL 16) — v3
+-- Esquema relacional (PostgreSQL 16) — v4
 --
--- Cambio principal respecto a v2: NORMALIZACIÓN. El profesor observó que
+-- =====================================================================
+-- v4: DE 1FN A 4FN
+--
+-- La v3 ya había separado los atributos multivaluados (presentaciones,
+-- imágenes, ítems de reglas, parámetros, supuestos, filtros), así que NO
+-- había dependencias multivaluadas que descomponer: la 4FN no se alcanza
+-- partiendo tablas, sino cerrando los defectos de 2FN, 3FN y FNBC que
+-- quedaban y dándole llave real a las tablas que no la tenían (sin llave
+-- verificable, hablar de forma normal no significa nada).
+--
+--  A. 2FN — `accesibilidad_componentes.peso` dependía de `componente`,
+--     que es solo PARTE de la llave (accesibilidad_id, componente): el
+--     peso es del MODELO, no de la zona. Se repetía idéntico en cada
+--     zona de la corrida. Pasó a `accesibilidad_pesos(corrida, comp)`.
+--
+--  B. FNBC — `direcciones`: `codigo_postal -> municipio_id` es una
+--     dependencia funcional cuyo determinante no es llave candidata.
+--     Dos direcciones con el mismo CP podían declarar municipios
+--     distintos. El CP pasó a ser catálogo: `codigos_postales`.
+--
+--  C. FNBC — `zona_clasificaciones`: `(corrida_id, cluster_valor) ->
+--     segmento_ingreso_id`. Todas las zonas del cluster 3 de una corrida
+--     caen en el mismo segmento; el determinante no es llave. El mapeo
+--     cluster→segmento pasó a `corrida_clusters`.
+--
+--  D. 3FN — `elasticidades.clasificacion` estaba determinada por
+--     `valor` (no-llave -> no-llave). Ahora es columna GENERADA: la
+--     redundancia deja de ser posible en vez de solo estar vigilada.
+--
+--  E. 3FN — `canastas.tamano` estaba determinado por `valor_total`
+--     (umbrales de RN-05 escondidos en el código de carga). El umbral
+--     pasó al catálogo `tamanos_compra` y el tamaño se resuelve en
+--     `v_canastas`. Cambiar el criterio ya no es un ALTER TABLE.
+--
+--  F. 3FN — `precios.vigente` y `zona_clasificaciones.vigente` eran
+--     banderas que podían contradecir a las fechas de vigencia. Ahora se
+--     generan de `fecha_vigencia_hasta` / `vigente_hasta`.
+--
+--  G. 3FN — `indicador_valores` admitía `producto_id` y `categoria_id`
+--     a la vez (producto -> categoría es transitiva) y `tienda_id` con
+--     `zona_id` (tienda -> zona). Además NO tenía llave: la misma
+--     medición podía insertarse mil veces. Se cerró con CHECKs de
+--     dimensión y una UNIQUE NULLS NOT DISTINCT.
+--
+--  H. Llaves que no cerraban: `elasticidades`, `sustituciones`,
+--     `limites_precio_zona` y `escenario_resultados` declaraban UNIQUE
+--     sobre columnas nulables. En SQL dos NULL son distintos, así que la
+--     restricción NO impedía duplicados justo en el caso agregado
+--     (zona NULL). Ahora son UNIQUE NULLS NOT DISTINCT (PG 15+).
+--
+--  I. `reglas_exclusion_asociacion` admitía (A,B) y (B,A) como filas
+--     distintas siendo el mismo hecho simétrico. Se canoniza con
+--     CHECK (categoria_a_id < categoria_b_id).
+--
+-- LO QUE **NO** SE TOCÓ, Y POR QUÉ (denormalización deliberada, no
+-- violación de forma normal — la redundancia entre tablas distintas no
+-- es lo que miden las formas normales; estas columnas dependen por
+-- completo de la llave de SU tabla):
+--   · `canastas` congela zona y segmento: reclasificar una zona hoy no
+--     debe reescribir el análisis de meses pasados. Es un hecho
+--     histórico distinto del actual, no una copia.
+--   · `canastas.valor_total`/`numero_productos`/… y `transacciones.total`
+--     e `importaciones.filas_*` son agregados materializados a propósito
+--     (el tablero consulta millones de líneas).
+--   · `auditoria.rol_id` es el rol VIGENTE EN EL INSTANTE del evento; el
+--     rol del usuario puede cambiar después, así que no es derivable.
+--   · `productos.estatus` es el estado actual; el historial completo de
+--     decisiones vive en `producto_revisiones`.
+--
+-- Queda pendiente (requiere trigger, no se puede expresar como CHECK):
+--   · que las dimensiones llenadas en `indicador_valores` correspondan
+--     al `ambito` declarado del indicador;
+--   · que los pesos de `accesibilidad_pesos` de una corrida sumen 1.
+-- =====================================================================
+--
+-- Cambio de v2 a v3: NORMALIZACIÓN. El profesor observó que
 -- varias tablas concentraban demasiados atributos. Lo que se corrigió:
 --
 --  1. `tiendas.direccion` era un TEXT con una dirección completa dentro
@@ -33,11 +108,89 @@
 -- Este archivo define únicamente estructura (DDL). Los datos de prueba
 -- están en `data_retail.sql`.
 --
+-- CONSTRUCCIÓN DESDE CERO. El archivo arranca borrando todos sus
+-- objetos (ver bloque LIMPIEZA) y los vuelve a crear, todo dentro de una
+-- misma transacción. Se puede reejecutar cuantas veces haga falta sin
+-- destruir el volumen de Docker, y si algo falla a medio camino la
+-- transacción se revierte entera: nunca queda un esquema a medias.
+--
+-- No es un script de migración: no conserva datos ni intenta detectar
+-- qué cambió respecto a la versión anterior. Para el entorno de
+-- desarrollo del equipo eso es lo que queremos; llegado el momento de
+-- tener datos que no se puedan perder, el mecanismo tendrá que ser otro
+-- (migraciones versionadas).
+--
+-- Sólo queda UN `ALTER TABLE` en todo el archivo, y es inevitable:
+-- `transacciones` e `importacion_filas` se referencian mutuamente, así
+-- que una de las dos llaves foráneas se cierra después de crear ambas
+-- tablas. Está señalado en su lugar.
+--
 -- Decisión de alcance vigente: TODO el modelo analítico vive en
 -- PostgreSQL. MongoDB y Redis quedan fuera hasta el Parcial 2.
 -- =====================================================================
 
 BEGIN;
+
+-- ---------------------------------------------------------------------
+-- LIMPIEZA: este archivo construye la base DESDE CERO.
+--
+-- No es un script de migración y no intenta conservar nada: borra todos
+-- sus objetos y los vuelve a crear. Así se puede reejecutar sobre una
+-- base ya inicializada sin tener que destruir el volumen de Docker.
+--
+--   docker compose exec -T postgres \
+--       psql -U postgres -d retail_analytics < db/schema.sql
+--
+-- CASCADE se encarga de vistas, índices, restricciones y disparadores
+-- que cuelguen de cada objeto; los DROP VIEW explícitos van primero
+-- solo para dejar constancia de qué vistas define el esquema.
+--
+-- ADVERTENCIA: esto BORRA LOS DATOS. En desarrollo es lo que queremos
+-- (los datos de prueba se recargan con data_retail.sql). Nunca se
+-- ejecuta contra un entorno con información real.
+-- ---------------------------------------------------------------------
+
+DROP VIEW IF EXISTS
+    v_direcciones, v_zona_segmento, v_zona_indicadores,
+    v_transaccion_detalle, v_canastas, v_accesibilidad_desglose,
+    v_dashboard_kpis_generales, v_dashboard_gasto_categoria,
+    v_dashboard_asociaciones, v_dashboard_accesibilidad_zona,
+    v_dashboard_elasticidad, v_variacion_precios, v_dashboard_simulacion
+CASCADE;
+
+DROP TABLE IF EXISTS
+    roles, modulos, rol_modulo_permiso, municipios, codigos_postales,
+    direcciones, proveedores, usuarios, analisis_corridas,
+    analisis_corrida_parametros, analisis_corrida_supuestos,
+    analisis_corrida_filtros, segmentos_ingreso, corrida_clusters, zonas,
+    zona_clasificaciones, indicadores, tiendas, tienda_canal_web,
+    categorias_producto, unidades_medida, productos, indicador_valores,
+    producto_presentaciones, producto_imagenes, producto_revisiones,
+    inventario, precios, precios_propuestos_proveedor, limites_precio_zona,
+    reglas_exclusion_asociacion, clientes, importaciones,
+    importacion_filas, importacion_errores, transacciones,
+    transacciones_detalle, tamanos_compra, canastas, reglas_asociacion,
+    regla_asociacion_items, sustituciones, elasticidades,
+    accesibilidad_zona, accesibilidad_pesos, accesibilidad_componentes,
+    escenarios, escenario_cambios, escenario_resultados, recomendaciones,
+    recomendacion_evidencias, auditoria, auditoria_cambios
+CASCADE;
+
+DROP TYPE IF EXISTS
+    nivel_permiso, tipo_corrida, estado_corrida, dimension_analisis,
+    ambito_indicador, formato_tienda, tipo_unidad, estatus_producto,
+    origen_precio, estatus_propuesta, perfil_hogar, frecuencia_compra,
+    estado_importacion, severidad_error, canal_transaccion, tamano_compra,
+    lado_regla, tipo_sustitucion, clasificacion_elasticidad,
+    componente_accesibilidad, tipo_cambio_escenario, estatus_recomendacion,
+    accion_auditoria
+CASCADE;
+
+DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
+
+-- ---------------------------------------------------------------------
+-- CONSTRUCCIÓN
+-- ---------------------------------------------------------------------
 
 -- gen_random_uuid() es nativa desde PostgreSQL 13; no hace falta pgcrypto.
 
@@ -91,27 +244,51 @@ CREATE TABLE municipios (
 );
 COMMENT ON TABLE municipios IS 'Municipios del AMM usados como base territorial (RN-02).';
 
+-- FNBC (v4). Un código postal pertenece a un solo municipio: en
+-- `direcciones` existía la dependencia funcional
+--     codigo_postal -> municipio_id
+-- cuyo determinante NO es llave candidata de la tabla. Consecuencia
+-- práctica: dos direcciones con CP 64000 podían declarar municipios
+-- distintos y la base no tenía cómo impedirlo. El CP se vuelve catálogo.
+CREATE TABLE codigos_postales (
+    codigo_postal   VARCHAR(10) PRIMARY KEY,
+    municipio_id    SMALLINT NOT NULL REFERENCES municipios(id),
+    CONSTRAINT chk_cp_formato CHECK (codigo_postal ~ '^[0-9]{5}$')
+);
+COMMENT ON TABLE codigos_postales IS 'Catálogo CP -> municipio (SEPOMEX). Elimina la dependencia funcional que rompía FNBC en direcciones.';
+
+CREATE INDEX idx_cp_municipio ON codigos_postales(municipio_id);
+
 -- Antes esto era `tiendas.direccion TEXT`. Una dirección es un dato
 -- compuesto: guardarla como una sola cadena impide agrupar por colonia
 -- o por código postal, que es justo lo que necesita el análisis por zona.
+-- Ya no guarda el municipio: se obtiene por el CP (ver v_direcciones).
 CREATE TABLE direcciones (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     calle               VARCHAR(150) NOT NULL,
     numero_exterior     VARCHAR(20),
     numero_interior     VARCHAR(20),
     colonia             VARCHAR(120),
-    codigo_postal       VARCHAR(10),
-    municipio_id        SMALLINT NOT NULL REFERENCES municipios(id),
+    codigo_postal       VARCHAR(10) NOT NULL REFERENCES codigos_postales(codigo_postal),
     referencia          TEXT,
     latitud             NUMERIC(9,6),
     longitud            NUMERIC(9,6),
     CONSTRAINT chk_direccion_lat CHECK (latitud  IS NULL OR latitud  BETWEEN -90  AND 90),
     CONSTRAINT chk_direccion_lon CHECK (longitud IS NULL OR longitud BETWEEN -180 AND 180)
 );
-COMMENT ON TABLE direcciones IS 'Domicilio normalizado. Reutilizable por tiendas y, más adelante, por proveedores.';
+COMMENT ON TABLE direcciones IS 'Domicilio normalizado. Reutilizable por tiendas y, más adelante, por proveedores. El municipio se deriva del código postal.';
 
-CREATE INDEX idx_direcciones_municipio ON direcciones(municipio_id);
 CREATE INDEX idx_direcciones_cp ON direcciones(codigo_postal);
+
+-- El municipio sigue siendo consultable como antes, ahora por join.
+CREATE VIEW v_direcciones AS
+SELECT d.id, d.calle, d.numero_exterior, d.numero_interior, d.colonia,
+       d.codigo_postal, cp.municipio_id, m.nombre AS municipio,
+       d.referencia, d.latitud, d.longitud
+FROM direcciones d
+JOIN codigos_postales cp ON cp.codigo_postal = d.codigo_postal
+JOIN municipios m ON m.id = cp.municipio_id;
+COMMENT ON VIEW v_direcciones IS 'Dirección con municipio resuelto. Sustituye a la columna direcciones.municipio_id que rompía FNBC.';
 
 -- =====================================================================
 -- 3. PROVEEDORES Y USUARIOS
@@ -240,6 +417,23 @@ CREATE TABLE segmentos_ingreso (
 );
 COMMENT ON TABLE segmentos_ingreso IS 'Rangos de clasificación por nivel de ingreso (RN-01).';
 
+-- FNBC (v4). El clustering de M05 no asigna segmentos zona por zona:
+-- asigna un segmento a cada CLUSTER, y la zona hereda el del cluster que
+-- le tocó. Guardar el segmento en `zona_clasificaciones` junto al
+-- cluster creaba la dependencia funcional
+--     (corrida_id, cluster_valor) -> segmento_ingreso_id
+-- con un determinante que no es llave de esa tabla: las 40 zonas del
+-- cluster 3 repetían el mismo segmento y nada impedía que la zona 17
+-- dijera otro. El mapeo vive aquí, una sola vez por cluster.
+CREATE TABLE corrida_clusters (
+    corrida_id          UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
+    cluster_valor       INTEGER NOT NULL,
+    segmento_ingreso_id SMALLINT NOT NULL REFERENCES segmentos_ingreso(id),
+    etiqueta            VARCHAR(60),
+    PRIMARY KEY (corrida_id, cluster_valor)
+);
+COMMENT ON TABLE corrida_clusters IS 'Mapeo cluster -> segmento de ingreso de una corrida de clasificación (M05). Un cluster, un segmento.';
+
 -- La zona conserva SOLO lo que la identifica. Su clasificación y sus
 -- indicadores cambian con el tiempo y viven en tablas aparte.
 CREATE TABLE zonas (
@@ -262,23 +456,55 @@ CREATE INDEX idx_zonas_municipio ON zonas(municipio_id);
 
 -- Historial de clasificación. Reclasificar una zona no borra cómo
 -- estaba clasificada cuando se calculó un indicador el mes pasado.
+--
+-- Dos caminos excluyentes para llegar al segmento:
+--   A) asignación manual  -> el segmento se escribe en segmento_manual_id
+--   B) resultado de una corrida de clustering -> el segmento lo dicta el
+--      cluster, y se lee de `corrida_clusters` (no se copia aquí, que es
+--      justo lo que rompía FNBC en v3).
 CREATE TABLE zona_clasificaciones (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     zona_id                 UUID NOT NULL REFERENCES zonas(id) ON DELETE CASCADE,
-    segmento_ingreso_id     SMALLINT NOT NULL REFERENCES segmentos_ingreso(id),
-    corrida_id              UUID REFERENCES analisis_corridas(id),  -- NULL = asignación manual
+    segmento_manual_id      SMALLINT REFERENCES segmentos_ingreso(id),
+    corrida_id              UUID,
     cluster_valor           INTEGER,
-    vigente                 BOOLEAN NOT NULL DEFAULT TRUE,
     vigente_desde           DATE NOT NULL DEFAULT CURRENT_DATE,
+    -- Cerrar una clasificación es ponerle fecha de fin, no mover una
+    -- bandera aparte que pudiera contradecirla (3FN).
+    vigente_hasta           DATE,
+    vigente                 BOOLEAN GENERATED ALWAYS AS (vigente_hasta IS NULL) STORED,
     asignada_por            UUID REFERENCES usuarios(id),
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT fk_zclas_cluster FOREIGN KEY (corrida_id, cluster_valor)
+        REFERENCES corrida_clusters(corrida_id, cluster_valor),
+    CONSTRAINT chk_zclas_origen CHECK (
+        (segmento_manual_id IS NOT NULL AND corrida_id IS NULL     AND cluster_valor IS NULL)
+     OR (segmento_manual_id IS NULL     AND corrida_id IS NOT NULL AND cluster_valor IS NOT NULL)
+    ),
+    CONSTRAINT chk_zclas_vigencia CHECK (
+        vigente_hasta IS NULL OR vigente_hasta >= vigente_desde
+    )
 );
-COMMENT ON TABLE zona_clasificaciones IS 'Clasificación de una zona en un segmento de ingreso, con su trazabilidad (RN-02).';
+COMMENT ON TABLE zona_clasificaciones IS 'Clasificación de una zona en un segmento de ingreso, con su trazabilidad (RN-02). Manual o por cluster, nunca las dos.';
 
 -- Una sola clasificación vigente por zona.
 CREATE UNIQUE INDEX uq_zona_clasificacion_vigente
     ON zona_clasificaciones(zona_id) WHERE vigente;
-CREATE INDEX idx_zona_clasif_segmento ON zona_clasificaciones(segmento_ingreso_id);
+CREATE INDEX idx_zona_clasif_segmento ON zona_clasificaciones(segmento_manual_id);
+CREATE INDEX idx_zona_clasif_cluster ON zona_clasificaciones(corrida_id, cluster_valor);
+
+-- Resuelve el segmento venga de donde venga. Todo el resto del esquema
+-- (canastas, tablero) consulta ESTA vista, no la tabla.
+CREATE VIEW v_zona_segmento AS
+SELECT zc.id AS clasificacion_id,
+       zc.zona_id,
+       COALESCE(zc.segmento_manual_id, cc.segmento_ingreso_id) AS segmento_ingreso_id,
+       zc.corrida_id, zc.cluster_valor,
+       zc.vigente, zc.vigente_desde, zc.vigente_hasta
+FROM zona_clasificaciones zc
+LEFT JOIN corrida_clusters cc
+       ON cc.corrida_id = zc.corrida_id AND cc.cluster_valor = zc.cluster_valor;
+COMMENT ON VIEW v_zona_segmento IS 'Segmento de ingreso vigente de cada zona, resolviendo la asignación manual o la del cluster.';
 
 -- =====================================================================
 -- 6. INDICADORES
@@ -301,39 +527,10 @@ CREATE TABLE indicadores (
 );
 COMMENT ON TABLE indicadores IS 'Catálogo de indicadores calculables: ticket promedio, productos por canasta, frecuencia de compra, unidades por transacción, gasto por categoría, población, ingreso estimado, disponibilidad…';
 
-CREATE TABLE indicador_valores (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    indicador_id        SMALLINT NOT NULL REFERENCES indicadores(id),
-    corrida_id          UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
-    -- Dimensiones. Se llenan solo las que apliquen al ámbito del
-    -- indicador; un ticket promedio puede ser por tienda, por zona, por
-    -- segmento o por combinación de ellas.
-    tienda_id           UUID,
-    zona_id             UUID REFERENCES zonas(id),
-    segmento_ingreso_id SMALLINT REFERENCES segmentos_ingreso(id),
-    categoria_id        SMALLINT,
-    periodo_inicio      DATE NOT NULL,
-    periodo_fin         DATE NOT NULL,
-    valor               NUMERIC(16,4) NOT NULL,
-    muestra             INTEGER,   -- nº de observaciones que respaldan el valor
-    CONSTRAINT chk_indicador_periodo CHECK (periodo_fin >= periodo_inicio)
-);
-COMMENT ON TABLE indicador_valores IS 'Valor de un indicador para una combinación de dimensiones y un periodo. Tabla de hechos: las dimensiones no aplicables quedan en NULL.';
-
-CREATE INDEX idx_indvalor_indicador ON indicador_valores(indicador_id, periodo_inicio, periodo_fin);
-CREATE INDEX idx_indvalor_zona ON indicador_valores(zona_id) WHERE zona_id IS NOT NULL;
-CREATE INDEX idx_indvalor_tienda ON indicador_valores(tienda_id) WHERE tienda_id IS NOT NULL;
-CREATE INDEX idx_indvalor_corrida ON indicador_valores(corrida_id);
-
--- Ingreso estimado, población y disponibilidad de la zona son medidas
--- que cambian con el tiempo: son indicadores, no columnas de `zonas`.
-CREATE VIEW v_zona_indicadores AS
-SELECT z.id AS zona_id, z.nombre AS zona, i.clave, i.nombre AS indicador,
-       iv.valor, i.unidad, iv.periodo_inicio, iv.periodo_fin
-FROM indicador_valores iv
-JOIN indicadores i ON i.id = iv.indicador_id
-JOIN zonas z ON z.id = iv.zona_id;
-COMMENT ON VIEW v_zona_indicadores IS 'Atajo de lectura para los indicadores de una zona (ingreso estimado, población, disponibilidad…).';
+-- `indicador_valores` (la tabla de hechos) se declara más abajo, después
+-- de `productos`: sus dimensiones apuntan a tiendas, categorías y
+-- productos, que se crean en las secciones 7 y 8. Declararla aquí
+-- obligaba a parchearla después con ALTER TABLE.
 
 -- =====================================================================
 -- 7. TIENDAS
@@ -363,9 +560,6 @@ CREATE INDEX idx_tiendas_zona ON tiendas(zona_id);
 CREATE INDEX idx_tiendas_activo ON tiendas(activo);
 CREATE INDEX idx_tiendas_proveedor ON tiendas(proveedor_id) WHERE proveedor_id IS NOT NULL;
 
-ALTER TABLE indicador_valores
-    ADD CONSTRAINT fk_indvalor_tienda FOREIGN KEY (tienda_id) REFERENCES tiendas(id);
-
 -- Antes eran dos columnas en `tiendas`, y la segunda solo tenía sentido
 -- si la primera era TRUE. La existencia de la fila ES el "tiene web".
 CREATE TABLE tienda_canal_web (
@@ -389,9 +583,6 @@ CREATE TABLE categorias_producto (
     descripcion         TEXT
 );
 COMMENT ON TABLE categorias_producto IS 'Categorías y subcategorías; soporta criterios de sustituibilidad (RN-11).';
-
-ALTER TABLE indicador_valores
-    ADD CONSTRAINT fk_indvalor_categoria FOREIGN KEY (categoria_id) REFERENCES categorias_producto(id);
 
 CREATE TYPE tipo_unidad AS ENUM ('masa','volumen','pieza','longitud');
 
@@ -435,8 +626,66 @@ CREATE INDEX idx_productos_proveedor ON productos(proveedor_id) WHERE proveedor_
 CREATE INDEX idx_productos_estatus ON productos(estatus);
 CREATE INDEX idx_productos_basicos ON productos(es_canasta_basica) WHERE es_canasta_basica;
 
-ALTER TABLE indicador_valores
-    ADD COLUMN producto_id UUID REFERENCES productos(id);
+-- --- Tabla de hechos de indicadores ----------------------------------
+-- Se declara aquí, y no junto al catálogo `indicadores`, porque sus
+-- dimensiones apuntan a zonas, segmentos, tiendas, categorías y
+-- productos: hasta este punto ya existen todas y la tabla se crea
+-- completa, sin ALTER posteriores.
+CREATE TABLE indicador_valores (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    indicador_id        SMALLINT NOT NULL REFERENCES indicadores(id),
+    corrida_id          UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
+    -- Dimensiones. Se llenan solo las que apliquen al ámbito del
+    -- indicador; un ticket promedio puede ser por tienda, por zona, por
+    -- segmento o por combinación de ellas.
+    tienda_id           UUID     REFERENCES tiendas(id),
+    zona_id             UUID     REFERENCES zonas(id),
+    segmento_ingreso_id SMALLINT REFERENCES segmentos_ingreso(id),
+    categoria_id        SMALLINT REFERENCES categorias_producto(id),
+    producto_id         UUID     REFERENCES productos(id),
+    periodo_inicio      DATE NOT NULL,
+    periodo_fin         DATE NOT NULL,
+    valor               NUMERIC(16,4) NOT NULL,
+    muestra             INTEGER,   -- nº de observaciones que respaldan el valor
+    CONSTRAINT chk_indicador_periodo CHECK (periodo_fin >= periodo_inicio),
+    -- 3FN. Una tienda ya determina su zona, y un producto su categoría:
+    -- llenar ambas columnas de un par creaba una dependencia transitiva
+    -- y permitía una fila que dijera "tienda del Valle, zona Oriente".
+    -- Se elige el grano, no los dos.
+    CONSTRAINT chk_indvalor_grano_territorial CHECK (
+        NOT (tienda_id IS NOT NULL AND zona_id IS NOT NULL)
+    ),
+    CONSTRAINT chk_indvalor_grano_producto CHECK (
+        NOT (producto_id IS NOT NULL AND categoria_id IS NOT NULL)
+    ),
+    -- La tabla NO tenía llave más allá del UUID sustituto: el mismo
+    -- indicador, misma corrida, mismas dimensiones y mismo periodo podía
+    -- insertarse cuantas veces se reintentara el cálculo. Sin llave real
+    -- no se puede afirmar ninguna forma normal sobre la tabla.
+    -- NULLS NOT DISTINCT (PG 15+) es indispensable aquí: las dimensiones
+    -- no aplicables son NULL, y con la semántica por omisión dos filas
+    -- idénticas con NULL se consideran distintas y la UNIQUE no serviría.
+    CONSTRAINT uq_indicador_valor UNIQUE NULLS NOT DISTINCT (
+        indicador_id, corrida_id, tienda_id, zona_id, segmento_ingreso_id,
+        categoria_id, producto_id, periodo_inicio, periodo_fin
+    )
+);
+COMMENT ON TABLE indicador_valores IS 'Valor de un indicador para una combinación de dimensiones y un periodo. Tabla de hechos: las dimensiones no aplicables quedan en NULL, y las que se implican entre sí no se llenan juntas.';
+
+CREATE INDEX idx_indvalor_indicador ON indicador_valores(indicador_id, periodo_inicio, periodo_fin);
+CREATE INDEX idx_indvalor_zona ON indicador_valores(zona_id) WHERE zona_id IS NOT NULL;
+CREATE INDEX idx_indvalor_tienda ON indicador_valores(tienda_id) WHERE tienda_id IS NOT NULL;
+CREATE INDEX idx_indvalor_corrida ON indicador_valores(corrida_id);
+
+-- Ingreso estimado, población y disponibilidad de la zona son medidas
+-- que cambian con el tiempo: son indicadores, no columnas de `zonas`.
+CREATE VIEW v_zona_indicadores AS
+SELECT z.id AS zona_id, z.nombre AS zona, i.clave, i.nombre AS indicador,
+       iv.valor, i.unidad, iv.periodo_inicio, iv.periodo_fin
+FROM indicador_valores iv
+JOIN indicadores i ON i.id = iv.indicador_id
+JOIN zonas z ON z.id = iv.zona_id;
+COMMENT ON VIEW v_zona_indicadores IS 'Atajo de lectura para los indicadores de una zona (ingreso estimado, población, disponibilidad…).';
 
 -- RF-35. Un producto tiene varias presentaciones (500 g, 1 kg, 6 pzas).
 -- Precios, inventario y líneas de venta apuntan AQUÍ, no a productos.
@@ -525,13 +774,23 @@ CREATE TABLE precios (
     precio                  NUMERIC(12,2) NOT NULL CHECK (precio > 0),
     fecha_vigencia_desde    DATE NOT NULL DEFAULT CURRENT_DATE,
     fecha_vigencia_hasta    DATE,
-    vigente                 BOOLEAN NOT NULL DEFAULT TRUE,
+    -- 3FN. `vigente` estaba determinada por `fecha_vigencia_hasta` y las
+    -- dos se guardaban por separado: se podía dejar un precio marcado
+    -- como vigente con fecha de fin, o al revés. Cerrar un precio ahora
+    -- es ponerle fecha de fin, y la bandera se sigue sola.
+    vigente                 BOOLEAN GENERATED ALWAYS AS (fecha_vigencia_hasta IS NULL) STORED,
     origen                  origen_precio NOT NULL DEFAULT 'interno',
     creado_por              UUID REFERENCES usuarios(id),
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_precio_vigencia CHECK (
         fecha_vigencia_hasta IS NULL OR fecha_vigencia_hasta >= fecha_vigencia_desde
-    )
+    ),
+    -- uq_precios_vigente (abajo) solo cubre el precio ACTUAL. Sin esto,
+    -- el histórico admitía dos precios distintos para la misma
+    -- presentación/tienda arrancando el mismo día: la llave natural
+    -- existía en la intención del equipo (data_retail.sql la protege con
+    -- un NOT EXISTS sobre justo estas tres columnas) pero no en la base.
+    UNIQUE (presentacion_id, tienda_id, fecha_vigencia_desde)
 );
 COMMENT ON TABLE precios IS 'Historial versionado de precios por presentación/tienda (RN-06). El histórico NO se sobrescribe: es lo que hace posible calcular elasticidad y variación de precios.';
 
@@ -575,7 +834,10 @@ CREATE TABLE limites_precio_zona (
     CONSTRAINT chk_limite_precio_rango CHECK (
         precio_min IS NULL OR precio_max IS NULL OR precio_max >= precio_min
     ),
-    UNIQUE (zona_id, presentacion_id)
+    -- presentacion_id NULL = el límite aplica a toda la zona. Con la
+    -- semántica por omisión ese NULL hace que la UNIQUE no impida
+    -- duplicados justo en el caso general.
+    UNIQUE NULLS NOT DISTINCT (zona_id, presentacion_id)
 );
 COMMENT ON TABLE limites_precio_zona IS 'Variación máxima de precio permitida por zona (RN-06, RN-10).';
 
@@ -587,7 +849,10 @@ CREATE TABLE reglas_exclusion_asociacion (
     activo              BOOLEAN NOT NULL DEFAULT TRUE,
     creado_por          UUID REFERENCES usuarios(id),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_exclusion_categorias_distintas CHECK (categoria_a_id <> categoria_b_id),
+    -- El hecho "A y B no se asocian" es simétrico. Con solo <> se podian
+    -- guardar (A,B) y (B,A) como dos filas del mismo hecho. Ordenar el
+    -- par lo vuelve una sola representación posible.
+    CONSTRAINT chk_exclusion_par_canonico CHECK (categoria_a_id < categoria_b_id),
     UNIQUE (categoria_a_id, categoria_b_id)
 );
 COMMENT ON TABLE reglas_exclusion_asociacion IS 'Excluye asociaciones espurias entre categorías (RN-10).';
@@ -744,6 +1009,14 @@ CREATE INDEX idx_transacciones_tienda_fecha ON transacciones(tienda_id, fecha);
 CREATE INDEX idx_transacciones_fecha ON transacciones(fecha);
 CREATE INDEX idx_transacciones_importacion ON transacciones(importacion_id) WHERE importacion_id IS NOT NULL;
 
+-- ÚNICO ALTER del archivo, y no se puede evitar reordenando: la
+-- dependencia entre importaciones y transacciones es CIRCULAR.
+--     transacciones.importacion_id  -> importaciones(id)
+--     importacion_filas.transaccion_id -> transacciones(id)
+-- Cuál se declare primero, a la otra le falta la contraparte. La única
+-- alternativa sería declarar la llave foránea como DEFERRABLE, que
+-- resuelve el orden de INSERT pero no el de CREATE TABLE. Se cierra
+-- aquí, en cuanto ambas tablas existen.
 ALTER TABLE importacion_filas
     ADD CONSTRAINT fk_impfila_transaccion FOREIGN KEY (transaccion_id) REFERENCES transacciones(id);
 
@@ -792,6 +1065,27 @@ COMMENT ON VIEW v_transaccion_detalle IS 'Línea de venta con producto Y present
 
 CREATE TYPE tamano_compra AS ENUM ('chica','mediana','grande');
 
+-- 3FN. En v3 `canastas.tamano` era una columna determinada por
+-- `valor_total` (no llave -> no llave): el criterio de RN-05 vivía
+-- escondido en un CASE del código de carga y se congelaba fila por fila.
+-- Aquí el umbral es un dato: cambiarlo es un UPDATE de tres filas, no un
+-- ALTER TABLE ni un reproceso. Rangos semiabiertos [min, max).
+CREATE TABLE tamanos_compra (
+    codigo      tamano_compra PRIMARY KEY,
+    valor_min   NUMERIC(14,2) NOT NULL CHECK (valor_min >= 0),
+    valor_max   NUMERIC(14,2),   -- NULL = sin tope superior
+    descripcion TEXT,
+    CONSTRAINT chk_tamano_rango CHECK (valor_max IS NULL OR valor_max > valor_min),
+    -- Los rangos NO se pueden traslapar: si lo hicieran, el join de
+    -- v_canastas devolvería la misma canasta dos veces. El CHECK de
+    -- arriba solo valida cada fila por separado; esto valida el conjunto.
+    -- numrange(min, NULL) queda abierto por arriba, que es justo 'grande'.
+    CONSTRAINT excl_tamano_sin_traslape EXCLUDE USING gist (
+        numrange(valor_min, valor_max, '[)') WITH &&
+    )
+);
+COMMENT ON TABLE tamanos_compra IS 'Umbrales de RN-05 que clasifican una canasta por su valor total. El tamaño se resuelve en v_canastas, no se guarda.';
+
 CREATE TABLE canastas (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     transaccion_id              UUID NOT NULL UNIQUE REFERENCES transacciones(id) ON DELETE CASCADE,
@@ -804,7 +1098,8 @@ CREATE TABLE canastas (
     numero_productos            INTEGER NOT NULL CHECK (numero_productos >= 0),
     unidades_totales            NUMERIC(12,2) NOT NULL CHECK (unidades_totales >= 0),
     productos_basicos           INTEGER NOT NULL DEFAULT 0 CHECK (productos_basicos >= 0),
-    tamano                      tamano_compra NOT NULL,
+    -- `tamano` ya no se guarda: se deriva de valor_total contra el
+    -- catálogo `tamanos_compra` (ver v_canastas).
     construida_en               TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_canasta_basicos CHECK (productos_basicos <= numero_productos)
 );
@@ -813,11 +1108,14 @@ COMMENT ON TABLE canastas IS 'Canasta de consumo derivada de una transacción (R
 CREATE INDEX idx_canastas_zona_fecha ON canastas(zona_id, fecha);
 CREATE INDEX idx_canastas_segmento ON canastas(segmento_ingreso_id);
 CREATE INDEX idx_canastas_fecha ON canastas(fecha);
-CREATE INDEX idx_canastas_tamano ON canastas(tamano);
+-- Sustituye a idx_canastas_tamano: filtrar por tamaño es filtrar por
+-- rango de valor_total.
+CREATE INDEX idx_canastas_valor_total ON canastas(valor_total);
 
 CREATE VIEW v_canastas AS
 SELECT k.id AS canasta_id, k.fecha, k.valor_total, k.numero_productos,
-       k.unidades_totales, k.productos_basicos, k.tamano,
+       k.unidades_totales, k.productos_basicos,
+       tc.codigo AS tamano,
        t.id AS transaccion_id, t.folio,
        ti.id AS tienda_id, ti.nombre AS tienda,
        z.id AS zona_id, z.nombre AS zona,
@@ -828,7 +1126,9 @@ JOIN transacciones t ON t.id = k.transaccion_id
 JOIN tiendas ti ON ti.id = t.tienda_id
 JOIN zonas z ON z.id = k.zona_id
 JOIN municipios m ON m.id = z.municipio_id
-LEFT JOIN segmentos_ingreso s ON s.id = k.segmento_ingreso_id;
+LEFT JOIN segmentos_ingreso s ON s.id = k.segmento_ingreso_id
+LEFT JOIN tamanos_compra tc ON k.valor_total >= tc.valor_min
+                           AND (tc.valor_max IS NULL OR k.valor_total < tc.valor_max);
 COMMENT ON VIEW v_canastas IS 'Consulta de canastas con todas las dimensiones que pide el requerimiento.';
 
 -- =====================================================================
@@ -876,7 +1176,9 @@ CREATE TABLE sustituciones (
     score               NUMERIC(6,4) NOT NULL CHECK (score BETWEEN 0 AND 1),
     observaciones       INTEGER,
     CONSTRAINT chk_sustitucion_distintos CHECK (producto_origen_id <> producto_destino_id),
-    UNIQUE (corrida_id, producto_origen_id, producto_destino_id, zona_id)
+    -- zona_id NULL = agregado nacional; sin NULLS NOT DISTINCT la
+    -- restricción no impedía duplicar justo ese caso.
+    UNIQUE NULLS NOT DISTINCT (corrida_id, producto_origen_id, producto_destino_id, zona_id)
 );
 COMMENT ON TABLE sustituciones IS 'Patrón de sustitución detectado entre dos productos (RN-11).';
 
@@ -889,20 +1191,25 @@ CREATE TABLE elasticidades (
     presentacion_id     UUID NOT NULL REFERENCES producto_presentaciones(id),
     zona_id             UUID REFERENCES zonas(id),      -- NULL = agregado nacional
     valor               NUMERIC(10,4) NOT NULL,
-    -- Redundante con `valor`, pero es la clasificación que exige el
-    -- requerimiento y se consulta muchísimo más que el número crudo.
-    clasificacion       clasificacion_elasticidad NOT NULL,
+    -- 3FN. `valor -> clasificacion` es una dependencia de un atributo no
+    -- llave sobre otro atributo no llave: en v3 la clasificación se
+    -- guardaba aparte y un CHECK vigilaba que no se contradijera. Como
+    -- columna GENERADA deja de ser un dato que alguien pueda escribir
+    -- mal: se sigue consultando igual, pero ya no es información
+    -- independiente que pueda desincronizarse.
+    clasificacion       clasificacion_elasticidad GENERATED ALWAYS AS (
+        CASE
+            WHEN abs(valor) > 1.05 THEN 'elastica'::clasificacion_elasticidad
+            WHEN abs(valor) < 0.95 THEN 'inelastica'::clasificacion_elasticidad
+            ELSE 'unitaria'::clasificacion_elasticidad
+        END
+    ) STORED,
     r_cuadrada          NUMERIC(6,5) CHECK (r_cuadrada IS NULL OR r_cuadrada BETWEEN 0 AND 1),
     observaciones       INTEGER NOT NULL CHECK (observaciones > 0),
-    UNIQUE (corrida_id, presentacion_id, zona_id),
-    -- La clasificación tiene que ser coherente con el valor.
-    CONSTRAINT chk_elasticidad_clasificacion CHECK (
-        (clasificacion = 'elastica'   AND abs(valor) > 1.05) OR
-        (clasificacion = 'inelastica' AND abs(valor) < 0.95) OR
-        (clasificacion = 'unitaria'   AND abs(valor) BETWEEN 0.95 AND 1.05)
-    )
+    -- zona_id NULL = agregado nacional (ver nota de `sustituciones`).
+    UNIQUE NULLS NOT DISTINCT (corrida_id, presentacion_id, zona_id)
 );
-COMMENT ON TABLE elasticidades IS 'Elasticidad precio-demanda. |E|>1 elástica, |E|<1 inelástica, |E|≈1 unitaria; el CHECK impide guardar una clasificación que contradiga el valor.';
+COMMENT ON TABLE elasticidades IS 'Elasticidad precio-demanda. |E|>1 elástica, |E|<1 inelástica, |E|≈1 unitaria: la clasificación se deriva del valor, no se captura.';
 
 CREATE INDEX idx_elasticidad_presentacion ON elasticidades(presentacion_id);
 
@@ -922,14 +1229,41 @@ CREATE TYPE componente_accesibilidad AS ENUM (
     'precio','ingreso_segmento','disponibilidad','cobertura_basicos'
 );
 
+-- 2FN. Ésta era la peor violación del esquema v3. `peso` vivía en
+-- `accesibilidad_componentes`, cuya llave es (accesibilidad_id,
+-- componente), pero el peso NO depende de la zona: es la ponderación del
+-- MODELO. Dependía solo de `componente`, una PARTE de la llave — eso es
+-- exactamente una dependencia parcial, y bajaba todo el esquema a 1FN.
+-- En la práctica: el peso de 'precio' se repetía idéntico en cada zona
+-- de la corrida, y corregirlo obligaba a actualizar N filas confiando en
+-- que ninguna quedara distinta.
+CREATE TABLE accesibilidad_pesos (
+    corrida_id          UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
+    componente          componente_accesibilidad NOT NULL,
+    peso                NUMERIC(5,4) NOT NULL CHECK (peso BETWEEN 0 AND 1),
+    PRIMARY KEY (corrida_id, componente)
+);
+COMMENT ON TABLE accesibilidad_pesos IS 'Ponderación de cada componente del índice, una vez por corrida. Que los pesos de una corrida sumen 1 requiere trigger: no es expresable como CHECK.';
+
 CREATE TABLE accesibilidad_componentes (
     accesibilidad_id    UUID NOT NULL REFERENCES accesibilidad_zona(id) ON DELETE CASCADE,
     componente          componente_accesibilidad NOT NULL,
     valor               NUMERIC(10,4) NOT NULL,
-    peso                NUMERIC(5,4) NOT NULL CHECK (peso BETWEEN 0 AND 1),
     PRIMARY KEY (accesibilidad_id, componente)
 );
-COMMENT ON TABLE accesibilidad_componentes IS 'Desglose del índice: precio + ingreso del segmento + disponibilidad + productos básicos, con su peso.';
+COMMENT ON TABLE accesibilidad_componentes IS 'Valor medido de cada componente para una zona: precio, ingreso del segmento, disponibilidad y cobertura de básicos. El peso está en accesibilidad_pesos.';
+
+-- El desglose completo "valor x peso = aporte" que antes se leía de una
+-- sola tabla sigue disponible, ahora sin redundancia.
+CREATE VIEW v_accesibilidad_desglose AS
+SELECT a.id AS accesibilidad_id, a.corrida_id, a.zona_id, a.indice,
+       c.componente, c.valor, w.peso,
+       round(c.valor * w.peso, 4) AS aporte
+FROM accesibilidad_zona a
+JOIN accesibilidad_componentes c ON c.accesibilidad_id = a.id
+JOIN accesibilidad_pesos w ON w.corrida_id = a.corrida_id
+                          AND w.componente = c.componente;
+COMMENT ON VIEW v_accesibilidad_desglose IS 'Explica el índice de accesibilidad componente por componente. RN: el índice nunca se reduce a "precio bajo".';
 
 -- --- M13 Simulación --------------------------------------------------
 CREATE TABLE escenarios (
@@ -969,7 +1303,7 @@ CREATE TABLE escenario_resultados (
         CASE WHEN valor_base = 0 THEN NULL
              ELSE (valor_simulado - valor_base) / valor_base * 100 END
     ) STORED,
-    UNIQUE (escenario_id, indicador_id, zona_id)
+    UNIQUE NULLS NOT DISTINCT (escenario_id, indicador_id, zona_id)
 );
 COMMENT ON TABLE escenario_resultados IS 'Impacto estimado del escenario sobre demanda, ingreso y accesibilidad. La variación se calcula sola.';
 
@@ -1023,6 +1357,7 @@ CREATE TABLE auditoria (
     fecha               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE auditoria IS 'Evento auditable: quién, qué acción, sobre qué entidad y cuándo. Append-only: no se actualiza ni se borra.';
+COMMENT ON COLUMN auditoria.rol_id IS 'Rol con el que actuaba el usuario EN EL INSTANTE del evento. No es copia redundante de usuarios.rol_id (eso sería una dependencia transitiva): el rol del usuario puede cambiar después y la bitácora no debe cambiar con él.';
 
 CREATE INDEX idx_auditoria_tabla_registro ON auditoria(tabla_afectada, registro_id);
 CREATE INDEX idx_auditoria_usuario ON auditoria(usuario_id);

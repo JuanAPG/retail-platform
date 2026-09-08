@@ -1,5 +1,5 @@
 -- =====================================================================
--- data_retail.sql — datos de prueba para el esquema v3.
+-- data_retail.sql — datos de prueba para el esquema v4.
 --
 -- Requiere que schema.sql ya se haya ejecutado.
 --
@@ -86,9 +86,12 @@ FROM (VALUES
 JOIN municipios m ON m.nombre = v.municipio_nombre
 ON CONFLICT (nombre, municipio_id) DO NOTHING;
 
--- Clasificación de cada zona (asignación manual: corrida_id NULL).
-INSERT INTO zona_clasificaciones (zona_id, segmento_ingreso_id, asignada_por, vigente)
-SELECT z.id, s.id, u.id, TRUE
+-- Clasificación de cada zona. Asignación manual: se escribe en
+-- segmento_manual_id y corrida_id/cluster_valor quedan NULL (v4 exige uno
+-- de los dos caminos, nunca ambos). `vigente` es columna generada: se
+-- deriva de vigente_hasta, no se inserta.
+INSERT INTO zona_clasificaciones (zona_id, segmento_manual_id, asignada_por)
+SELECT z.id, s.id, u.id
 FROM (VALUES
     ('Zona Valle',   'Ingreso alto'),
     ('Zona Centro',  'Ingreso medio'),
@@ -103,14 +106,25 @@ WHERE u.email = 'admin@retail.mx'
   );
 
 -- --------------------------------------------------------------- 6. TIENDAS
-INSERT INTO direcciones (calle, numero_exterior, colonia, codigo_postal, municipio_id)
-SELECT v.calle, v.num, v.colonia, v.cp, m.id
+-- El municipio ya no se captura en cada dirección: se declara una vez
+-- por código postal (v4, FNBC).
+INSERT INTO codigos_postales (codigo_postal, municipio_id)
+SELECT v.cp, m.id
 FROM (VALUES
-    ('Av. Vasconcelos',   '402',  'Del Valle',       '66220', 'San Pedro Garza García'),
-    ('Av. Constitución',  '1050', 'Centro',          '64000', 'Monterrey'),
-    ('Av. Pablo Livas',   '2300', 'Nueva Linda Vista','67130', 'Guadalupe')
-) AS v(calle, num, colonia, cp, municipio_nombre)
+    ('66220', 'San Pedro Garza García'),
+    ('64000', 'Monterrey'),
+    ('67130', 'Guadalupe')
+) AS v(cp, municipio_nombre)
 JOIN municipios m ON m.nombre = v.municipio_nombre
+ON CONFLICT (codigo_postal) DO NOTHING;
+
+INSERT INTO direcciones (calle, numero_exterior, colonia, codigo_postal)
+SELECT v.calle, v.num, v.colonia, v.cp
+FROM (VALUES
+    ('Av. Vasconcelos',   '402',  'Del Valle',        '66220'),
+    ('Av. Constitución',  '1050', 'Centro',           '64000'),
+    ('Av. Pablo Livas',   '2300', 'Nueva Linda Vista','67130')
+) AS v(calle, num, colonia, cp)
 WHERE NOT EXISTS (
     SELECT 1 FROM direcciones d WHERE d.calle = v.calle AND d.numero_exterior = v.num
 );
@@ -190,20 +204,23 @@ WHERE p.estatus = 'activo'
   AND NOT EXISTS (SELECT 1 FROM producto_revisiones r WHERE r.producto_id = p.id);
 
 -- --------------------------------------------------------------- 8. PRECIOS E INVENTARIO
-INSERT INTO precios (presentacion_id, tienda_id, precio, fecha_vigencia_desde, vigente, origen, creado_por)
-SELECT pp.id, t.id, v.precio, v.desde::date, v.vigente, 'interno'::origen_precio, u.id
+-- `vigente` es columna generada en v4: un precio está vigente si y solo
+-- si no tiene fecha de fin. Cerrar el precio de junio es ponerle
+-- fecha_vigencia_hasta, no bajarle una bandera aparte.
+INSERT INTO precios (presentacion_id, tienda_id, precio, fecha_vigencia_desde, fecha_vigencia_hasta, origen, creado_por)
+SELECT pp.id, t.id, v.precio, v.desde::date, v.hasta::date, 'interno'::origen_precio, u.id
 FROM (VALUES
-    ('P-001-001',  '1 kg',  'Super Valle Centro',     38.00, '2026-06-01', FALSE),
-    ('P-001-001',  '1 kg',  'Super Valle Centro',     42.50, '2026-08-01', TRUE),
-    ('P-001-001',  '1 kg',  'Mercado Pablo Livas',    36.00, '2026-08-01', TRUE),
-    ('P-001-001',  '500 g', 'Super Valle Centro',     24.00, '2026-08-01', TRUE),
-    ('LDN-LEC',    '1 L',   'Super Valle Centro',     28.50, '2026-08-01', TRUE),
-    ('LDN-LEC',    '1 L',   'Abarrotes Constitución', 27.00, '2026-08-01', TRUE),
-    ('LDN-LEC',    '1 L',   'Mercado Pablo Livas',    26.00, '2026-08-01', TRUE),
-    ('BIO-QUI-500','500 g', 'Super Valle Centro',     92.00, '2026-08-01', TRUE),
-    ('LDN-QUE-400','400 g', 'Super Valle Centro',     58.00, '2026-08-01', TRUE),
-    ('LDN-QUE-400','400 g', 'Abarrotes Constitución', 55.50, '2026-08-01', TRUE)
-) AS v(sku, presentacion, tienda, precio, desde, vigente)
+    ('P-001-001',  '1 kg',  'Super Valle Centro',     38.00, '2026-06-01', '2026-07-31'),
+    ('P-001-001',  '1 kg',  'Super Valle Centro',     42.50, '2026-08-01', NULL),
+    ('P-001-001',  '1 kg',  'Mercado Pablo Livas',    36.00, '2026-08-01', NULL),
+    ('P-001-001',  '500 g', 'Super Valle Centro',     24.00, '2026-08-01', NULL),
+    ('LDN-LEC',    '1 L',   'Super Valle Centro',     28.50, '2026-08-01', NULL),
+    ('LDN-LEC',    '1 L',   'Abarrotes Constitución', 27.00, '2026-08-01', NULL),
+    ('LDN-LEC',    '1 L',   'Mercado Pablo Livas',    26.00, '2026-08-01', NULL),
+    ('BIO-QUI-500','500 g', 'Super Valle Centro',     92.00, '2026-08-01', NULL),
+    ('LDN-QUE-400','400 g', 'Super Valle Centro',     58.00, '2026-08-01', NULL),
+    ('LDN-QUE-400','400 g', 'Abarrotes Constitución', 55.50, '2026-08-01', NULL)
+) AS v(sku, presentacion, tienda, precio, desde, hasta)
 JOIN productos p ON p.sku = v.sku
 JOIN producto_presentaciones pp ON pp.producto_id = p.id AND pp.nombre = v.presentacion
 JOIN tiendas t ON t.nombre = v.tienda
@@ -295,13 +312,22 @@ SET total = COALESCE((
 -- --------------------------------------------------------------- 11. CANASTAS
 -- Una canasta por transacción, con la zona y el segmento congelados al
 -- momento de construirla (RN-03, RN-05).
+-- El tamaño de la canasta YA NO se inserta: en v3 este CASE era la única
+-- definición de RN-05 y vivía escondida aquí. Ahora los umbrales son el
+-- catálogo `tamanos_compra` y `v_canastas` resuelve el tamaño al leer.
+INSERT INTO tamanos_compra (codigo, valor_min, valor_max, descripcion) VALUES
+    ('chica',     0.00,  80.00, 'Compra de reposición o conveniencia.'),
+    ('mediana',  80.00, 200.00, 'Compra semanal típica.'),
+    ('grande',  200.00, NULL,   'Despensa o compra de abastecimiento.')
+ON CONFLICT (codigo) DO NOTHING;
+
 INSERT INTO canastas (transaccion_id, zona_id, segmento_ingreso_id, fecha,
                       valor_total, numero_productos, unidades_totales,
-                      productos_basicos, tamano)
+                      productos_basicos)
 SELECT
     t.id,
     ti.zona_id,
-    zc.segmento_ingreso_id,
+    zs.segmento_ingreso_id,
     t.fecha,
     t.total,
     (SELECT count(*)          FROM transacciones_detalle d WHERE d.transaccion_id = t.id),
@@ -310,15 +336,12 @@ SELECT
        FROM transacciones_detalle d
        JOIN producto_presentaciones pp ON pp.id = d.presentacion_id
        JOIN productos p ON p.id = pp.producto_id
-      WHERE d.transaccion_id = t.id AND p.es_canasta_basica),
-    CASE
-        WHEN t.total < 80  THEN 'chica'
-        WHEN t.total < 200 THEN 'mediana'
-        ELSE 'grande'
-    END::tamano_compra
+      WHERE d.transaccion_id = t.id AND p.es_canasta_basica)
 FROM transacciones t
 JOIN tiendas ti ON ti.id = t.tienda_id
-LEFT JOIN zona_clasificaciones zc ON zc.zona_id = ti.zona_id AND zc.vigente
+-- v_zona_segmento resuelve el segmento venga de asignación manual o de
+-- un cluster; la tabla base ya no lo tiene siempre.
+LEFT JOIN v_zona_segmento zs ON zs.zona_id = ti.zona_id AND zs.vigente
 WHERE NOT EXISTS (SELECT 1 FROM canastas k WHERE k.transaccion_id = t.id);
 
 COMMIT;

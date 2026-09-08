@@ -1,10 +1,15 @@
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
-import { MunicipioEntity } from './municipio.entity';
+import { CodigoPostalEntity } from './codigo-postal.entity';
 
 /**
  * Domicilio normalizado. Antes era el campo `tiendas.direccion TEXT`:
  * una cadena única impedía agrupar por colonia o por código postal, que
  * es justo lo que necesita el análisis territorial.
+ *
+ * Desde el esquema v4 ya NO guarda `municipio_id`: el municipio se
+ * obtiene del código postal (`direccion.codigoPostalRef.municipio`),
+ * porque un CP pertenece a un solo municipio y duplicarlo aquí rompía
+ * FNBC.
  */
 @Entity({ name: 'direcciones' })
 export class DireccionEntity {
@@ -23,15 +28,13 @@ export class DireccionEntity {
   @Column({ type: 'varchar', length: 120, nullable: true })
   colonia: string | null;
 
-  @Column({ name: 'codigo_postal', type: 'varchar', length: 10, nullable: true })
-  codigoPostal: string | null;
+  @Column({ name: 'codigo_postal', type: 'varchar', length: 10 })
+  codigoPostal: string;
 
-  @Column({ name: 'municipio_id', type: 'smallint' })
-  municipioId: number;
-
-  @ManyToOne(() => MunicipioEntity, { eager: true })
-  @JoinColumn({ name: 'municipio_id' })
-  municipio: MunicipioEntity;
+  /** El municipio se lee por aquí: codigoPostalRef.municipio. */
+  @ManyToOne(() => CodigoPostalEntity, { eager: true })
+  @JoinColumn({ name: 'codigo_postal' })
+  codigoPostalRef: CodigoPostalEntity;
 
   @Column({ type: 'text', nullable: true })
   referencia: string | null;
