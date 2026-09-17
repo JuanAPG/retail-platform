@@ -144,6 +144,39 @@ export interface LoginResponse {
   usuario: AuthUser;
 }
 
+/**
+ * M08 — Un renglón del histórico de precios. Cuelga de presentación +
+ * tienda (RN-06); la zona no viaja aquí, se deriva de `store.zona`.
+ */
+export interface PriceHistoryEntry {
+  id: string;
+  presentationId: string;
+  presentation?: ProductoPresentacion;
+  storeId: string;
+  store?: Tienda;
+  price: string;
+  effectiveDate: string;
+  effectiveUntil: string | null;
+  vigente: boolean;
+  origen: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface ZonePriceComparison {
+  zoneId: string;
+  zoneName: string;
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+  storeCount: number;
+}
+
+export interface PriceComparisonResult {
+  productId: string;
+  zones: ZonePriceComparison[];
+}
+
 /** Nombres de rol EXACTOS como están sembrados en la tabla roles. */
 export type RolNombre =
   | 'Administrador'
