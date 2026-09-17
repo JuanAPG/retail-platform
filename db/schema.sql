@@ -407,15 +407,24 @@ COMMENT ON TABLE analisis_corrida_filtros IS 'Filtros aplicados al dataset. Sin 
 --    infiere el ingreso de una persona a partir de su compra.
 -- =====================================================================
 
+-- Columnas codigo/fuente/frecuencia_actualizacion/relacion_zona/limitaciones
+-- agregadas en Sprint 1 (M05): el profesor exigió que cada segmento
+-- justifique explícitamente su fuente, periodicidad, relación con zona y
+-- limitaciones (RN-01, RN-02), no solo el rango numérico.
 CREATE TABLE segmentos_ingreso (
-    id              SMALLSERIAL PRIMARY KEY,
-    nombre          VARCHAR(60) NOT NULL UNIQUE,
-    ingreso_min     NUMERIC(12,2) NOT NULL,
-    ingreso_max     NUMERIC(12,2),
-    descripcion     TEXT,
+    id                          SMALLSERIAL PRIMARY KEY,
+    codigo                      VARCHAR(20) NOT NULL UNIQUE,
+    nombre                      VARCHAR(60) NOT NULL UNIQUE,
+    ingreso_min                 NUMERIC(12,2) NOT NULL,
+    ingreso_max                 NUMERIC(12,2),
+    fuente                      TEXT NOT NULL,
+    frecuencia_actualizacion    VARCHAR(60) NOT NULL,
+    relacion_zona               TEXT NOT NULL,
+    limitaciones                TEXT NOT NULL,
+    descripcion                 TEXT,
     CONSTRAINT chk_segmento_rango CHECK (ingreso_max IS NULL OR ingreso_max > ingreso_min)
 );
-COMMENT ON TABLE segmentos_ingreso IS 'Rangos de clasificación por nivel de ingreso (RN-01).';
+COMMENT ON TABLE segmentos_ingreso IS 'Rangos de clasificación por nivel de ingreso (RN-01), con la justificación de fuente/actualización/relación con zona/limitaciones que exige la retroalimentación del profesor.';
 
 -- FNBC (v4). El clustering de M05 no asigna segmentos zona por zona:
 -- asigna un segmento a cada CLUSTER, y la zona hereda el del cluster que

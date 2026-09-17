@@ -144,6 +144,25 @@ export interface LoginResponse {
   usuario: AuthUser;
 }
 
+/**
+ * M05 — Segmento de ingreso. A diferencia del resto del catálogo (en
+ * español), esta entidad y sus rutas quedaron en inglés porque así las
+ * fijó `Contrato_Metodos_Endpoints` para que Leonardo (M09/M11) y
+ * Fernando (M07/M12) integraran contra nombres literales.
+ */
+export interface IncomeSegment {
+  id: number;
+  code: string;
+  name: string;
+  incomeRangeMin: string;
+  incomeRangeMax: string | null;
+  source: string;
+  updateFrequency: string;
+  zoneRelation: string;
+  limitations: string;
+  description: string | null;
+}
+
 /** Nombres de rol EXACTOS como están sembrados en la tabla roles. */
 export type RolNombre =
   | 'Administrador'
