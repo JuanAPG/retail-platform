@@ -70,10 +70,27 @@ INSERT INTO municipios (nombre) VALUES
     ('San Pedro Garza García'), ('Monterrey'), ('Guadalupe')
 ON CONFLICT (nombre) DO NOTHING;
 
-INSERT INTO segmentos_ingreso (nombre, ingreso_min, ingreso_max, descripcion) VALUES
-    ('Ingreso bajo',  0.00,      15000.00, 'Hogares por debajo de la mediana metropolitana.'),
-    ('Ingreso medio', 15000.01,  45000.00, 'Hogares alrededor de la mediana metropolitana.'),
-    ('Ingreso alto',  45000.01,  NULL,     'Hogares por encima del tercer cuartil.')
+INSERT INTO segmentos_ingreso
+    (codigo,  nombre,          ingreso_min, ingreso_max, fuente, frecuencia_actualizacion, relacion_zona, limitaciones, descripcion)
+VALUES
+    ('ING_1', 'Ingreso bajo',  0.00,      15000.00,
+     'INEGI - ENIGH, ingreso corriente trimestral por hogar (Área Metropolitana de Monterrey)',
+     'Anual, al publicarse la ENIGH',
+     'El rango se asigna a la ZONA agregada (RN-02); nunca se infiere el ingreso de una persona ni de una compra individual',
+     'No captura variación de ingreso dentro de la misma zona; una zona con hogares heterogéneos queda representada por un solo segmento',
+     'Hogares por debajo de la mediana metropolitana.'),
+    ('ING_2', 'Ingreso medio', 15000.01,  45000.00,
+     'INEGI - ENIGH, ingreso corriente trimestral por hogar (Área Metropolitana de Monterrey)',
+     'Anual, al publicarse la ENIGH',
+     'El rango se asigna a la ZONA agregada (RN-02); nunca se infiere el ingreso de una persona ni de una compra individual',
+     'No captura variación de ingreso dentro de la misma zona; una zona con hogares heterogéneos queda representada por un solo segmento',
+     'Hogares alrededor de la mediana metropolitana.'),
+    ('ING_3', 'Ingreso alto',  45000.01,  NULL,
+     'INEGI - ENIGH, ingreso corriente trimestral por hogar (Área Metropolitana de Monterrey)',
+     'Anual, al publicarse la ENIGH',
+     'El rango se asigna a la ZONA agregada (RN-02); nunca se infiere el ingreso de una persona ni de una compra individual',
+     'No captura variación de ingreso dentro de la misma zona; una zona con hogares heterogéneos queda representada por un solo segmento',
+     'Hogares por encima del tercer cuartil.')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO zonas (nombre, municipio_id, descripcion, activo)
