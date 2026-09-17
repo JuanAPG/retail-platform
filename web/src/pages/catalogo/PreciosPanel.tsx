@@ -104,7 +104,7 @@ export function PreciosPanel() {
       <div className="mb-6 rounded border border-slate-200 p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-800">Registrar precio</h2>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="lg:col-span-2">
             <label htmlFor="precio-producto" className={labelClass}>
               Producto
@@ -163,36 +163,35 @@ export function PreciosPanel() {
             </select>
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label htmlFor="precio-monto" className={labelClass}>
-                Precio (MXN)
-              </label>
-              <input
-                id="precio-monto"
-                type="number"
-                min={0}
-                step="0.01"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="precio-fecha" className={labelClass}>
-                Vigente desde
-              </label>
-              <input
-                id="precio-fecha"
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className={inputClass}
-              />
-            </div>
+          <div>
+            <label htmlFor="precio-monto" className={labelClass}>
+              Precio (MXN)
+            </label>
+            <input
+              id="precio-monto"
+              type="number"
+              min={0}
+              step="0.01"
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+              className={inputClass}
+            />
           </div>
 
-          <div className="flex items-end sm:col-span-2 lg:col-span-5">
+          <div>
+            <label htmlFor="precio-fecha" className={labelClass}>
+              Vigente desde
+            </label>
+            <input
+              id="precio-fecha"
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="flex items-end sm:col-span-2 lg:col-span-6">
             <button
               type="submit"
               disabled={guardando}
