@@ -1,24 +1,21 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Basket } from '../entities/basket.entity';
+import { Transaction } from '../entities/transaction.entity';
+import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { BasketsService } from './baskets.service';
+import { BasketsController } from './baskets.controller';
 
 /**
- * M07 — Canastas de consumo.
- *
- * Responsable: Fernando Olivares
- * Rama:        `feature/m07-canastas`
- *
- * Alcance:
- * - Una canasta = una transacción. Construye las canastas a partir de lo
- *   que carga M06 y las clasifica por zona y segmento (M03, M05).
- *   Alimenta a M09, M10 y M12.
- *
- * Este módulo está declarado y registrado en AppModule a propósito
- * aunque todavía esté vacío: así quien lo desarrolle no tiene que tocar
- * `app.module.ts` y las cuatro ramas no chocan en ese archivo.
- *
- * Al implementarlo: agrega aquí `imports` (TypeOrmModule.forFeature con
- * tus entidades), `controllers`, `providers` y lo que otros módulos
- * necesiten en `exports`. Las entidades compartidas viven en
- * `src/entities/`; los guards y los nombres de rol, en `src/common/`.
+ * M07 — Baskets. Responsable: Fernando Olivares.
+ * buildFromTransaction() la llama TransactionsModule (M06, Juan) al
+ * crear una transacción — no hay endpoint POST porque no se construye
+ * "a mano" según el Contrato de Métodos y Endpoints.
  */
-@Module({})
+@Module({
+  imports: [TypeOrmModule.forFeature([Basket, Transaction, TransactionDetail])],
+  controllers: [BasketsController],
+  providers: [BasketsService],
+  exports: [BasketsService],
+})
 export class BasketsModule {}
