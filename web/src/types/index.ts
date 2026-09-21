@@ -145,6 +145,39 @@ export interface LoginResponse {
 }
 
 /**
+ * M08 — Un renglón del histórico de precios. Cuelga de presentación +
+ * tienda (RN-06); la zona no viaja aquí, se deriva de `store.zona`.
+ */
+export interface PriceHistoryEntry {
+  id: string;
+  presentationId: string;
+  presentation?: ProductoPresentacion;
+  storeId: string;
+  store?: Tienda;
+  price: string;
+  effectiveDate: string;
+  effectiveUntil: string | null;
+  vigente: boolean;
+  origen: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface ZonePriceComparison {
+  zoneId: string;
+  zoneName: string;
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+  storeCount: number;
+}
+
+export interface PriceComparisonResult {
+  productId: string;
+  zones: ZonePriceComparison[];
+}
+
+/**
  * M05 — Segmento de ingreso. A diferencia del resto del catálogo (en
  * español), esta entidad y sus rutas quedaron en inglés porque así las
  * fijó `Contrato_Metodos_Endpoints` para que Leonardo (M09/M11) y
