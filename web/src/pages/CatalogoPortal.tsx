@@ -8,6 +8,8 @@ import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
 import { EstatusProductoBadge } from '../components/EstatusProductoBadge';
 import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
+import { PreciosPanel } from './catalogo/PreciosPanel';
+import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias } from '../api/catalogo';
 
 type Tab =
@@ -142,15 +144,7 @@ export function CatalogoPortal() {
         </section>
       )}
 
-      {tab === 'precios' && (
-        <section>
-          <SectionHeader title="Gestión de precios" />
-          <EmptyState
-            title="Aún no hay precios registrados"
-            description="Los precios vigentes por producto y tienda se mostrarán aquí en cuanto se capturen."
-          />
-        </section>
-      )}
+      {tab === 'precios' && <PreciosPanel />}
 
       {tab === 'elasticidad' && (
         <section>
@@ -162,15 +156,7 @@ export function CatalogoPortal() {
         </section>
       )}
 
-      {tab === 'comparacion' && (
-        <section>
-          <SectionHeader title="Comparación de precios entre zonas" />
-          <EmptyState
-            title="Aún no hay precios que comparar"
-            description="En cuanto existan precios vigentes por zona, podrás compararlos aquí."
-          />
-        </section>
-      )}
+      {tab === 'comparacion' && <ComparacionPreciosPanel />}
 
       {tab === 'reportes' && (
         <section>
