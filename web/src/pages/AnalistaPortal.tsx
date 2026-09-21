@@ -5,6 +5,7 @@ import { DataTable } from '../components/DataTable';
 import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
 import { getTiendas, getProductos } from '../api/catalogo';
+import { SegmentosPanel } from './analista/SegmentosPanel';
 
 type Tab =
   | 'transacciones'
@@ -46,15 +47,7 @@ export function AnalistaPortal() {
         </section>
       )}
 
-      {tab === 'segmentos' && (
-        <section>
-          <SectionHeader title="Segmentos de ingreso" />
-          <EmptyState
-            title="Aún no hay segmentos configurados"
-            description="Define rangos de ingreso para clasificar zonas y canastas por capacidad de compra."
-          />
-        </section>
-      )}
+      {tab === 'segmentos' && <SegmentosPanel />}
 
       {tab === 'canastas' && (
         <section>
