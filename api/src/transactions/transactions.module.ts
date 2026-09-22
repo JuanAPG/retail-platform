@@ -1,4 +1,16 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Transaction } from '../entities/transaction.entity';
+import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { Importacion } from '../entities/importacion.entity';
+import { ImportacionFila } from '../entities/importacion-fila.entity';
+import { ImportacionError } from '../entities/importacion-error.entity';
+import { TiendaEntity } from '../entities/tienda.entity';
+import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
+import { ProductoEntity } from '../entities/producto.entity';
+import { BasketsModule } from '../baskets/baskets.module';
+import { TransactionsService } from './transactions.service';
+import { TransactionsController } from './transactions.controller';
 
 /**
  * M06 — Transacciones e importación CSV.
@@ -12,15 +24,25 @@ import { Module } from '@nestjs/common';
  *   detalles[] (producto, presentación, cantidad, precio_unitario,
  *   subtotal). Es el primer eslabón de la cadena: sin esto, M07 en
  *   adelante no tienen datos. Depende de las presentaciones de M04.
- *
- * Este módulo está declarado y registrado en AppModule a propósito
- * aunque todavía esté vacío: así quien lo desarrolle no tiene que tocar
- * `app.module.ts` y las cuatro ramas no chocan en ese archivo.
- *
- * Al implementarlo: agrega aquí `imports` (TypeOrmModule.forFeature con
- * tus entidades), `controllers`, `providers` y lo que otros módulos
- * necesiten en `exports`. Las entidades compartidas viven en
- * `src/entities/`; los guards y los nombres de rol, en `src/common/`.
+ * - Importa `BasketsModule` para construir la canasta justo después de
+ *   guardar cada transacción (manual o confirmada del CSV).
  */
-@Module({})
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Transaction,
+      TransactionDetail,
+      Importacion,
+      ImportacionFila,
+      ImportacionError,
+      TiendaEntity,
+      ProductoPresentacionEntity,
+      ProductoEntity,
+    ]),
+    BasketsModule,
+  ],
+  controllers: [TransactionsController],
+  providers: [TransactionsService],
+  exports: [TransactionsService],
+})
 export class TransactionsModule {}
