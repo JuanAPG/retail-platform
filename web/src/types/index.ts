@@ -205,3 +205,69 @@ export type RolNombre =
   | 'Planeador'
   | 'Auditor'
   | 'Proveedor';
+
+/** M06 — Línea de venta: presentación + cantidad + precio congelado. */
+export interface TransactionDetail {
+  id: string;
+  transactionId: string;
+  presentationId: string;
+  presentation: ProductoPresentacion & { producto: Producto };
+  quantity: string;
+  unitPrice: string;
+  subtotal: string;
+}
+
+/** M06 — Encabezado de venta. Una transacción = una canasta (RN-03). */
+export interface Transaction {
+  id: string;
+  folio: string;
+  storeId: string;
+  store: Tienda;
+  date: string;
+  total: string;
+  canal: string;
+  importacionId: string | null;
+  details: TransactionDetail[];
+  createdAt: string;
+}
+
+/** M06 — Error de validación del CSV con fila y columna exactas. */
+export interface CsvPreviewError {
+  fila: number | null;
+  columna: string | null;
+  codigo: string;
+  mensaje: string;
+  valorRecibido: string | null;
+}
+
+/** M06 — Transacción detectada en el CSV (previa a confirmar). */
+export interface CsvPreviewGroup {
+  folio: string;
+  tienda: string;
+  tiendaId: string;
+  fecha: string;
+  lineas: number;
+  totalEstimado: number;
+}
+
+/** M06 — Respuesta de POST /transactions/import/preview. */
+export interface CsvPreview {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  filasTotales: number;
+  filasValidas: number;
+  filasConError: number;
+  transaccionesDetectadas: number;
+  grupos: CsvPreviewGroup[];
+  errores: CsvPreviewError[];
+}
+
+/** M06 — Respuesta de POST /transactions/import/confirm. */
+export interface CsvImportResult {
+  importacionId: string;
+  estado: string;
+  transaccionesCreadas: number;
+  canastasCreadas: number;
+  omitidos: { folio: string; tienda: string; motivo: string }[];
+}
