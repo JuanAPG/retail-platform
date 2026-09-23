@@ -4,6 +4,7 @@ import {
   Zona,
   Municipio,
   CategoriaProducto,
+  CodigoPostal,
   Producto,
   Proveedor,
   NuevaPropuestaProducto,
@@ -15,6 +16,40 @@ import {
 export const getTiendas = () => apiClient.get<Tienda[]>('/tiendas').then((r) => r.data);
 export const getZonas = () => apiClient.get<Zona[]>('/zonas').then((r) => r.data);
 export const getMunicipios = () => apiClient.get<Municipio[]>('/municipios').then((r) => r.data);
+
+// --- M02 Tiendas: CRUD -------------------------------------------------
+
+export interface FormatoTienda {
+  formato: 'supermercado' | 'minimarket' | 'tienda_conveniencia' | 'mayorista' | 'otro';
+}
+
+export interface CrearTiendaPayload {
+  nombre: string;
+  formato: FormatoTienda['formato'];
+  zonaId: string;
+  numeroSucursal?: string;
+  proveedorId?: string;
+  calle: string;
+  numeroExterior?: string;
+  numeroInterior?: string;
+  colonia?: string;
+  codigoPostal: string;
+}
+
+export type ActualizarTiendaPayload = Partial<CrearTiendaPayload> & { activo?: boolean };
+
+/** Catálogo para el selector de CP del formulario de alta/edición de tienda. */
+export const getCodigosPostales = () =>
+  apiClient.get<CodigoPostal[]>('/tiendas/catalogo/codigos-postales').then((r) => r.data);
+
+export const crearTienda = (payload: CrearTiendaPayload) =>
+  apiClient.post<Tienda>('/tiendas', payload).then((r) => r.data);
+
+export const actualizarTienda = (id: string, payload: ActualizarTiendaPayload) =>
+  apiClient.patch<Tienda>(`/tiendas/${id}`, payload).then((r) => r.data);
+
+export const eliminarTienda = (id: string) =>
+  apiClient.delete<void>(`/tiendas/${id}`).then((r) => r.data);
 export const getCategorias = () =>
   apiClient.get<CategoriaProducto[]>('/categorias-producto').then((r) => r.data);
 export const getUnidadesMedida = () =>

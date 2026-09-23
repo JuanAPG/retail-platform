@@ -59,15 +59,24 @@ export interface ProductoPresentacion {
   activo: boolean;
 }
 
+/** El municipio no vive aquí directo: se llega por `codigoPostalRef.municipio`. */
+export interface CodigoPostal {
+  codigoPostal: string;
+  municipioId: number;
+  municipio: Municipio;
+}
+
 export interface Direccion {
   id: string;
   calle: string;
   numeroExterior: string | null;
   numeroInterior: string | null;
   colonia: string | null;
-  codigoPostal: string | null;
-  municipioId: number;
-  municipio: Municipio;
+  codigoPostal: string;
+  codigoPostalRef: CodigoPostal;
+  referencia: string | null;
+  latitud: string | null;
+  longitud: string | null;
 }
 
 export interface Tienda {
