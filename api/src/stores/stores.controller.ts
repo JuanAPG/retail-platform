@@ -18,10 +18,10 @@ import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 
-@ApiTags('M02 Tiendas')
+@ApiTags('M02 Stores')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('tiendas')
+@Controller('stores')
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
@@ -31,12 +31,12 @@ export class StoresController {
     return this.storesService.findAll();
   }
 
-  // Declarada ANTES que ':id', para que 'catalogo' no se interprete
-  // como un id de tienda (mismo truco que /productos/pendientes en M04).
-  @Get('catalogo/codigos-postales')
+  // Declarada ANTES que ':id', para que 'catalog' no se interprete
+  // como un id de tienda (mismo truco que /products/pending en M04).
+  @Get('catalog/postal-codes')
   @Roles(...PERFILES_INTERNOS)
-  findCodigosPostales() {
-    return this.storesService.findCodigosPostales();
+  findPostalCodes() {
+    return this.storesService.findPostalCodes();
   }
 
   @Get(':id')

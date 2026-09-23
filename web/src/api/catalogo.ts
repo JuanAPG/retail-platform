@@ -13,7 +13,7 @@ import {
 
 // Los usuarios viven en api/usuarios.ts junto con su CRUD.
 
-export const getTiendas = () => apiClient.get<Tienda[]>('/tiendas').then((r) => r.data);
+export const getTiendas = () => apiClient.get<Tienda[]>('/stores').then((r) => r.data);
 export const getZonas = () => apiClient.get<Zona[]>('/zonas').then((r) => r.data);
 export const getMunicipios = () => apiClient.get<Municipio[]>('/municipios').then((r) => r.data);
 
@@ -40,16 +40,16 @@ export type ActualizarTiendaPayload = Partial<CrearTiendaPayload> & { activo?: b
 
 /** Catálogo para el selector de CP del formulario de alta/edición de tienda. */
 export const getCodigosPostales = () =>
-  apiClient.get<CodigoPostal[]>('/tiendas/catalogo/codigos-postales').then((r) => r.data);
+  apiClient.get<CodigoPostal[]>('/stores/catalog/postal-codes').then((r) => r.data);
 
 export const crearTienda = (payload: CrearTiendaPayload) =>
-  apiClient.post<Tienda>('/tiendas', payload).then((r) => r.data);
+  apiClient.post<Tienda>('/stores', payload).then((r) => r.data);
 
 export const actualizarTienda = (id: string, payload: ActualizarTiendaPayload) =>
-  apiClient.patch<Tienda>(`/tiendas/${id}`, payload).then((r) => r.data);
+  apiClient.patch<Tienda>(`/stores/${id}`, payload).then((r) => r.data);
 
 export const eliminarTienda = (id: string) =>
-  apiClient.delete<void>(`/tiendas/${id}`).then((r) => r.data);
+  apiClient.delete<void>(`/stores/${id}`).then((r) => r.data);
 export const getCategorias = () =>
   apiClient.get<CategoriaProducto[]>('/categorias-producto').then((r) => r.data);
 export const getUnidadesMedida = () =>
