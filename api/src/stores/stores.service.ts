@@ -25,7 +25,7 @@ export class StoresService {
   }
 
   /** Catálogo para el formulario de alta: qué códigos postales son válidos. */
-  findCodigosPostales() {
+  findPostalCodes() {
     return this.codigosPostalesRepo.find({ order: { codigoPostal: 'ASC' } });
   }
 
