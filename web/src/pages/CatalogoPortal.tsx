@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { PortalLayout } from '../components/PortalLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { DataTable } from '../components/DataTable';
-import { Badge } from '../components/Badge';
 import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
-import { EstatusProductoBadge } from '../components/EstatusProductoBadge';
 import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
+import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias } from '../api/catalogo';
@@ -91,27 +90,7 @@ export function CatalogoPortal() {
       sidebarItems={sidebarItems}
     >
       {tab === 'productos' && (
-        <section>
-          <SectionHeader title="Catálogo de productos" description="Productos registrados en la plataforma." />
-          {productos.loading && <p className="text-sm text-slate-500">Cargando productos…</p>}
-          {productos.error && <p className="text-sm text-rose-600">{productos.error}</p>}
-          {productos.data && (
-            <DataTable
-              rowKey={(p) => p.id}
-              rows={productos.data}
-              columns={[
-                { header: 'SKU', render: (p) => p.sku },
-                { header: 'Nombre', render: (p) => p.nombre },
-                { header: 'Categoría', render: (p) => p.categoria?.nombre },
-                {
-                  header: 'Canasta básica',
-                  render: (p) => (p.esCanastaBasica ? <Badge tone="positive">Sí</Badge> : 'No'),
-                },
-                { header: 'Estatus', render: (p) => <EstatusProductoBadge estatus={p.estatus} /> },
-              ]}
-            />
-          )}
-        </section>
+        <ProductosPanel estado={productos} puedeGestionar={seccionesCatalogo} />
       )}
 
       {tab === 'categorias' && (

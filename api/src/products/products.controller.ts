@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -13,10 +14,13 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { APRUEBAN_PRODUCTOS, ROL, UsuarioSolicitante } from '../common/roles';
+import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL, UsuarioSolicitante } from '../common/roles';
 import { ProductsService } from './products.service';
 import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { CreatePresentationDto } from './dto/create-presentation.dto';
 
 /**
  * Catálogo de productos y flujo de alta propuesta por proveedor.
@@ -91,6 +95,55 @@ export class ProductsController {
     @CurrentUser() usuario: UsuarioSolicitante,
   ) {
     return this.productsService.crearPropuesta(dto, usuario);
+  }
+
+  /**
+   * Alta DIRECTA por Administrador/Gerente — distinta de `crearPropuesta`
+   * (esa es del Proveedor y nace pendiente). Ruta separada a propósito:
+   * mezclar los dos flujos en un solo POST /productos habría hecho que
+   * el mismo endpoint se comportara distinto según quién lo llama, algo
+   * que ya evita el resto del controlador (aprobar/rechazar son rutas
+   * aparte por la misma razón).
+   */
+  @Post('productos/alta-directa')
+  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  @ApiOperation({ summary: 'Alta directa de un producto, sin pasar por la bandeja de aprobación.' })
+  create(@Body() dto: CreateProductDto) {
+    return this.productsService.create(dto);
+  }
+
+  @Patch('productos/:id')
+  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
+    return this.productsService.update(id, dto);
+  }
+
+  @Delete('productos/:id')
+  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productsService.remove(id);
+  }
+
+  // -------------------------------------------------------------------
+  // Presentaciones (RF-35)
+  // -------------------------------------------------------------------
+
+  @Get('productos/:id/presentaciones')
+  @Roles(...PERFILES_INTERNOS)
+  findPresentations(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productsService.findPresentations(id);
+  }
+
+  @Post('productos/:id/presentaciones')
+  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  addPresentation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreatePresentationDto) {
+    return this.productsService.addPresentation(id, dto);
+  }
+
+  @Delete('presentaciones/:id')
+  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  removePresentation(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productsService.removePresentation(id);
   }
 
   @Patch('productos/:id/aprobar')

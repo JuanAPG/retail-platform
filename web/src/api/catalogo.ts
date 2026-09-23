@@ -5,6 +5,7 @@ import {
   Municipio,
   CategoriaProducto,
   Producto,
+  ProductoPresentacion,
   Proveedor,
   NuevaPropuestaProducto,
   UnidadMedida,
@@ -42,3 +43,53 @@ export const rechazarProducto = (id: string, motivoRechazo: string) =>
   apiClient
     .patch<Producto>(`/productos/${id}/rechazar`, { motivoRechazo })
     .then((r) => r.data);
+
+// --- M04 Productos: alta directa (Admin/Gerente) + presentaciones ------
+
+export interface CrearProductoDirectoPayload {
+  sku: string;
+  nombre: string;
+  descripcion?: string;
+  categoriaId: number;
+  esCanastaBasica?: boolean;
+  presentacion: string;
+  contenido: number;
+  unidadMedida: string;
+}
+
+export interface ActualizarProductoPayload {
+  nombre?: string;
+  descripcion?: string;
+  categoriaId?: number;
+  esCanastaBasica?: boolean;
+}
+
+export const crearProductoDirecto = (payload: CrearProductoDirectoPayload) =>
+  apiClient.post<Producto>('/productos/alta-directa', payload).then((r) => r.data);
+
+export const actualizarProducto = (id: string, payload: ActualizarProductoPayload) =>
+  apiClient.patch<Producto>(`/productos/${id}`, payload).then((r) => r.data);
+
+export const eliminarProducto = (id: string) =>
+  apiClient.delete<void>(`/productos/${id}`).then((r) => r.data);
+
+export interface CrearPresentacionPayload {
+  nombre: string;
+  contenido: number;
+  unidadMedida: string;
+  codigoBarras?: string;
+  esPredeterminada?: boolean;
+}
+
+export const getPresentaciones = (productoId: string) =>
+  apiClient
+    .get<ProductoPresentacion[]>(`/productos/${productoId}/presentaciones`)
+    .then((r) => r.data);
+
+export const agregarPresentacion = (productoId: string, payload: CrearPresentacionPayload) =>
+  apiClient
+    .post<ProductoPresentacion>(`/productos/${productoId}/presentaciones`, payload)
+    .then((r) => r.data);
+
+export const eliminarPresentacion = (id: string) =>
+  apiClient.delete<void>(`/presentaciones/${id}`).then((r) => r.data);
