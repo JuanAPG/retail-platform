@@ -15,6 +15,40 @@ import {
 export const getTiendas = () => apiClient.get<Tienda[]>('/tiendas').then((r) => r.data);
 export const getZonas = () => apiClient.get<Zona[]>('/zonas').then((r) => r.data);
 export const getMunicipios = () => apiClient.get<Municipio[]>('/municipios').then((r) => r.data);
+
+// --- M03 Zonas: CRUD + comparación --------------------------------------
+
+export interface CrearZonaPayload {
+  nombre: string;
+  municipioId: number;
+  descripcion?: string;
+}
+
+export type ActualizarZonaPayload = Partial<CrearZonaPayload> & { activo?: boolean };
+
+export const crearZona = (payload: CrearZonaPayload) =>
+  apiClient.post<Zona>('/zonas', payload).then((r) => r.data);
+
+export const actualizarZona = (id: string, payload: ActualizarZonaPayload) =>
+  apiClient.patch<Zona>(`/zonas/${id}`, payload).then((r) => r.data);
+
+export const eliminarZona = (id: string) =>
+  apiClient.delete<void>(`/zonas/${id}`).then((r) => r.data);
+
+export interface ZoneComparisonRow {
+  zoneId: string;
+  zoneName: string;
+  municipality: string;
+  classification: string | null;
+  estimatedIncome: number | null;
+  population: number | null;
+  availability: number | null;
+}
+
+export const compararZonas = (zoneIds: string[]) =>
+  apiClient
+    .get<ZoneComparisonRow[]>('/zonas/compare', { params: { ids: zoneIds.join(',') } })
+    .then((r) => r.data);
 export const getCategorias = () =>
   apiClient.get<CategoriaProducto[]>('/categorias-producto').then((r) => r.data);
 export const getUnidadesMedida = () =>
