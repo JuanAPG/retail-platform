@@ -22,31 +22,31 @@ import { UpdateZoneDto } from './dto/update-zone.dto';
 
 /**
  * Zonas y su catálogo territorial. Se agrupan en un solo controlador
- * porque `municipios` existe únicamente para dar de alta zonas: no
+ * porque `municipalities` existe únicamente para dar de alta zonas: no
  * tiene sentido que viva en otro módulo.
  */
-@ApiTags('M03 Zonas')
+@ApiTags('M03 Zones')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class ZonesController {
   constructor(private readonly zonesService: ZonesService) {}
 
-  @Get('zonas')
+  @Get('zones')
   @Roles(...PERFILES_INTERNOS)
-  findZonas() {
-    return this.zonesService.findZonas();
+  findAll() {
+    return this.zonesService.findAll();
   }
 
-  @Get('municipios')
+  @Get('municipalities')
   @Roles(...PERFILES_INTERNOS)
-  findMunicipios() {
-    return this.zonesService.findMunicipios();
+  findMunicipalities() {
+    return this.zonesService.findMunicipalities();
   }
 
-  // Declarada ANTES que 'zonas/:id', para que 'compare' no se
+  // Declarada ANTES que 'zones/:id', para que 'compare' no se
   // interprete como un id de zona.
-  @Get('zonas/compare')
+  @Get('zones/compare')
   @Roles(...PERFILES_INTERNOS)
   @ApiQuery({ name: 'ids', required: true, description: 'Ids de zona separados por coma.' })
   compareZones(@Query('ids') ids?: string) {
@@ -60,25 +60,25 @@ export class ZonesController {
     return this.zonesService.compareZones(zoneIds);
   }
 
-  @Get('zonas/:id')
+  @Get('zones/:id')
   @Roles(...PERFILES_INTERNOS)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.zonesService.findOne(id);
   }
 
-  @Post('zonas')
+  @Post('zones')
   @Roles(ROL.ADMINISTRADOR)
   create(@Body() dto: CreateZoneDto) {
     return this.zonesService.create(dto);
   }
 
-  @Patch('zonas/:id')
+  @Patch('zones/:id')
   @Roles(ROL.ADMINISTRADOR)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateZoneDto) {
     return this.zonesService.update(id, dto);
   }
 
-  @Delete('zonas/:id')
+  @Delete('zones/:id')
   @Roles(ROL.ADMINISTRADOR)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.zonesService.remove(id);

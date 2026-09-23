@@ -28,11 +28,11 @@ export class ZonesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  findZonas() {
+  findAll() {
     return this.zonasRepo.find({ order: { nombre: 'ASC' } });
   }
 
-  findMunicipios() {
+  findMunicipalities() {
     return this.municipiosRepo.find({ order: { nombre: 'ASC' } });
   }
 
