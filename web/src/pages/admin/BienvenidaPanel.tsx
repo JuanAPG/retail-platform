@@ -5,7 +5,14 @@ import { UseFetchState } from '../../hooks/useFetch';
 import { useAuth } from '../../context/AuthContext';
 import { Proveedor, Tienda, Usuario, Zona } from '../../types';
 
-export type TabAdmin = 'inicio' | 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'auditoria';
+export type TabAdmin =
+  | 'inicio'
+  | 'usuarios'
+  | 'tiendas'
+  | 'zonas'
+  | 'comparar-zonas'
+  | 'proveedores'
+  | 'auditoria';
 
 interface BienvenidaPanelProps {
   usuarios: UseFetchState<Usuario[]>;

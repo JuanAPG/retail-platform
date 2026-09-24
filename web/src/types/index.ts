@@ -59,15 +59,24 @@ export interface ProductoPresentacion {
   activo: boolean;
 }
 
+/** El municipio no vive aquí directo: se llega por `codigoPostalRef.municipio`. */
+export interface CodigoPostal {
+  codigoPostal: string;
+  municipioId: number;
+  municipio: Municipio;
+}
+
 export interface Direccion {
   id: string;
   calle: string;
   numeroExterior: string | null;
   numeroInterior: string | null;
   colonia: string | null;
-  codigoPostal: string | null;
-  municipioId: number;
-  municipio: Municipio;
+  codigoPostal: string;
+  codigoPostalRef: CodigoPostal;
+  referencia: string | null;
+  latitud: string | null;
+  longitud: string | null;
 }
 
 export interface Tienda {
@@ -145,6 +154,39 @@ export interface LoginResponse {
 }
 
 /**
+ * M08 — Un renglón del histórico de precios. Cuelga de presentación +
+ * tienda (RN-06); la zona no viaja aquí, se deriva de `store.zona`.
+ */
+export interface PriceHistoryEntry {
+  id: string;
+  presentationId: string;
+  presentation?: ProductoPresentacion;
+  storeId: string;
+  store?: Tienda;
+  price: string;
+  effectiveDate: string;
+  effectiveUntil: string | null;
+  vigente: boolean;
+  origen: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface ZonePriceComparison {
+  zoneId: string;
+  zoneName: string;
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+  storeCount: number;
+}
+
+export interface PriceComparisonResult {
+  productId: string;
+  zones: ZonePriceComparison[];
+}
+
+/**
  * M05 — Segmento de ingreso. A diferencia del resto del catálogo (en
  * español), esta entidad y sus rutas quedaron en inglés porque así las
  * fijó `Contrato_Metodos_Endpoints` para que Leonardo (M09/M11) y
@@ -172,3 +214,69 @@ export type RolNombre =
   | 'Planeador'
   | 'Auditor'
   | 'Proveedor';
+
+/** M06 — Línea de venta: presentación + cantidad + precio congelado. */
+export interface TransactionDetail {
+  id: string;
+  transactionId: string;
+  presentationId: string;
+  presentation: ProductoPresentacion & { producto: Producto };
+  quantity: string;
+  unitPrice: string;
+  subtotal: string;
+}
+
+/** M06 — Encabezado de venta. Una transacción = una canasta (RN-03). */
+export interface Transaction {
+  id: string;
+  folio: string;
+  storeId: string;
+  store: Tienda;
+  date: string;
+  total: string;
+  canal: string;
+  importacionId: string | null;
+  details: TransactionDetail[];
+  createdAt: string;
+}
+
+/** M06 — Error de validación del CSV con fila y columna exactas. */
+export interface CsvPreviewError {
+  fila: number | null;
+  columna: string | null;
+  codigo: string;
+  mensaje: string;
+  valorRecibido: string | null;
+}
+
+/** M06 — Transacción detectada en el CSV (previa a confirmar). */
+export interface CsvPreviewGroup {
+  folio: string;
+  tienda: string;
+  tiendaId: string;
+  fecha: string;
+  lineas: number;
+  totalEstimado: number;
+}
+
+/** M06 — Respuesta de POST /transactions/import/preview. */
+export interface CsvPreview {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  filasTotales: number;
+  filasValidas: number;
+  filasConError: number;
+  transaccionesDetectadas: number;
+  grupos: CsvPreviewGroup[];
+  errores: CsvPreviewError[];
+}
+
+/** M06 — Respuesta de POST /transactions/import/confirm. */
+export interface CsvImportResult {
+  importacionId: string;
+  estado: string;
+  transaccionesCreadas: number;
+  canastasCreadas: number;
+  omitidos: { folio: string; tienda: string; motivo: string }[];
+}

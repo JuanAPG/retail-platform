@@ -17,5 +17,15 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": false
+  },
+  // Docker Desktop en Windows no reenvía los eventos de inotify del bind
+  // mount al contenedor: `nest start --watch` (tsc por debajo) nunca se
+  // entera de que un archivo cambió en el host sin esto, y hay que
+  // reiniciar el contenedor a mano para ver cualquier edición. Mismo
+  // problema que ya se resolvió con `usePolling` en web/vite.config.ts.
+  "watchOptions": {
+    "watchFile": "fixedPollingInterval",
+    "watchDirectory": "fixedPollingInterval",
+    "fallbackPolling": "fixedinterval"
   }
 }

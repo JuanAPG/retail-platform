@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useFetch } from '../hooks/useFetch';
 import { getTiendas, getProductos } from '../api/catalogo';
 import { SegmentosPanel } from './analista/SegmentosPanel';
+import { TransaccionesPanel } from './analista/TransaccionesPanel';
 
 type Tab =
   | 'transacciones'
@@ -37,15 +38,7 @@ export function AnalistaPortal() {
 
   return (
     <PortalLayout breadcrumb="Portal del Analista" rolLabel="Analista comercial" sidebarItems={sidebarItems}>
-      {tab === 'transacciones' && (
-        <section>
-          <SectionHeader title="Transacciones" description="Registro de operaciones en tiendas." />
-          <EmptyState
-            title="Aún no hay transacciones registradas"
-            description="Importa un lote de transacciones o registra una manualmente para empezar a construir canastas e indicadores."
-          />
-        </section>
-      )}
+      {tab === 'transacciones' && <TransaccionesPanel />}
 
       {tab === 'segmentos' && <SegmentosPanel />}
 
