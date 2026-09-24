@@ -52,12 +52,12 @@ export const actualizarTienda = (id: string, payload: ActualizarTiendaPayload) =
 export const eliminarTienda = (id: string) =>
   apiClient.delete<void>(`/stores/${id}`).then((r) => r.data);
 export const getCategorias = () =>
-  apiClient.get<CategoriaProducto[]>('/categorias-producto').then((r) => r.data);
+  apiClient.get<CategoriaProducto[]>('/product-categories').then((r) => r.data);
 export const getUnidadesMedida = () =>
-  apiClient.get<UnidadMedida[]>('/unidades-medida').then((r) => r.data);
-export const getProductos = () => apiClient.get<Producto[]>('/productos').then((r) => r.data);
+  apiClient.get<UnidadMedida[]>('/units').then((r) => r.data);
+export const getProductos = () => apiClient.get<Producto[]>('/products').then((r) => r.data);
 export const getProveedores = () =>
-  apiClient.get<Proveedor[]>('/proveedores').then((r) => r.data);
+  apiClient.get<Proveedor[]>('/providers').then((r) => r.data);
 
 // --- Flujo de alta de producto propuesta por un Proveedor ------------
 // El backend decide qué devuelve `getProductos` según el rol del token:
@@ -65,18 +65,23 @@ export const getProveedores = () =>
 
 /** Bandeja de revisión del Gerente de categoría (403 para otros roles). */
 export const getProductosPendientes = () =>
-  apiClient.get<Producto[]>('/productos/pendientes').then((r) => r.data);
+  apiClient.get<Producto[]>('/products/pending').then((r) => r.data);
 
-/** Solo Proveedor. El backend asigna la empresa a partir del token. */
+/**
+ * Solo Proveedor. El backend asigna la empresa a partir del token.
+ * Ruta separada de `crearProductoDirecto` (POST /products, esa es la
+ * de Admin/Gerente): son dos flujos de negocio distintos, no el mismo
+ * endpoint comportándose diferente según quién llama.
+ */
 export const proponerProducto = (datos: NuevaPropuestaProducto) =>
-  apiClient.post<Producto>('/productos', datos).then((r) => r.data);
+  apiClient.post<Producto>('/products/proposals', datos).then((r) => r.data);
 
 export const aprobarProducto = (id: string) =>
-  apiClient.patch<Producto>(`/productos/${id}/aprobar`).then((r) => r.data);
+  apiClient.patch<Producto>(`/products/${id}/approve`).then((r) => r.data);
 
 export const rechazarProducto = (id: string, motivoRechazo: string) =>
   apiClient
-    .patch<Producto>(`/productos/${id}/rechazar`, { motivoRechazo })
+    .patch<Producto>(`/products/${id}/reject`, { motivoRechazo })
     .then((r) => r.data);
 
 // --- M04 Productos: alta directa (Admin/Gerente) + presentaciones ------
@@ -100,13 +105,13 @@ export interface ActualizarProductoPayload {
 }
 
 export const crearProductoDirecto = (payload: CrearProductoDirectoPayload) =>
-  apiClient.post<Producto>('/productos/alta-directa', payload).then((r) => r.data);
+  apiClient.post<Producto>('/products', payload).then((r) => r.data);
 
 export const actualizarProducto = (id: string, payload: ActualizarProductoPayload) =>
-  apiClient.patch<Producto>(`/productos/${id}`, payload).then((r) => r.data);
+  apiClient.patch<Producto>(`/products/${id}`, payload).then((r) => r.data);
 
 export const eliminarProducto = (id: string) =>
-  apiClient.delete<void>(`/productos/${id}`).then((r) => r.data);
+  apiClient.delete<void>(`/products/${id}`).then((r) => r.data);
 
 export interface CrearPresentacionPayload {
   nombre: string;
@@ -118,13 +123,13 @@ export interface CrearPresentacionPayload {
 
 export const getPresentaciones = (productoId: string) =>
   apiClient
-    .get<ProductoPresentacion[]>(`/productos/${productoId}/presentaciones`)
+    .get<ProductoPresentacion[]>(`/products/${productoId}/presentations`)
     .then((r) => r.data);
 
 export const agregarPresentacion = (productoId: string, payload: CrearPresentacionPayload) =>
   apiClient
-    .post<ProductoPresentacion>(`/productos/${productoId}/presentaciones`, payload)
+    .post<ProductoPresentacion>(`/products/${productoId}/presentations`, payload)
     .then((r) => r.data);
 
 export const eliminarPresentacion = (id: string) =>
-  apiClient.delete<void>(`/presentaciones/${id}`).then((r) => r.data);
+  apiClient.delete<void>(`/presentations/${id}`).then((r) => r.data);
