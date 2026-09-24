@@ -22,7 +22,7 @@ export class TransactionDetail {
   @JoinColumn({ name: 'presentacion_id' })
   presentation: ProductoPresentacionEntity;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2 })
+  @Column({ name: 'cantidad', type: 'numeric', precision: 10, scale: 2 })
   quantity: string;
 
   @Column({ name: 'precio_unitario', type: 'numeric', precision: 12, scale: 2 })

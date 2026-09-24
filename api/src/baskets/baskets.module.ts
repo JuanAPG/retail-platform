@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Basket } from '../entities/basket.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { ZonesModule } from '../zones/zones.module';
 import { BasketsService } from './baskets.service';
 import { BasketsController } from './baskets.controller';
 
@@ -13,7 +14,10 @@ import { BasketsController } from './baskets.controller';
  * "a mano" según el Contrato de Métodos y Endpoints.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Basket, Transaction, TransactionDetail])],
+  imports: [
+    TypeOrmModule.forFeature([Basket, Transaction, TransactionDetail]),
+    ZonesModule,
+  ],
   controllers: [BasketsController],
   providers: [BasketsService],
   exports: [BasketsService],
