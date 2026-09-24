@@ -40,7 +40,7 @@ export class Basket {
   @Column({ name: 'segmento_ingreso_id', type: 'smallint', nullable: true })
   segmentId: number | null;
 
-  @Column({ type: 'timestamptz' })
+  @Column({ name: 'fecha', type: 'timestamptz' })
   date: Date;
 
   @Column({ name: 'valor_total', type: 'numeric', precision: 14, scale: 2 })

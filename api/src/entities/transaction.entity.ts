@@ -27,7 +27,7 @@ export class Transaction {
   store: TiendaEntity;
 
   @Column({ type: 'timestamptz' })
-  date: Date;
+  fecha: Date;
 
   @Column({ type: 'numeric', precision: 14, scale: 2 })
   total: string;

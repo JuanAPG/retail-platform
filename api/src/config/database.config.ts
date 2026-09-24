@@ -15,6 +15,9 @@ import { ProductoRevisionEntity } from '../entities/producto-revision.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
 import { PriceHistory } from '../entities/price-history.entity';
 import { IncomeSegment } from '../entities/income-segment.entity';
+import { Transaction } from '../entities/transaction.entity';
+import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { Basket } from '../entities/basket.entity';
 
 export default registerAs(
   'database',
@@ -44,6 +47,9 @@ export default registerAs(
       ProductoRevisionEntity,
       PriceHistory,
       IncomeSegment,
+      Transaction,
+      TransactionDetail,
+      Basket,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,

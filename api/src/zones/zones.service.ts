@@ -44,6 +44,23 @@ export class ZonesService {
     return zona;
   }
 
+  async findSegmentId(zoneId: string): Promise<number | null> {
+    const [fila] = await this.dataSource.query(
+      `
+      SELECT s.id AS "segmentId"
+      FROM zona_clasificaciones zc
+      LEFT JOIN corrida_clusters cc
+            ON cc.corrida_id = zc.corrida_id AND cc.cluster_valor = zc.cluster_valor
+      LEFT JOIN segmentos_ingreso s
+            ON s.id = COALESCE(zc.segmento_manual_id, cc.segmento_ingreso_id)
+      WHERE zc.zona_id = $1 AND zc.vigente
+      LIMIT 1
+      `,
+      [zoneId],
+    );
+    return fila?.segmentId ?? null;
+  }
+
   async create(dto: CreateZoneDto): Promise<ZonaEntity> {
     const municipio = await this.municipiosRepo.findOne({ where: { id: dto.municipioId } });
     if (!municipio) {
