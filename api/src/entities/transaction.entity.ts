@@ -3,12 +3,13 @@ import { TiendaEntity } from './tienda.entity';
 import { TransactionDetail } from './transaction-detail.entity';
 
 /**
- * M06 — TransactionsModule (Juan Angel), según Contrato de Métodos y
- * Endpoints. Este archivo se crea aquí de forma TEMPORAL porque M06
- * todavía no existe (baskets.module.ts estaba vacío, igual que
- * transactions.module.ts). Cuando Juan construya su módulo, debe
- * REUTILIZAR este mismo archivo en vez de crear uno propio —
- * avísale para que no terminemos con dos entidades para la misma tabla.
+ * M06 — TransactionsModule (Juan Angel).
+ *
+ * Creada de forma temporal por M07 (Fernando) para poder construir
+ * canastas; M06 la adopta como propia y la completa con las columnas
+ * de trazabilidad que ya existen en `schema.sql` (`canal`,
+ * `importacion_id`, `capturada_por`). No requiere migración: esas
+ * columnas ya están en la tabla `transacciones`.
  */
 @Entity({ name: 'transacciones' })
 export class Transaction {
@@ -30,6 +31,17 @@ export class Transaction {
 
   @Column({ type: 'numeric', precision: 14, scale: 2 })
   total: string;
+
+  /** `canal_transaccion` en Postgres; varchar aquí (ver Importacion). */
+  @Column({ type: 'varchar', length: 20, default: 'punto_venta' })
+  canal: string;
+
+  /** Trazabilidad de origen: de qué carga CSV salió, si vino de una. */
+  @Column({ name: 'importacion_id', type: 'uuid', nullable: true })
+  importacionId: string | null;
+
+  @Column({ name: 'capturada_por', type: 'uuid', nullable: true })
+  capturadaPor: string | null;
 
   @OneToMany(() => TransactionDetail, (d) => d.transaction)
   details: TransactionDetail[];
