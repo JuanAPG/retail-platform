@@ -44,7 +44,7 @@ export class ProductsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  findUnidadesMedida() {
+  findUnits() {
     return this.unidadesRepo.find({ order: { clave: 'ASC' } });
   }
 
@@ -52,11 +52,11 @@ export class ProductsService {
   // Proveedores y categorías (referencia del catálogo)
   // -------------------------------------------------------------------
 
-  findProveedores() {
+  findProviders() {
     return this.proveedoresRepo.find({ order: { razonSocial: 'ASC' } });
   }
 
-  findCategorias() {
+  findCategories() {
     return this.categoriasRepo.find({ order: { nombre: 'ASC' } });
   }
 
@@ -73,7 +73,7 @@ export class ProductsService {
    * el catálogo de todos los proveedores y bastaría abrir la pestaña de
    * red para verlo.
    */
-  async findProductos(solicitante: UsuarioSolicitante) {
+  async findAll(solicitante: UsuarioSolicitante) {
     if (solicitante.rol !== ROL.PROVEEDOR) {
       return this.productosRepo.find({
         relations: { presentaciones: true },
@@ -90,7 +90,7 @@ export class ProductsService {
   }
 
   /** Bandeja de revisión del Gerente de categoría. */
-  findProductosPendientes() {
+  findPending() {
     return this.productosRepo.find({
       where: { estatus: ESTATUS_PRODUCTO.PENDIENTE },
       relations: { presentaciones: true },
@@ -103,7 +103,7 @@ export class ProductsService {
    * queda amarrada a la empresa del token: el proveedor no elige de
    * quién es el producto que da de alta.
    */
-  async crearPropuesta(
+  async createProposal(
     dto: CrearPropuestaProductoDto,
     solicitante: UsuarioSolicitante,
   ) {
@@ -325,11 +325,11 @@ export class ProductsService {
     }
   }
 
-  async aprobar(id: string, solicitante: UsuarioSolicitante) {
+  async approve(id: string, solicitante: UsuarioSolicitante) {
     return this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
   }
 
-  async rechazar(
+  async reject(
     id: string,
     dto: RechazarProductoDto,
     solicitante: UsuarioSolicitante,
