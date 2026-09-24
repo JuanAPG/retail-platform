@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Basket } from '../entities/basket.entity';
+import { TransactionDetail } from '../entities/transaction-detail.entity';
 import { AnalyticsFilterDto } from './dto/analytics-filter.dto';
+import { CategorySpend } from './dto/category-spend.dto';
 
 /**
  * M09 — Indicadores descriptivos, según Contrato de Métodos y Endpoints.
@@ -68,6 +70,54 @@ export class AnalyticsService {
     const months = monthsBetween(start, end);
     if (months <= 0) return 0;
     return round2(baskets / months);
+  }
+
+  /**
+   * Gasto por categoría de producto, de mayor a menor. La canasta no
+   * guarda categorías: se baja a sus líneas de venta, que apuntan a la
+   * PRESENTACIÓN, y de ahí se sube a producto y categoría.
+   *
+   * Agrupa por la categoría directa del producto (no suma hacia
+   * `categoria_padre_id`). Las categorías sin ventas no aparecen.
+   */
+  async getSpendByCategory(filters: AnalyticsFilterDto): Promise<CategorySpend[]> {
+    const rows = await this.filteredBaskets(filters)
+      // Join por columna y no por `basket.transaction`: filteredBaskets ya
+      // usa ese alias cuando filtra por tienda.
+      .innerJoin(TransactionDetail, 'detail', 'detail.transactionId = basket.transactionId')
+      .innerJoin('detail.presentation', 'presentation')
+      .innerJoin('presentation.producto', 'product')
+      .innerJoin('product.categoria', 'category')
+      .select('category.id', 'categoryId')
+      .addSelect('category.nombre', 'categoryName')
+      .addSelect('SUM(detail.subtotal)', 'totalSpend')
+      .addSelect('SUM(detail.quantity)', 'units')
+      .addSelect('COUNT(DISTINCT basket.id)', 'basketCount')
+      // Ventana sobre el resultado agrupado: el total sale en la misma
+      // consulta. NULLIF evita dividir entre cero si todo suma 0.
+      .addSelect('SUM(detail.subtotal) * 100 / NULLIF(SUM(SUM(detail.subtotal)) OVER (), 0)', 'share')
+      .groupBy('category.id')
+      .addGroupBy('category.nombre')
+      .orderBy('SUM(detail.subtotal)', 'DESC')
+      .addOrderBy('category.nombre', 'ASC')
+      .getRawMany<{
+        categoryId: number;
+        categoryName: string;
+        totalSpend: string;
+        units: string;
+        basketCount: string;
+        share: string | null;
+      }>();
+
+    // Postgres devuelve NUMERIC y COUNT como texto.
+    return rows.map((row) => ({
+      categoryId: Number(row.categoryId),
+      categoryName: row.categoryName,
+      totalSpend: round2(Number(row.totalSpend)),
+      units: round2(Number(row.units)),
+      basketCount: Number(row.basketCount),
+      share: round2(Number(row.share ?? 0)),
+    }));
   }
 
   /**
