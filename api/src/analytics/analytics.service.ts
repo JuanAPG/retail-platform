@@ -36,6 +36,41 @@ export class AnalyticsService {
   }
 
   /**
+   * Compras (canastas) por mes en el ámbito de los filtros: una zona,
+   * una tienda, un segmento o todo.
+   *
+   * El catálogo `indicadores` la define por cliente (count / clientes
+   * distintos / meses), pero `transacciones.cliente_id` no se captura y
+   * RN-02 pide analizar por zona agregada, no por persona. Por eso se
+   * calcula agregada: canastas / meses del periodo.
+   *
+   * Periodo: el rango dateFrom–dateTo si viene; el extremo que falte se
+   * completa con los meses calendario completos que cubren los datos.
+   * Usar solo del primer al último dato extrapolaría unos pocos días a un
+   * mes y inflaría el resultado.
+   */
+  async getPurchaseFrequency(filters: AnalyticsFilterDto): Promise<number> {
+    const row = await this.filteredBaskets(filters)
+      .select('COUNT(*)', 'baskets')
+      // Como texto, no como DATE: el driver convertiría DATE a Date en la
+      // zona horaria del proceso y podría recorrer el día.
+      .addSelect(`to_char(date_trunc('month', MIN(basket.date)), 'YYYY-MM-DD')`, 'dataStart')
+      .addSelect(`to_char(date_trunc('month', MAX(basket.date)) + interval '1 month', 'YYYY-MM-DD')`, 'dataEnd')
+      .getRawOne<{ baskets: string; dataStart: string | null; dataEnd: string | null }>();
+
+    const baskets = Number(row?.baskets ?? 0);
+    if (baskets === 0 || !row?.dataStart || !row?.dataEnd) return 0;
+
+    const start = parseDay(filters.dateFrom ?? row.dataStart);
+    // dateTo es inclusivo; el periodo se maneja con fin exclusivo.
+    const end = filters.dateTo ? addDays(parseDay(filters.dateTo), 1) : parseDay(row.dataEnd);
+
+    const months = monthsBetween(start, end);
+    if (months <= 0) return 0;
+    return round2(baskets / months);
+  }
+
+  /**
    * Consulta base sobre canastas con los filtros aplicados. Todos los
    * indicadores parten de aquí para que filtren exactamente igual.
    */
@@ -73,4 +108,32 @@ export class AnalyticsService {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Duración promedio de un mes (365.25 / 12), para periodos que no son meses completos. */
+const AVERAGE_MONTH_DAYS = 30.4375;
+
+/** 'YYYY-MM-DD' (o un ISO completo) → medianoche UTC de ese día. */
+function parseDay(value: string): Date {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * DAY_MS);
+}
+
+/**
+ * Meses entre `start` (inclusivo) y `end` (exclusivo). Si ambos caen en
+ * día 1, cuenta meses calendario exactos (agosto completo = 1, aunque
+ * tenga 31 días); si no, divide los días entre el mes promedio.
+ */
+function monthsBetween(start: Date, end: Date): number {
+  if (start.getUTCDate() === 1 && end.getUTCDate() === 1) {
+    return (
+      (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth())
+    );
+  }
+  return (end.getTime() - start.getTime()) / DAY_MS / AVERAGE_MONTH_DAYS;
 }
