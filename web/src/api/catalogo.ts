@@ -15,8 +15,42 @@ import {
 // Los usuarios viven en api/usuarios.ts junto con su CRUD.
 
 export const getTiendas = () => apiClient.get<Tienda[]>('/stores').then((r) => r.data);
-export const getZonas = () => apiClient.get<Zona[]>('/zonas').then((r) => r.data);
-export const getMunicipios = () => apiClient.get<Municipio[]>('/municipios').then((r) => r.data);
+export const getZonas = () => apiClient.get<Zona[]>('/zones').then((r) => r.data);
+export const getMunicipios = () => apiClient.get<Municipio[]>('/municipalities').then((r) => r.data);
+
+// --- M03 Zonas: CRUD + comparación --------------------------------------
+
+export interface CrearZonaPayload {
+  nombre: string;
+  municipioId: number;
+  descripcion?: string;
+}
+
+export type ActualizarZonaPayload = Partial<CrearZonaPayload> & { activo?: boolean };
+
+export const crearZona = (payload: CrearZonaPayload) =>
+  apiClient.post<Zona>('/zones', payload).then((r) => r.data);
+
+export const actualizarZona = (id: string, payload: ActualizarZonaPayload) =>
+  apiClient.patch<Zona>(`/zones/${id}`, payload).then((r) => r.data);
+
+export const eliminarZona = (id: string) =>
+  apiClient.delete<void>(`/zones/${id}`).then((r) => r.data);
+
+export interface ZoneComparisonRow {
+  zoneId: string;
+  zoneName: string;
+  municipality: string;
+  classification: string | null;
+  estimatedIncome: number | null;
+  population: number | null;
+  availability: number | null;
+}
+
+export const compararZonas = (zoneIds: string[]) =>
+  apiClient
+    .get<ZoneComparisonRow[]>('/zones/compare', { params: { ids: zoneIds.join(',') } })
+    .then((r) => r.data);
 
 // --- M02 Tiendas: CRUD -------------------------------------------------
 

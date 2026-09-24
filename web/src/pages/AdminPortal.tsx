@@ -9,6 +9,8 @@ import { getTiendas, getZonas, getProveedores } from '../api/catalogo';
 import { getUsuarios } from '../api/usuarios';
 import { BienvenidaPanel, TabAdmin } from './admin/BienvenidaPanel';
 import { UsuariosPanel } from './admin/UsuariosPanel';
+import { ZonasPanel } from './admin/ZonasPanel';
+import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
 import { TiendasPanel } from './admin/TiendasPanel';
 
 export function AdminPortal() {
@@ -26,6 +28,11 @@ export function AdminPortal() {
     { label: 'Usuarios', active: tab === 'usuarios', onClick: () => setTab('usuarios') },
     { label: 'Tiendas', active: tab === 'tiendas', onClick: () => setTab('tiendas') },
     { label: 'Zonas', active: tab === 'zonas', onClick: () => setTab('zonas') },
+    {
+      label: 'Comparar zonas',
+      active: tab === 'comparar-zonas',
+      onClick: () => setTab('comparar-zonas'),
+    },
     {
       label: 'Proveedores',
       active: tab === 'proveedores',
@@ -56,31 +63,9 @@ export function AdminPortal() {
 
       {tab === 'tiendas' && <TiendasPanel estado={tiendas} />}
 
-      {tab === 'zonas' && (
-        <section>
-          <SectionHeader title="Zonas" description="Zonas geográficas del Área Metropolitana." />
-          {zonas.loading && <p className="text-sm text-slate-500">Cargando zonas…</p>}
-          {zonas.error && <p className="text-sm text-rose-600">{zonas.error}</p>}
-          {zonas.data && (
-            <DataTable
-              rowKey={(z) => z.id}
-              rows={zonas.data}
-              columns={[
-                { header: 'Nombre', render: (z) => z.nombre },
-                { header: 'Municipio', render: (z) => z.municipio?.nombre },
-                {
-                  header: 'Estado',
-                  render: (z) => (
-                    <Badge tone={z.activo ? 'positive' : 'neutral'}>
-                      {z.activo ? 'Activo' : 'Inactivo'}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </section>
-      )}
+      {tab === 'zonas' && <ZonasPanel estado={zonas} />}
+
+      {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} />}
 
       {tab === 'proveedores' && (
         <section>
