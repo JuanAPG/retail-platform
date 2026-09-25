@@ -280,3 +280,30 @@ export interface CsvImportResult {
   canastasCreadas: number;
   omitidos: { folio: string; tienda: string; motivo: string }[];
 }
+
+/**
+ * M09 — Filtros de los indicadores descriptivos. Mismos nombres que
+ * `AnalyticsFilterDto` del backend; todos opcionales.
+ */
+export interface AnalyticsFilters {
+  storeId?: string;
+  zoneId?: string;
+  segmentId?: number;
+  /** ISO `yyyy-mm-dd`. */
+  dateFrom?: string;
+  /** ISO `yyyy-mm-dd`, inclusivo. */
+  dateTo?: string;
+}
+
+/** M09 — Una fila de GET /analytics/spend-by-category. */
+export interface CategorySpend {
+  categoryId: number;
+  categoryName: string;
+  /** MXN. */
+  totalSpend: number;
+  units: number;
+  /** Canastas que incluyen la categoría. */
+  basketCount: number;
+  /** Porcentaje del gasto total filtrado, 0–100. */
+  share: number;
+}

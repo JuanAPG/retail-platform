@@ -7,11 +7,13 @@ import { useFetch } from '../hooks/useFetch';
 import { getTiendas, getProductos } from '../api/catalogo';
 import { SegmentosPanel } from './analista/SegmentosPanel';
 import { TransaccionesPanel } from './analista/TransaccionesPanel';
+import { IndicadoresPanel } from './analista/IndicadoresPanel';
 
 type Tab =
   | 'transacciones'
   | 'segmentos'
   | 'canastas'
+  | 'indicadores'
   | 'reglas'
   | 'accesibilidad'
   | 'productos'
@@ -26,6 +28,7 @@ export function AnalistaPortal() {
     { label: 'Transacciones', active: tab === 'transacciones', onClick: () => setTab('transacciones') },
     { label: 'Segmentos de ingreso', active: tab === 'segmentos', onClick: () => setTab('segmentos') },
     { label: 'Canastas', active: tab === 'canastas', onClick: () => setTab('canastas') },
+    { label: 'Indicadores descriptivos', active: tab === 'indicadores', onClick: () => setTab('indicadores') },
     { label: 'Reglas de asociación', active: tab === 'reglas', onClick: () => setTab('reglas') },
     {
       label: 'Indicadores de accesibilidad',
@@ -51,6 +54,8 @@ export function AnalistaPortal() {
           />
         </section>
       )}
+
+      {tab === 'indicadores' && <IndicadoresPanel />}
 
       {tab === 'reglas' && (
         <section>
