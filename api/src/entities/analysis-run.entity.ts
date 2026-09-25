@@ -11,6 +11,7 @@ import { UsuarioEntity } from './usuario.entity';
 import { AnalysisRunParameter } from './analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from './analysis-run-assumption.entity';
 import { AnalysisRunFilter } from './analysis-run-filter.entity';
+import { AssociationRule } from './association-rule.entity';
 
 /** Valores del enum `tipo_corrida` en Postgres. */
 export type AnalysisRunType =
@@ -86,4 +87,13 @@ export class AnalysisRun {
 
   @OneToMany(() => AnalysisRunFilter, (f) => f.run)
   filters: AnalysisRunFilter[];
+
+  /**
+   * Resultados de una corrida de asociación (M10): sus reglas. Nombre
+   * literal del Contrato de Métodos y Endpoints. En corridas de otro tipo
+   * viene vacío: elasticidad, accesibilidad, etc. cuelgan sus resultados
+   * de sus propias tablas.
+   */
+  @OneToMany(() => AssociationRule, (r) => r.run)
+  results: AssociationRule[];
 }

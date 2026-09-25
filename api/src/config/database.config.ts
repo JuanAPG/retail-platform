@@ -22,6 +22,9 @@ import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
 import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
+import { AssociationRule } from '../entities/association-rule.entity';
+import { AssociationRuleItem } from '../entities/association-rule-item.entity';
+import { AssociationExclusion } from '../entities/association-exclusion.entity';
 
 export default registerAs(
   'database',
@@ -58,6 +61,9 @@ export default registerAs(
       AnalysisRunParameter,
       AnalysisRunAssumption,
       AnalysisRunFilter,
+      AssociationRule,
+      AssociationRuleItem,
+      AssociationExclusion,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,
