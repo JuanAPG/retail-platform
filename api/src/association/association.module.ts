@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
+import { AssociationController } from './association.controller';
 import { AssociationService } from './association.service';
 
 /**
@@ -21,6 +22,7 @@ import { AssociationService } from './association.service';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([AnalysisRun, AssociationRule, AssociationExclusion])],
+  controllers: [AssociationController],
   providers: [AssociationService],
   exports: [AssociationService],
 })
