@@ -30,9 +30,9 @@ export class CreateTransactionDto {
   folio: string;
 
   @ApiProperty({ example: '2026-09-18', description: 'Fecha de la venta (ISO).' })
-  @IsDateString({}, { message: 'date debe ser una fecha ISO válida.' })
-  @IsNotEmpty({ message: 'date es obligatoria.' })
-  date: string;
+  @IsDateString({}, { message: 'fecha debe ser una fecha ISO válida.' })
+  @IsNotEmpty({ message: 'fecha es obligatoria.' })
+  fecha: string;
 
   @ApiProperty({ type: [CreateTransactionDetailDto] })
   @IsArray()
