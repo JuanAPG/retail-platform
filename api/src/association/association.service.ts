@@ -1,5 +1,11 @@
 import { randomUUID } from 'crypto';
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { UsuarioSolicitante } from '../common/roles';
@@ -43,6 +49,8 @@ export class AssociationService {
   private readonly logger = new Logger(AssociationService.name);
 
   constructor(
+    @InjectRepository(AnalysisRun)
+    private readonly runsRepo: Repository<AnalysisRun>,
     @InjectRepository(AssociationRule)
     private readonly rulesRepo: Repository<AssociationRule>,
     @InjectRepository(AssociationExclusion)
@@ -149,6 +157,54 @@ export class AssociationService {
 
       return Object.assign(saved, { parameters, assumptions, filters, results }) as AnalysisRun;
     });
+  }
+
+  /**
+   * Historial de corridas de asociación, de la más reciente a la más
+   * antigua, con sus parámetros. Sin reglas: pueden ser cientos por
+   * corrida y se piden con findRun. Las fallidas también aparecen.
+   */
+  findAllRuns(): Promise<AnalysisRun[]> {
+    return this.runsQuery()
+      .leftJoinAndSelect('run.parameters', 'parameter')
+      .orderBy('run.date', 'DESC')
+      .addOrderBy('parameter.key', 'ASC')
+      .getMany();
+  }
+
+  /**
+   * Una corrida de asociación completa: parámetros, supuestos en orden,
+   * filtros y reglas con sus productos. Lo necesario para reproducirla y
+   * explicarla. 404 también si el id es de una corrida de otro tipo.
+   */
+  async findRun(id: string): Promise<AnalysisRun> {
+    const run = await this.runsQuery()
+      .leftJoinAndSelect('run.parameters', 'parameter')
+      .leftJoinAndSelect('run.assumptions', 'assumption')
+      .leftJoinAndSelect('run.filters', 'filter')
+      .andWhere('run.id = :id', { id })
+      .orderBy('parameter.key', 'ASC')
+      .addOrderBy('assumption.order', 'ASC')
+      .addOrderBy('filter.dimension', 'ASC')
+      .getOne();
+    if (!run) throw new NotFoundException(`No existe la corrida de asociación ${id}.`);
+
+    run.results = await this.findRulesOfRun(run.id);
+    return run;
+  }
+
+  /**
+   * Base de las consultas de corridas: solo las de asociación, y del
+   * usuario solo id y nombre. `usuarios` trae password_hash sin
+   * `select: false`; cargar la relación completa lo sacaría en la
+   * respuesta HTTP.
+   */
+  private runsQuery() {
+    return this.runsRepo
+      .createQueryBuilder('run')
+      .leftJoin('run.user', 'user')
+      .addSelect(['user.id', 'user.nombre'])
+      .where('run.type = :type', { type: 'asociacion' });
   }
 
   /**
