@@ -123,10 +123,10 @@ export class TransactionsService {
       .leftJoinAndSelect('presentation.producto', 'producto');
 
     if (filters.storeId) qb.andWhere('t.storeId = :storeId', { storeId: filters.storeId });
-    if (filters.dateFrom) qb.andWhere('t.date >= :dateFrom', { dateFrom: filters.dateFrom });
-    if (filters.dateTo) qb.andWhere('t.date <= :dateTo', { dateTo: filters.dateTo });
+    if (filters.dateFrom) qb.andWhere('t.fecha >= :dateFrom', { dateFrom: filters.dateFrom });
+    if (filters.dateTo) qb.andWhere('t.fecha <= :dateTo', { dateTo: filters.dateTo });
 
-    return qb.orderBy('t.date', 'DESC').getMany();
+    return qb.orderBy('t.fecha', 'DESC').getMany();
   }
 
   async findOne(id: string): Promise<Transaction> {
@@ -173,7 +173,7 @@ export class TransactionsService {
       const transaction = await manager.save(Transaction, {
         folio: dto.folio,
         storeId: dto.storeId,
-        date: new Date(dto.date),
+        fecha: new Date(dto.fecha),
         total: total.toFixed(2),
         canal: 'punto_venta',
         importacionId: null,
@@ -362,7 +362,7 @@ export class TransactionsService {
           const transaction = await manager.save(Transaction, {
             folio,
             storeId: tiendaId,
-            date: primera.fecha as Date,
+            fecha: primera.fecha as Date,
             total: total.toFixed(2),
             canal: 'importacion_csv',
             importacionId: importacion.id,

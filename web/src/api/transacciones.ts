@@ -11,7 +11,7 @@ export interface CrearTransaccionPayload {
   storeId: string;
   folio: string;
   /** ISO `yyyy-mm-dd`. */
-  date: string;
+  fecha: string;
   details: CrearTransaccionLinea[];
 }
 

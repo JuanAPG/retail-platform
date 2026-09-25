@@ -103,7 +103,7 @@ export function TransaccionesPanel() {
           columns={[
             { header: 'Folio', render: (t) => t.folio },
             { header: 'Tienda', render: (t) => t.store?.nombre ?? '—' },
-            { header: 'Fecha', render: (t) => new Date(t.date).toLocaleDateString('es-MX') },
+            { header: 'Fecha', render: (t) => new Date(t.fecha).toLocaleDateString('es-MX') },
             { header: 'Líneas', render: (t) => t.details?.length ?? 0 },
             { header: 'Total', render: (t) => `$${Number(t.total).toFixed(2)}` },
             { header: 'Origen', render: (t) => (t.importacionId ? 'CSV' : 'Manual') },
