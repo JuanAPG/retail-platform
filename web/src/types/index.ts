@@ -307,3 +307,85 @@ export interface CategorySpend {
   /** Porcentaje del gasto total filtrado, 0–100. */
   share: number;
 }
+
+/**
+ * M10 — Cuerpo de POST /association/apriori/run. Extiende los filtros de
+ * M09, igual que `AprioriParamsDto` en el backend.
+ */
+export interface AprioriParams extends AnalyticsFilters {
+  /** 0.01–1. */
+  minSupport: number;
+  /** 0–1. */
+  minConfidence: number;
+  /** 2–4; el backend usa 3 si no viene. */
+  maxItemsetSize?: number;
+}
+
+/** Corridas de análisis (compartido: M10 hoy, M11–M13 después). */
+export type AnalysisRunStatus = 'en_proceso' | 'completada' | 'fallida';
+
+export interface AnalysisRunParameter {
+  runId: string;
+  key: string;
+  /** Siempre texto; se interpreta según la clave. */
+  value: string;
+}
+
+export interface AnalysisRunAssumption {
+  runId: string;
+  order: number;
+  assumption: string;
+}
+
+export interface AnalysisRunFilter {
+  runId: string;
+  dimension: 'tienda' | 'zona' | 'segmento' | 'categoria' | 'producto';
+  referenceId: string;
+}
+
+/** M10 — Un producto de un lado de una regla. */
+export interface AssociationRuleItem {
+  ruleId: string;
+  productId: string;
+  side: 'antecedente' | 'consecuente';
+  product: { id: string; sku: string; nombre: string; categoriaId: number };
+}
+
+/** M10 — Regla de asociación de una corrida. */
+export interface AssociationRule {
+  id: string;
+  runId: string;
+  /** 0–1. */
+  support: number;
+  /** 0–1. */
+  confidence: number;
+  /** > 1 = asociación positiva. */
+  lift: number | null;
+  /** Canastas que contienen la regla completa. */
+  transactionCount: number | null;
+  items: AssociationRuleItem[];
+}
+
+export interface AnalysisRun {
+  id: string;
+  type: string;
+  status: AnalysisRunStatus;
+  userId: string | null;
+  /** Solo id y nombre: el backend no expone más del usuario. */
+  user: { id: string; nombre: string } | null;
+  /** ISO: cuándo se ejecutó. */
+  date: string;
+  /** `yyyy-mm-dd`: periodo de los DATOS analizados. */
+  periodStart: string;
+  periodEnd: string;
+  transactionsConsidered: number | null;
+  basketsConsidered: number | null;
+  errorMessage: string | null;
+  parameters: AnalysisRunParameter[];
+  /** Solo en GET /association/runs/:id. */
+  assumptions?: AnalysisRunAssumption[];
+  /** Solo en GET /association/runs/:id. */
+  filters?: AnalysisRunFilter[];
+  /** Reglas; solo en GET /association/runs/:id. */
+  results?: AssociationRule[];
+}

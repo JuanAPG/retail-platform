@@ -18,6 +18,13 @@ import { IncomeSegment } from '../entities/income-segment.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
 import { Basket } from '../entities/basket.entity';
+import { AnalysisRun } from '../entities/analysis-run.entity';
+import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
+import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
+import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
+import { AssociationRule } from '../entities/association-rule.entity';
+import { AssociationRuleItem } from '../entities/association-rule-item.entity';
+import { AssociationExclusion } from '../entities/association-exclusion.entity';
 
 export default registerAs(
   'database',
@@ -50,6 +57,13 @@ export default registerAs(
       Transaction,
       TransactionDetail,
       Basket,
+      AnalysisRun,
+      AnalysisRunParameter,
+      AnalysisRunAssumption,
+      AnalysisRunFilter,
+      AssociationRule,
+      AssociationRuleItem,
+      AssociationExclusion,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,
