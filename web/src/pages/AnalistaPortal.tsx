@@ -8,6 +8,7 @@ import { getTiendas, getProductos } from '../api/catalogo';
 import { SegmentosPanel } from './analista/SegmentosPanel';
 import { TransaccionesPanel } from './analista/TransaccionesPanel';
 import { IndicadoresPanel } from './analista/IndicadoresPanel';
+import { ReglasAsociacionPanel } from './analista/ReglasAsociacionPanel';
 
 type Tab =
   | 'transacciones'
@@ -57,15 +58,7 @@ export function AnalistaPortal() {
 
       {tab === 'indicadores' && <IndicadoresPanel />}
 
-      {tab === 'reglas' && (
-        <section>
-          <SectionHeader title="Reglas de asociación" />
-          <EmptyState
-            title="Aún no se ha ejecutado ningún análisis"
-            description="Corre Apriori o FP-Growth sobre las canastas para descubrir productos que se compran juntos."
-          />
-        </section>
-      )}
+      {tab === 'reglas' && <ReglasAsociacionPanel />}
 
       {tab === 'accesibilidad' && (
         <section>
