@@ -1,27 +1,24 @@
-import { useState } from 'react';
-import { SectionHeader } from '../../components/SectionHeader';
-import { StatCard } from '../../components/StatCard';
-import { DataTable } from '../../components/DataTable';
-import { EmptyState } from '../../components/EmptyState';
+import { FormEvent, useState } from 'react';
 import { useFetch } from '../../hooks/useFetch';
 import { getResumenIndicadores } from '../../api/analitica';
 import { getTiendas, getZonas } from '../../api/catalogo';
 import { getSegmentos } from '../../api/segmentos';
 import { AnalyticsFilters } from '../../types';
+import { Hero } from '../../components/ui/Hero';
+import { IconReportes } from '../../components/ui/icons';
 
 const moneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const decimal = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const inputCls = 'w-full rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-900';
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600';
+const selectClass =
+  'h-14 rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60';
+const labelClass = 'flex flex-col gap-1.5 text-[13px] font-semibold text-teal';
 
 /**
  * M09 — Indicadores descriptivos: ticket promedio, productos por canasta,
  * frecuencia de compra, unidades por transacción y gasto por categoría.
- *
- * Los filtros se editan en un borrador y solo se consultan al pulsar
- * "Aplicar": cada consulta son cinco peticiones, y así las cifras en
- * pantalla siempre corresponden a los filtros aplicados.
+ * Se llega aquí desde el paso "Indicadores" del flujo en Transacciones:
+ * el prototipo no le da un ícono propio en el Rail.
  */
 export function IndicadoresPanel() {
   const tiendas = useFetch(getTiendas, []);
@@ -33,9 +30,6 @@ export function IndicadoresPanel() {
   const indicadores = useFetch(() => getResumenIndicadores(aplicados), [aplicados]);
 
   const fechasInvertidas = Boolean(borrador.dateFrom && borrador.dateTo && borrador.dateTo < borrador.dateFrom);
-
-  // Una tienda ya determina su zona: con una zona elegida solo se ofrecen
-  // sus tiendas, para no armar combinaciones que siempre darían vacío.
   const tiendasDisponibles = (tiendas.data ?? []).filter((t) => !borrador.zoneId || t.zonaId === borrador.zoneId);
 
   function cambiarZona(zoneId: string) {
@@ -46,7 +40,7 @@ export function IndicadoresPanel() {
     });
   }
 
-  function aplicar(e: React.FormEvent) {
+  function aplicar(e: FormEvent) {
     e.preventDefault();
     if (fechasInvertidas) return;
     setAplicados({ ...borrador });
@@ -63,38 +57,33 @@ export function IndicadoresPanel() {
   const sinCanastas = datos !== null && datos.ticketPromedio === 0 && datos.gastoPorCategoria.length === 0;
 
   return (
-    <section>
-      <SectionHeader
-        title="Indicadores descriptivos"
-        description="Tamaño y frecuencia de compra calculados a partir de las canastas."
-        action={
-          <button
-            type="button"
-            onClick={indicadores.refetch}
-            disabled={indicadores.loading}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {indicadores.loading ? 'Cargando…' : 'Actualizar'}
-          </button>
+    <div className="flex flex-col gap-6">
+      <Hero
+        title="Indicadores"
+        subtitle="Tamaño y frecuencia de compra a partir de las canastas"
+        decorations={
+          <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
+            <IconReportes className="mt-8 h-[74px] w-[74px]" />
+          </div>
         }
       />
 
-      <form onSubmit={aplicar} className="mb-6 rounded border border-slate-200 px-4 py-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <div>
-            <label className={labelCls} htmlFor="ind-zona">Zona</label>
-            <select id="ind-zona" className={inputCls} value={borrador.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
+      <form onSubmit={aplicar} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+          <label className={labelClass} htmlFor="ind-zona">
+            Zona
+            <select id="ind-zona" className={selectClass} value={borrador.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
               <option value="">Todas</option>
               {(zonas.data ?? []).map((z) => (
                 <option key={z.id} value={z.id}>{z.nombre}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="ind-tienda">Tienda</label>
+          </label>
+          <label className={labelClass} htmlFor="ind-tienda">
+            Tienda
             <select
               id="ind-tienda"
-              className={inputCls}
+              className={selectClass}
               value={borrador.storeId ?? ''}
               onChange={(e) => setBorrador((f) => ({ ...f, storeId: e.target.value || undefined }))}
             >
@@ -103,61 +92,55 @@ export function IndicadoresPanel() {
                 <option key={t.id} value={t.id}>{t.nombre}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="ind-segmento">Segmento de ingreso</label>
+          </label>
+          <label className={labelClass} htmlFor="ind-segmento">
+            Segmento de ingreso
             <select
               id="ind-segmento"
-              className={inputCls}
+              className={selectClass}
               value={borrador.segmentId ?? ''}
-              onChange={(e) =>
-                setBorrador((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))
-              }
+              onChange={(e) => setBorrador((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
             >
               <option value="">Todos</option>
               {(segmentos.data ?? []).map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="ind-desde">Desde</label>
+          </label>
+          <label className={labelClass} htmlFor="ind-desde">
+            Desde
             <input
               id="ind-desde"
               type="date"
-              className={inputCls}
+              className={selectClass}
               value={borrador.dateFrom ?? ''}
               onChange={(e) => setBorrador((f) => ({ ...f, dateFrom: e.target.value || undefined }))}
             />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="ind-hasta">Hasta</label>
+          </label>
+          <label className={labelClass} htmlFor="ind-hasta">
+            Hasta
             <input
               id="ind-hasta"
               type="date"
-              className={inputCls}
+              className={selectClass}
               value={borrador.dateTo ?? ''}
               onChange={(e) => setBorrador((f) => ({ ...f, dateTo: e.target.value || undefined }))}
             />
-          </div>
+          </label>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-4">
-          <p className="text-xs text-red-600">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs font-semibold text-vino">
             {fechasInvertidas && 'La fecha final no puede ser anterior a la inicial.'}
           </p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={limpiar}
-              className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
+            <button type="button" onClick={limpiar} className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta">
               Limpiar
             </button>
             <button
               type="submit"
               disabled={fechasInvertidas || indicadores.loading}
-              className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              className="flex h-11 items-center rounded-full bg-teal px-6 text-sm font-bold text-arena transition hover:bg-vino disabled:opacity-50"
             >
               Aplicar
             </button>
@@ -165,86 +148,64 @@ export function IndicadoresPanel() {
         </div>
       </form>
 
-      {indicadores.loading && <p className="text-sm text-slate-500">Cargando indicadores…</p>}
-
-      {!indicadores.loading && indicadores.error && (
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-red-600">{indicadores.error}</p>
-          <button
-            type="button"
-            onClick={indicadores.refetch}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            Reintentar
-          </button>
-        </div>
-      )}
+      {indicadores.loading && <p className="text-sm text-teal/70">Cargando indicadores…</p>}
+      {!indicadores.loading && indicadores.error && <p className="text-sm font-semibold text-vino">{indicadores.error}</p>}
 
       {!indicadores.loading && !indicadores.error && sinCanastas && (
-        <EmptyState
-          title="No hay canastas para estos filtros"
-          description="Prueba con otro periodo o quita filtros."
-        />
+        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+          <p className="font-display text-2xl text-teal">No hay canastas para estos filtros</p>
+          <p className="text-sm text-teal/70">Prueba con otro periodo o quita filtros.</p>
+        </div>
       )}
 
       {!indicadores.loading && !indicadores.error && datos && !sinCanastas && (
         <>
-          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Ticket promedio" value={moneda.format(datos.ticketPromedio)} hint="por canasta" />
-            <StatCard
-              label="Productos por canasta"
-              value={decimal.format(datos.productosPorCanasta)}
-              hint="productos distintos"
-            />
-            <StatCard
-              label="Frecuencia de compra"
-              value={decimal.format(datos.frecuenciaCompra)}
-              hint="compras por mes"
-            />
-            <StatCard
-              label="Unidades por transacción"
-              value={decimal.format(datos.unidadesPorTransaccion)}
-              hint="unidades"
-            />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: 'Ticket promedio', value: moneda.format(datos.ticketPromedio), hint: 'por canasta' },
+              { label: 'Productos por canasta', value: decimal.format(datos.productosPorCanasta), hint: 'distintos' },
+              { label: 'Frecuencia de compra', value: decimal.format(datos.frecuenciaCompra), hint: 'compras/mes' },
+              { label: 'Unidades por transacción', value: decimal.format(datos.unidadesPorTransaccion), hint: 'unidades' },
+            ].map((stat) => (
+              <div key={stat.label} className="flex flex-col gap-1 rounded-card bg-arena p-5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-teal/70">{stat.label}</span>
+                <span className="font-display text-3xl text-vino">{stat.value}</span>
+                <span className="text-xs text-teal/70">{stat.hint}</span>
+              </div>
+            ))}
           </div>
 
-          <h2 className="mb-3 text-lg font-semibold text-slate-900">Gasto por categoría</h2>
+          <h2 className="px-1 font-display text-[28px] text-vino">Gasto por categoría</h2>
           {datos.gastoPorCategoria.length === 0 ? (
-            <EmptyState
-              title="Sin gasto registrado por categoría"
-              description="Las canastas filtradas no tienen líneas con categoría asignada."
-            />
+            <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+              <p className="font-display text-xl text-teal">Sin gasto registrado por categoría</p>
+            </div>
           ) : (
-            <DataTable
-              rowKey={(c) => String(c.categoryId)}
-              rows={datos.gastoPorCategoria}
-              columns={[
-                { header: 'Categoría', render: (c) => c.categoryName },
-                { header: 'Gasto', render: (c) => moneda.format(c.totalSpend) },
-                {
-                  header: '% del gasto',
-                  className: 'w-64',
-                  render: (c) => (
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded bg-slate-100">
-                        <div className="h-2 rounded bg-slate-700" style={{ width: `${c.share}%` }} />
-                      </div>
-                      <span className="w-16 text-right tabular-nums">{decimal.format(c.share)}%</span>
-                    </div>
-                  ),
-                },
-                { header: 'Unidades', render: (c) => decimal.format(c.units) },
-                { header: 'Canastas', render: (c) => c.basketCount },
-              ]}
-            />
+            <div className="flex flex-col gap-2">
+              {datos.gastoPorCategoria.map((c) => (
+                <div key={c.categoryId} className="group relative flex h-14 items-center overflow-hidden rounded-full bg-arena px-5 transition hover:translate-x-1">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-salvia transition-all group-hover:bg-teal"
+                    style={{ width: `${c.share}%` }}
+                  />
+                  <div className="relative z-[1] flex w-full items-center justify-between text-sm font-semibold text-tinta group-hover:text-arena">
+                    <span>
+                      {c.categoryName} <span className="font-data text-xs opacity-70">{c.basketCount} canastas</span>
+                    </span>
+                    <span className="font-data">
+                      {moneda.format(c.totalSpend)} · {decimal.format(c.share)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}
 
-      <p className="mt-6 text-xs text-slate-400">
-        Indicadores agregados por tienda, zona o segmento. El segmento corresponde a la zona donde se hizo la
-        compra; no se infiere el ingreso de ninguna persona. La frecuencia de compra se mide en canastas por mes.
+      <p className="px-1 text-xs text-teal/60">
+        El segmento corresponde a la zona donde se hizo la compra; no se infiere el ingreso de ninguna persona.
       </p>
-    </section>
+    </div>
   );
 }

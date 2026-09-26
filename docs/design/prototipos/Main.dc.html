@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acceso</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&amp;family=Josefin+Slab:wght@600;700&amp;family=Figtree:wght@400;500;600;700&amp;family=Montserrat:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#FAF8F2}
+*{box-sizing:border-box}
+a{color:#003C3E}a:hover{color:#708D81}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+input{font-family:inherit}
+.d{font-family:'Young Serif',Georgia,serif;letter-spacing:-0.015em;font-weight:400 !important;font-synthesis:none}
+.d:not(h1):not(.logo){font-family:'Josefin Slab','Rockwell',Georgia,serif;font-weight:700 !important;letter-spacing:0;font-synthesis:none}
+.m{font-family:'Montserrat',system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em;font-weight:500}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.orb{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .5s cubic-bezier(.3,1.6,.5,1)}
+.orb svg{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .5s}
+.orb:hover{transform:translateY(-14px) scale(1.06)}
+.orb:hover svg{transform:rotate(-14deg)}
+.sg{flex:1;height:48px;border-radius:999px;font-size:15px;font-weight:700;color:#003C3E;transition:.25s}
+.sg:hover{background:rgba(112,141,129,.25)}
+.sg.on{background:#8E0A0A;color:#F0ECDF}
+.fl{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#003C3E}
+.fw{height:56px;border-radius:999px;background:#F0ECDF;border:2px solid transparent;display:flex;align-items:center;gap:10px;padding:0 8px 0 20px;transition:.2s;color:#003C3E}
+.fw:hover{border-color:rgba(112,141,129,.6)}
+.fw:focus-within{border-color:#003C3E;background:#FAF8F2}
+.fw input{flex:1;border:0;background:none;outline:none;font-size:15px;color:#040404;min-width:0}
+.fw input::placeholder{color:#708D81}
+.fw input[readonly]{color:#003C3E;font-weight:600}
+.eye{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:.2s;color:#003C3E}
+.eye:hover{background:#003C3E;color:#F0ECDF}
+.sw{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600;color:#003C3E}
+.sw .k{width:54px;height:34px;border-radius:999px;background:rgba(112,141,129,.35);position:relative;transition:.25s;flex-shrink:0}
+.sw .k::after{content:'';position:absolute;top:4px;left:4px;width:26px;height:26px;border-radius:50%;background:#FAF8F2;transition:.25s}
+.sw:hover .k{background:rgba(112,141,129,.6)}
+.sw.on .k{background:#8E0A0A}
+.sw.on .k::after{left:24px;background:#F0ECDF}
+.go{height:60px;border-radius:999px;background:#003C3E;color:#F0ECDF;font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 28px;text-decoration:none;transition:.25s}
+.go:hover{background:#040404;color:#F0ECDF}
+.go .ar{width:44px;height:44px;border-radius:50%;background:#8E0A0A;color:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.3s}
+.go:hover .ar{transform:translateX(4px) rotate(-45deg);background:#F0ECDF;color:#8E0A0A}
+.lk{font-size:14px;font-weight:600;color:#003C3E;text-decoration:none;padding:8px 14px;border-radius:999px;transition:.2s}
+.lk:hover{background:#8E0A0A;color:#F0ECDF}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; gap: 24px; padding: 24px; background: #FAF8F2; color: #040404; font-family: 'Figtree', system-ui, sans-serif;">
+
+<section style="width: 760px; flex-shrink: 0; border-radius: 60px; background: #003C3E; color: #F0ECDF; position: relative; overflow: hidden; padding: 56px; display: flex; flex-direction: column; justify-content: space-between;">
+<div style="display: flex; align-items: center; gap: 14px; position: relative; z-index: 2;">
+<span class="d" style="width: 60px; height: 60px; border-radius: 50%; background: #F0ECDF; color: #003C3E; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800;">ra</span>
+<span style="font-size: 16px; font-weight: 600;">RetailAnalytics Pro</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 28px; position: relative; z-index: 2;">
+<h1 class="d" style="margin: 0; font-size: 76px; line-height: 0.98; font-weight: 800;">Del anaquel<br><span style="color: #708D81;">a la decisión<span style="color: #8E0A0A; -webkit-text-stroke: 2px #F0ECDF;">.</span></span></h1>
+<span class="m" style="font-size: 13px; color: #708D81;">v2.4.1 · Consumo minorista</span>
+</div>
+
+<div class="orb" style="width: 250px; height: 250px; right: -50px; top: -60px; background: #708D81; color: #040404;">
+<svg viewBox="0 0 64 64" style="width: 100px; height: 100px; margin: 40px 40px 0 0;"><path d="M8 24h48l-5 26a5 5 0 0 1-5 4H18a5 5 0 0 1-5-4z"/><path d="M20 24l12-14 12 14"/></svg>
+</div>
+<div class="orb" style="width: 130px; height: 130px; right: 190px; top: 70px; background: #F0ECDF; color: #003C3E;">
+<svg viewBox="0 0 64 64" style="width: 60px; height: 60px;"><path d="M20 22l6-12h12l6 12v30a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4z"/><path d="M20 22h24"/></svg>
+</div>
+<div class="orb" style="width: 110px; height: 110px; right: 60px; top: 220px; background: #8E0A0A; color: #F0ECDF;">
+<svg viewBox="0 0 64 64" style="width: 52px; height: 52px;"><path d="M8 32V12a3 3 0 0 1 3-3h20l25 25-23 23z"/><circle cx="20" cy="21" r="4"/></svg>
+</div>
+<div class="orb" style="width: 90px; height: 90px; right: 250px; top: 230px; background: transparent; box-shadow: inset 0 0 0 3px #F0ECDF; color: #F0ECDF;">
+<svg viewBox="0 0 64 64" style="width: 42px; height: 42px;"><rect x="20" y="8" width="24" height="48" rx="9"/><path d="M20 18h24M20 46h24"/></svg>
+</div>
+<div style="position: absolute; width: 420px; height: 420px; border-radius: 50%; right: -160px; bottom: -200px; background: #8E0A0A; opacity: .55;"></div>
+</section>
+
+<section style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 56px; gap: 28px;">
+<div style="display: flex; gap: 4px; background: #F0ECDF; border-radius: 999px; padding: 5px;">
+<button class="{{tabIn}}" onClick="{{goIn}}">Iniciar sesión</button>
+<button class="{{tabReg}}" onClick="{{goReg}}">Soy proveedor</button>
+</div>
+
+<sc-if value="{{isIn}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 18px;">
+<h2 class="d" style="margin: 0; font-size: 48px; font-weight: 800; color: #8E0A0A;">Hola de nuevo</h2>
+<label class="fl">Correo<span class="fw"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="5"/><path d="M4 7l8 6 8-6"/></svg><input type="email" placeholder="nombre@retail.mx"></span></label>
+<label class="fl">Contraseña<span class="fw"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="4"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><input type="{{pwType}}" placeholder="••••••••"><button class="eye" onClick="{{togglePw}}" aria-label="Mostrar contraseña"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<button class="{{swRem}}" onClick="{{toggleRem}}"><span class="k"></span>Recordarme</button>
+<a class="lk" href="#">¿Olvidaste tu contraseña?</a>
+</div>
+<a class="go" href="Categoria.dc.html">Ingresar<span class="ar"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+</div>
+</sc-if>
+
+<sc-if value="{{isReg}}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{notSent}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 14px;">
+<h2 class="d" style="margin: 0; font-size: 40px; font-weight: 800; color: #8E0A0A;">Vende con nosotros</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+<label class="fl">Nombre completo<span class="fw"><input placeholder="Nombre y apellidos"></span></label>
+<label class="fl">Rol<span class="fw" style="background: #708D81;"><input value="Proveedor Externo" readonly style="color: #040404;"><svg class="i" style="color: #040404; margin-right: 12px;" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="4"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span></label>
+</div>
+<label class="fl">Razón social<span class="fw"><input placeholder="Empresa S.A. de C.V."></span></label>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+<label class="fl">RFC<span class="fw"><input class="m" placeholder="XAXX010101000"></span></label>
+<label class="fl">Teléfono<span class="fw"><input type="tel" placeholder="81 0000 0000"></span></label>
+</div>
+<label class="fl">Correo<span class="fw"><input type="email" placeholder="contacto@empresa.mx"></span></label>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+<label class="fl">Contraseña<span class="fw"><input type="password" placeholder="••••••••"></span></label>
+<label class="fl">Confirmar<span class="fw"><input type="password" placeholder="••••••••"></span></label>
+</div>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+<button class="{{swTerms}}" onClick="{{toggleTerms}}"><span class="k"></span>Acepto términos</button>
+<button class="go" style="width: 260px; opacity: {{sendOpacity}};" onClick="{{send}}">Crear cuenta<span class="ar"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{sent}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 18px;">
+<div style="width: 140px; height: 140px; border-radius: 50%; background: #708D81; color: #040404; display: flex; align-items: center; justify-content: center;"><svg class="i" style="width: 60px; height: 60px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+<h2 class="d" style="margin: 0; font-size: 44px; font-weight: 800; color: #003C3E;">Cuenta en revisión</h2>
+<a class="go" style="width: 320px;" href="Proveedor.dc.html">Ver mi portal<span class="ar"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+</div>
+</sc-if>
+</sc-if>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    this.state = Object.assign({}, this.state || {}, { tab: 'in', pw: false, rem: true, terms: false, sent: false });
+  }
+  renderVals() {
+    const s = this.state;
+    const set = (o) => this.setState(o);
+    return {
+      tabIn: s.tab === 'in' ? 'sg on' : 'sg', tabReg: s.tab === 'reg' ? 'sg on' : 'sg',
+      goIn: () => set({ tab: 'in' }), goReg: () => set({ tab: 'reg' }),
+      isIn: s.tab === 'in', isReg: s.tab === 'reg',
+      pwType: s.pw ? 'text' : 'password', togglePw: (e) => { if (e && e.preventDefault) e.preventDefault(); set({ pw: !s.pw }); },
+      swRem: s.rem ? 'sw on' : 'sw', toggleRem: () => set({ rem: !s.rem }),
+      swTerms: s.terms ? 'sw on' : 'sw', toggleTerms: () => set({ terms: !s.terms }),
+      sendOpacity: s.terms ? '1' : '.45',
+      send: () => { if (s.terms) set({ sent: true }); },
+      sent: s.sent, notSent: !s.sent
+    };
+  }
+}
+</script>
+</body>
+</html>

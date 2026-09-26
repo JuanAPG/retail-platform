@@ -3,10 +3,11 @@ import { AxiosError } from 'axios';
 import { correrApriori } from '../../api/asociacion';
 import { mensajeDeError } from '../../api/errores';
 import { AnalyticsFilters, AssociationRule, IncomeSegment, Tienda, Zona } from '../../types';
+import { IconSimulacion } from '../../components/ui/icons';
 
-const inputCls = 'w-full rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-900';
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600';
-const ayudaCls = 'mt-1 text-xs text-slate-400';
+const selectClass =
+  'h-14 rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60';
+const labelClass = 'flex flex-col gap-1.5 text-[13px] font-semibold text-teal';
 
 interface CorridaAprioriFormProps {
   tiendas: Tienda[];
@@ -43,7 +44,6 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
   const fechasInvertidas = Boolean(filtros.dateFrom && filtros.dateTo && filtros.dateTo < filtros.dateFrom);
   const invalido = Boolean(errorSoporte || errorConfianza || fechasInvertidas);
 
-  // Una tienda ya determina su zona: con zona elegida solo se ofrecen sus tiendas.
   const tiendasDisponibles = tiendas.filter((t) => !filtros.zoneId || t.zonaId === filtros.zoneId);
 
   function cambiarZona(zoneId: string) {
@@ -62,7 +62,6 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
     try {
       const reglas = await correrApriori({
         ...filtros,
-        // toFixed evita arrastrar ruido de punto flotante (14.3 / 100 = 0.14300000000000002).
         minSupport: Number((soporteNum / 100).toFixed(4)),
         minConfidence: Number((confianzaNum / 100).toFixed(4)),
         maxItemsetSize: tamanoMaximo,
@@ -77,74 +76,68 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
   }
 
   return (
-    <form onSubmit={correr} className="mb-6 rounded border border-slate-200 px-4 py-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Nueva corrida</h2>
+    <form onSubmit={correr} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+      <h2 className="font-slab text-[22px] text-vino">Nueva corrida</h2>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div>
-          <label className={labelCls} htmlFor="apr-soporte">Soporte mínimo (%)</label>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <label className={labelClass} htmlFor="apr-soporte">
+          Soporte mínimo (%)
           <input
             id="apr-soporte"
             type="number"
             min={1}
             max={100}
             step="any"
-            className={inputCls}
+            className={selectClass}
             value={soporte}
             onChange={(e) => setSoporte(e.target.value)}
           />
-          <p className={errorSoporte ? 'mt-1 text-xs text-red-600' : ayudaCls}>
-            {errorSoporte ??
-              `La combinación debe aparecer en al menos ${soporteNum}% de las canastas.`}
-          </p>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-confianza">Confianza mínima (%)</label>
+          <span className={`text-xs ${errorSoporte ? 'font-semibold text-vino' : 'text-teal/70'}`}>
+            {errorSoporte ?? `Debe aparecer en al menos ${soporteNum}% de las canastas.`}
+          </span>
+        </label>
+        <label className={labelClass} htmlFor="apr-confianza">
+          Confianza mínima (%)
           <input
             id="apr-confianza"
             type="number"
             min={0}
             max={100}
             step="any"
-            className={inputCls}
+            className={selectClass}
             value={confianza}
             onChange={(e) => setConfianza(e.target.value)}
           />
-          <p className={errorConfianza ? 'mt-1 text-xs text-red-600' : ayudaCls}>
-            {errorConfianza ?? `De quienes compran lo primero, al menos ${confianzaNum}% lleva lo segundo.`}
-          </p>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-tamano">Productos por regla (máx.)</label>
-          <select
-            id="apr-tamano"
-            className={inputCls}
-            value={tamanoMaximo}
-            onChange={(e) => setTamanoMaximo(Number(e.target.value))}
-          >
+          <span className={`text-xs ${errorConfianza ? 'font-semibold text-vino' : 'text-teal/70'}`}>
+            {errorConfianza ?? `De quienes compran lo primero, ${confianzaNum}% lleva lo segundo.`}
+          </span>
+        </label>
+        <label className={labelClass} htmlFor="apr-tamano">
+          Productos por regla (máx.)
+          <select id="apr-tamano" className={selectClass} value={tamanoMaximo} onChange={(e) => setTamanoMaximo(Number(e.target.value))}>
             <option value={2}>2</option>
             <option value={3}>3</option>
             <option value={4}>4</option>
           </select>
-          <p className={ayudaCls}>Con 3: reglas como {'{A, B} → {C}'}.</p>
-        </div>
+          <span className="text-xs text-teal/70">Con 3: reglas como {'{A, B} → {C}'}.</span>
+        </label>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <div>
-          <label className={labelCls} htmlFor="apr-zona">Zona</label>
-          <select id="apr-zona" className={inputCls} value={filtros.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+        <label className={labelClass} htmlFor="apr-zona">
+          Zona
+          <select id="apr-zona" className={selectClass} value={filtros.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
             <option value="">Todas</option>
             {zonas.map((z) => (
               <option key={z.id} value={z.id}>{z.nombre}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-tienda">Tienda</label>
+        </label>
+        <label className={labelClass} htmlFor="apr-tienda">
+          Tienda
           <select
             id="apr-tienda"
-            className={inputCls}
+            className={selectClass}
             value={filtros.storeId ?? ''}
             onChange={(e) => setFiltros((f) => ({ ...f, storeId: e.target.value || undefined }))}
           >
@@ -153,54 +146,51 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
               <option key={t.id} value={t.id}>{t.nombre}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-segmento">Segmento de ingreso</label>
+        </label>
+        <label className={labelClass} htmlFor="apr-segmento">
+          Segmento de ingreso
           <select
             id="apr-segmento"
-            className={inputCls}
+            className={selectClass}
             value={filtros.segmentId ?? ''}
-            onChange={(e) =>
-              setFiltros((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))
-            }
+            onChange={(e) => setFiltros((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
           >
             <option value="">Todos</option>
             {segmentos.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-desde">Desde</label>
+        </label>
+        <label className={labelClass} htmlFor="apr-desde">
+          Desde
           <input
             id="apr-desde"
             type="date"
-            className={inputCls}
+            className={selectClass}
             value={filtros.dateFrom ?? ''}
             onChange={(e) => setFiltros((f) => ({ ...f, dateFrom: e.target.value || undefined }))}
           />
-        </div>
-        <div>
-          <label className={labelCls} htmlFor="apr-hasta">Hasta</label>
+        </label>
+        <label className={labelClass} htmlFor="apr-hasta">
+          Hasta
           <input
             id="apr-hasta"
             type="date"
-            className={inputCls}
+            className={selectClass}
             value={filtros.dateTo ?? ''}
             onChange={(e) => setFiltros((f) => ({ ...f, dateTo: e.target.value || undefined }))}
           />
-        </div>
+        </label>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-4">
-        <p className="text-xs text-red-600">
-          {fechasInvertidas ? 'La fecha final no puede ser anterior a la inicial.' : error}
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs font-semibold text-vino">{fechasInvertidas ? 'La fecha final no puede ser anterior a la inicial.' : error}</p>
         <button
           type="submit"
           disabled={invalido || corriendo}
-          className="shrink-0 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          className="flex h-[52px] shrink-0 items-center gap-2.5 rounded-full bg-teal px-6 text-[15px] font-bold text-arena transition hover:bg-vino disabled:opacity-50"
         >
+          <IconSimulacion className="h-[18px] w-[18px]" />
           {corriendo ? 'Corriendo…' : 'Correr Apriori'}
         </button>
       </div>

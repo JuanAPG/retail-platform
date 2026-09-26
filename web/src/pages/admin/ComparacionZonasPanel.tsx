@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { SectionHeader } from '../../components/SectionHeader';
-import { DataTable } from '../../components/DataTable';
-import { EmptyState } from '../../components/EmptyState';
-import { UseFetchState, useFetch } from '../../hooks/useFetch';
+import { UseFetchState } from '../../hooks/useFetch';
 import { compararZonas, ZoneComparisonRow } from '../../api/catalogo';
 import { mensajeDeError } from '../../api/errores';
 import { Zona } from '../../types';
+import { Chip } from '../../components/ui/Chip';
+import { Card } from '../../components/ui/Card';
+import { IconResultados } from '../../components/ui/icons';
 
 interface ComparacionZonasPanelProps {
   estado: UseFetchState<Zona[]>;
+  onVolver: () => void;
 }
 
 function formatoNumero(valor: number | null, unidad: string): string {
@@ -21,7 +22,7 @@ function formatoNumero(valor: number | null, unidad: string): string {
  * más recientes (ingreso estimado, población, disponibilidad). Esos
  * indicadores los calcula Analítica (M09); aquí solo se leen.
  */
-export function ComparacionZonasPanel({ estado }: ComparacionZonasPanelProps) {
+export function ComparacionZonasPanel({ estado, onVolver }: ComparacionZonasPanelProps) {
   const zonas = estado.data ?? [];
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [resultado, setResultado] = useState<ZoneComparisonRow[] | null>(null);
@@ -29,9 +30,7 @@ export function ComparacionZonasPanel({ estado }: ComparacionZonasPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   function alternarSeleccion(id: string) {
-    setSeleccionadas((actuales) =>
-      actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id],
-    );
+    setSeleccionadas((actuales) => (actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id]));
     setResultado(null);
   }
 
@@ -49,30 +48,31 @@ export function ComparacionZonasPanel({ estado }: ComparacionZonasPanelProps) {
   }
 
   return (
-    <section>
-      <SectionHeader
-        title="Comparar zonas"
-        description="Clasificación vigente e indicadores más recientes (ingreso estimado, población, disponibilidad) de las zonas que elijas."
-      />
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-4xl text-vino">Comparar zonas</h1>
+          <p className="mt-1 text-sm font-semibold text-teal/70">
+            Clasificación e indicadores más recientes de las zonas que elijas.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onVolver}
+          className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
+        >
+          Volver a Zonas
+        </button>
+      </div>
 
-      {estado.loading && <p className="text-sm text-slate-500">Cargando zonas…</p>}
-      {estado.error && <p className="text-sm text-rose-600">{estado.error}</p>}
+      {estado.error && <p className="text-sm font-semibold text-vino">{estado.error}</p>}
 
       {zonas.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {zonas.map((z) => (
-            <label
-              key={z.id}
-              className="flex items-center gap-2 rounded border border-slate-300 px-3 py-1.5 text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={seleccionadas.includes(z.id)}
-                onChange={() => alternarSeleccion(z.id)}
-                className="h-4 w-4 rounded border-slate-300"
-              />
+            <Chip key={z.id} active={seleccionadas.includes(z.id)} onClick={() => alternarSeleccion(z.id)}>
               {z.nombre}
-            </label>
+            </Chip>
           ))}
         </div>
       )}
@@ -82,38 +82,44 @@ export function ComparacionZonasPanel({ estado }: ComparacionZonasPanelProps) {
         onClick={comparar}
         disabled={seleccionadas.length < 2 || cargando}
         title={seleccionadas.length < 2 ? 'Selecciona al menos 2 zonas' : undefined}
-        className="mb-6 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+        className="flex h-[52px] w-fit items-center rounded-full bg-teal px-6 text-[15px] font-bold text-arena transition hover:bg-vino disabled:opacity-50"
       >
         {cargando ? 'Comparando…' : 'Comparar'}
       </button>
 
       {error && (
-        <p role="alert" className="mb-4 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <p role="alert" className="rounded-full bg-vino/10 px-5 py-3 text-sm font-semibold text-vino">
           {error}
         </p>
       )}
 
       {!resultado && (
-        <EmptyState
-          title="Selecciona al menos 2 zonas"
-          description="Marca las zonas que quieres comparar y presiona «Comparar»."
-        />
+        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-salvia text-tinta">
+            <IconResultados className="h-6 w-6" />
+          </span>
+          <p className="font-display text-2xl text-teal">Selecciona al menos 2 zonas</p>
+        </div>
       )}
 
       {resultado && resultado.length > 0 && (
-        <DataTable
-          rowKey={(r) => r.zoneId}
-          rows={resultado}
-          columns={[
-            { header: 'Zona', render: (r) => r.zoneName },
-            { header: 'Municipio', render: (r) => r.municipality },
-            { header: 'Segmento vigente', render: (r) => r.classification ?? 'Sin clasificar' },
-            { header: 'Ingreso estimado', render: (r) => formatoNumero(r.estimatedIncome, 'MXN') },
-            { header: 'Población', render: (r) => formatoNumero(r.population, 'hab.') },
-            { header: 'Disponibilidad', render: (r) => formatoNumero(r.availability, '%') },
-          ]}
-        />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {resultado.map((r) => (
+            <Card key={r.zoneId}>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-display text-[19px] leading-tight text-tinta">{r.zoneName}</span>
+                <span className="font-data text-xs text-teal">{r.municipality}</span>
+              </div>
+              <p className="text-sm font-semibold text-vino">{r.classification ?? 'Sin clasificar'}</p>
+              <div className="flex flex-col gap-1 font-data text-xs text-teal">
+                <span>Ingreso estimado: {formatoNumero(r.estimatedIncome, 'MXN')}</span>
+                <span>Población: {formatoNumero(r.population, 'hab.')}</span>
+                <span>Disponibilidad: {formatoNumero(r.availability, '%')}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
-    </section>
+    </div>
   );
 }

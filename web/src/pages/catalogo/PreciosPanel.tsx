@@ -1,17 +1,15 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { SectionHeader } from '../../components/SectionHeader';
-import { DataTable } from '../../components/DataTable';
-import { Badge } from '../../components/Badge';
-import { EmptyState } from '../../components/EmptyState';
 import { useFetch } from '../../hooks/useFetch';
 import { mensajeDeError } from '../../api/errores';
 import { getProductos, getTiendas } from '../../api/catalogo';
 import { getHistorialPrecios, registrarPrecio } from '../../api/precios';
+import { Hero } from '../../components/ui/Hero';
+import { StatusPill } from '../../components/ui/StatusPill';
+import { CircleButton } from '../../components/ui/CircleButton';
+import { IconMas, IconPrecios } from '../../components/ui/icons';
 
 function formatoMoneda(valor: string | number): string {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
-    Number(valor),
-  );
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(valor));
 }
 
 function fechaCorta(iso: string | null): string {
@@ -21,6 +19,10 @@ function fechaCorta(iso: string | null): string {
   return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(fecha);
 }
 
+const selectClass =
+  'h-14 rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60 disabled:opacity-50';
+const labelClass = 'flex flex-col gap-1.5 text-[13px] font-semibold text-teal';
+
 /**
  * M08 — Registrar un precio nuevo y ver el histórico de un producto.
  *
@@ -28,6 +30,14 @@ function fechaCorta(iso: string | null): string {
  * precio nuevo cierra automáticamente el vigente anterior (lo hace el
  * backend en una transacción); esta pantalla solo captura y muestra,
  * nunca reescribe una fila del histórico.
+ *
+ * Nota de fidelidad: Precios.dc.html muestra un grid de "etiquetas de
+ * precio" con TODOS los precios vigentes del sistema y segmentos
+ * Todos/Vigentes/Por vencer/Vencidos, pero el backend no tiene un
+ * endpoint de listado global — solo histórico de un producto ya
+ * elegido. Se mantiene la receta visual de la etiqueta (recorte
+ * redondo, gira al hover) aplicada al histórico real del producto
+ * seleccionado.
  */
 export function PreciosPanel() {
   const productos = useFetch(getProductos, []);
@@ -38,7 +48,6 @@ export function PreciosPanel() {
   const [tiendaId, setTiendaId] = useState('');
   const [precio, setPrecio] = useState('');
   const [fecha, setFecha] = useState('');
-  const [soloEstaPresentacion, setSoloEstaPresentacion] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -50,11 +59,8 @@ export function PreciosPanel() {
   );
 
   const historial = useFetch(
-    () =>
-      productoId
-        ? getHistorialPrecios(productoId, soloEstaPresentacion ? presentacionId : undefined)
-        : Promise.resolve([]),
-    [productoId, presentacionId, soloEstaPresentacion],
+    () => (productoId ? getHistorialPrecios(productoId) : Promise.resolve([])),
+    [productoId],
   );
 
   function elegirProducto(id: string) {
@@ -95,25 +101,28 @@ export function PreciosPanel() {
   const filas = historial.data ?? [];
 
   return (
-    <section>
-      <SectionHeader
-        title="Gestión de precios"
-        description="Histórico versionado por presentación y tienda (RN-06). Registrar un precio nuevo cierra el vigente anterior."
+    <div className="flex flex-col gap-6">
+      <Hero
+        title="Precios"
+        subtitle="Histórico versionado por presentación y tienda"
+        decorations={
+          <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
+            <IconPrecios className="mt-8 h-[74px] w-[74px]" />
+          </div>
+        }
       />
 
-      <div className="mb-6 rounded border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Registrar precio</h2>
+      <section className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+        <h2 className="font-slab text-[22px] text-vino">Registrar precio</h2>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="lg:col-span-2">
-            <label htmlFor="precio-producto" className={labelClass}>
-              Producto
-            </label>
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-6">
+          <label className={`${labelClass} lg:col-span-2`} htmlFor="precio-producto">
+            Producto
             <select
               id="precio-producto"
               value={productoId}
               onChange={(e) => elegirProducto(e.target.value)}
-              className={inputClass}
+              className={selectClass}
             >
               <option value="">Selecciona…</option>
               {(productos.data ?? []).map((p) => (
@@ -122,18 +131,16 @@ export function PreciosPanel() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="precio-presentacion" className={labelClass}>
-              Presentación
-            </label>
+          <label className={labelClass} htmlFor="precio-presentacion">
+            Presentación
             <select
               id="precio-presentacion"
               value={presentacionId}
               onChange={(e) => setPresentacionId(e.target.value)}
               disabled={!productoSeleccionado}
-              className={inputClass}
+              className={selectClass}
             >
               <option value="">Selecciona…</option>
               {(productoSeleccionado?.presentaciones ?? []).map((pr) => (
@@ -142,17 +149,15 @@ export function PreciosPanel() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="precio-tienda" className={labelClass}>
-              Tienda
-            </label>
+          <label className={labelClass} htmlFor="precio-tienda">
+            Tienda
             <select
               id="precio-tienda"
               value={tiendaId}
               onChange={(e) => setTiendaId(e.target.value)}
-              className={inputClass}
+              className={selectClass}
             >
               <option value="">Selecciona…</option>
               {(tiendas.data ?? []).map((t) => (
@@ -161,12 +166,10 @@ export function PreciosPanel() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="precio-monto" className={labelClass}>
-              Precio (MXN)
-            </label>
+          <label className={labelClass} htmlFor="precio-monto">
+            Precio (MXN)
             <input
               id="precio-monto"
               type="number"
@@ -174,104 +177,103 @@ export function PreciosPanel() {
               step="0.01"
               value={precio}
               onChange={(e) => setPrecio(e.target.value)}
-              className={inputClass}
+              className={selectClass}
             />
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="precio-fecha" className={labelClass}>
-              Vigente desde
-            </label>
+          <label className={labelClass} htmlFor="precio-fecha">
+            Vigente desde
             <input
               id="precio-fecha"
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
-              className={inputClass}
+              className={selectClass}
             />
-          </div>
+          </label>
 
           <div className="flex items-end sm:col-span-2 lg:col-span-6">
             <button
               type="submit"
               disabled={guardando}
-              className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-teal disabled:opacity-50"
             >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90">
+                <IconMas className="h-[18px] w-[18px]" />
+              </span>
               {guardando ? 'Registrando…' : 'Registrar precio'}
             </button>
           </div>
         </form>
 
-        {error && (
-          <p role="alert" className="mt-3 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
-        {aviso && (
-          <p className="mt-3 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{aviso}</p>
-        )}
-      </div>
+        {error && <p className="rounded-full bg-vino/10 px-5 py-3 text-sm font-semibold text-vino">{error}</p>}
+        {aviso && <p className="rounded-full bg-salvia/25 px-5 py-3 text-sm font-semibold text-teal">{aviso}</p>}
+      </section>
 
-      <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico</h2>
+      <h2 className="px-1 font-display text-[28px] text-vino">Histórico</h2>
 
       {!productoId && (
-        <EmptyState
-          title="Selecciona un producto"
-          description="Elige un producto arriba para ver su histórico de precios."
-        />
+        <div className="flex h-[220px] flex-col items-center justify-center gap-3 rounded-panel border-2 border-dashed border-salvia text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-arena text-teal">
+            <IconPrecios className="h-6 w-6" />
+          </span>
+          <p className="font-display text-2xl text-teal">Elige un producto arriba</p>
+        </div>
       )}
 
-      {productoId && (
-        <>
-          <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={soloEstaPresentacion}
-              disabled={!presentacionId}
-              onChange={(e) => setSoloEstaPresentacion(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            Mostrar solo la presentación seleccionada
-          </label>
+      {productoId && historial.loading && <p className="px-1 text-sm text-teal/70">Cargando histórico…</p>}
+      {productoId && historial.error && <p className="px-1 text-sm font-semibold text-vino">{historial.error}</p>}
 
-          {historial.loading && <p className="text-sm text-slate-500">Cargando histórico…</p>}
-          {historial.error && <p className="text-sm text-rose-600">{historial.error}</p>}
-
-          {historial.data && filas.length === 0 && (
-            <EmptyState
-              title="Este producto no tiene precios registrados"
-              description="Usa el formulario de arriba para capturar el primero."
-            />
-          )}
-
-          {filas.length > 0 && (
-            <DataTable
-              rowKey={(f) => f.id}
-              rows={filas}
-              columns={[
-                { header: 'Presentación', render: (f) => f.presentation?.nombre ?? '—' },
-                { header: 'Tienda', render: (f) => f.store?.nombre ?? '—' },
-                { header: 'Zona', render: (f) => f.store?.zona?.nombre ?? '—' },
-                { header: 'Precio', render: (f) => formatoMoneda(f.price) },
-                { header: 'Desde', render: (f) => fechaCorta(f.effectiveDate) },
-                { header: 'Hasta', render: (f) => fechaCorta(f.effectiveUntil) },
-                {
-                  header: 'Estado',
-                  render: (f) => (
-                    <Badge tone={f.vigente ? 'positive' : 'neutral'}>
-                      {f.vigente ? 'Vigente' : 'Histórico'}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </>
+      {productoId && historial.data && filas.length === 0 && (
+        <div className="flex h-[220px] flex-col items-center justify-center gap-3 rounded-panel border-2 border-dashed border-salvia text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-arena text-teal">
+            <IconPrecios className="h-6 w-6" />
+          </span>
+          <p className="font-display text-2xl text-teal">Sin precios registrados todavía</p>
+        </div>
       )}
-    </section>
+
+      {filas.length > 0 && (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {filas.map((f) => (
+            <article
+              key={f.id}
+              className="group relative flex origin-top flex-col gap-2.5 rounded-[34px] bg-arena px-5 pb-4 pt-8 text-tinta transition duration-300 hover:-rotate-2 hover:bg-vino hover:text-arena hover:shadow-lift"
+            >
+              <span className="absolute left-1/2 top-3 h-[18px] w-[18px] -translate-x-1/2 rounded-full bg-marfil shadow-[inset_0_0_0_4px_#8E0A0A]" />
+              <div className="flex items-center justify-between gap-2">
+                <StatusPill tone={f.vigente ? 'ok' : 'neutral'}>{f.vigente ? 'Vigente' : 'Histórico'}</StatusPill>
+              </div>
+              <span className="font-display text-[46px] font-extrabold leading-none">{formatoMoneda(f.price)}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-base font-bold leading-tight">{f.presentation?.nombre ?? 'Presentación'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-[13px] font-semibold">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vino text-[12px] font-bold text-arena transition group-hover:bg-arena group-hover:text-vino">
+                    {(f.store?.nombre ?? '?')[0]}
+                  </span>
+                  {f.store?.nombre ?? 'Tienda'}
+                </span>
+                {productoSeleccionado && (
+                  <CircleButton
+                    icon={<IconPrecios className="h-[17px] w-[17px]" />}
+                    label="Volver a registrar"
+                    size="sm"
+                    onClick={() => {
+                      setPresentacionId(f.presentationId);
+                      setTiendaId(f.storeId);
+                    }}
+                  />
+                )}
+              </div>
+              <span className="font-data text-xs opacity-80">
+                {fechaCorta(f.effectiveDate)} — {fechaCorta(f.effectiveUntil)}
+              </span>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
-
-const inputClass =
-  'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-const labelClass = 'mb-1 block text-xs font-medium uppercase text-slate-500';

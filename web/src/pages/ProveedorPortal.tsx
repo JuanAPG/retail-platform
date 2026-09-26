@@ -1,188 +1,265 @@
 import { FormEvent, useState } from 'react';
-import { PortalLayout } from '../components/PortalLayout';
-import { SectionHeader } from '../components/SectionHeader';
-import { DataTable } from '../components/DataTable';
-import { Badge } from '../components/Badge';
-import { EstatusProductoBadge } from '../components/EstatusProductoBadge';
-import { EmptyState } from '../components/EmptyState';
+import { AppShell } from '../components/ui/AppShell';
 import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
-import {
-  getProductos,
-  getCategorias,
-  getUnidadesMedida,
-  proponerProducto,
-} from '../api/catalogo';
+import { getProductos, getCategorias, getUnidadesMedida, proponerProducto } from '../api/catalogo';
 import { mensajeDeError } from '../api/errores';
-import { UnidadMedida } from '../types';
+import { EstatusProducto, UnidadMedida } from '../types';
+import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { RailModule } from '../components/ui/Rail';
+import { Hero } from '../components/ui/Hero';
+import { Chip } from '../components/ui/Chip';
+import { Card } from '../components/ui/Card';
+import { StatusPill } from '../components/ui/StatusPill';
+import { IconCanastas, IconCheck, IconMas, IconPrecios, IconProductos } from '../components/ui/icons';
 
-type Tab = 'mis-productos' | 'proponer' | 'solicitudes' | 'perfil';
+type Tab = 'mis-productos' | 'proponer-alta' | 'mis-solicitudes' | 'cambio-precio' | 'mi-perfil';
+
+const ESTATUS_TONE: Record<EstatusProducto, 'ok' | 'warn' | 'neutral'> = {
+  activo: 'ok',
+  pendiente_aprobacion: 'warn',
+  rechazado: 'warn',
+  inactivo: 'neutral',
+};
+const ESTATUS_LABEL: Record<EstatusProducto, string> = {
+  activo: 'Aprobada',
+  pendiente_aprobacion: 'En revisión',
+  rechazado: 'Rechazada',
+  inactivo: 'Inactiva',
+};
+
+function inicialesDeTexto(texto: string): string {
+  const palabras = texto.split(' ').filter(Boolean);
+  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
+  return texto.slice(0, 2).toUpperCase();
+}
+
+/** Círculos del tracker: 3 pasos reales (Enviada → En revisión → Aprobada/Rechazada). */
+function Tracker({ estatus }: { estatus: EstatusProducto }) {
+  const rechazada = estatus === 'rechazado';
+  const aprobada = estatus === 'activo';
+  const dot = (activo: boolean, variante: 'ok' | 'warn' | 'neutral') =>
+    `flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full ${
+      !activo ? 'bg-salvia/30' : variante === 'ok' ? 'bg-salvia' : variante === 'warn' ? 'bg-vino' : 'bg-teal ring-2 ring-salvia'
+    }`;
+  const line = (activo: boolean) => `h-1.5 flex-1 rounded-full ${activo ? 'bg-salvia' : 'bg-salvia/30'}`;
+
+  return (
+    <div className="flex items-center gap-0">
+      <span className={dot(true, 'neutral')} />
+      <span className={line(true)} />
+      <span className={dot(true, rechazada ? 'warn' : aprobada ? 'ok' : 'neutral')} />
+      <span className={line(aprobada || rechazada)} />
+      <span className={dot(aprobada || rechazada, rechazada ? 'warn' : 'ok')} />
+    </div>
+  );
+}
 
 export function ProveedorPortal() {
-  const { usuario } = useAuth();
+  const { usuario, logout } = useAuth();
 
   // El Administrador puede entrar aquí para revisar el portal, pero su
   // cuenta no está ligada a ninguna empresa proveedora: el backend no
   // le recorta el catálogo (el recorte solo aplica al rol Proveedor) y
-  // no puede proponer altas. Se dice explícitamente en pantalla en vez
-  // de mostrarle el catálogo completo bajo el rótulo "Mis productos".
+  // no puede proponer altas.
   const esProveedor = usuario?.rol === 'Proveedor';
   const [tab, setTab] = useState<Tab>('mis-productos');
 
-  // El recorte por empresa lo hace el backend a partir del token: esta
-  // respuesta ya viene únicamente con los productos de este proveedor.
   const productos = useFetch(getProductos, []);
   const categorias = useFetch(getCategorias, []);
   const unidades = useFetch(getUnidadesMedida, []);
 
   const misProductos = productos.data ?? [];
   const enCatalogo = misProductos.filter((p) => p.estatus === 'activo');
+  const enRevision = misProductos.filter((p) => p.estatus === 'pendiente_aprobacion');
   const solicitudes = misProductos.filter((p) => p.estatus !== 'activo');
+  const empresa = misProductos.find((p) => p.proveedor)?.proveedor?.razonSocial ?? 'Proveedor Externo';
 
-  const sidebarItems = [
-    { label: 'Mis productos', nivel: 'lectura' as const, active: tab === 'mis-productos', onClick: () => setTab('mis-productos') },
-    { label: 'Proponer alta de producto', nivel: 'propone' as const, active: tab === 'proponer', onClick: () => setTab('proponer') },
-    { label: 'Mis solicitudes', nivel: 'lectura' as const, active: tab === 'solicitudes', onClick: () => setTab('solicitudes') },
-    { label: 'Mi perfil', active: tab === 'perfil', onClick: () => setTab('perfil') },
-  ];
+  const modulos: RailModule[] = MODULOS_POR_ROL.Proveedor.map((m) => ({
+    key: m.key,
+    label: m.label,
+    icon: m.icon,
+    permiso: m.permiso,
+    active: tab === m.key,
+    badge: m.key === 'mis-solicitudes' ? solicitudes.length : undefined,
+    onClick: () => setTab(m.key as Tab),
+  }));
+
+  const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
+  const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
 
   return (
-    <PortalLayout
-      breadcrumb={
-        esProveedor
-          ? 'Portal del Proveedor'
-          : 'Portal del Proveedor — vista de Administrador'
-      }
-      rolLabel={esProveedor ? 'Proveedor Externo' : (usuario?.rol ?? '')}
-      sidebarItems={sidebarItems}
+    <AppShell
+      rolLabel={esProveedor ? empresa : `Portal del Proveedor — vista de ${usuario?.rol}`}
+      nombre={primerNombre}
+      modulos={modulos}
+      iniciales={iniciales}
+      onLogout={logout}
     >
       {!esProveedor && (
-        <div className="mb-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Estás viendo el portal del Proveedor con una cuenta de{' '}
-          <strong>{usuario?.rol}</strong>. Como esta cuenta no pertenece a
-          ninguna empresa proveedora, el listado muestra el catálogo completo
-          en vez de acotarse, y no es posible enviar propuestas de alta.
+        <div className="mb-2 rounded-full bg-vino/10 px-5 py-3">
+          <p className="text-sm font-semibold text-vino">
+            Estás viendo el portal del Proveedor con una cuenta de {usuario?.rol}. El catálogo se muestra completo (no
+            acotado a una empresa) y no puedes enviar propuestas.
+          </p>
         </div>
       )}
+
       {tab === 'mis-productos' && (
-        <section>
-          <SectionHeader
-            title={esProveedor ? 'Mis productos en catálogo' : 'Productos en catálogo'}
-            badge="SOLO LECTURA"
-            description={
-              esProveedor
-                ? 'Productos aprobados de tu empresa. El catálogo de otros proveedores no es visible desde este portal.'
-                : 'Catálogo completo: esta cuenta no está acotada a una empresa proveedora.'
+        <div className="flex flex-col gap-6">
+          <Hero
+            title="Tu vitrina"
+            className="!bg-salvia !text-tinta"
+            action={
+              <div className="flex gap-2">
+                <StatusPill tone="ok" icon={<IconCheck className="h-3.5 w-3.5" />}>
+                  Verificada
+                </StatusPill>
+              </div>
+            }
+            decorations={
+              <>
+                <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-tinta text-arena">
+                  <IconProductos className="mt-8 h-[74px] w-[74px]" />
+                </div>
+                <div className="absolute right-[22px] top-[18px] flex h-[108px] w-[108px] flex-col items-center justify-center gap-0.5 rounded-full bg-arena text-teal">
+                  <span className="font-display text-[30px] leading-none">{enCatalogo.length}</span>
+                  <span className="text-[10px] font-semibold">activos</span>
+                </div>
+                <div className="absolute right-[190px] top-[130px] flex h-[92px] w-[92px] flex-col items-center justify-center gap-0.5 rounded-full bg-vino text-arena">
+                  <span className="font-display text-2xl leading-none">{enRevision.length}</span>
+                  <span className="text-[10px] font-semibold">en revisión</span>
+                </div>
+              </>
             }
           />
-          {productos.loading && <p className="text-sm text-slate-500">Cargando…</p>}
-          {productos.error && <p className="text-sm text-rose-600">{productos.error}</p>}
+
+          {productos.error && <p className="text-sm font-semibold text-vino">{productos.error}</p>}
+
           {productos.data && enCatalogo.length === 0 && (
-            <EmptyState
-              title="Aún no tienes productos en el catálogo"
-              description="Cuando propongas un producto y el Gerente de categoría lo apruebe, aparecerá aquí."
-            />
+            <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-salvia text-tinta">
+                <IconProductos className="h-6 w-6" />
+              </span>
+              <p className="font-display text-2xl text-teal">Aún no tienes productos en el catálogo</p>
+              <p className="max-w-sm text-sm text-teal/70">
+                Cuando propongas un producto y el Gerente de categoría lo apruebe, aparecerá aquí.
+              </p>
+            </div>
           )}
+
           {enCatalogo.length > 0 && (
-            <DataTable
-              rowKey={(p) => p.id}
-              rows={enCatalogo}
-              columns={[
-                { header: 'SKU', render: (p) => p.sku },
-                { header: 'Nombre', render: (p) => p.nombre },
-                { header: 'Categoría', render: (p) => p.categoria?.nombre ?? '—' },
-                {
-                  header: 'Presentaciones',
-                  render: (p) =>
-                    (p.presentaciones ?? []).map((v) => v.nombre).join(', ') || '—',
-                },
-                {
-                  header: 'Canasta básica',
-                  render: (p) => (p.esCanastaBasica ? <Badge tone="positive">Sí</Badge> : 'No'),
-                },
-                { header: 'Estatus', render: (p) => <EstatusProductoBadge estatus={p.estatus} /> },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {enCatalogo.map((p) => (
+                <Card key={p.id}>
+                  <div className="relative flex h-[100px] items-center justify-center rounded-[24px] bg-marfil text-teal transition group-hover:bg-teal group-hover:text-arena">
+                    <IconProductos className="h-[46px] w-[46px]" />
+                    {p.esCanastaBasica && (
+                      <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-vino text-arena">
+                        <IconCanastas className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-0.5 px-1">
+                    <span className="font-display text-lg leading-tight text-tinta">{p.nombre}</span>
+                    <span className="text-xs text-teal">{p.categoria?.nombre}</span>
+                  </div>
+                  <span className="font-data px-1 text-xs text-teal">{p.sku}</span>
+                </Card>
+              ))}
+            </div>
           )}
-        </section>
+        </div>
       )}
 
-      {tab === 'proponer' && !esProveedor && (
-        <section>
-          <SectionHeader title="Proponer alta de producto" badge="PROPONE" />
-          <EmptyState
-            title="Solo un Proveedor puede enviar propuestas"
-            description="El alta queda ligada a la empresa proveedora del usuario que la envía, así que este formulario únicamente está disponible al iniciar sesión con una cuenta de rol Proveedor."
-          />
-        </section>
-      )}
-
-      {tab === 'proponer' && esProveedor && (
+      {tab === 'proponer-alta' && esProveedor && (
         <FormularioPropuesta
           categorias={categorias.data ?? []}
           unidades={unidades.data ?? []}
           cargandoCategorias={categorias.loading}
           alGuardar={() => {
             productos.refetch();
-            setTab('solicitudes');
+            setTab('mis-solicitudes');
           }}
         />
       )}
 
-      {tab === 'solicitudes' && (
-        <section>
-          <SectionHeader
-            title="Mis solicitudes"
-            badge="LECTURA"
-            description="Propuestas en revisión y resoluciones del Gerente de categoría."
-          />
-          {productos.loading && <p className="text-sm text-slate-500">Cargando…</p>}
-          {productos.data && solicitudes.length === 0 && (
-            <EmptyState
-              title="No tienes solicitudes registradas"
-              description="Usa «Proponer alta de producto» para enviar una propuesta a revisión."
-            />
-          )}
-          {solicitudes.length > 0 && (
-            <DataTable
-              rowKey={(p) => p.id}
-              rows={solicitudes}
-              columns={[
-                { header: 'SKU', render: (p) => p.sku },
-                { header: 'Producto', render: (p) => p.nombre },
-                { header: 'Estatus', render: (p) => <EstatusProductoBadge estatus={p.estatus} /> },
-                {
-                  header: 'Motivo del rechazo',
-                  render: (p) => (
-                    <span className="text-slate-600">{p.motivoRechazo ?? '—'}</span>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </section>
+      {tab === 'proponer-alta' && !esProveedor && (
+        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+          <p className="font-display text-2xl text-teal">Solo un Proveedor puede enviar propuestas</p>
+          <p className="max-w-sm text-sm text-teal/70">
+            El alta queda ligada a la empresa proveedora del usuario que la envía.
+          </p>
+        </div>
       )}
 
-      {tab === 'perfil' && (
-        <section>
-          <SectionHeader title="Mi perfil" />
-          <dl className="max-w-md divide-y divide-slate-100 rounded border border-slate-200">
-            <div className="flex justify-between px-4 py-3 text-sm">
-              <dt className="text-slate-500">Nombre de contacto</dt>
-              <dd className="font-medium text-slate-800">{usuario?.nombre}</dd>
+      {tab === 'mis-solicitudes' && (
+        <div className="flex flex-col gap-6">
+          <h1 className="font-display text-4xl text-vino">Mis solicitudes</h1>
+          {productos.loading && <p className="text-sm text-teal/70">Cargando…</p>}
+          {productos.data && solicitudes.length === 0 && (
+            <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+              <p className="font-display text-2xl text-teal">No tienes solicitudes registradas</p>
+              <p className="text-sm text-teal/70">Usa «Proponer alta de producto» para enviar una propuesta.</p>
             </div>
-            <div className="flex justify-between px-4 py-3 text-sm">
-              <dt className="text-slate-500">Correo</dt>
-              <dd className="font-medium text-slate-800">{usuario?.email}</dd>
+          )}
+          {solicitudes.length > 0 && (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {solicitudes.map((p) => (
+                <Card key={p.id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-display text-[19px] leading-tight text-tinta">{p.nombre}</span>
+                    <StatusPill tone={ESTATUS_TONE[p.estatus]}>{ESTATUS_LABEL[p.estatus]}</StatusPill>
+                  </div>
+                  <Tracker estatus={p.estatus} />
+                  <div className="flex items-center justify-between font-data text-xs text-teal">
+                    <span>{p.sku}</span>
+                    {p.estatus === 'rechazado' && p.motivoRechazo && (
+                      <span className="text-vino">{p.motivoRechazo}</span>
+                    )}
+                  </div>
+                </Card>
+              ))}
             </div>
-            <div className="flex justify-between px-4 py-3 text-sm">
-              <dt className="text-slate-500">Rol</dt>
-              <dd className="font-medium text-slate-800">{usuario?.rol}</dd>
-            </div>
-          </dl>
-        </section>
+          )}
+        </div>
       )}
-    </PortalLayout>
+
+      {tab === 'cambio-precio' && (
+        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-salvia text-tinta">
+            <IconPrecios className="h-6 w-6" />
+          </span>
+          <p className="font-display text-2xl text-teal">Aún no disponible</p>
+          <p className="max-w-sm text-sm text-teal/70">
+            Proponer un cambio de precio directamente todavía no está construido. Mientras tanto, contacta a
+            Responsable de Precios.
+          </p>
+        </div>
+      )}
+
+      {tab === 'mi-perfil' && (
+        <div className="flex flex-col gap-6">
+          <h1 className="font-display text-4xl text-vino">Mi perfil</h1>
+          <Card className="max-w-md">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                <span className="text-teal">Nombre de contacto</span>
+                <span className="font-semibold text-tinta">{usuario?.nombre}</span>
+              </div>
+              <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                <span className="text-teal">Correo</span>
+                <span className="font-semibold text-tinta">{usuario?.email}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-teal">Rol</span>
+                <span className="font-semibold text-tinta">{usuario?.rol}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+    </AppShell>
   );
 }
 
@@ -193,16 +270,11 @@ interface FormularioPropuestaProps {
   alGuardar: () => void;
 }
 
-function FormularioPropuesta({
-  categorias,
-  unidades,
-  cargandoCategorias,
-  alGuardar,
-}: FormularioPropuestaProps) {
+function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuardar }: FormularioPropuestaProps) {
   const [sku, setSku] = useState('');
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
-  const [categoriaId, setCategoriaId] = useState('');
+  const [categoriaId, setCategoriaId] = useState<number | null>(null);
   const [presentacion, setPresentacion] = useState('');
   const [contenido, setContenido] = useState('');
   const [unidadMedida, setUnidadMedida] = useState('');
@@ -235,7 +307,7 @@ function FormularioPropuesta({
         sku: sku.trim(),
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
-        categoriaId: Number(categoriaId),
+        categoriaId,
         presentacion: presentacion.trim(),
         contenido: Number(contenido),
         unidadMedida,
@@ -248,129 +320,94 @@ function FormularioPropuesta({
     }
   }
 
-  const inputClass =
-    'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none';
+  const fieldClass =
+    'h-14 rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60';
+  const labelClass = 'flex flex-col gap-1.5 text-[13px] font-semibold text-teal';
 
   return (
-    <section>
-      <SectionHeader
-        title="Proponer alta de producto"
-        badge="PROPONE"
-        description="La propuesta queda en revisión del Gerente de categoría. No aparece en el catálogo hasta que la apruebe."
-      />
+    <div className="flex flex-col gap-6">
+      <h1 className="font-display text-4xl text-vino">Proponer alta de producto</h1>
+      <p className="max-w-2xl text-sm text-teal/80">
+        La propuesta queda en revisión del Gerente de categoría. No aparece en el catálogo hasta que la apruebe.
+      </p>
 
-      <form onSubmit={enviar} className="max-w-xl space-y-4">
-        {error && (
-          <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
+      <form onSubmit={enviar} className="flex max-w-2xl flex-col gap-4 rounded-panel bg-arena p-6">
+        {error && <p className="rounded-full bg-vino/10 px-5 py-3 text-sm font-semibold text-vino">{error}</p>}
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="sku">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClass} htmlFor="sku">
             SKU
+            <input
+              id="sku"
+              className={fieldClass}
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="BIO-QUI-500"
+              maxLength={40}
+              required
+            />
           </label>
-          <input
-            id="sku"
-            className={inputClass}
-            value={sku}
-            onChange={(e) => setSku(e.target.value)}
-            placeholder="BIO-QUI-500"
-            maxLength={40}
-            required
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            Clave con la que identificas el producto. Debe ser única en la plataforma.
-          </p>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="nombre">
+          <label className={labelClass} htmlFor="nombre">
             Nombre del producto
+            <input
+              id="nombre"
+              className={fieldClass}
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              maxLength={150}
+              required
+            />
           </label>
-          <input
-            id="nombre"
-            className={inputClass}
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            maxLength={150}
-            required
-          />
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="categoria">
-            Categoría
-          </label>
-          <select
-            id="categoria"
-            className={inputClass}
-            value={categoriaId}
-            onChange={(e) => setCategoriaId(e.target.value)}
-            disabled={cargandoCategorias}
-            required
-          >
-            <option value="">
-              {cargandoCategorias ? 'Cargando…' : 'Selecciona una categoría'}
-            </option>
+        <div className="flex flex-col gap-2.5">
+          <span className="text-[13px] font-semibold text-teal">Categoría</span>
+          <div className="flex flex-wrap gap-2">
+            {cargandoCategorias && <span className="text-sm text-teal/60">Cargando…</span>}
             {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
+              <Chip key={c.id} active={categoriaId === c.id} onClick={() => setCategoriaId(c.id)}>
                 {c.nombre}
-              </option>
+              </Chip>
             ))}
-          </select>
+          </div>
         </div>
 
-        <fieldset className="rounded border border-slate-200 p-4">
-          <legend className="px-1 text-sm font-medium text-slate-700">
-            Primera presentación
-          </legend>
-          <p className="mb-3 text-xs text-slate-500">
-            Un producto se vende en presentaciones (500 g, 1 L, six-pack). El
-            precio se registra por presentación, así que se necesita al menos
-            una. Después podrás agregar más.
-          </p>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-3">
-              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="presentacion">
-                Nombre
-              </label>
+        <div className="flex flex-col gap-2.5 rounded-[28px] bg-marfil p-4">
+          <span className="text-[13px] font-semibold text-teal">
+            Primera presentación — un producto se vende por presentación (500 g, 1 L…); después podrás agregar más
+          </span>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className={`${labelClass} sm:col-span-3`} htmlFor="presentacion">
+              Nombre
               <input
                 id="presentacion"
-                className={inputClass}
+                className={fieldClass}
                 value={presentacion}
                 onChange={(e) => setPresentacion(e.target.value)}
                 placeholder="500 g"
                 maxLength={60}
                 required
               />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="contenido">
-                Contenido
-              </label>
+            </label>
+            <label className={`${labelClass} sm:col-span-2`} htmlFor="contenido">
+              Contenido
               <input
                 id="contenido"
                 type="number"
                 step="0.001"
                 min="0"
-                className={inputClass}
+                className={fieldClass}
                 value={contenido}
                 onChange={(e) => setContenido(e.target.value)}
                 placeholder="500"
                 required
               />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="unidad">
-                Unidad
-              </label>
+            </label>
+            <label className={labelClass} htmlFor="unidad">
+              Unidad
               <select
                 id="unidad"
-                className={inputClass}
+                className={fieldClass}
                 value={unidadMedida}
                 onChange={(e) => setUnidadMedida(e.target.value)}
                 required
@@ -382,31 +419,32 @@ function FormularioPropuesta({
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
           </div>
-        </fieldset>
+        </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="descripcion">
-            Descripción <span className="font-normal text-slate-400">(opcional)</span>
-          </label>
+        <label className={labelClass} htmlFor="descripcion">
+          Descripción (opcional)
           <textarea
             id="descripcion"
-            className={inputClass}
             rows={3}
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
+            className="rounded-[28px] border-2 border-transparent bg-arena px-5 py-4 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60"
           />
-        </div>
+        </label>
 
         <button
           type="submit"
           disabled={enviando}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="group flex h-[56px] w-fit items-center gap-2.5 rounded-full bg-teal py-0 pl-6 pr-3 text-[15px] font-bold text-arena transition hover:bg-vino disabled:opacity-50"
         >
           {enviando ? 'Enviando…' : 'Enviar propuesta'}
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition group-hover:translate-x-0.5">
+            <IconMas className="h-4 w-4 rotate-45" />
+          </span>
         </button>
       </form>
-    </section>
+    </div>
   );
 }

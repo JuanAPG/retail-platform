@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Proveedor Externo · Portal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&amp;family=Josefin+Slab:wght@600;700&amp;family=Figtree:wght@400;500;600;700&amp;family=Montserrat:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#FAF8F2}
+*{box-sizing:border-box}
+a{color:#003C3E}a:hover{color:#708D81}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+input,textarea{font-family:inherit}
+.d{font-family:'Young Serif',Georgia,serif;letter-spacing:-0.015em;font-weight:400 !important;font-synthesis:none}
+.d:not(h1):not(.logo){font-family:'Josefin Slab','Rockwell',Georgia,serif;font-weight:700 !important;letter-spacing:0;font-synthesis:none}
+.m{font-family:'Montserrat',system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em;font-weight:500}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.rail{width:92px;background:#003C3E;border-radius:46px;padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:4}
+.logo{width:60px;height:60px;border-radius:50%;background:#F0ECDF;color:#003C3E;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;margin-bottom:14px;text-decoration:none;transition:transform .3s}
+.logo:hover{transform:rotate(-12deg) scale(1.06);background:#8E0A0A;color:#F0ECDF}
+.ni{position:relative;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#F0ECDF;transition:background .25s,transform .25s,color .25s}
+.ni:hover{background:#708D81;color:#040404;transform:scale(1.08)}
+.ni.on{background:#8E0A0A;color:#F0ECDF}
+.tip{position:absolute;left:68px;top:50%;transform:translate(-8px,-50%);background:#040404;color:#F0ECDF;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;opacity:0;pointer-events:none;transition:.2s;display:flex;gap:8px;align-items:center}
+.tip small{color:#708D81;font-weight:500}
+.ni:hover .tip{opacity:1;transform:translate(0,-50%)}
+.bd{position:absolute;top:0;right:0;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#8E0A0A;color:#F0ECDF;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #003C3E}
+.who{position:relative;margin-top:auto}
+.av{width:60px;height:60px;border-radius:50%;background:#708D81;color:#040404;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;transition:.25s;border:3px solid #003C3E;box-shadow:0 0 0 2px #708D81}
+.who:hover .av,.who:focus-within .av{box-shadow:0 0 0 4px #F0ECDF}
+.menu{position:absolute;left:72px;bottom:0;background:#040404;border-radius:30px;padding:10px;display:flex;flex-direction:column;gap:4px;min-width:250px;opacity:0;visibility:hidden;transform:translateX(-8px);transition:.2s}
+.menu::before{content:'';position:absolute;left:-16px;top:0;bottom:0;width:16px}
+.who:hover .menu,.who:focus-within .menu{opacity:1;visibility:visible;transform:none}
+.menu a{color:#F0ECDF;text-decoration:none;padding:11px 14px;border-radius:999px;font-size:14px;display:flex;align-items:center;gap:10px;transition:.2s}
+.menu a:hover{background:#708D81;color:#040404}
+.menu a.cur{background:#003C3E}
+.menu a.cur .dot{background:#8E0A0A;color:#F0ECDF}
+.menu .dot{width:28px;height:28px;border-radius:50%;background:#708D81;color:#040404;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.ib{width:56px;height:56px;border-radius:50%;background:#F0ECDF;color:#003C3E;display:flex;align-items:center;justify-content:center;position:relative;transition:.25s}
+.ib:hover{background:#003C3E;color:#F0ECDF;transform:rotate(-8deg)}
+.ib .pip{position:absolute;top:13px;right:14px;width:10px;height:10px;border-radius:50%;background:#8E0A0A;border:2px solid #F0ECDF}
+.kc{border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;transition:transform .35s cubic-bezier(.2,.8,.2,1);position:absolute}
+.kc:hover{transform:scale(1.08) rotate(-4deg)}
+.pill{border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.bub{display:flex;flex-direction:column;align-items:center;gap:10px;width:112px;text-align:center;font-size:13px;font-weight:600;color:#003C3E}
+.bub .c{width:100px;height:100px;border-radius:50%;background:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.35s cubic-bezier(.2,.8,.2,1);border:2px solid rgba(112,141,129,.35)}
+.bub .c svg{width:46px;height:46px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:.35s}
+.bub:hover .c{background:#003C3E;color:#F0ECDF;transform:translateY(-6px);border-color:#003C3E}
+.bub:hover .c svg{transform:rotate(-10deg) scale(1.1)}
+.stp{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#003C3E;padding:6px 16px 6px 6px;border-radius:999px;transition:.2s}
+.stp:hover{background:rgba(112,141,129,.2)}
+.stp .n{width:40px;height:40px;border-radius:50%;border:2px solid #708D81;display:flex;align-items:center;justify-content:center;font-family:'Montserrat',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-size:14px;transition:.25s}
+.stp.on .n{background:#8E0A0A;border-color:#8E0A0A;color:#F0ECDF}
+.stp.done .n{background:#708D81;color:#040404}
+.fl{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#003C3E}
+.fi{height:52px;border-radius:999px;background:#FAF8F2;border:2px solid transparent;padding:0 20px;font-size:15px;color:#040404;outline:none;transition:.2s;width:100%}
+.fi::placeholder{color:#708D81}
+.fi:hover{border-color:rgba(112,141,129,.6)}
+.fi:focus{border-color:#8E0A0A}
+.ta{border-radius:28px;background:#FAF8F2;border:2px solid transparent;padding:16px 20px;font-size:15px;color:#040404;outline:none;transition:.2s;width:100%;height:110px;resize:none}
+.ta::placeholder{color:#708D81}
+.ta:hover{border-color:rgba(112,141,129,.6)}
+.ta:focus{border-color:#003C3E}
+.chip{height:44px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;background:#FAF8F2;color:#003C3E;border:2px solid transparent;transition:.2s}
+.chip:hover{border-color:#708D81}
+.chip.on{background:#8E0A0A;color:#F0ECDF}
+.sw{display:flex;align-items:center;gap:12px;height:56px;padding:0 8px 0 20px;border-radius:999px;background:#FAF8F2;font-size:15px;font-weight:600;color:#003C3E;justify-content:space-between;transition:.2s;border:2px solid transparent}
+.sw:hover{border-color:#708D81}
+.sw .k{width:62px;height:40px;border-radius:999px;background:rgba(112,141,129,.35);position:relative;transition:.25s}
+.sw .k::after{content:'';position:absolute;top:4px;left:4px;width:32px;height:32px;border-radius:50%;background:#FAF8F2;transition:.25s;box-shadow:0 2px 4px rgba(4,4,4,.15)}
+.sw.on .k{background:#8E0A0A}
+.sw.on .k::after{left:26px;background:#F0ECDF}
+.drop{border-radius:40px;border:2px dashed #708D81;background:#FAF8F2;padding:22px;display:flex;align-items:center;gap:18px;transition:.25s;cursor:pointer}
+.drop:hover{background:#708D81;border-color:#003C3E;color:#040404}
+.drop .c{width:72px;height:72px;border-radius:50%;background:#8E0A0A;color:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.3s;flex-shrink:0}
+.drop:hover .c{transform:translateY(-4px)}
+.go{height:56px;padding:0 26px;border-radius:999px;background:#003C3E;color:#F0ECDF;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;transition:.25s}
+.go:hover{background:#8E0A0A;transform:translateX(3px)}
+.gh{height:56px;padding:0 22px;border-radius:999px;color:#003C3E;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;border:2px solid rgba(112,141,129,.6);transition:.2s}
+.gh:hover{background:#708D81;color:#040404;border-color:#708D81}
+.tab{flex:1;justify-content:center;height:40px;padding:0 8px;border-radius:999px;font-size:12.5px;font-weight:600;color:#003C3E;display:flex;align-items:center;gap:6px;transition:.2s}
+.tab:hover{background:rgba(112,141,129,.25)}
+.tab.on{background:#003C3E;color:#F0ECDF}
+.tab b{font-weight:700;opacity:.7}
+.rq{border-radius:28px;background:#FAF8F2;padding:14px 16px;display:flex;flex-direction:column;gap:12px;border:2px solid transparent;transition:.25s}
+.rq:hover{border-color:#708D81;transform:translateX(-4px)}
+.trk{display:flex;align-items:center;gap:0}
+.trk .dt{width:26px;height:26px;border-radius:50%;background:rgba(112,141,129,.3);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#F0ECDF}
+.trk .ln{flex:1;height:6px;border-radius:999px;background:rgba(112,141,129,.3);margin:0 4px}
+.trk .dt.f{background:#708D81;color:#040404}
+.trk .dt.a{background:#003C3E;box-shadow:0 0 0 3px #708D81}
+.trk .dt.x{background:#8E0A0A}
+.trk .ln.f{background:#708D81}
+.go{margin-left:auto}
+.mp{background:rgba(240,236,223,.14);color:#F0ECDF;border:2px solid transparent}
+.mp:hover{border-color:#F0ECDF;transform:translateX(4px)}
+.mp-on{background:#F0ECDF;color:#8E0A0A;border:2px solid #F0ECDF}
+.yes-p{transition:.2s}
+.yes-p:hover{background:#708D81 !important;color:#040404 !important}
+.ic{width:52px;height:52px;border-radius:50%;background:#003C3E;color:#F0ECDF;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.25s}
+.ic:hover{background:#040404;transform:rotate(-12deg)}
+.menu a{padding:9px 14px}
+.chip{display:inline-flex;align-items:center;gap:6px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1360px; display: flex; gap: 24px; padding: 24px; background: #FAF8F2; color: #040404; font-family: 'Figtree', system-ui, sans-serif;">
+
+<nav class="rail" aria-label="Módulos">
+<a class="logo d" href="Main.dc.html" aria-label="Inicio">ra</a>
+<button class="ni on" aria-label="Mis productos"><svg class="i" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3.5"/><circle cx="17" cy="7" r="3.5"/><circle cx="7" cy="17" r="3.5"/><circle cx="17" cy="17" r="3.5"/></svg><span class="tip">Mis productos</span></button>
+<button class="ni" aria-label="Proponer alta de producto"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span class="tip">Proponer alta <small>propone</small></span></button>
+<button class="ni" aria-label="Mis solicitudes"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="bd">{{pendCount}}</span><span class="tip">Mis solicitudes</span></button>
+<button class="ni" aria-label="Proponer cambio de precio"><svg class="i" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/></svg><span class="tip">Cambio de precio <small>propone</small></span></button>
+<button class="ni" aria-label="Mi perfil"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="tip">Mi perfil</span></button>
+<div class="who">
+<button class="av" aria-label="Perfil">ER</button>
+<div class="menu">
+<a href="Admin.dc.html"><span class="dot">ML</span>Administrador</a>
+<a href="Categoria.dc.html"><span class="dot">RM</span>Gerente de Categoría</a>
+<a href="Precios.dc.html"><span class="dot">LV</span>Responsable de Precios</a>
+<a href="Analista.dc.html"><span class="dot">CR</span>Analista</a>
+<a href="Auditor.dc.html"><span class="dot">AT</span>Auditor</a>
+<a href="Planeador.dc.html"><span class="dot">JS</span>Planeador</a>
+<a class="cur" href="Proveedor.dc.html"><span class="dot">ER</span>Proveedor Externo</a>
+<a href="Main.dc.html"><span class="dot"><svg class="i" style="width: 15px; height: 15px;" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/></svg></span>Cerrar sesión</a>
+</div>
+</div>
+</nav>
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px;">
+
+<header style="display: flex; align-items: center; gap: 16px; justify-content: space-between;">
+<div style="display: flex; flex-direction: column;">
+<span style="font-size: 14px; color: #708D81; font-weight: 600;">BioOrgánicos S.A.P.I.</span>
+<span class="d" style="font-size: 30px; font-weight: 800; color: #8E0A0A;">Hola, Elena</span>
+</div>
+<button class="ib" aria-label="Notificaciones"><svg class="i" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="pip"></span></button>
+</header>
+
+<div style="display: flex; gap: 24px; flex-grow: 1; min-height: 0;">
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 26px;">
+
+<section style="height: 230px; border-radius: 44px; background: #708D81; position: relative; overflow: hidden; padding: 32px 36px; display: flex; align-items: center; gap: 24px;">
+<div style="width: 140px; height: 140px; border-radius: 50%; background: #8E0A0A; color: #F0ECDF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative; z-index: 2;">
+<svg viewBox="0 0 64 64" style="width: 70px; height: 70px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;"><path d="M14 50c0-22 14-34 38-36 0 22-12 36-34 36"/><path d="M14 50l18-18M26 36h8M30 30v6"/></svg>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 2;">
+<h1 class="d" style="margin: 0; font-size: 54px; line-height: 0.95; font-weight: 800; color: #040404;">Tu vitrina</h1>
+<div style="display: flex; gap: 8px;">
+<span class="pill" style="background: #003C3E; color: #F0ECDF; padding: 8px 14px;"><svg class="i" style="width: 16px; height: 16px;" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Verificada</span>
+<span class="pill" style="background: #F0ECDF; color: #003C3E; padding: 8px 14px;">Proveedor desde 2024</span>
+</div>
+</div>
+<div class="kc" style="width: 170px; height: 170px; right: 150px; top: -34px; background: #F0ECDF; color: #003C3E;">
+<span class="d" style="font-size: 50px; font-weight: 800; line-height: 1;">14</span>
+<span style="font-size: 13px; font-weight: 600;">activos</span>
+</div>
+<div class="kc" style="width: 128px; height: 128px; right: 30px; top: 18px; background: #040404; color: #F0ECDF;">
+<span class="d" style="font-size: 38px; font-weight: 800; line-height: 1;">8</span>
+<span style="font-size: 12px; font-weight: 600;">aprobados este año</span>
+</div>
+<div class="kc" style="width: 110px; height: 110px; right: 110px; top: 142px; background: #8E0A0A; color: #F0ECDF;">
+<span class="d" style="font-size: 32px; font-weight: 800; line-height: 1;">{{pendCount}}</span>
+<span style="font-size: 12px; font-weight: 600;">en revisión</span>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 16px;">
+<h2 class="d" style="margin: 0; font-size: 28px; font-weight: 800; color: #8E0A0A;">Mis productos</h2>
+<div style="display: flex; justify-content: space-between; gap: 8px;">
+<button class="bub"><span class="c"><svg viewBox="0 0 48 48"><path d="M16 10h16l-2 6c5 3 8 9 8 15 0 7-6 10-14 10S10 38 10 31c0-6 3-12 8-15z"/><circle cx="21" cy="29" r="1.5"/><circle cx="27" cy="26" r="1.5"/><circle cx="26" cy="33" r="1.5"/></svg></span>Quinoa blanca 500 g</button>
+<button class="bub"><span class="c"><svg viewBox="0 0 48 48"><rect x="12" y="8" width="24" height="34" rx="6"/><path d="M12 17h24M19 28c3 3 7 3 10 0"/></svg></span>Avena orgánica 1 kg</button>
+<button class="bub"><span class="c"><svg viewBox="0 0 48 48"><path d="M14 18h20v20a5 5 0 0 1-5 5h-10a5 5 0 0 1-5-5z"/><rect x="12" y="12" width="24" height="6" rx="3"/><circle cx="21" cy="30" r="1.5"/><circle cx="27" cy="28" r="1.5"/></svg></span>Linaza dorada 400 g</button>
+<button class="bub"><span class="c"><svg viewBox="0 0 48 48"><circle cx="18" cy="28" r="8"/><circle cx="30" cy="24" r="8"/><path d="M30 16c0-4 2-6 5-7"/></svg></span>Arándano deshidratado</button>
+<button class="bub"><span class="c"><svg viewBox="0 0 48 48"><path d="M10 22h28l-3 16a5 5 0 0 1-5 4H18a5 5 0 0 1-5-4z"/><path d="M16 22c0-5 4-9 8-9s8 4 8 9"/></svg></span>Granola con miel</button>
+<button class="bub"><span class="c" style="background: #8E0A0A; color: #F0ECDF; border-color: #8E0A0A;"><span class="d" style="font-size: 26px; font-weight: 800;">+9</span></span>Ver todos</button>
+</div>
+</section>
+
+<section id="alta" style="background: #F0ECDF; border-radius: 44px; padding: 30px 34px; display: flex; flex-direction: column; gap: 24px;">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+<h2 class="d" style="margin: 0; font-size: 30px; font-weight: 800; color: #8E0A0A;">Nuevo producto</h2>
+<div style="display: flex; gap: 4px;">
+<button class="{{stepCls.a}}" onClick="{{goStep.a}}"><span class="n">1</span>Producto</button>
+<button class="{{stepCls.b}}" onClick="{{goStep.b}}"><span class="n">2</span>Precio</button>
+<button class="{{stepCls.c}}" onClick="{{goStep.c}}"><span class="n">3</span>Archivos</button>
+</div>
+</div>
+
+<sc-if value="{{isA}}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+<label class="fl">Nombre del producto<input class="fi" placeholder="Ej. Cacao en nibs 200 g" value="{{name}}" onChange="{{onName}}"></label>
+<label class="fl">Código de barras<input class="fi m" placeholder="EAN / UPC"></label>
+<div class="fl">Presentaciones<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 52px;"><sc-for list="{{presL}}" as="x" hint-placeholder-count="1"><button class="chip on" onClick="{{x.rm}}" aria-label="Quitar presentación">{{x.n}}<svg class="i" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></sc-for><sc-for list="{{presAdd}}" as="x" hint-placeholder-count="2"><button class="chip" onClick="{{x.add}}">+ {{x.n}}</button></sc-for></div></div>
+<label class="fl">Subcategoría<input class="fi" placeholder="Ej. Semillas"></label>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px;">
+<span style="font-size: 13px; font-weight: 600; color: #003C3E;">Categoría</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px;">
+<sc-for list="{{cats}}" as="c" hint-placeholder-count="6">
+<button class="{{c.cls}}" onClick="{{c.pick}}">{{c.n}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isB}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+<label class="fl">Precio sugerido<input class="fi m" placeholder="$0.00"></label>
+<label class="fl">Costo al retailer<input class="fi m" placeholder="$0.00"></label>
+<label class="fl">Pedido mínimo<input class="fi m" placeholder="Unidades"></label>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+<button class="{{swCan}}" onClick="{{tCan}}">Canasta básica<span class="k"></span></button>
+<button class="{{swOrg}}" onClick="{{tOrg}}">Orgánico<span class="k"></span></button>
+</div>
+<label class="fl">Certificaciones<input class="fi" placeholder="Ej. Orgánico SAGARPA, Kosher"></label>
+</sc-if>
+
+<sc-if value="{{isC}}" hint-placeholder-val="{{ false }}">
+<button class="drop">
+<span class="c"><svg class="i" style="width: 28px; height: 28px;" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+<span style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+<span class="d" style="font-size: 20px; font-weight: 700;">Ficha técnica, registro sanitario, certificados</span>
+<span class="m" style="font-size: 12px;">PDF · JPG · PNG · 10 MB</span>
+</span>
+</button>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+<label class="fl">Descripción<textarea class="ta" placeholder="¿Qué es y cómo se presenta?"></textarea></label>
+<label class="fl">Justificación comercial<textarea class="ta" placeholder="¿Por qué en nuestras tiendas?"></textarea></label>
+</div>
+</sc-if>
+
+<sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 22px; padding: 10px 0;">
+<div style="width: 120px; height: 120px; border-radius: 50%; background: #003C3E; color: #F0ECDF; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg class="i" style="width: 50px; height: 50px;" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div>
+<div style="display: flex; flex-direction: column; gap: 6px;">
+<span class="d" style="font-size: 32px; font-weight: 800; color: #003C3E;">¡Enviado!</span>
+<span style="font-size: 16px; font-weight: 600;">{{sentName}}</span>
+<span class="m" style="font-size: 13px; color: #003C3E;">S-0152 · 3 a 5 días hábiles</span>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<sc-if value="{{canBack}}" hint-placeholder-val="{{ false }}"><button class="gh" onClick="{{back}}"><svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Atrás</button></sc-if>
+<sc-if value="{{noBack}}" hint-placeholder-val="{{ true }}"><button class="gh">Guardar borrador</button></sc-if>
+<sc-if value="{{canNext}}" hint-placeholder-val="{{ true }}"><button class="go" onClick="{{next}}">Siguiente<svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></sc-if>
+<sc-if value="{{canSend}}" hint-placeholder-val="{{ false }}"><button class="go" onClick="{{send}}">Enviar solicitud<svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></svg></button></sc-if>
+<sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}"><button class="go" onClick="{{again}}">Proponer otro<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></sc-if>
+</div>
+</section>
+</div>
+
+<aside style="width: 364px; flex-shrink: 0; display: flex; flex-direction: column; gap: 24px;">
+
+<section style="background: #F0ECDF; border-radius: 40px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+<h2 class="d" style="margin: 0; padding: 0 4px; font-size: 26px; font-weight: 800; color: #003C3E;">Mis solicitudes</h2>
+<div style="display: flex; gap: 4px; background: #FAF8F2; border-radius: 999px; padding: 4px;">
+<button class="{{tabCls.p}}" onClick="{{tabGo.p}}">En curso <b>{{pendCount}}</b></button>
+<button class="{{tabCls.a}}" onClick="{{tabGo.a}}">Aprobadas <b>5</b></button>
+<button class="{{tabCls.r}}" onClick="{{tabGo.r}}">Rechazadas <b>2</b></button>
+</div>
+<sc-for list="{{reqs}}" as="r" hint-placeholder-count="3">
+<div class="rq">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+<span style="font-weight: 700; font-size: 15px;">{{r.name}}</span>
+<span class="m" style="font-size: 12px; color: #003C3E;">{{r.id}}</span>
+</div>
+<div class="trk">
+<span class="{{r.d1}}"></span><span class="{{r.l1}}"></span><span class="{{r.d2}}"></span><span class="{{r.l2}}"></span><span class="{{r.d3}}"></span>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #003C3E;">
+<span>{{r.date}}</span><span>{{r.label}}</span>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section style="background: #8E0A0A; color: #F0ECDF; border-radius: 40px; padding: 22px; display: flex; flex-direction: column; gap: 16px;">
+<h2 class="d" style="margin: 0; padding: 0 4px; font-size: 26px; font-weight: 800;">Cambio de precio</h2>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<sc-for list="{{mine}}" as="p" hint-placeholder-count="3">
+<button class="{{p.cls}}" onClick="{{p.pick}}" style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 20px; border-radius: 999px; font-size: 14px; font-weight: 600; transition: .2s;"><span>{{p.n}}</span><span class="m">{{p.cur}}</span></button>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 10px;">
+<label style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600;">Nuevo precio
+<input class="fi m" style="background: #F0ECDF;" type="number" step="0.5" value="{{np}}" onChange="{{onNp}}">
+</label>
+<span class="d" style="width: 76px; height: 76px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; flex-shrink: 0; background: {{dBg}}; color: {{dFg}};">{{dLabel}}</span>
+</div>
+<button class="yes-p" style="height: 52px; border-radius: 999px; background: #F0ECDF; color: #003C3E; font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">Enviar propuesta<svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></svg></button>
+</section>
+</aside>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    this.state = Object.assign({}, this.state || {}, { pres: ['500 g'], step: 'a', name: '', cat: 'Semillas', can: false, org: true, tab: 'p', sent: [], mp: 'chia', np: 84.5 });
+  }
+  renderVals() {
+    const s = this.state;
+    const set = (o) => this.setState(o);
+    const order = ['a', 'b', 'c'];
+    const idx = order.indexOf(s.step);
+    const stepCls = {}, goStep = {};
+    order.forEach((k, i) => {
+      stepCls[k] = 'stp' + (s.step === k ? ' on' : (idx > i || s.step === 'done') ? ' done' : '');
+      goStep[k] = () => set({ step: k });
+    });
+    const cats = ['Semillas', 'Cereales', 'Botanas', 'Endulzantes', 'Bebidas', 'Superalimentos'].map((n) => ({ n, cls: s.cat === n ? 'chip on' : 'chip', pick: () => set({ cat: n }) }));
+
+    const base = {
+      p: [
+        { id: 'S-0149', name: 'Cacao en nibs 200 g', date: '30 nov', st: 1 },
+        { id: 'S-0145', name: 'Amaranto natural 250 g', date: '29 nov', st: 2 },
+        { id: 'S-0142', name: 'Chía orgánica 500 g', date: '28 nov', st: 2 }
+      ],
+      a: [
+        { id: 'S-0131', name: 'Quinoa blanca 500 g', date: '12 oct', st: 3 },
+        { id: 'S-0127', name: 'Avena orgánica 1 kg', date: '02 oct', st: 3 },
+        { id: 'S-0120', name: 'Linaza dorada 400 g', date: '18 sep', st: 3 }
+      ],
+      r: [
+        { id: 'S-0138', name: 'Miel de agave 330 ml', date: '05 nov', st: -1 },
+        { id: 'S-0112', name: 'Té de jamaica 100 g', date: '22 ago', st: -1 }
+      ]
+    };
+    const sent = s.sent.map((n, i) => ({ id: 'S-' + (152 + i).toString().padStart(4, '0'), name: n, date: 'hoy', st: 1 }));
+    const list = s.tab === 'p' ? sent.concat(base.p) : base[s.tab];
+    const lbl = { 1: 'Enviada', 2: 'En revisión', 3: 'Aprobada', '-1': 'Rechazada' };
+    const reqs = list.map((r) => {
+      const st = r.st;
+      const f = (n) => (st === -1 ? true : st >= n);
+      return Object.assign({}, r, {
+        label: lbl[st],
+        d1: 'dt f', l1: f(2) ? 'ln f' : 'ln',
+        d2: f(2) ? 'dt f' : 'dt', l2: (st === 3 || st === -1) ? 'ln f' : 'ln',
+        d3: st === 3 ? 'dt a' : st === -1 ? 'dt x' : 'dt'
+      });
+    });
+    const tabCls = {}, tabGo = {};
+    ['p', 'a', 'r'].forEach((t) => { tabCls[t] = s.tab === t ? 'tab on' : 'tab'; tabGo[t] = () => set({ tab: t }); });
+
+    const M = { chia: { n: 'Chía orgánica 500 g', c: 89.0 }, quinoa: { n: 'Quinoa blanca 500 g', c: 72.0 }, avena: { n: 'Avena orgánica 1 kg', c: 54.0 } };
+    const mine = Object.keys(M).map((k) => ({
+      n: M[k].n, cur: '$' + M[k].c.toFixed(2),
+      cls: s.mp === k ? 'mp-on' : 'mp',
+      pick: () => set({ mp: k, np: M[k].c })
+    }));
+    const cur = M[s.mp].c;
+    const np = parseFloat(s.np);
+    const d = isNaN(np) ? 0 : (np - cur) / cur;
+
+    const sentName = s.sent.length ? s.sent[0] : '';
+    return {
+      stepCls, goStep, cats,
+      presL: s.pres.map((n) => ({ n, rm: () => set({ pres: s.pres.filter((x) => x !== n) }) })),
+      presAdd: ['250 g', '500 g', '1 kg', '2 kg'].filter((n) => s.pres.indexOf(n) < 0).map((n) => ({ n, add: () => set({ pres: s.pres.concat([n]) }) })),
+      isA: s.step === 'a', isB: s.step === 'b', isC: s.step === 'c', isDone: s.step === 'done',
+      canBack: idx > 0, noBack: s.step === 'a',
+      canNext: s.step === 'a' || s.step === 'b', canSend: s.step === 'c',
+      back: () => set({ step: order[idx - 1] }),
+      next: () => set({ step: order[idx + 1] }),
+      send: () => set({ step: 'done', sent: [s.name || 'Producto sin nombre'].concat(s.sent), tab: 'p', name: '' }),
+      again: () => set({ step: 'a' }),
+      name: s.name, onName: (e) => set({ name: e.target.value }), sentName,
+      swCan: s.can ? 'sw on' : 'sw', swOrg: s.org ? 'sw on' : 'sw',
+      tCan: () => set({ can: !s.can }), tOrg: () => set({ org: !s.org }),
+      tabCls, tabGo, reqs, pendCount: base.p.length + sent.length,
+      mine, np: s.np, onNp: (e) => set({ np: e.target.value }),
+      dLabel: (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + '%',
+      dBg: d > 0.1 ? '#040404' : '#F0ECDF', dFg: d > 0.1 ? '#F0ECDF' : '#8E0A0A'
+    };
+  }
+}
+</script>
+</body>
+</html>
