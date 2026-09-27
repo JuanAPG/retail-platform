@@ -25,6 +25,9 @@ import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
+import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
+import { AccessibilityWeightEntity } from '../entities/accessibility-weight.entity';
+import { AccessibilityComponentEntity } from '../entities/accessibility-component.entity';
 
 export default registerAs(
   'database',
@@ -64,6 +67,9 @@ export default registerAs(
       AssociationRule,
       AssociationRuleItem,
       AssociationExclusion,
+      AccessibilityZoneEntity,
+      AccessibilityWeightEntity,
+      AccessibilityComponentEntity,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,

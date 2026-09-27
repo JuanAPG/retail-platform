@@ -232,7 +232,7 @@ export interface Transaction {
   folio: string;
   storeId: string;
   store: Tienda;
-  date: string;
+  fecha: string;
   total: string;
   canal: string;
   importacionId: string | null;

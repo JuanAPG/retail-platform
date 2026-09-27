@@ -26,7 +26,7 @@ export class Transaction {
   @JoinColumn({ name: 'tienda_id' })
   store: TiendaEntity;
 
-  @Column({ type: 'timestamptz' })
+  @Column({ name: 'fecha', type: 'timestamptz' })
   fecha: Date;
 
   @Column({ type: 'numeric', precision: 14, scale: 2 })

@@ -235,7 +235,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-bold text-tinta">{t.store?.nombre ?? '—'}</span>
                 <span className="font-data text-xs text-teal">
-                  {t.folio} · {new Date(t.date).toLocaleDateString('es-MX')}
+                  {t.folio} · {new Date(t.fecha).toLocaleDateString('es-MX')}
                 </span>
               </div>
               <span className="font-data text-[15px] font-semibold text-tinta">${Number(t.total).toFixed(2)}</span>

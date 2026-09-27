@@ -34,7 +34,7 @@ const inputCls =
 export function TransaccionFormModal({ tiendas, productos, onCerrar, onGuardado }: TransaccionFormModalProps) {
   const [storeId, setStoreId] = useState('');
   const [folio, setFolio] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [lineas, setLineas] = useState<LineaForm[]>([{ ...LINEA_VACIA }]);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -79,7 +79,7 @@ export function TransaccionFormModal({ tiendas, productos, onCerrar, onGuardado 
 
     setGuardando(true);
     try {
-      await crearTransaccion({ storeId, folio: folio.trim(), date, details: detalles });
+      await crearTransaccion({ storeId, folio: folio.trim(), fecha, details: detalles });
       onGuardado('Transacción registrada correctamente (canasta construida).');
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudo registrar la transacción.'));
@@ -99,7 +99,7 @@ export function TransaccionFormModal({ tiendas, productos, onCerrar, onGuardado 
               </option>
             ))}
           </Select>
-          <Field id="trx-fecha" label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Field id="trx-fecha" label="Fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
         </div>
 
         <Field
