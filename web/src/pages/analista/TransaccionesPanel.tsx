@@ -4,6 +4,7 @@ import { getTransacciones } from '../../api/transacciones';
 import { getProductos, getTiendas } from '../../api/catalogo';
 import { Hero } from '../../components/ui/Hero';
 import { CtaButton } from '../../components/ui/CtaButton';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconTransacciones } from '../../components/ui/icons';
 import { TransaccionFormModal } from './TransaccionFormModal';
 import { ImportarCsvPanel } from './ImportarCsvPanel';
@@ -100,7 +101,7 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
         </div>
       )}
 
-      {transacciones.error && <p className="px-1 text-sm font-semibold text-vino">{transacciones.error}</p>}
+      {transacciones.error && <ErrorText>{transacciones.error}</ErrorText>}
 
       {!transacciones.loading && !transacciones.error && todas.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

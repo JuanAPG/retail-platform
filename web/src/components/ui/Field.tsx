@@ -14,7 +14,11 @@ export function Field({ id, label, icon, trailing, dataFont, ...inputProps }: Fi
   return (
     <label htmlFor={id} className="flex flex-col gap-1.5 text-[13px] font-semibold text-teal">
       {label}
-      <span className="flex h-14 items-center gap-2.5 rounded-full border-2 border-transparent bg-arena py-0 pl-5 pr-2 text-teal transition focus-within:border-vino focus-within:bg-marfil hover:border-salvia/60">
+      <span
+        className={`flex h-14 items-center gap-2.5 rounded-full border-2 border-transparent bg-arena py-0 pl-5 pr-2 text-teal transition ${
+          inputProps.disabled ? 'opacity-50' : 'focus-within:border-vino focus-within:bg-marfil hover:border-salvia/60'
+        }`}
+      >
         {icon}
         <input
           id={id}

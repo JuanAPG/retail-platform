@@ -5,6 +5,7 @@ import { mensajeDeError } from '../../api/errores';
 import { Zona } from '../../types';
 import { Chip } from '../../components/ui/Chip';
 import { Card } from '../../components/ui/Card';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconResultados } from '../../components/ui/icons';
 
 interface ComparacionZonasPanelProps {
@@ -65,7 +66,7 @@ export function ComparacionZonasPanel({ estado, onVolver }: ComparacionZonasPane
         </button>
       </div>
 
-      {estado.error && <p className="text-sm font-semibold text-vino">{estado.error}</p>}
+      {estado.error && <ErrorText>{estado.error}</ErrorText>}
 
       {zonas.length > 0 && (
         <div className="flex flex-wrap gap-2">

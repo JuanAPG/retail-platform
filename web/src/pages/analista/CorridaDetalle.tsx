@@ -1,4 +1,5 @@
 import { StatusPill } from '../../components/ui/StatusPill';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { parametro } from '../../api/asociacion';
 import { AnalysisRun, AnalysisRunFilter, AssociationRule, IncomeSegment, Tienda, Zona } from '../../types';
 import { EstadoCorridaBadge, formatearDia, formatearFechaHora, porcentaje } from './corridaFormato';
@@ -22,7 +23,7 @@ export function CorridaDetalle({ corrida, loading, error, onReintentar, tiendas,
   if (error) {
     return (
       <div className="flex items-center gap-3">
-        <p className="text-sm font-semibold text-vino">{error}</p>
+        <ErrorText>{error}</ErrorText>
         <button type="button" onClick={onReintentar} className="flex h-9 items-center rounded-full border-2 border-salvia/60 px-4 text-xs font-bold text-teal hover:bg-salvia hover:text-tinta">
           Reintentar
         </button>

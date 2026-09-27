@@ -9,8 +9,10 @@ import { getHistorialPrecios } from '../api/precios';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Card } from '../components/ui/Card';
+import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
 import { Hero } from '../components/ui/Hero';
+import { ErrorText } from '../components/ui/ErrorText';
 import { IconRecomendaciones, IconResultados, IconSimulacion } from '../components/ui/icons';
 import { Producto, Tienda, Transaction } from '../types';
 
@@ -144,7 +146,7 @@ function ProductosLectura({ estado }: { estado: UseFetchState<Producto[]> }) {
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <p className="text-sm font-semibold text-vino">{estado.error}</p>}
+      {estado.error && <ErrorText>{estado.error}</ErrorText>}
       {estado.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {estado.data.map((p) => (
@@ -191,7 +193,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <p className="text-sm font-semibold text-vino">{estado.error}</p>}
+      {estado.error && <ErrorText>{estado.error}</ErrorText>}
       {estado.data && estado.data.length === 0 && (
         <PlaceholderHonesto
           titulo="Aún no hay transacciones registradas"
@@ -233,19 +235,13 @@ function PreciosLectura({ productos }: { productos: UseFetchState<Producto[]> })
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
 
-      <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-teal">
-        Producto
-        <select
-          value={productoId}
-          onChange={(e) => setProductoId(e.target.value)}
-          className="h-14 w-full max-w-md rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60"
-        >
-          <option value="">Selecciona…</option>
+      <div className="max-w-md">
+        <Select id="planeador-precios-producto" label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)} placeholder="Selecciona…">
           {(productos.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>{p.sku} — {p.nombre}</option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </div>
 
       {!productoId && (
         <PlaceholderHonesto

@@ -7,6 +7,8 @@ import { Hero } from '../../components/ui/Hero';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { CircleButton } from '../../components/ui/CircleButton';
 import { CtaButton } from '../../components/ui/CtaButton';
+import { Select } from '../../components/ui/Select';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconPrecios } from '../../components/ui/icons';
 
 function formatoMoneda(valor: string | number): string {
@@ -117,57 +119,38 @@ export function PreciosPanel() {
         <h2 className="font-slab text-[22px] text-vino">Registrar precio</h2>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-6">
-          <label className={`${labelClass} lg:col-span-2`} htmlFor="precio-producto">
-            Producto
-            <select
-              id="precio-producto"
-              value={productoId}
-              onChange={(e) => elegirProducto(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Selecciona…</option>
+          <div className="lg:col-span-2">
+            <Select id="precio-producto" label="Producto" value={productoId} onChange={(e) => elegirProducto(e.target.value)} placeholder="Selecciona…">
               {(productos.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.sku} — {p.nombre}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </div>
 
-          <label className={labelClass} htmlFor="precio-presentacion">
-            Presentación
-            <select
-              id="precio-presentacion"
-              value={presentacionId}
-              onChange={(e) => setPresentacionId(e.target.value)}
-              disabled={!productoSeleccionado}
-              className={selectClass}
-            >
-              <option value="">Selecciona…</option>
-              {(productoSeleccionado?.presentaciones ?? []).map((pr) => (
-                <option key={pr.id} value={pr.id}>
-                  {pr.nombre} ({pr.contenido} {pr.unidadMedida?.clave})
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            id="precio-presentacion"
+            label="Presentación"
+            value={presentacionId}
+            onChange={(e) => setPresentacionId(e.target.value)}
+            disabled={!productoSeleccionado}
+            placeholder="Selecciona…"
+          >
+            {(productoSeleccionado?.presentaciones ?? []).map((pr) => (
+              <option key={pr.id} value={pr.id}>
+                {pr.nombre} ({pr.contenido} {pr.unidadMedida?.clave})
+              </option>
+            ))}
+          </Select>
 
-          <label className={labelClass} htmlFor="precio-tienda">
-            Tienda
-            <select
-              id="precio-tienda"
-              value={tiendaId}
-              onChange={(e) => setTiendaId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Selecciona…</option>
-              {(tiendas.data ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre} — {t.zona?.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select id="precio-tienda" label="Tienda" value={tiendaId} onChange={(e) => setTiendaId(e.target.value)} placeholder="Selecciona…">
+            {(tiendas.data ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre} — {t.zona?.nombre}
+              </option>
+            ))}
+          </Select>
 
           <label className={labelClass} htmlFor="precio-monto">
             Precio (MXN)
@@ -216,7 +199,7 @@ export function PreciosPanel() {
       )}
 
       {productoId && historial.loading && <p className="px-1 text-sm text-teal/70">Cargando histórico…</p>}
-      {productoId && historial.error && <p className="px-1 text-sm font-semibold text-vino">{historial.error}</p>}
+      {productoId && historial.error && <ErrorText>{historial.error}</ErrorText>}
 
       {productoId && historial.data && filas.length === 0 && (
         <div className="flex h-[220px] flex-col items-center justify-center gap-3 rounded-panel border-2 border-dashed border-salvia text-center">

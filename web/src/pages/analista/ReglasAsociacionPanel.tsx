@@ -5,6 +5,7 @@ import { getTiendas, getZonas } from '../../api/catalogo';
 import { getSegmentos } from '../../api/segmentos';
 import { AssociationRule } from '../../types';
 import { Hero } from '../../components/ui/Hero';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconAsociacion } from '../../components/ui/icons';
 import { CorridaAprioriForm } from './CorridaAprioriForm';
 import { CorridaDetalle } from './CorridaDetalle';
@@ -74,7 +75,7 @@ export function ReglasAsociacionPanel() {
         </div>
       )}
 
-      {corridas.error && <p className="px-1 text-sm font-semibold text-vino">{corridas.error}</p>}
+      {corridas.error && <ErrorText>{corridas.error}</ErrorText>}
 
       {!corridas.loading && !corridas.error && lista.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

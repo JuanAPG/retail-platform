@@ -5,6 +5,8 @@ import { getProductosPendientes, aprobarProducto, rechazarProducto } from '../..
 import { mensajeDeError } from '../../api/errores';
 import { Producto } from '../../types';
 import { ApprovalItem, ApprovalQueue } from '../../components/ui/ApprovalQueue';
+import { TextArea } from '../../components/ui/TextArea';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconPropuesta } from '../../components/ui/icons';
 
 function fechaCorta(iso: string | undefined): string {
@@ -86,7 +88,7 @@ export function AprobacionesPanel() {
         <p className="rounded-full bg-salvia/25 px-4 py-2.5 text-sm font-semibold text-teal">{aviso}</p>
       )}
       {error && <p className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">{error}</p>}
-      {pendientes.error && <p className="text-sm font-semibold text-vino">{pendientes.error}</p>}
+      {pendientes.error && <ErrorText>{pendientes.error}</ErrorText>}
 
       <ApprovalQueue items={items} emptyLabel="Todo al día" />
 
@@ -137,35 +139,30 @@ function ModalRechazo({ producto, onCerrar, onRechazado }: ModalRechazoProps) {
   return (
     <Modal titulo="Rechazar propuesta" descripcion={`${producto.sku} — ${producto.nombre}`} onCerrar={onCerrar}>
       {error && (
-        <p className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+        <p className="mb-3 rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">{error}</p>
       )}
 
-      <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="motivo">
-        Motivo del rechazo
-      </label>
-      <textarea
+      <TextArea
         id="motivo"
+        label="Motivo del rechazo"
         rows={4}
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
-        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         placeholder="Explica qué debe corregir el proveedor para volver a proponerlo."
+        hint="El proveedor verá este texto en «Mis solicitudes». Mínimo 10 caracteres."
       />
-      <p className="mt-1 text-xs text-slate-500">
-        El proveedor verá este texto en «Mis solicitudes». Mínimo 10 caracteres.
-      </p>
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex justify-end gap-2.5">
         <button
           onClick={onCerrar}
-          className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
         >
           Cancelar
         </button>
         <button
           onClick={confirmar}
           disabled={!motivoValido || enviando}
-          className="rounded bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
         >
           {enviando ? 'Rechazando…' : 'Rechazar propuesta'}
         </button>

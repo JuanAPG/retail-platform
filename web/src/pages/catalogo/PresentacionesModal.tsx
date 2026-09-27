@@ -1,6 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { Badge } from '../../components/Badge';
+import { Select } from '../../components/ui/Select';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { mensajeDeError } from '../../api/errores';
 import { agregarPresentacion, eliminarPresentacion, getPresentaciones } from '../../api/catalogo';
 import { useFetch } from '../../hooks/useFetch';
@@ -11,6 +13,9 @@ interface PresentacionesModalProps {
   unidadesMedida: UnidadMedida[];
   onCerrar: () => void;
 }
+
+const inputClass =
+  'h-12 rounded-full border-2 border-transparent bg-arena px-4 text-sm text-tinta outline-none transition placeholder:text-salvia focus:border-vino focus:bg-marfil hover:border-salvia/60';
 
 /**
  * RF-35: un producto tiene varias presentaciones. Se administran aquí,
@@ -72,24 +77,22 @@ export function PresentacionesModal({ producto, unidadesMedida, onCerrar }: Pres
       descripcion="Precio, inventario y ventas van por presentación, no por el producto en general."
       onCerrar={onCerrar}
     >
-      {presentaciones.loading && <p className="text-sm text-slate-500">Cargando…</p>}
-      {presentaciones.error && <p className="text-sm text-rose-600">{presentaciones.error}</p>}
+      {presentaciones.loading && <p className="text-sm text-teal/70">Cargando…</p>}
+      {presentaciones.error && <ErrorText>{presentaciones.error}</ErrorText>}
 
       {presentaciones.data && presentaciones.data.length > 0 && (
-        <ul className="mb-4 divide-y divide-slate-100 rounded border border-slate-200">
+        <ul className="mb-4 divide-y divide-salvia/20 rounded-card border-2 border-arena">
           {presentaciones.data.map((p) => (
-            <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
-              <span>
+            <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-sm text-tinta">
+              <span className="flex items-center gap-2">
                 {p.nombre} ({p.contenido} {p.unidadMedida?.clave})
-                {p.esPredeterminada && (
-                  <Badge tone="positive"> Predeterminada</Badge>
-                )}
+                {p.esPredeterminada && <Badge tone="positive">Predeterminada</Badge>}
               </span>
               <button
                 type="button"
                 onClick={() => handleEliminar(p.id)}
                 disabled={eliminandoId === p.id}
-                className="text-sm text-rose-600 underline hover:text-rose-800 disabled:opacity-40"
+                className="text-sm font-semibold text-vino underline decoration-vino/40 transition hover:text-teal disabled:opacity-40"
               >
                 {eliminandoId === p.id ? 'Eliminando…' : 'Eliminar'}
               </button>
@@ -99,18 +102,18 @@ export function PresentacionesModal({ producto, unidadesMedida, onCerrar }: Pres
       )}
 
       {presentaciones.data && presentaciones.data.length === 0 && (
-        <p className="mb-4 text-sm text-slate-500">Este producto no tiene presentaciones.</p>
+        <p className="mb-4 text-sm text-teal/70">Este producto no tiene presentaciones.</p>
       )}
 
-      <p className="mb-2 text-xs font-medium uppercase text-slate-400">Agregar presentación</p>
-      <form onSubmit={handleAgregar} className="grid grid-cols-3 gap-2">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-salvia">Agregar presentación</p>
+      <form onSubmit={handleAgregar} className="grid grid-cols-3 gap-2.5">
         <input
           id="presentacion-nombre"
           type="text"
           placeholder="Nombre (ej. 250 g)"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          className={inputClass}
         />
         <input
           id="presentacion-contenido"
@@ -120,31 +123,26 @@ export function PresentacionesModal({ producto, unidadesMedida, onCerrar }: Pres
           step="0.001"
           value={contenido}
           onChange={(e) => setContenido(e.target.value)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          className={`${inputClass} font-data tabular-nums`}
         />
-        <select
-          id="presentacion-unidad"
-          value={unidadMedida}
-          onChange={(e) => setUnidadMedida(e.target.value)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        >
+        <Select id="presentacion-unidad" value={unidadMedida} onChange={(e) => setUnidadMedida(e.target.value)}>
           {unidadesMedida.map((u) => (
             <option key={u.clave} value={u.clave}>
               {u.clave}
             </option>
           ))}
-        </select>
+        </Select>
         <button
           type="submit"
           disabled={agregando}
-          className="col-span-3 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          className="col-span-3 flex h-12 items-center justify-center rounded-full bg-vino text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
         >
           {agregando ? 'Agregando…' : 'Agregar presentación'}
         </button>
       </form>
 
       {error && (
-        <p role="alert" className="mt-3 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <p role="alert" className="mt-3 rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
           {error}
         </p>
       )}
@@ -153,7 +151,7 @@ export function PresentacionesModal({ producto, unidadesMedida, onCerrar }: Pres
         <button
           type="button"
           onClick={onCerrar}
-          className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
         >
           Cerrar
         </button>

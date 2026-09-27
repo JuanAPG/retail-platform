@@ -2,6 +2,9 @@ import { FormEvent, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { mensajeDeError } from '../../api/errores';
 import { CrearZonaPayload, actualizarZona, crearZona } from '../../api/catalogo';
+import { Field } from '../../components/ui/Field';
+import { Select } from '../../components/ui/Select';
+import { TextArea } from '../../components/ui/TextArea';
 import { Municipio, Zona } from '../../types';
 
 interface ZonaFormModalProps {
@@ -59,69 +62,42 @@ export function ZonaFormModal({ zona, municipios, onCerrar, onGuardado }: ZonaFo
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label htmlFor="zona-nombre" className="mb-1 block text-xs font-medium uppercase text-slate-500">
-            Nombre
-          </label>
-          <input
-            id="zona-nombre"
-            type="text"
-            required
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className={inputClass}
-          />
-        </div>
+        <Field id="zona-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
 
-        <div>
-          <label htmlFor="zona-municipio" className="mb-1 block text-xs font-medium uppercase text-slate-500">
-            Municipio
-          </label>
-          <select
-            id="zona-municipio"
-            value={municipioId}
-            onChange={(e) => setMunicipioId(Number(e.target.value))}
-            className={inputClass}
-          >
-            {municipios.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select id="zona-municipio" label="Municipio" value={municipioId} onChange={(e) => setMunicipioId(Number(e.target.value))}>
+          {municipios.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nombre}
+            </option>
+          ))}
+        </Select>
 
-        <div>
-          <label htmlFor="zona-descripcion" className="mb-1 block text-xs font-medium uppercase text-slate-500">
-            Descripción (opcional)
-          </label>
-          <textarea
-            id="zona-descripcion"
-            rows={2}
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            className={inputClass}
-          />
-        </div>
+        <TextArea
+          id="zona-descripcion"
+          label="Descripción (opcional)"
+          rows={2}
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+        />
 
         {error && (
-          <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
             {error}
           </p>
         )}
 
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onCerrar}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear zona'}
           </button>
@@ -130,6 +106,3 @@ export function ZonaFormModal({ zona, municipios, onCerrar, onGuardado }: ZonaFo
     </Modal>
   );
 }
-
-const inputClass =
-  'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';

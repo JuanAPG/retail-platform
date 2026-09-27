@@ -1,23 +1,25 @@
+import { ReactNode } from 'react';
+
 interface SectionHeaderProps {
   title: string;
   badge?: string;
   description?: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }
 
 export function SectionHeader({ title, badge, description, action }: SectionHeaderProps) {
   return (
-    <div className="mb-6 flex items-start justify-between">
+    <div className="mb-6 flex items-start justify-between gap-4">
       <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="font-display text-3xl text-vino">{title}</h1>
           {badge && (
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+            <span className="rounded-full bg-salvia/25 px-3 py-1 text-xs font-bold uppercase tracking-wide text-teal">
               {badge}
             </span>
           )}
         </div>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        {description && <p className="mt-1.5 text-sm text-teal/70">{description}</p>}
       </div>
       {action}
     </div>

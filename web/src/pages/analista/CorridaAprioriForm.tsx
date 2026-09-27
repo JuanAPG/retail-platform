@@ -3,6 +3,7 @@ import { AxiosError } from 'axios';
 import { correrApriori } from '../../api/asociacion';
 import { mensajeDeError } from '../../api/errores';
 import { AnalyticsFilters, AssociationRule, IncomeSegment, Tienda, Zona } from '../../types';
+import { Select } from '../../components/ui/Select';
 import { IconSimulacion } from '../../components/ui/icons';
 
 const selectClass =
@@ -112,55 +113,44 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
             {errorConfianza ?? `De quienes compran lo primero, ${confianzaNum}% lleva lo segundo.`}
           </span>
         </label>
-        <label className={labelClass} htmlFor="apr-tamano">
-          Productos por regla (máx.)
-          <select id="apr-tamano" className={selectClass} value={tamanoMaximo} onChange={(e) => setTamanoMaximo(Number(e.target.value))}>
+        <div className="flex flex-col gap-1.5">
+          <Select id="apr-tamano" label="Productos por regla (máx.)" value={tamanoMaximo} onChange={(e) => setTamanoMaximo(Number(e.target.value))}>
             <option value={2}>2</option>
             <option value={3}>3</option>
             <option value={4}>4</option>
-          </select>
+          </Select>
           <span className="text-xs text-teal/70">Con 3: reglas como {'{A, B} → {C}'}.</span>
-        </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
-        <label className={labelClass} htmlFor="apr-zona">
-          Zona
-          <select id="apr-zona" className={selectClass} value={filtros.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
-            <option value="">Todas</option>
-            {zonas.map((z) => (
-              <option key={z.id} value={z.id}>{z.nombre}</option>
-            ))}
-          </select>
-        </label>
-        <label className={labelClass} htmlFor="apr-tienda">
-          Tienda
-          <select
-            id="apr-tienda"
-            className={selectClass}
-            value={filtros.storeId ?? ''}
-            onChange={(e) => setFiltros((f) => ({ ...f, storeId: e.target.value || undefined }))}
-          >
-            <option value="">Todas</option>
-            {tiendasDisponibles.map((t) => (
-              <option key={t.id} value={t.id}>{t.nombre}</option>
-            ))}
-          </select>
-        </label>
-        <label className={labelClass} htmlFor="apr-segmento">
-          Segmento de ingreso
-          <select
-            id="apr-segmento"
-            className={selectClass}
-            value={filtros.segmentId ?? ''}
-            onChange={(e) => setFiltros((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
-          >
-            <option value="">Todos</option>
-            {segmentos.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </label>
+        <Select id="apr-zona" label="Zona" value={filtros.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)} placeholder="Todas">
+          {zonas.map((z) => (
+            <option key={z.id} value={z.id}>{z.nombre}</option>
+          ))}
+        </Select>
+        <Select
+          id="apr-tienda"
+          label="Tienda"
+          value={filtros.storeId ?? ''}
+          onChange={(e) => setFiltros((f) => ({ ...f, storeId: e.target.value || undefined }))}
+          placeholder="Todas"
+        >
+          {tiendasDisponibles.map((t) => (
+            <option key={t.id} value={t.id}>{t.nombre}</option>
+          ))}
+        </Select>
+        <Select
+          id="apr-segmento"
+          label="Segmento de ingreso"
+          value={filtros.segmentId ?? ''}
+          onChange={(e) => setFiltros((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
+          placeholder="Todos"
+        >
+          {segmentos.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </Select>
         <label className={labelClass} htmlFor="apr-desde">
           Desde
           <input

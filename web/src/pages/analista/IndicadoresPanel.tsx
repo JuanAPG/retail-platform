@@ -5,6 +5,8 @@ import { getTiendas, getZonas } from '../../api/catalogo';
 import { getSegmentos } from '../../api/segmentos';
 import { AnalyticsFilters } from '../../types';
 import { Hero } from '../../components/ui/Hero';
+import { Select } from '../../components/ui/Select';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { IconReportes } from '../../components/ui/icons';
 
 const moneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -70,43 +72,33 @@ export function IndicadoresPanel() {
 
       <form onSubmit={aplicar} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
-          <label className={labelClass} htmlFor="ind-zona">
-            Zona
-            <select id="ind-zona" className={selectClass} value={borrador.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)}>
-              <option value="">Todas</option>
-              {(zonas.data ?? []).map((z) => (
-                <option key={z.id} value={z.id}>{z.nombre}</option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass} htmlFor="ind-tienda">
-            Tienda
-            <select
-              id="ind-tienda"
-              className={selectClass}
-              value={borrador.storeId ?? ''}
-              onChange={(e) => setBorrador((f) => ({ ...f, storeId: e.target.value || undefined }))}
-            >
-              <option value="">Todas</option>
-              {tiendasDisponibles.map((t) => (
-                <option key={t.id} value={t.id}>{t.nombre}</option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass} htmlFor="ind-segmento">
-            Segmento de ingreso
-            <select
-              id="ind-segmento"
-              className={selectClass}
-              value={borrador.segmentId ?? ''}
-              onChange={(e) => setBorrador((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
-            >
-              <option value="">Todos</option>
-              {(segmentos.data ?? []).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </label>
+          <Select id="ind-zona" label="Zona" value={borrador.zoneId ?? ''} onChange={(e) => cambiarZona(e.target.value)} placeholder="Todas">
+            {(zonas.data ?? []).map((z) => (
+              <option key={z.id} value={z.id}>{z.nombre}</option>
+            ))}
+          </Select>
+          <Select
+            id="ind-tienda"
+            label="Tienda"
+            value={borrador.storeId ?? ''}
+            onChange={(e) => setBorrador((f) => ({ ...f, storeId: e.target.value || undefined }))}
+            placeholder="Todas"
+          >
+            {tiendasDisponibles.map((t) => (
+              <option key={t.id} value={t.id}>{t.nombre}</option>
+            ))}
+          </Select>
+          <Select
+            id="ind-segmento"
+            label="Segmento de ingreso"
+            value={borrador.segmentId ?? ''}
+            onChange={(e) => setBorrador((f) => ({ ...f, segmentId: e.target.value ? Number(e.target.value) : undefined }))}
+            placeholder="Todos"
+          >
+            {(segmentos.data ?? []).map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </Select>
           <label className={labelClass} htmlFor="ind-desde">
             Desde
             <input
@@ -149,7 +141,7 @@ export function IndicadoresPanel() {
       </form>
 
       {indicadores.loading && <p className="text-sm text-teal/70">Cargando indicadores…</p>}
-      {!indicadores.loading && indicadores.error && <p className="text-sm font-semibold text-vino">{indicadores.error}</p>}
+      {!indicadores.loading && indicadores.error && <ErrorText>{indicadores.error}</ErrorText>}
 
       {!indicadores.loading && !indicadores.error && sinCanastas && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

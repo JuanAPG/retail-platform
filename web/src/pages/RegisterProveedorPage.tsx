@@ -1,10 +1,8 @@
-import { motion } from 'motion/react';
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { registerProveedor } from '../api/auth';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
-import { FILL_DURATION, FILL_EASE, useOriginFill } from '../components/ui/useOriginFill';
 import { IconCandado, IconFlecha, IconOjo, IconOjoCerrado, IconResultados } from '../components/ui/icons';
 import { IlustracionCadenaSuministro } from '../components/ui/IlustracionCadenaSuministro';
 
@@ -58,7 +56,6 @@ export function RegisterProveedorPage() {
   const [error, setError] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { ref: crearCuentaRef, origen, diametro, mostrarRelleno, handlers } = useOriginFill<HTMLButtonElement>(submitting);
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -244,33 +241,18 @@ export function RegisterProveedorPage() {
                   </p>
                 )}
 
-                <motion.button
-                  ref={crearCuentaRef}
+                <button
                   type="submit"
                   disabled={submitting}
-                  whileTap={submitting ? undefined : { scale: 0.985 }}
-                  {...handlers}
-                  className={`relative flex h-[52px] items-center justify-between gap-3 overflow-hidden rounded-full bg-teal py-0 pl-6 pr-2 text-[15px] font-bold text-arena transition-colors disabled:cursor-not-allowed ${
+                  className={`group flex h-[52px] items-center justify-between gap-3 rounded-full bg-teal py-0 pl-6 pr-2 text-[15px] font-bold text-arena transition hover:bg-vino disabled:cursor-not-allowed ${
                     aceptaTerminos ? 'opacity-100' : 'opacity-45'
                   }`}
                 >
-                  <motion.span
-                    aria-hidden
-                    initial={false}
-                    animate={{ scale: mostrarRelleno && diametro > 0 ? 1 : 0 }}
-                    transition={{ duration: FILL_DURATION, ease: FILL_EASE }}
-                    className="pointer-events-none absolute rounded-full bg-vino"
-                    style={{ left: origen.x - diametro / 2, top: origen.y - diametro / 2, width: diametro, height: diametro }}
-                  />
-                  <span className="relative z-10">{submitting ? 'Enviando…' : 'Crear cuenta'}</span>
-                  <span
-                    className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition-transform duration-300 ${
-                      mostrarRelleno ? 'translate-x-0.5' : ''
-                    }`}
-                  >
+                  {submitting ? 'Enviando…' : 'Crear cuenta'}
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition group-hover:translate-x-0.5">
                     <IconFlecha className="h-4 w-4" />
                   </span>
-                </motion.button>
+                </button>
               </div>
             </form>
 

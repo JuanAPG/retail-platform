@@ -11,7 +11,9 @@ import { RailModule } from '../components/ui/Rail';
 import { Hero } from '../components/ui/Hero';
 import { Chip } from '../components/ui/Chip';
 import { Card } from '../components/ui/Card';
+import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
+import { ErrorText } from '../components/ui/ErrorText';
 import { IconCanastas, IconCheck, IconMas, IconPrecios, IconProductos } from '../components/ui/icons';
 
 type Tab = 'mis-productos' | 'proponer-alta' | 'mis-solicitudes' | 'cambio-precio' | 'mi-perfil';
@@ -132,7 +134,7 @@ export function ProveedorPortal() {
             }
           />
 
-          {productos.error && <p className="text-sm font-semibold text-vino">{productos.error}</p>}
+          {productos.error && <ErrorText>{productos.error}</ErrorText>}
 
           {productos.data && enCatalogo.length === 0 && (
             <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
@@ -401,23 +403,13 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
                 required
               />
             </label>
-            <label className={labelClass} htmlFor="unidad">
-              Unidad
-              <select
-                id="unidad"
-                className={fieldClass}
-                value={unidadMedida}
-                onChange={(e) => setUnidadMedida(e.target.value)}
-                required
-              >
-                <option value="">—</option>
-                {unidades.map((u) => (
-                  <option key={u.id} value={u.clave}>
-                    {u.clave}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Select id="unidad" label="Unidad" value={unidadMedida} onChange={(e) => setUnidadMedida(e.target.value)} required placeholder="—">
+              {unidades.map((u) => (
+                <option key={u.id} value={u.clave}>
+                  {u.clave}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
 

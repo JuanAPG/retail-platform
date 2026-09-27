@@ -6,6 +6,8 @@ import {
   crearTienda,
   actualizarTienda,
 } from '../../api/catalogo';
+import { Field } from '../../components/ui/Field';
+import { Select } from '../../components/ui/Select';
 import { CodigoPostal, Tienda, Zona } from '../../types';
 
 const FORMATOS: { valor: CrearTiendaPayload['formato']; etiqueta: string }[] = [
@@ -99,159 +101,86 @@ export function TiendaFormModal({
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Campo id="tienda-nombre" label="Nombre">
-            <input
-              id="tienda-nombre"
-              type="text"
-              required
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
-          <Campo id="tienda-formato" label="Formato">
-            <select
-              id="tienda-formato"
-              value={formato}
-              onChange={(e) => setFormato(e.target.value as CrearTiendaPayload['formato'])}
-              className={inputClass}
-            >
-              {FORMATOS.map((f) => (
-                <option key={f.valor} value={f.valor}>
-                  {f.etiqueta}
-                </option>
-              ))}
-            </select>
-          </Campo>
+          <Field id="tienda-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <Select
+            id="tienda-formato"
+            label="Formato"
+            value={formato}
+            onChange={(e) => setFormato(e.target.value as CrearTiendaPayload['formato'])}
+          >
+            {FORMATOS.map((f) => (
+              <option key={f.valor} value={f.valor}>
+                {f.etiqueta}
+              </option>
+            ))}
+          </Select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Campo id="tienda-zona" label="Zona">
-            <select
-              id="tienda-zona"
-              value={zonaId}
-              onChange={(e) => setZonaId(e.target.value)}
-              className={inputClass}
-            >
-              {zonas.map((z) => (
-                <option key={z.id} value={z.id}>
-                  {z.nombre}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <Campo id="tienda-sucursal" label="No. de sucursal (opcional)">
-            <input
-              id="tienda-sucursal"
-              type="text"
-              value={numeroSucursal}
-              onChange={(e) => setNumeroSucursal(e.target.value)}
-              placeholder="SUC-004"
-              className={inputClass}
-            />
-          </Campo>
+          <Select id="tienda-zona" label="Zona" value={zonaId} onChange={(e) => setZonaId(e.target.value)}>
+            {zonas.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.nombre}
+              </option>
+            ))}
+          </Select>
+          <Field
+            id="tienda-sucursal"
+            label="No. de sucursal (opcional)"
+            value={numeroSucursal}
+            onChange={(e) => setNumeroSucursal(e.target.value)}
+            placeholder="SUC-004"
+          />
         </div>
 
-        <p className="text-xs font-medium uppercase text-slate-400">Dirección</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-salvia">Dirección</p>
 
-        <Campo id="tienda-calle" label="Calle">
-          <input
-            id="tienda-calle"
-            type="text"
-            required
-            value={calle}
-            onChange={(e) => setCalle(e.target.value)}
-            className={inputClass}
-          />
-        </Campo>
+        <Field id="tienda-calle" label="Calle" required value={calle} onChange={(e) => setCalle(e.target.value)} />
 
         <div className="grid grid-cols-3 gap-3">
-          <Campo id="tienda-num-ext" label="No. exterior">
-            <input
-              id="tienda-num-ext"
-              type="text"
-              value={numeroExterior}
-              onChange={(e) => setNumeroExterior(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
-          <Campo id="tienda-num-int" label="No. interior">
-            <input
-              id="tienda-num-int"
-              type="text"
-              value={numeroInterior}
-              onChange={(e) => setNumeroInterior(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
-          <Campo id="tienda-colonia" label="Colonia">
-            <input
-              id="tienda-colonia"
-              type="text"
-              value={colonia}
-              onChange={(e) => setColonia(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
+          <Field id="tienda-num-ext" label="No. exterior" value={numeroExterior} onChange={(e) => setNumeroExterior(e.target.value)} />
+          <Field id="tienda-num-int" label="No. interior" value={numeroInterior} onChange={(e) => setNumeroInterior(e.target.value)} />
+          <Field id="tienda-colonia" label="Colonia" value={colonia} onChange={(e) => setColonia(e.target.value)} />
         </div>
 
-        <Campo id="tienda-cp" label="Código postal">
-          <select
-            id="tienda-cp"
-            value={codigoPostal}
-            onChange={(e) => setCodigoPostal(e.target.value)}
-            className={inputClass}
-          >
+        <div>
+          <Select id="tienda-cp" label="Código postal" value={codigoPostal} onChange={(e) => setCodigoPostal(e.target.value)}>
             {codigosPostales.map((cp) => (
               <option key={cp.codigoPostal} value={cp.codigoPostal}>
                 {cp.codigoPostal} — {cp.municipio?.nombre}
               </option>
             ))}
-          </select>
+          </Select>
           {codigosPostales.length === 0 && (
-            <p className="mt-1 text-xs text-rose-500">
+            <p className="mt-1.5 text-xs font-semibold text-vino">
               No hay códigos postales en el catálogo — pide que agreguen uno primero.
             </p>
           )}
-        </Campo>
+        </div>
 
         {error && (
-          <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
             {error}
           </p>
         )}
 
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onCerrar}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando || codigosPostales.length === 0}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear tienda'}
           </button>
         </div>
       </form>
     </Modal>
-  );
-}
-
-const inputClass =
-  'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-
-function Campo({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium uppercase text-slate-500">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }
