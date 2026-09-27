@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AnalysisRun } from '../entities/analysis-run.entity';
+import { Elasticity } from '../entities/elasticity.entity';
+import { ElasticityService } from './elasticity.service';
 
 /**
  * M11 — Elasticidad y patrones de sustitución.
@@ -11,14 +15,12 @@ import { Module } from '@nestjs/common';
  *   o unitaria (|E| ≈ 1), y conserva los datos usados, el periodo y los
  *   supuestos. Necesita el histórico de precios de M08.
  *
- * Este módulo está declarado y registrado en AppModule a propósito
- * aunque todavía esté vacío: así quien lo desarrolle no tiene que tocar
- * `app.module.ts` y las cuatro ramas no chocan en ese archivo.
- *
- * Al implementarlo: agrega aquí `imports` (TypeOrmModule.forFeature con
- * tus entidades), `controllers`, `providers` y lo que otros módulos
- * necesiten en `exports`. Las entidades compartidas viven en
- * `src/entities/`; los guards y los nombres de rol, en `src/common/`.
+ * Exporta ElasticityService para que Simulación (M13) estime la demanda
+ * ante un cambio de precio con las elasticidades ya calculadas.
  */
-@Module({})
+@Module({
+  imports: [TypeOrmModule.forFeature([AnalysisRun, Elasticity])],
+  providers: [ElasticityService],
+  exports: [ElasticityService],
+})
 export class ElasticityModule {}
