@@ -389,3 +389,114 @@ export interface AnalysisRun {
   /** Reglas; solo en GET /association/runs/:id. */
   results?: AssociationRule[];
 }
+
+/** M11 — Cuerpo de POST /elasticity/calculate. Todo opcional. */
+export interface ElasticityParams {
+  /** Sin ella, todas las presentaciones con ventas en el periodo. */
+  presentationId?: string;
+  /** ISO `yyyy-mm-dd`. */
+  dateFrom?: string;
+  /** ISO `yyyy-mm-dd`, inclusivo. */
+  dateTo?: string;
+  /** Agrupación de las ventas en observaciones; el backend usa 'day' si no viene. */
+  granularity?: 'day' | 'week';
+}
+
+/** M11 — Clasificación según el contrato. */
+export type ElasticityClass = 'elastic' | 'inelastic' | 'unitary';
+
+export interface ElasticityResultItem {
+  presentationId: string;
+  productName: string;
+  presentationName: string;
+  /** null = agregado nacional. */
+  zoneId: string | null;
+  zoneName: string;
+  value: number;
+  classification: ElasticityClass;
+  rSquared: number | null;
+  observations: number;
+  /** E > 0: la demanda sube con el precio. */
+  atypical: boolean;
+}
+
+export interface InsufficientElasticity {
+  presentationId: string;
+  productName: string;
+  presentationName: string;
+  zoneId: string | null;
+  zoneName: string;
+  observations: number;
+  distinctPrices: number;
+  reason: string;
+}
+
+/** M11 — Respuesta de POST /elasticity/calculate. */
+export interface ElasticityResult {
+  runId: string;
+  periodStart: string;
+  periodEnd: string;
+  granularity: 'day' | 'week';
+  results: ElasticityResultItem[];
+  insufficient: InsufficientElasticity[];
+  assumptions: string[];
+}
+
+/** M11 — Query de GET /elasticity/chart. */
+export interface ElasticityFilters {
+  presentationId: string;
+  groupBy?: 'zone' | 'segment';
+  /** Sin él, la corrida más reciente con resultados de la presentación. */
+  runId?: string;
+}
+
+/** Todo en null si no hubo datos suficientes. */
+export interface ElasticityChartValue {
+  value: number | null;
+  classification: ElasticityClass | null;
+  observations: number;
+  rSquared: number | null;
+}
+
+export interface ElasticityChartBar extends ElasticityChartValue {
+  /** Id de la zona o del segmento. */
+  key: string;
+  label: string;
+  /** Solo por segmento: zonas con datos que se promediaron. */
+  zones?: string[];
+}
+
+/** M11 — Respuesta de GET /elasticity/chart. */
+export interface ElasticityChartData {
+  runId: string;
+  presentationId: string;
+  productName: string;
+  presentationName: string;
+  groupBy: 'zone' | 'segment';
+  /** ISO: cuándo se ejecutó la corrida graficada. */
+  executedAt: string;
+  granularity: 'day' | 'week';
+  periodStart: string;
+  periodEnd: string;
+  bars: ElasticityChartBar[];
+  national: ElasticityChartValue | null;
+  note: string;
+}
+
+/** M11 — Un par de sustitutos de GET /substitution/patterns. */
+export interface SubstitutionPattern {
+  originProductId: string;
+  originProductName: string;
+  targetProductId: string;
+  targetProductName: string;
+  type: 'precio' | 'preferencia';
+  /** 0–1. */
+  score: number;
+  /** < 1 = se compran juntos menos de lo esperado. */
+  lift: number;
+  /** Precio de A ↔ comprar B; null si no hubo datos. */
+  priceCorrelation: number | null;
+  observations: number;
+  periodStart: string;
+  periodEnd: string;
+}
