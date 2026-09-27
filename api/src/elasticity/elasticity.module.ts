@@ -4,6 +4,7 @@ import { AnalysisRun } from '../entities/analysis-run.entity';
 import { Elasticity } from '../entities/elasticity.entity';
 import { ZonesModule } from '../zones/zones.module';
 import { ElasticityService } from './elasticity.service';
+import { SubstitutionService } from './substitution.service';
 
 /**
  * M11 — Elasticidad y patrones de sustitución.
@@ -17,12 +18,13 @@ import { ElasticityService } from './elasticity.service';
  *   supuestos. Necesita el histórico de precios de M08.
  *
  * Exporta ElasticityService para que Simulación (M13) estime la demanda
- * ante un cambio de precio con las elasticidades ya calculadas.
+ * ante un cambio de precio con las elasticidades ya calculadas, y
+ * SubstitutionService para que Recomendaciones (M14) proponga sustitutos.
  */
 @Module({
   // ZonesModule: zona → segmento para el gráfico por segmento.
   imports: [TypeOrmModule.forFeature([AnalysisRun, Elasticity]), ZonesModule],
-  providers: [ElasticityService],
-  exports: [ElasticityService],
+  providers: [ElasticityService, SubstitutionService],
+  exports: [ElasticityService, SubstitutionService],
 })
 export class ElasticityModule {}
