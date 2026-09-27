@@ -25,6 +25,7 @@ import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
+import { Elasticity } from '../entities/elasticity.entity';
 
 export default registerAs(
   'database',
@@ -64,6 +65,7 @@ export default registerAs(
       AssociationRule,
       AssociationRuleItem,
       AssociationExclusion,
+      Elasticity,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,
