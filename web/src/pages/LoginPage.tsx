@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -5,7 +6,9 @@ import { portalDelRol } from '../routes/portalPorRol';
 import { mensajeDeError } from '../api/errores';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
+import { FILL_DURATION, FILL_EASE, useOriginFill } from '../components/ui/useOriginFill';
 import { IconCandado, IconCheck, IconCorreo, IconFlecha, IconOjo, IconOjoCerrado } from '../components/ui/icons';
+import { IlustracionCadenaSuministro } from '../components/ui/IlustracionCadenaSuministro';
 
 /** DESIGN.md — pantalla de Acceso. Referencia pixel a pixel: docs/design/prototipos/Main.dc.html. */
 export function LoginPage() {
@@ -18,6 +21,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const { ref: ingresarRef, origen, diametro, mostrarRelleno, handlers } = useOriginFill<HTMLButtonElement>(submitting);
 
   // Si ya hay sesión válida (p. ej. se entró a /login escribiendo la URL),
   // no tiene sentido pedir credenciales otra vez.
@@ -74,6 +78,10 @@ export function LoginPage() {
               </span>
             </h1>
             <span className="font-data text-[13px] text-salvia">Consumo minorista</span>
+          </div>
+
+          <div className="relative z-[2]">
+            <IlustracionCadenaSuministro />
           </div>
 
           {/* Orbes decorativos, tal cual Main.dc.html (escalados al panel de 560px). */}
@@ -171,16 +179,31 @@ export function LoginPage() {
                 </p>
               )}
 
-              <button
+              <motion.button
+                ref={ingresarRef}
                 type="submit"
                 disabled={submitting}
-                className="group flex h-[60px] items-center justify-between rounded-full bg-teal py-0 pl-7 pr-2 text-[17px] font-bold text-arena transition hover:bg-tinta disabled:opacity-60"
+                whileTap={submitting ? undefined : { scale: 0.985 }}
+                {...handlers}
+                className="relative flex h-[60px] items-center justify-between overflow-hidden rounded-full bg-teal py-0 pl-7 pr-2 text-[17px] font-bold text-arena transition-colors disabled:opacity-60"
               >
-                {submitting ? 'Ingresando…' : 'Ingresar'}
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-vino text-arena transition group-hover:translate-x-1 group-hover:-rotate-45 group-hover:bg-arena group-hover:text-vino">
+                <motion.span
+                  aria-hidden
+                  initial={false}
+                  animate={{ scale: mostrarRelleno && diametro > 0 ? 1 : 0 }}
+                  transition={{ duration: FILL_DURATION, ease: FILL_EASE }}
+                  className="pointer-events-none absolute rounded-full bg-tinta"
+                  style={{ left: origen.x - diametro / 2, top: origen.y - diametro / 2, width: diametro, height: diametro }}
+                />
+                <span className="relative z-10">{submitting ? 'Ingresando…' : 'Ingresar'}</span>
+                <span
+                  className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all duration-300 ${
+                    mostrarRelleno ? 'translate-x-1 -rotate-45 bg-arena text-vino' : 'bg-vino text-arena'
+                  }`}
+                >
                   <IconFlecha className="h-[22px] w-[22px]" />
                 </span>
-              </button>
+              </motion.button>
             </form>
           </div>
         </section>

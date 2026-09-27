@@ -1,9 +1,12 @@
+import { motion } from 'motion/react';
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { registerProveedor } from '../api/auth';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
+import { FILL_DURATION, FILL_EASE, useOriginFill } from '../components/ui/useOriginFill';
 import { IconCandado, IconFlecha, IconOjo, IconOjoCerrado, IconResultados } from '../components/ui/icons';
+import { IlustracionCadenaSuministro } from '../components/ui/IlustracionCadenaSuministro';
 
 /** Mismo panel decorativo que LoginPage: DESIGN.md trata Login y Registro como pestañas de una misma pantalla. */
 function PanelDecorativo() {
@@ -23,6 +26,10 @@ function PanelDecorativo() {
           <span className="text-salvia">nosotros</span>
         </h1>
         <span className="font-data text-[13px] text-salvia">Catálogo nacional de consumo minorista</span>
+      </div>
+
+      <div className="relative z-[2]">
+        <IlustracionCadenaSuministro />
       </div>
 
       <div className="absolute -bottom-[140px] -right-[100px] h-[280px] w-[280px] rounded-full bg-vino opacity-55" />
@@ -51,6 +58,7 @@ export function RegisterProveedorPage() {
   const [error, setError] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { ref: crearCuentaRef, origen, diametro, mostrarRelleno, handlers } = useOriginFill<HTMLButtonElement>(submitting);
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -236,18 +244,33 @@ export function RegisterProveedorPage() {
                   </p>
                 )}
 
-                <button
+                <motion.button
+                  ref={crearCuentaRef}
                   type="submit"
                   disabled={submitting}
-                  className={`group flex h-[52px] items-center justify-between gap-3 rounded-full bg-teal py-0 pl-6 pr-2 text-[15px] font-bold text-arena transition hover:bg-vino disabled:cursor-not-allowed ${
+                  whileTap={submitting ? undefined : { scale: 0.985 }}
+                  {...handlers}
+                  className={`relative flex h-[52px] items-center justify-between gap-3 overflow-hidden rounded-full bg-teal py-0 pl-6 pr-2 text-[15px] font-bold text-arena transition-colors disabled:cursor-not-allowed ${
                     aceptaTerminos ? 'opacity-100' : 'opacity-45'
                   }`}
                 >
-                  {submitting ? 'Enviando…' : 'Crear cuenta'}
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition group-hover:translate-x-0.5">
+                  <motion.span
+                    aria-hidden
+                    initial={false}
+                    animate={{ scale: mostrarRelleno && diametro > 0 ? 1 : 0 }}
+                    transition={{ duration: FILL_DURATION, ease: FILL_EASE }}
+                    className="pointer-events-none absolute rounded-full bg-vino"
+                    style={{ left: origen.x - diametro / 2, top: origen.y - diametro / 2, width: diametro, height: diametro }}
+                  />
+                  <span className="relative z-10">{submitting ? 'Enviando…' : 'Crear cuenta'}</span>
+                  <span
+                    className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition-transform duration-300 ${
+                      mostrarRelleno ? 'translate-x-0.5' : ''
+                    }`}
+                  >
                     <IconFlecha className="h-4 w-4" />
                   </span>
-                </button>
+                </motion.button>
               </div>
             </form>
 
