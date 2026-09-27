@@ -29,6 +29,9 @@ import { Elasticity } from '../entities/elasticity.entity';
 import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
 import { AccessibilityWeightEntity } from '../entities/accessibility-weight.entity';
 import { AccessibilityComponentEntity } from '../entities/accessibility-component.entity';
+import { Scenario } from '../entities/scenario.entity';
+import { ScenarioChange } from '../entities/scenario-change.entity';
+import { ScenarioResult } from '../entities/scenario-result.entity';
 
 export default registerAs(
   'database',
@@ -72,6 +75,9 @@ export default registerAs(
       AccessibilityZoneEntity,
       AccessibilityWeightEntity,
       AccessibilityComponentEntity,
+      Scenario,
+      ScenarioChange,
+      ScenarioResult,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,
