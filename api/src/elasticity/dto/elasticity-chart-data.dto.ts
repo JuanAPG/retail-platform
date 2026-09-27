@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CHART_GROUPINGS, ChartGrouping } from './elasticity-filter.dto';
+import { GRANULARITIES, Granularity } from './elasticity-params.dto';
 import { ELASTICITY_CLASSES, ElasticityClass } from './elasticity-result.dto';
 
 /** Valor de una barra; todo en null si no hubo datos suficientes. */
@@ -45,6 +46,12 @@ export class ElasticityChartData {
 
   @ApiProperty({ enum: CHART_GROUPINGS })
   groupBy: ChartGrouping;
+
+  @ApiProperty({ description: 'Cuándo se ejecutó la corrida graficada (puede no ser la última).' })
+  executedAt: string;
+
+  @ApiProperty({ enum: GRANULARITIES, description: 'Cómo se agruparon las ventas en esa corrida.' })
+  granularity: Granularity;
 
   @ApiProperty()
   periodStart: string;

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { Elasticity } from '../entities/elasticity.entity';
+import { ZonesModule } from '../zones/zones.module';
 import { ElasticityService } from './elasticity.service';
 
 /**
@@ -19,7 +20,8 @@ import { ElasticityService } from './elasticity.service';
  * ante un cambio de precio con las elasticidades ya calculadas.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([AnalysisRun, Elasticity])],
+  // ZonesModule: zona → segmento para el gráfico por segmento.
+  imports: [TypeOrmModule.forFeature([AnalysisRun, Elasticity]), ZonesModule],
   providers: [ElasticityService],
   exports: [ElasticityService],
 })

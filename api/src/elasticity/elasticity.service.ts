@@ -11,6 +11,9 @@ import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
 import { Elasticity } from '../entities/elasticity.entity';
+import { ZonesService } from '../zones/zones.service';
+import { ElasticityChartBar, ElasticityChartData, ElasticityChartValue } from './dto/elasticity-chart-data.dto';
+import { ElasticityFilterDto } from './dto/elasticity-filter.dto';
 import { ElasticityParamsDto, Granularity } from './dto/elasticity-params.dto';
 import {
   ElasticityClass,
@@ -51,6 +54,18 @@ const ASSUMPTIONS = (granularity: Granularity) => [
   `Indicador analítico: se exigen al menos ${MIN_OBSERVATIONS} observaciones y ${MIN_DISTINCT_PRICES} precios distintos; con muestras chicas, leer junto con el R² y el número de observaciones.`,
 ];
 
+/** Corridas graficables: solo de elasticidad y completadas. Quien la use agrega `AND …`. */
+const CHART_RUN_SQL = `
+  SELECT c.id, c.periodo_inicio::text AS "periodStart", c.periodo_fin::text AS "periodEnd",
+         c.ejecutada_en AS "executedAt", to_char(c.ejecutada_en, 'DD/MM/YYYY') AS "executedOn",
+         (SELECT p.valor FROM analisis_corrida_parametros p
+           WHERE p.corrida_id = c.id AND p.clave = 'granularidad') AS "granularity"
+  FROM analisis_corridas c
+  WHERE c.tipo = 'elasticidad' AND c.estado = 'completada'`;
+
+/** Barra de una zona o segmento sin datos suficientes. */
+const EMPTY_VALUE: ElasticityChartValue = { value: null, classification: null, observations: 0, rSquared: null };
+
 const REASONS: Record<InsufficientReason, (observations: number) => string> = {
   'single-price': () => 'Un solo precio en el periodo: no se puede medir cómo reacciona la demanda al precio.',
   'few-observations': (n) => `Solo ${n} observación(es); se necesitan al menos ${MIN_OBSERVATIONS}.`,
@@ -77,6 +92,24 @@ interface Names {
   presentation: string;
 }
 
+/** Elasticidad guardada de una zona, lista para graficar o promediar. */
+export interface ZoneElasticity {
+  zoneId: string;
+  zoneName: string;
+  value: number;
+  rSquared: number | null;
+  observations: number;
+}
+
+interface ChartRun {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  executedAt: Date;
+  executedOn: string;
+  granularity: string | null;
+}
+
 /**
  * M11 — Elasticidad precio-demanda, según Contrato de Métodos y
  * Endpoints. Cada cálculo se guarda como corrida (tipo 'elasticidad') con
@@ -87,7 +120,10 @@ interface Names {
 export class ElasticityService {
   private readonly logger = new Logger(ElasticityService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly zonesService: ZonesService,
+  ) {}
 
   /** Misma clasificación que la columna generada de la base. */
   classify(value: number): ElasticityClass {
@@ -145,6 +181,128 @@ export class ElasticityService {
         'No se pudo completar el cálculo de elasticidad; quedó registrado como corrida fallida.',
       );
     }
+  }
+
+  /**
+   * Elasticidad de una presentación comparada entre zonas o segmentos.
+   * No calcula nada nuevo: lee lo que guardó una corrida, así el gráfico
+   * es reproducible. Todas las zonas o segmentos aparecen como barra,
+   * aunque no tengan valor, para que se vea cuáles no tuvieron datos.
+   */
+  async getComparativeChart(filters: ElasticityFilterDto): Promise<ElasticityChartData> {
+    const groupBy = filters.groupBy ?? 'zone';
+    const name = (await this.loadNames([filters.presentationId])).get(filters.presentationId);
+    if (!name) throw new NotFoundException(`No existe la presentación ${filters.presentationId}.`);
+
+    const run = filters.runId
+      ? await this.findChartRun(filters.runId)
+      : await this.latestRunWithResults(filters.presentationId, name);
+
+    const rows: { zoneId: string | null; value: string; rSquared: string | null; observations: number }[] =
+      await this.dataSource.query(
+        `SELECT zona_id AS "zoneId", valor AS "value", r_cuadrada AS "rSquared", observaciones AS "observations"
+         FROM elasticidades WHERE corrida_id = $1 AND presentacion_id = $2`,
+        [run.id, filters.presentationId],
+      );
+    const nationalRow = rows.find((r) => r.zoneId === null);
+    const zoneRows = rows.filter((r) => r.zoneId !== null);
+
+    // Zonas activas, más cualquier inactiva que sí tenga resultado en la corrida.
+    const zones: { id: string; nombre: string }[] = await this.dataSource.query(
+      `SELECT id, nombre FROM zonas WHERE activo OR id = ANY($1::uuid[]) ORDER BY nombre`,
+      [zoneRows.map((r) => r.zoneId)],
+    );
+    const zoneValues: ZoneElasticity[] = zoneRows.map((r) => ({
+      zoneId: r.zoneId!,
+      zoneName: zones.find((z) => z.id === r.zoneId)?.nombre ?? r.zoneId!,
+      value: Number(r.value),
+      rSquared: r.rSquared === null ? null : Number(r.rSquared),
+      observations: Number(r.observations),
+    }));
+
+    let bars: ElasticityChartBar[];
+    let note: string;
+    const basis = `corrida del ${run.executedOn}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
+    if (groupBy === 'zone') {
+      bars = zones.map((z) => {
+        const found = zoneValues.find((v) => v.zoneId === z.id);
+        return { key: z.id, label: z.nombre, ...(found ? this.chartValue(found) : EMPTY_VALUE) };
+      });
+      note = `Elasticidad de cada zona (${basis}). Barras vacías: sin datos suficientes.`;
+    } else {
+      const segments: { id: number; nombre: string }[] = await this.dataSource.query(
+        'SELECT id, nombre FROM segmentos_ingreso ORDER BY ingreso_min',
+      );
+      // Una sola fuente de verdad para zona → segmento: la misma que usa M07.
+      const segmentOf = new Map<string, number | null>();
+      for (const z of zones) segmentOf.set(z.id, await this.zonesService.findSegmentId(z.id));
+      bars = aggregateBySegment(
+        segments.map((s) => ({ id: s.id, name: s.nombre })),
+        zoneValues,
+        segmentOf,
+      );
+      note =
+        `Promedio de las zonas de cada segmento (clasificación vigente), ponderado por observaciones (${basis}). ` +
+        'Es una aproximación: no equivale a calcular la elasticidad con todas las ventas del segmento juntas.';
+    }
+
+    return {
+      runId: run.id,
+      presentationId: filters.presentationId,
+      productName: name.product,
+      presentationName: name.presentation,
+      groupBy,
+      executedAt: run.executedAt.toISOString(),
+      granularity: run.granularity === 'week' ? 'week' : 'day',
+      periodStart: run.periodStart,
+      periodEnd: run.periodEnd,
+      bars,
+      national: nationalRow
+        ? this.chartValue({
+            value: Number(nationalRow.value),
+            rSquared: nationalRow.rSquared === null ? null : Number(nationalRow.rSquared),
+            observations: Number(nationalRow.observations),
+          })
+        : null,
+      note,
+    };
+  }
+
+  private chartValue(v: { value: number; rSquared: number | null; observations: number }): ElasticityChartValue {
+    return {
+      value: v.value,
+      classification: this.classify(v.value),
+      observations: v.observations,
+      rSquared: v.rSquared,
+    };
+  }
+
+  /** Solo corridas de elasticidad completadas: no se grafica una de asociación ni una fallida. */
+  private async findChartRun(runId: string): Promise<ChartRun> {
+    const [run] = await this.dataSource.query(`${CHART_RUN_SQL} AND c.id = $1`, [runId]);
+    if (!run) throw new NotFoundException(`No existe una corrida de elasticidad completada con id ${runId}.`);
+    return run;
+  }
+
+  /**
+   * La más reciente CON resultados para la presentación, no la más
+   * reciente a secas: una corrida semanal posterior con 0 resultados
+   * dejaría el gráfico vacío aunque haya una anterior con datos.
+   */
+  private async latestRunWithResults(presentationId: string, name: Names): Promise<ChartRun> {
+    const [run] = await this.dataSource.query(
+      `${CHART_RUN_SQL}
+       AND EXISTS (SELECT 1 FROM elasticidades e WHERE e.corrida_id = c.id AND e.presentacion_id = $1)
+       ORDER BY c.ejecutada_en DESC LIMIT 1`,
+      [presentationId],
+    );
+    if (!run) {
+      throw new NotFoundException(
+        `No hay elasticidades calculadas para ${name.product} ${name.presentation}: ` +
+          'ninguna corrida tuvo datos suficientes para esta presentación.',
+      );
+    }
+    return run;
   }
 
   /**
@@ -383,6 +541,35 @@ export class ElasticityService {
       this.logger.error(`No se pudo registrar la corrida fallida: ${String(recordError)}`);
     }
   }
+}
+
+/**
+ * Vista por segmento (RN-02: el segmento es de la zona, no de la persona).
+ * Cada segmento vale el promedio de sus zonas con datos, ponderado por
+ * observaciones: la zona con más ventas pesa más. El R² queda en null
+ * porque promediar R² de regresiones distintas no significa nada.
+ */
+export function aggregateBySegment(
+  segments: { id: number; name: string }[],
+  zoneValues: ZoneElasticity[],
+  segmentOf: Map<string, number | null>,
+): ElasticityChartBar[] {
+  return segments.map((segment) => {
+    const zones = zoneValues.filter((z) => segmentOf.get(z.zoneId) === segment.id);
+    const bar = { key: String(segment.id), label: segment.name };
+    if (zones.length === 0) return { ...bar, ...EMPTY_VALUE, zones: [] };
+
+    const observations = zones.reduce((sum, z) => sum + z.observations, 0);
+    const value = roundTo(zones.reduce((sum, z) => sum + z.value * z.observations, 0) / observations, ELASTICITY_DECIMALS);
+    return {
+      ...bar,
+      value,
+      classification: classifyElasticity(value),
+      observations,
+      rSquared: null,
+      zones: zones.map((z) => z.zoneName).sort((a, b) => a.localeCompare(b, 'es')),
+    };
+  });
 }
 
 /**
