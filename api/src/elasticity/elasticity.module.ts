@@ -3,7 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { Elasticity } from '../entities/elasticity.entity';
 import { ZonesModule } from '../zones/zones.module';
+import { ElasticityController } from './elasticity.controller';
 import { ElasticityService } from './elasticity.service';
+import { SubstitutionController } from './substitution.controller';
 import { SubstitutionService } from './substitution.service';
 
 /**
@@ -24,6 +26,7 @@ import { SubstitutionService } from './substitution.service';
 @Module({
   // ZonesModule: zona → segmento para el gráfico por segmento.
   imports: [TypeOrmModule.forFeature([AnalysisRun, Elasticity]), ZonesModule],
+  controllers: [ElasticityController, SubstitutionController],
   providers: [ElasticityService, SubstitutionService],
   exports: [ElasticityService, SubstitutionService],
 })
