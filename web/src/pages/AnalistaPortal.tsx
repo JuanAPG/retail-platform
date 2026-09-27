@@ -9,6 +9,7 @@ import { SegmentosPanel } from './analista/SegmentosPanel';
 import { TransaccionesPanel } from './analista/TransaccionesPanel';
 import { IndicadoresPanel } from './analista/IndicadoresPanel';
 import { ReglasAsociacionPanel } from './analista/ReglasAsociacionPanel';
+import { ElasticidadPanel } from './analista/ElasticidadPanel';
 
 type Tab =
   | 'transacciones'
@@ -16,6 +17,7 @@ type Tab =
   | 'canastas'
   | 'indicadores'
   | 'reglas'
+  | 'elasticidad'
   | 'accesibilidad'
   | 'productos'
   | 'tiendas';
@@ -31,6 +33,7 @@ export function AnalistaPortal() {
     { label: 'Canastas', active: tab === 'canastas', onClick: () => setTab('canastas') },
     { label: 'Indicadores descriptivos', active: tab === 'indicadores', onClick: () => setTab('indicadores') },
     { label: 'Reglas de asociación', active: tab === 'reglas', onClick: () => setTab('reglas') },
+    { label: 'Elasticidad de precios', active: tab === 'elasticidad', onClick: () => setTab('elasticidad') },
     {
       label: 'Indicadores de accesibilidad',
       active: tab === 'accesibilidad',
@@ -59,6 +62,8 @@ export function AnalistaPortal() {
       {tab === 'indicadores' && <IndicadoresPanel />}
 
       {tab === 'reglas' && <ReglasAsociacionPanel />}
+
+      {tab === 'elasticidad' && <ElasticidadPanel />}
 
       {tab === 'accesibilidad' && (
         <section>
