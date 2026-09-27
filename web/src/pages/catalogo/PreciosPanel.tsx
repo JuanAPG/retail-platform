@@ -6,7 +6,8 @@ import { getHistorialPrecios, registrarPrecio } from '../../api/precios';
 import { Hero } from '../../components/ui/Hero';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { CircleButton } from '../../components/ui/CircleButton';
-import { IconMas, IconPrecios } from '../../components/ui/icons';
+import { CtaButton } from '../../components/ui/CtaButton';
+import { IconPrecios } from '../../components/ui/icons';
 
 function formatoMoneda(valor: string | number): string {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(valor));
@@ -193,16 +194,9 @@ export function PreciosPanel() {
           </label>
 
           <div className="flex items-end sm:col-span-2 lg:col-span-6">
-            <button
-              type="submit"
-              disabled={guardando}
-              className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-teal disabled:opacity-50"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90">
-                <IconMas className="h-[18px] w-[18px]" />
-              </span>
+            <CtaButton type="submit" disabled={guardando}>
               {guardando ? 'Registrando…' : 'Registrar precio'}
-            </button>
+            </CtaButton>
           </div>
         </form>
 

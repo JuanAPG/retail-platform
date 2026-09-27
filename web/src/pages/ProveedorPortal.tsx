@@ -6,6 +6,7 @@ import { getProductos, getCategorias, getUnidadesMedida, proponerProducto } from
 import { mensajeDeError } from '../api/errores';
 import { EstatusProducto, UnidadMedida } from '../types';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { RailModule } from '../components/ui/Rail';
 import { Hero } from '../components/ui/Hero';
 import { Chip } from '../components/ui/Chip';
@@ -27,12 +28,6 @@ const ESTATUS_LABEL: Record<EstatusProducto, string> = {
   rechazado: 'Rechazada',
   inactivo: 'Inactiva',
 };
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 /** Círculos del tracker: 3 pasos reales (Enviada → En revisión → Aprobada/Rechazada). */
 function Tracker({ estatus }: { estatus: EstatusProducto }) {
@@ -85,8 +80,10 @@ export function ProveedorPortal() {
     onClick: () => setTab(m.key as Tab),
   }));
 
+  const esAdmin = usuario?.rol === 'Administrador';
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
+  const perfiles = esAdmin ? perfilesParaAdmin('/proveedor') : undefined;
 
   return (
     <AppShell
@@ -94,6 +91,7 @@ export function ProveedorPortal() {
       nombre={primerNombre}
       modulos={modulos}
       iniciales={iniciales}
+      perfiles={perfiles}
       onLogout={logout}
     >
       {!esProveedor && (

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getTiendas, getProductos } from '../api/catalogo';
 import { getSegmentos } from '../api/segmentos';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { IconAccesibilidad, IconSegmentos } from '../components/ui/icons';
@@ -35,12 +36,6 @@ const PASOS: { label: string; tab: Tab }[] = [
   { label: 'Asociaciones', tab: 'reglas-asociacion' },
   { label: 'Accesibilidad', tab: 'accesibilidad' },
 ];
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 function PipelineStepper({ tabActual, onIr }: { tabActual: Tab; onIr: (t: Tab) => void }) {
   return (
@@ -122,16 +117,19 @@ export function AnalistaPortal() {
     onClick: () => setTab(m.key as Tab),
   }));
 
+  const esAdmin = usuario?.rol === 'Administrador';
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
+  const perfiles = esAdmin ? perfilesParaAdmin('/analista') : undefined;
   const mostrandoTransacciones = tab === 'transacciones';
 
   return (
     <AppShell
-      rolLabel="Analista comercial"
+      rolLabel={esAdmin ? 'Administrador' : 'Analista comercial'}
       nombre={primerNombre}
       modulos={modulos}
       iniciales={iniciales}
+      perfiles={perfiles}
       onLogout={logout}
       buscador={
         mostrandoTransacciones

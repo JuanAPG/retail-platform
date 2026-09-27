@@ -11,6 +11,7 @@ import { PreciosPanel } from './catalogo/PreciosPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
 import { MODULOS_POR_ROL, ModuloDefinicion } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ApprovalQueue } from '../components/ui/ApprovalQueue';
@@ -27,12 +28,6 @@ type Tab =
   | 'reportes-precios'
   | 'tiendas'
   | 'proveedores';
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 /** Los módulos de "Comparar precios" y "Productos" (lectura) llevan al mismo lugar: el catálogo. */
 function tabDeModulo(key: string): Tab {
@@ -90,6 +85,7 @@ export function CatalogoPortal() {
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
   const rolLabel = esAdmin ? 'Administrador' : (usuario?.rol ?? '');
+  const perfiles = esAdmin ? perfilesParaAdmin('/catalogo') : undefined;
 
   const mostrandoCatalogo = tab === 'catalogo-productos';
 
@@ -99,6 +95,7 @@ export function CatalogoPortal() {
       nombre={primerNombre}
       modulos={modulos}
       iniciales={iniciales}
+      perfiles={perfiles}
       onLogout={logout}
       buscador={
         mostrandoCatalogo

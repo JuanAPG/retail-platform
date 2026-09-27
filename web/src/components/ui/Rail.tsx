@@ -96,7 +96,10 @@ export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/' 
         <ModuloBoton key={modulo.key} modulo={modulo} />
       ))}
 
-      <div className="group/who relative mt-auto">
+      {/* pr-4 puentea el hueco entre el avatar y el menú: sin esto, el
+          mouse "sale" del área hoverable a medio camino y el menú se
+          cierra antes de poder hacer click en una opción. */}
+      <div className="group/who relative mt-auto pr-4">
         <button
           type="button"
           aria-label="Perfil"

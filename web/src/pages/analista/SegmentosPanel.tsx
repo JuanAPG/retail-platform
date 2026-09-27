@@ -5,7 +5,8 @@ import { IncomeSegment } from '../../types';
 import { Hero } from '../../components/ui/Hero';
 import { Card } from '../../components/ui/Card';
 import { CircleButton } from '../../components/ui/CircleButton';
-import { IconCerrar as IconEliminar, IconMas, IconOjo, IconSegmentos } from '../../components/ui/icons';
+import { CtaButton } from '../../components/ui/CtaButton';
+import { IconCerrar as IconEliminar, IconOjo, IconSegmentos } from '../../components/ui/icons';
 import { SegmentoFormModal } from './SegmentoFormModal';
 import { ConfirmarEliminarSegmentoModal } from './ConfirmarEliminarSegmentoModal';
 
@@ -60,19 +61,14 @@ export function SegmentosPanel() {
         title="Segmentos"
         subtitle="Rangos de ingreso por zona (RN-01, RN-02)"
         action={
-          <button
-            type="button"
+          <CtaButton
             onClick={() => {
               setSegmentoEditando(undefined);
               setFormAbierto(true);
             }}
-            className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-arena hover:text-vino"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90 group-hover:bg-vino group-hover:text-arena">
-              <IconMas className="h-[18px] w-[18px]" />
-            </span>
             Nuevo segmento
-          </button>
+          </CtaButton>
         }
         decorations={
           <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">

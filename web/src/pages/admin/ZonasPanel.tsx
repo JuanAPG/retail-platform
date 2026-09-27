@@ -7,8 +7,9 @@ import { Hero } from '../../components/ui/Hero';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { CircleButton } from '../../components/ui/CircleButton';
+import { CtaButton } from '../../components/ui/CtaButton';
 import { Switch } from '../../components/ui/Switch';
-import { IconCerrar as IconEliminar, IconMas, IconOjo, IconZonas } from '../../components/ui/icons';
+import { IconCerrar as IconEliminar, IconOjo, IconZonas } from '../../components/ui/icons';
 import { ZonaFormModal } from './ZonaFormModal';
 import { ConfirmarEliminarZonaModal } from './ConfirmarEliminarZonaModal';
 
@@ -71,20 +72,15 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
         subtitle="Área Metropolitana"
         action={
           <div className="flex gap-3">
-            <button
-              type="button"
+            <CtaButton
               onClick={() => {
                 setZonaEditando(undefined);
                 setFormAbierto(true);
               }}
               disabled={!municipios.data || municipios.data.length === 0}
-              className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-arena hover:text-vino disabled:opacity-50"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90 group-hover:bg-vino group-hover:text-arena">
-                <IconMas className="h-[18px] w-[18px]" />
-              </span>
               Nueva zona
-            </button>
+            </CtaButton>
             <button
               type="button"
               onClick={onComparar}

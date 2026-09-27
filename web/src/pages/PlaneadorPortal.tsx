@@ -7,6 +7,7 @@ import { getProductos, getTiendas } from '../api/catalogo';
 import { getTransacciones } from '../api/transacciones';
 import { getHistorialPrecios } from '../api/precios';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { Hero } from '../components/ui/Hero';
@@ -22,12 +23,6 @@ type Tab =
   | 'tiendas'
   | 'precios'
   | 'transacciones';
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 function PlaceholderHonesto({ titulo, descripcion, icono }: { titulo: string; descripcion: string; icono: ReactNode }) {
   return (
@@ -64,11 +59,20 @@ export function PlaneadorPortal() {
     onClick: () => setTab(m.key as Tab),
   }));
 
+  const esAdmin = usuario?.rol === 'Administrador';
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
+  const perfiles = esAdmin ? perfilesParaAdmin('/planeador') : undefined;
 
   return (
-    <AppShell rolLabel="Planeador" nombre={primerNombre} modulos={modulos} iniciales={iniciales} onLogout={logout}>
+    <AppShell
+      rolLabel={esAdmin ? 'Administrador' : 'Planeador'}
+      nombre={primerNombre}
+      modulos={modulos}
+      iniciales={iniciales}
+      perfiles={perfiles}
+      onLogout={logout}
+    >
       {tab === 'nueva-simulacion' && (
         <div className="flex flex-col gap-6">
           <Hero

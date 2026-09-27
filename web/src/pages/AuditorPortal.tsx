@@ -8,6 +8,7 @@ import { getTiendas, getZonas, getProveedores, getProductos } from '../api/catal
 import { getTransacciones } from '../api/transacciones';
 import { getHistorialPrecios } from '../api/precios';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Hero } from '../components/ui/Hero';
 import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
@@ -15,12 +16,6 @@ import { IconAuditoria, IconCandado } from '../components/ui/icons';
 import { Producto, Proveedor, Tienda, Transaction, Usuario, Zona } from '../types';
 
 type Tab = 'bitacora' | 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'productos' | 'precios' | 'transacciones';
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 function Placeholder({ titulo, descripcion }: { titulo: string; descripcion: string }) {
   return (
@@ -69,11 +64,20 @@ export function AuditorPortal() {
     onClick: () => setTab(m.key as Tab),
   }));
 
+  const esAdmin = usuario?.rol === 'Administrador';
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
+  const perfiles = esAdmin ? perfilesParaAdmin('/auditor') : undefined;
 
   return (
-    <AppShell rolLabel="Auditor" nombre={primerNombre} modulos={modulos} iniciales={iniciales} onLogout={logout}>
+    <AppShell
+      rolLabel={esAdmin ? 'Administrador' : 'Auditor'}
+      nombre={primerNombre}
+      modulos={modulos}
+      iniciales={iniciales}
+      perfiles={perfiles}
+      onLogout={logout}
+    >
       {tab === 'bitacora' && (
         <div className="flex flex-col gap-6">
           <Hero

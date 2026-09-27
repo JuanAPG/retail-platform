@@ -8,8 +8,9 @@ import { Chip } from '../../components/ui/Chip';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { CircleButton } from '../../components/ui/CircleButton';
+import { CtaButton } from '../../components/ui/CtaButton';
 import { Switch } from '../../components/ui/Switch';
-import { IconCerrar as IconEliminar, IconMas, IconOjo, IconTiendas } from '../../components/ui/icons';
+import { IconCerrar as IconEliminar, IconOjo, IconTiendas } from '../../components/ui/icons';
 import { TiendaFormModal } from './TiendaFormModal';
 import { ConfirmarEliminarTiendaModal } from './ConfirmarEliminarTiendaModal';
 
@@ -95,21 +96,16 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
         title="Tiendas"
         subtitle="Sucursales físicas registradas"
         action={
-          <button
-            type="button"
+          <CtaButton
             onClick={() => {
               setTiendaEditando(undefined);
               setFormAbierto(true);
             }}
             disabled={!puedeAbrirForm}
             title={!puedeAbrirForm ? 'Necesitas al menos una zona y un código postal' : undefined}
-            className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-arena hover:text-vino disabled:opacity-50"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90 group-hover:bg-vino group-hover:text-arena">
-              <IconMas className="h-[18px] w-[18px]" />
-            </span>
             Nueva tienda
-          </button>
+          </CtaButton>
         }
         decorations={
           <>

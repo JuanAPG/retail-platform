@@ -5,7 +5,7 @@ import { portalDelRol } from '../routes/portalPorRol';
 import { mensajeDeError } from '../api/errores';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
-import { IconCandado, IconCorreo, IconFlecha, IconOjo, IconOjoCerrado } from '../components/ui/icons';
+import { IconCandado, IconCheck, IconCorreo, IconFlecha, IconOjo, IconOjoCerrado } from '../components/ui/icons';
 
 /** DESIGN.md — pantalla de Acceso. Referencia pixel a pixel: docs/design/prototipos/Main.dc.html. */
 export function LoginPage() {
@@ -17,6 +17,7 @@ export function LoginPage() {
   const [recordarme, setRecordarme] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Si ya hay sesión válida (p. ej. se entró a /login escribiendo la URL),
   // no tiene sentido pedir credenciales otra vez.
@@ -25,6 +26,17 @@ export function LoginPage() {
       navigate(portalDelRol(usuario.rol), { replace: true });
     }
   }, [isAuthenticated, usuario, navigate]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  function alternarRecordarme(valor: boolean) {
+    setRecordarme(valor);
+    setToast(valor ? 'Se recordará tu inicio de sesión' : 'Ya no se recordará tu inicio de sesión');
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -139,13 +151,13 @@ export function LoginPage() {
                     aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-teal transition hover:bg-teal hover:text-arena"
                   >
-                    {mostrarPassword ? <IconOjoCerrado /> : <IconOjo />}
+                    {mostrarPassword ? <IconOjo /> : <IconOjoCerrado />}
                   </button>
                 }
               />
 
               <div className="flex items-center justify-between">
-                <Switch checked={recordarme} onChange={setRecordarme}>
+                <Switch checked={recordarme} onChange={alternarRecordarme}>
                   Recordarme
                 </Switch>
                 <a href="#" className="rounded-full px-3.5 py-2 text-sm font-semibold text-teal transition hover:bg-vino hover:text-arena">
@@ -173,6 +185,15 @@ export function LoginPage() {
           </div>
         </section>
       </div>
+
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-8 z-50 flex justify-center">
+          <div className="flex items-center gap-2.5 rounded-full bg-tinta px-5 py-3 text-sm font-semibold text-arena shadow-lift">
+            <IconCheck className="h-4 w-4 text-salvia" />
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

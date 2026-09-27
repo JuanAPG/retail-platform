@@ -9,8 +9,9 @@ import { Chip } from '../../components/ui/Chip';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { CircleButton } from '../../components/ui/CircleButton';
+import { CtaButton } from '../../components/ui/CtaButton';
 import { Switch } from '../../components/ui/Switch';
-import { IconMas, IconOjo, IconCerrar as IconEliminar, IconUsuarios } from '../../components/ui/icons';
+import { IconOjo, IconCerrar as IconEliminar, IconUsuarios } from '../../components/ui/icons';
 import { UsuarioFormModal } from './UsuarioFormModal';
 import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
 
@@ -20,6 +21,7 @@ interface UsuariosPanelProps {
 }
 
 type FiltroEstado = 'todos' | 'activos' | 'inactivos';
+type Vista = 'todos' | 'departamento' | 'estado';
 
 /** Círculo de iniciales coloreado por rol, como en Admin.dc.html. */
 const COLOR_POR_ROL: Record<string, string> = {
@@ -45,8 +47,17 @@ export function UsuariosPanel({ estado, busqueda }: UsuariosPanelProps) {
   const { usuario: usuarioEnSesion } = useAuth();
   const roles = useFetch(getRoles, []);
 
+  const [vista, setVista] = useState<Vista>('todos');
   const [rol, setRol] = useState('todos');
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('todos');
+
+  // Cambiar de vista limpia el filtro de la otra: mezclar rol + estado a
+  // la vez confundía más de lo que ayudaba (una sola dimensión a la vez).
+  function cambiarVista(v: Vista) {
+    setVista(v);
+    setRol('todos');
+    setFiltroEstado('todos');
+  }
 
   const [formAbierto, setFormAbierto] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState<Usuario | undefined>();
@@ -122,20 +133,15 @@ export function UsuariosPanel({ estado, busqueda }: UsuariosPanelProps) {
         title="Usuarios"
         subtitle="Roles internos del sistema"
         action={
-          <button
-            type="button"
+          <CtaButton
             onClick={() => {
               setUsuarioEditando(undefined);
               setFormAbierto(true);
             }}
             disabled={!roles.data || roles.data.length === 0}
-            className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-arena hover:text-vino disabled:opacity-50"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90 group-hover:bg-vino group-hover:text-arena">
-              <IconMas className="h-[18px] w-[18px]" />
-            </span>
             Nuevo usuario
-          </button>
+          </CtaButton>
         }
         decorations={
           <>
@@ -150,27 +156,61 @@ export function UsuariosPanel({ estado, busqueda }: UsuariosPanelProps) {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip active={rol === 'todos'} onClick={() => setRol('todos')} count={usuarios.length}>
-          Todos
-        </Chip>
-        {rolesEnUso.map((nombreRol) => (
-          <Chip
-            key={nombreRol}
-            active={rol === nombreRol}
-            onClick={() => setRol(nombreRol)}
-            count={usuarios.filter((u) => u.rol === nombreRol).length}
-          >
-            {nombreRol}
-          </Chip>
-        ))}
-        <span className="mx-1 h-6 w-px bg-salvia/30" />
-        <Chip active={filtroEstado === 'activos'} onClick={() => setFiltroEstado(filtroEstado === 'activos' ? 'todos' : 'activos')}>
-          Activos
-        </Chip>
-        <Chip active={filtroEstado === 'inactivos'} onClick={() => setFiltroEstado(filtroEstado === 'inactivos' ? 'todos' : 'inactivos')}>
-          Inactivos
-        </Chip>
+      <div className="flex flex-col gap-3">
+        <div className="flex w-fit gap-1 rounded-full bg-arena p-1.5">
+          {(
+            [
+              { v: 'todos' as const, etiqueta: 'Todos' },
+              { v: 'departamento' as const, etiqueta: 'Departamento' },
+              { v: 'estado' as const, etiqueta: 'Estado' },
+            ]
+          ).map((op) => (
+            <button
+              key={op.v}
+              type="button"
+              onClick={() => cambiarVista(op.v)}
+              className={`h-11 rounded-full px-5 text-sm font-bold transition ${
+                vista === op.v ? 'bg-teal text-arena' : 'text-teal hover:bg-salvia/25'
+              }`}
+            >
+              {op.etiqueta}
+            </button>
+          ))}
+        </div>
+
+        {vista === 'departamento' && (
+          <div className="flex flex-wrap gap-2">
+            {rolesEnUso.map((nombreRol) => (
+              <Chip
+                key={nombreRol}
+                active={rol === nombreRol}
+                onClick={() => setRol(rol === nombreRol ? 'todos' : nombreRol)}
+                count={usuarios.filter((u) => u.rol === nombreRol).length}
+              >
+                {nombreRol}
+              </Chip>
+            ))}
+          </div>
+        )}
+
+        {vista === 'estado' && (
+          <div className="flex flex-wrap gap-2">
+            <Chip
+              active={filtroEstado === 'activos'}
+              onClick={() => setFiltroEstado(filtroEstado === 'activos' ? 'todos' : 'activos')}
+              count={usuarios.filter((u) => u.activo).length}
+            >
+              Activos
+            </Chip>
+            <Chip
+              active={filtroEstado === 'inactivos'}
+              onClick={() => setFiltroEstado(filtroEstado === 'inactivos' ? 'todos' : 'inactivos')}
+              count={usuarios.filter((u) => !u.activo).length}
+            >
+              Inactivos
+            </Chip>
+          </div>
+        )}
       </div>
 
       {aviso && (

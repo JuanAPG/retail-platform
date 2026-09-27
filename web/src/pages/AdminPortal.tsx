@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { AppShell } from '../components/ui/AppShell';
-import { RailModule, RailPerfil } from '../components/ui/Rail';
+import { RailModule } from '../components/ui/Rail';
 import { IconCheck } from '../components/ui/icons';
 import { useFetch, UseFetchState } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
 import { getTiendas, getZonas, getProveedores } from '../api/catalogo';
 import { getUsuarios } from '../api/usuarios';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
-import { PORTALES } from '../routes/portalPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Proveedor, Tienda, Zona } from '../types';
 import { UsuariosPanel } from './admin/UsuariosPanel';
 import { TiendasPanel } from './admin/TiendasPanel';
@@ -17,12 +17,6 @@ import { ProveedoresPanel } from './admin/ProveedoresPanel';
 import { AuditoriaPanel } from './admin/AuditoriaPanel';
 
 type TabAdmin = 'usuarios' | 'tiendas' | 'zonas' | 'comparar-zonas' | 'proveedores' | 'auditoria';
-
-function inicialesDeTexto(texto: string): string {
-  const palabras = texto.split(' ').filter(Boolean);
-  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
-  return texto.slice(0, 2).toUpperCase();
-}
 
 /** "Zonas y tiendas" — resumen navegable, igual que el aside de Admin.dc.html. */
 function ZonasTiendasResumen({ zonas, tiendas }: { zonas: UseFetchState<Zona[]>; tiendas: UseFetchState<Tienda[]> }) {
@@ -136,12 +130,7 @@ export function AdminPortal() {
 
   // Mismo atajo que antes daba `SelectorDePortal`: el Admin recorre
   // todos los portales sin cerrar sesión, ahora desde el menú del Rail.
-  const perfiles: RailPerfil[] = PORTALES.map((p) => ({
-    rol: p.etiqueta,
-    iniciales: inicialesDeTexto(p.etiqueta),
-    href: p.ruta,
-    actual: p.ruta === '/admin',
-  }));
+  const perfiles = perfilesParaAdmin('/admin');
 
   const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
   const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';

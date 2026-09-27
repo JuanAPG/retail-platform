@@ -41,7 +41,7 @@ export function Header({ rolLabel, nombre, buscador, onNotificaciones, notificac
         type="button"
         onClick={onNotificaciones}
         aria-label="Notificaciones"
-        className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena text-teal transition hover:-rotate-[8deg] hover:bg-teal hover:text-arena"
+        className="relative ml-auto flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena text-teal transition hover:-rotate-[8deg] hover:bg-teal hover:text-arena"
       >
         <IconCampana />
         {notificacionesPendientes && (

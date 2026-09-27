@@ -1,3 +1,4 @@
+import type { RailPerfil } from '../components/ui/Rail';
 import { RolNombre } from '../types';
 
 export const PORTAL_POR_ROL: Record<RolNombre, string> = {
@@ -35,3 +36,25 @@ export const PORTALES: Portal[] = [
   { ruta: '/auditor', etiqueta: 'Auditoría', duenio: 'Auditor' },
   { ruta: '/proveedor', etiqueta: 'Portal del proveedor', duenio: 'Proveedor' },
 ];
+
+/** Dos letras para un avatar: "Ana Torres" → "AT", "Planeación" → "PL". */
+export function inicialesDeTexto(texto: string): string {
+  const palabras = texto.split(' ').filter(Boolean);
+  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
+  return texto.slice(0, 2).toUpperCase();
+}
+
+/**
+ * El menú del avatar del Admin lista todos los portales (incluido el
+ * suyo, marcado como actual) para que pueda volver a "Administración"
+ * sin cerrar sesión. Los demás roles no tienen a dónde cambiar, así que
+ * el llamador solo pide esto cuando `esAdmin` es cierto.
+ */
+export function perfilesParaAdmin(rutaActual: string): RailPerfil[] {
+  return PORTALES.map((p) => ({
+    rol: p.etiqueta,
+    iniciales: inicialesDeTexto(p.etiqueta),
+    href: p.ruta,
+    actual: p.ruta === rutaActual,
+  }));
+}

@@ -3,7 +3,8 @@ import { useFetch } from '../../hooks/useFetch';
 import { getTransacciones } from '../../api/transacciones';
 import { getProductos, getTiendas } from '../../api/catalogo';
 import { Hero } from '../../components/ui/Hero';
-import { IconMas, IconTransacciones } from '../../components/ui/icons';
+import { CtaButton } from '../../components/ui/CtaButton';
+import { IconTransacciones } from '../../components/ui/icons';
 import { TransaccionFormModal } from './TransaccionFormModal';
 import { ImportarCsvPanel } from './ImportarCsvPanel';
 
@@ -57,16 +58,7 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
             >
               Importar CSV
             </button>
-            <button
-              type="button"
-              onClick={() => setFormAbierto(true)}
-              className="group flex h-[52px] items-center gap-2.5 rounded-full bg-vino py-0 pl-4.5 pr-6 text-[15px] font-bold text-arena transition hover:bg-arena hover:text-vino"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-arena text-vino transition duration-300 group-hover:rotate-90 group-hover:bg-vino group-hover:text-arena">
-                <IconMas className="h-[18px] w-[18px]" />
-              </span>
-              Nueva transacción
-            </button>
+            <CtaButton onClick={() => setFormAbierto(true)}>Nueva transacción</CtaButton>
           </div>
         }
         decorations={
