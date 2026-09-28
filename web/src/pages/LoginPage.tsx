@@ -76,6 +76,17 @@ export function LoginPage() {
             <span className="font-data text-[13px] text-salvia">Consumo minorista</span>
           </div>
 
+          <div className="relative z-[2] w-full overflow-hidden rounded-card">
+            <video
+              className="block h-auto w-full"
+              src="/videos/entrega-producto.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          </div>
+
           {/* Orbes decorativos, tal cual Main.dc.html (escalados al panel de 560px). */}
           <div className="absolute -right-[37px] -top-[44px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta transition duration-500 hover:-translate-y-3.5 hover:scale-105">
             <svg viewBox="0 0 64 64" className="h-[74px] w-[74px] mt-8" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
