@@ -24,6 +24,7 @@ import { ElasticityModule } from './elasticity/elasticity.module';
 import { AccessibilityModule } from './accessibility/accessibility.module';
 import { SimulationModule } from './simulation/simulation.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 // --- Transversal ---
 import { AuditModule } from './audit/audit.module';
@@ -72,6 +73,9 @@ import { AuditModule } from './audit/audit.module';
     AccessibilityModule,
     SimulationModule,
     RecommendationsModule,
+
+    // M16 Dashboard de negocio (solo lectura, sobre vistas del §16)
+    DashboardModule,
 
     // M15 Auditoría
     AuditModule,

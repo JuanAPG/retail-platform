@@ -34,6 +34,8 @@ import { ScenarioChange } from '../entities/scenario-change.entity';
 import { ScenarioResult } from '../entities/scenario-result.entity';
 import { Recommendation } from '../entities/recommendation.entity';
 import { RecommendationEvidence } from '../entities/recommendation-evidence.entity';
+import { Auditoria } from '../entities/auditoria.entity';
+import { AuditoriaCambio } from '../entities/auditoria-cambio.entity';
 
 export default registerAs(
   'database',
@@ -82,6 +84,8 @@ export default registerAs(
       ScenarioResult,
       Recommendation,
       RecommendationEvidence,
+      Auditoria,
+      AuditoriaCambio,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,

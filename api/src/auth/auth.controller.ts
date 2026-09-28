@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -30,8 +31,8 @@ export class AuthController {
   /** Pantalla "Iniciar sesión" del wireframe. Sirve para todos los roles. */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
+    return this.authService.login(dto, ip);
   }
 
   /** Renueva el access token usando un refresh token vigente. */

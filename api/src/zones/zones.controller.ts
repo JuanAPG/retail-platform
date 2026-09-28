@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,7 +16,8 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { PERFILES_INTERNOS, ROL } from '../common/roles';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PERFILES_INTERNOS, ROL, UsuarioSolicitante } from '../common/roles';
 import { ZonesService } from './zones.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
@@ -68,19 +70,32 @@ export class ZonesController {
 
   @Post('zones')
   @Roles(ROL.ADMINISTRADOR)
-  create(@Body() dto: CreateZoneDto) {
-    return this.zonesService.create(dto);
+  create(
+    @Body() dto: CreateZoneDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.zonesService.create(dto, { actor: usuario, ip });
   }
 
   @Patch('zones/:id')
   @Roles(ROL.ADMINISTRADOR)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateZoneDto) {
-    return this.zonesService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateZoneDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.zonesService.update(id, dto, { actor: usuario, ip });
   }
 
   @Delete('zones/:id')
   @Roles(ROL.ADMINISTRADOR)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.zonesService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.zonesService.remove(id, { actor: usuario, ip });
   }
 }
