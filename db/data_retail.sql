@@ -267,6 +267,39 @@ JOIN producto_presentaciones pp ON pp.producto_id = p.id AND pp.nombre = v.prese
 JOIN tiendas t ON t.nombre = v.tienda
 ON CONFLICT (tienda_id, presentacion_id) DO NOTHING;
 
+-- --------------------------------------------------------------- 8b. SEGUNDO PUNTO DE PRECIOS (prueba 100 canastas)
+-- Elasticidad exige >=2 precios distintos y sustitución/simulación leen el
+-- histórico vigente de M08. `vigente` es generada: cerrar = poner fecha fin.
+-- Idempotente: el UPDATE cierra el precio abierto en bases ya cargadas y el
+-- INSERT con NOT EXISTS crea el de septiembre sin duplicar en re-ejecuciones.
+UPDATE precios pr
+SET fecha_vigencia_hasta = '2026-08-31'
+FROM productos p, producto_presentaciones pp, tiendas t
+WHERE pr.presentacion_id = pp.id AND pr.tienda_id = t.id
+  AND pp.producto_id = p.id
+  AND ((p.sku = 'LDN-LEC' AND pp.nombre = '1 L' AND t.nombre = 'Mercado Pablo Livas'
+        AND pr.fecha_vigencia_desde = '2026-08-01')
+    OR (p.sku = 'LDN-QUE-400' AND pp.nombre = '400 g' AND t.nombre = 'Abarrotes Constitución'
+        AND pr.fecha_vigencia_desde = '2026-08-01'))
+  AND pr.fecha_vigencia_hasta IS NULL;
+
+INSERT INTO precios (presentacion_id, tienda_id, precio, fecha_vigencia_desde, fecha_vigencia_hasta, origen, creado_por)
+SELECT pp.id, t.id, v.precio, v.desde::date, NULL::date, 'interno'::origen_precio, u.id
+FROM (VALUES
+    ('LDN-LEC',    '1 L',   'Mercado Pablo Livas',    29.00, '2026-09-01'),
+    ('LDN-QUE-400','400 g', 'Abarrotes Constitución', 59.00, '2026-09-01')
+) AS v(sku, presentacion, tienda, precio, desde)
+JOIN productos p ON p.sku = v.sku
+JOIN producto_presentaciones pp ON pp.producto_id = p.id AND pp.nombre = v.presentacion
+JOIN tiendas t ON t.nombre = v.tienda
+CROSS JOIN usuarios u
+WHERE u.email = 'precios@retail.mx'
+  AND NOT EXISTS (
+      SELECT 1 FROM precios pr
+      WHERE pr.presentacion_id = pp.id AND pr.tienda_id = t.id
+        AND pr.fecha_vigencia_desde = v.desde::date
+  );
+
 -- --------------------------------------------------------------- 9. INDICADORES
 -- Catálogo. Agregar un indicador nuevo es insertar una fila aquí, no un
 -- ALTER TABLE: eso es lo que se ganó al normalizar.
