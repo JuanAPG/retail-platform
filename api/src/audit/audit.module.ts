@@ -1,4 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Auditoria } from '../entities/auditoria.entity';
+import { AuditoriaCambio } from '../entities/auditoria-cambio.entity';
+import { AuditService } from './audit.service';
 
 /**
  * M15 — Auditoría.
@@ -9,17 +13,22 @@ import { Module } from '@nestjs/common';
  * Alcance:
  * - Bitácora inmutable de operaciones: usuario, acción, entidad y estado
  *   previo/posterior. Registro append-only, sin edición ni borrado. La
- *   escritura NO debe poder tumbar la operación de negocio que la origina.
- *   Candidato a MongoDB en el Parcial 2 (cada evento tiene forma distinta).
+ *   escritura NO debe poder tumbar la operación de negocio que la origina
+ *   (`AuditService.log()` nunca lanza).
  *
- * Este módulo está declarado y registrado en AppModule a propósito
- * aunque todavía esté vacío: así quien lo desarrolle no tiene que tocar
- * `app.module.ts` y las cuatro ramas no chocan en ese archivo.
+ * Es `@Global` a propósito: la auditoría es transversal como la
+ * configuración (todos los módulos de negocio la inyectan para registrar
+ * sus operaciones). Así ninguna rama tiene que editar el `*.module.ts`
+ * de otro equipo para importar este módulo; los hooks viven en cada
+ * servicio con parámetros opcionales que no rompen a sus llamadores.
  *
- * Al implementarlo: agrega aquí `imports` (TypeOrmModule.forFeature con
- * tus entidades), `controllers`, `providers` y lo que otros módulos
- * necesiten en `exports`. Las entidades compartidas viven en
- * `src/entities/`; los guards y los nombres de rol, en `src/common/`.
+ * Las entidades compartidas viven en `src/entities/`; los guards y los
+ * nombres de rol, en `src/common/`.
  */
-@Module({})
+@Global()
+@Module({
+  imports: [TypeOrmModule.forFeature([Auditoria, AuditoriaCambio])],
+  providers: [AuditService],
+  exports: [AuditService],
+})
 export class AuditModule {}
