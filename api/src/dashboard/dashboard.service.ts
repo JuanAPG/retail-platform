@@ -3,6 +3,8 @@ import { DataSource } from 'typeorm';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { AnalyticsFilterDto } from '../analytics/dto/analytics-filter.dto';
 import { CategorySpend } from '../analytics/dto/category-spend.dto';
+import { SubstitutionService } from '../elasticity/substitution.service';
+import { SubstitutionPattern } from '../elasticity/dto/substitution-pattern.dto';
 
 /** Fila de `v_dashboard_kpis_generales` con números ya convertidos. */
 export interface KpisGenerales {
@@ -24,6 +26,17 @@ export interface Comportamiento {
   gastoPorCategoria: CategorySpend[];
 }
 
+/** Regla de asociación en texto legible (de `v_dashboard_asociaciones`). */
+export interface AsociacionPrincipal {
+  reglaId: string;
+  corridaId: string;
+  soporte: number;
+  confianza: number;
+  lift: number | null;
+  antecedente: string | null;
+  consecuente: string | null;
+}
+
 /**
  * M16 — Agregación del tablero. Cada método lee una vista del §16 o
  * delega en el servicio dueño del cálculo; este módulo no calcula nada
@@ -35,6 +48,7 @@ export class DashboardService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly analytics: AnalyticsService,
+    private readonly substitution: SubstitutionService,
   ) {}
 
   /**
@@ -73,5 +87,37 @@ export class DashboardService {
         this.analytics.getSpendByCategory(filters),
       ]);
     return { frecuenciaCompra, ticketPromedio, productosPorCanasta, unidadesPorTransaccion, gastoPorCategoria };
+  }
+
+  /**
+   * Asociaciones principales, ordenadas por `lift`. Sin corridas de
+   * Apriori devuelve `[]`, no error: el tablero no se rompe porque el
+   * análisis aún no se corrió.
+   */
+  async getAsociaciones(limit = 10): Promise<AsociacionPrincipal[]> {
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      `SELECT regla_id, corrida_id, soporte, confianza, lift, antecedente, consecuente
+       FROM v_dashboard_asociaciones
+       ORDER BY lift DESC NULLS LAST, confianza DESC
+       LIMIT $1`,
+      [Math.min(limit, 50)],
+    );
+    return rows.map((row) => ({
+      reglaId: String(row.regla_id),
+      corridaId: String(row.corrida_id),
+      soporte: Number(row.soporte),
+      confianza: Number(row.confianza),
+      lift: row.lift == null ? null : Number(row.lift),
+      antecedente: row.antecedente ?? null,
+      consecuente: row.consecuente ?? null,
+    }));
+  }
+
+  /**
+   * Sustituciones detectadas en una categoría. Delega en M11: se
+   * calculan al vuelo y no se guardan, igual que en su endpoint.
+   */
+  async getSustituciones(categoryId: string): Promise<SubstitutionPattern[]> {
+    return this.substitution.detectPatterns(categoryId);
   }
 }
