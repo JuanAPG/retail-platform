@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Ip,
   Param,
   ParseIntPipe,
   Patch,
@@ -13,7 +14,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { PERFILES_INTERNOS, ROL } from '../common/roles';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PERFILES_INTERNOS, ROL, UsuarioSolicitante } from '../common/roles';
 import { SegmentsService } from './segments.service';
 import { CreateSegmentDto } from './dto/create-segment.dto';
 import { UpdateSegmentDto } from './dto/update-segment.dto';
@@ -33,8 +35,12 @@ export class SegmentsController {
 
   @Post()
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
-  create(@Body() dto: CreateSegmentDto) {
-    return this.segmentsService.create(dto);
+  create(
+    @Body() dto: CreateSegmentDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.segmentsService.create(dto, { actor: usuario, ip });
   }
 
   @Get()
@@ -51,13 +57,22 @@ export class SegmentsController {
 
   @Patch(':id')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateSegmentDto) {
-    return this.segmentsService.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSegmentDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.segmentsService.update(id, dto, { actor: usuario, ip });
   }
 
   @Delete(':id')
   @Roles(ROL.ADMINISTRADOR)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.segmentsService.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.segmentsService.remove(id, { actor: usuario, ip });
   }
 }
