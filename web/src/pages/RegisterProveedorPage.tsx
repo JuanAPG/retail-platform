@@ -1,28 +1,81 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { registerProveedor } from '../api/auth';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
 import { IconCandado, IconFlecha, IconOjo, IconOjoCerrado, IconResultados } from '../components/ui/icons';
 
+const LINEA_1 = 'Vende con';
+const LINEA_2 = 'nosotros';
+
+/** Efecto de máquina de escribir: "Vende con" y luego "nosotros", una sola vez al montar. */
+function TituloEscritura() {
+  const [texto1, setTexto1] = useState('');
+  const [texto2, setTexto2] = useState('');
+
+  useEffect(() => {
+    let i = 0;
+    const escribirLinea1 = setInterval(() => {
+      i += 1;
+      setTexto1(LINEA_1.slice(0, i));
+      if (i >= LINEA_1.length) {
+        clearInterval(escribirLinea1);
+        let j = 0;
+        const escribirLinea2 = setInterval(() => {
+          j += 1;
+          setTexto2(LINEA_2.slice(0, j));
+          if (j >= LINEA_2.length) clearInterval(escribirLinea2);
+        }, 70);
+      }
+    }, 70);
+    return () => clearInterval(escribirLinea1);
+  }, []);
+
+  const escribiendoLinea1 = texto1.length < LINEA_1.length;
+  const terminado = texto2.length === LINEA_2.length;
+
+  return (
+    <h1 className="min-h-[92px] font-display text-5xl font-normal leading-[0.95] text-arena">
+      {texto1}
+      {escribiendoLinea1 && <span className="inline-block w-[3px] animate-pulse">|</span>}
+      <br />
+      <span className="text-salvia">
+        {texto2}
+        {!escribiendoLinea1 && <span className={`inline-block w-[3px] ${terminado ? 'animate-pulse' : ''}`}>|</span>}
+      </span>
+    </h1>
+  );
+}
+
 /** Mismo panel decorativo que LoginPage: DESIGN.md trata Login y Registro como pestañas de una misma pantalla. */
 function PanelDecorativo() {
   return (
-    <section className="relative hidden w-[480px] flex-shrink-0 flex-col justify-between overflow-hidden rounded-hero bg-teal p-12 text-arena lg:flex">
-      <div className="relative z-[2] flex items-center gap-3.5">
+    <section className="relative hidden w-[480px] flex-shrink-0 flex-col overflow-hidden rounded-hero bg-teal text-arena lg:flex">
+      <div className="relative z-[2] flex items-center gap-3.5 p-12 pb-8">
         <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal">
           ra
         </span>
         <span className="text-base font-semibold">RetailAnalytics Pro</span>
       </div>
 
-      <div className="relative z-[2] flex flex-col gap-4">
-        <h1 className="font-display text-5xl font-normal leading-[0.95]">
-          Vende con
-          <br />
-          <span className="text-salvia">nosotros</span>
-        </h1>
-        <span className="font-data text-[13px] text-salvia">Catálogo nacional de consumo minorista</span>
+      <div className="relative h-[280px] w-full">
+        <video
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src="/videos/retailvideo2-alpha.webm" type="video/webm" />
+          <source src="/videos/retailvideo2.mp4" type="video/mp4" />
+        </video>
+      </div>
+
+      <div className="relative z-[2] flex flex-col">
+        <div className="relative -translate-y-[3%] bg-[#6B0F14] px-12 py-5">
+          <TituloEscritura />
+        </div>
+        <span className="px-12 pt-4 font-data text-[13px] text-salvia">Catálogo nacional de consumo minorista</span>
       </div>
 
       <div className="absolute -bottom-[140px] -right-[100px] h-[280px] w-[280px] rounded-full bg-vino opacity-55" />

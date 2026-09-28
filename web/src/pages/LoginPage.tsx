@@ -58,13 +58,15 @@ export function LoginPage() {
         {/* Panel decorativo — oculto en pantallas chicas, la sesión importa más que el arte. */}
         <section className="relative hidden w-[560px] flex-shrink-0 flex-col justify-between overflow-hidden rounded-hero bg-teal p-14 text-arena lg:flex">
           <video
-            className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80"
-            src="/videos/retailvideo.mp4"
+            className="pointer-events-none absolute inset-0 h-full w-full object-contain object-[center_35%] opacity-80"
             autoPlay
             loop
             muted
             playsInline
-          />
+          >
+            <source src="/videos/retailvideo-alpha.webm" type="video/webm" />
+            <source src="/videos/retailvideo.mp4" type="video/mp4" />
+          </video>
 
           <div className="relative z-[2] flex items-center gap-3.5">
             <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal">
@@ -73,8 +75,8 @@ export function LoginPage() {
             <span className="text-base font-semibold">RetailAnalytics Pro</span>
           </div>
 
-          <div className="relative z-[2] flex flex-col gap-6">
-            <h1 className="font-display text-6xl font-normal leading-[0.95]">
+          <div className="relative z-[2] flex translate-y-[10%] flex-col gap-6">
+            <h1 className="translate-y-[10%] font-display text-6xl font-normal leading-[0.95]">
               Del anaquel
               <br />
               <span className="text-salvia">
@@ -102,12 +104,6 @@ export function LoginPage() {
             <svg viewBox="0 0 64 64" className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M8 32V12a3 3 0 0 1 3-3h20l25 25-23 23z" />
               <circle cx="20" cy="21" r="4" />
-            </svg>
-          </div>
-          <div className="absolute right-[184px] top-[170px] flex h-[66px] w-[66px] items-center justify-center rounded-full text-arena shadow-[inset_0_0_0_3px_#F0ECDF] transition duration-500 hover:-translate-y-3.5 hover:scale-105">
-            <svg viewBox="0 0 64 64" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="20" y="8" width="24" height="48" rx="9" />
-              <path d="M20 18h24M20 46h24" />
             </svg>
           </div>
           <div className="absolute -bottom-[147px] -right-[118px] h-[310px] w-[310px] rounded-full bg-vino opacity-55" />
