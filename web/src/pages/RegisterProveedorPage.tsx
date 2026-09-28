@@ -4,7 +4,6 @@ import { registerProveedor } from '../api/auth';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
 import { IconCandado, IconFlecha, IconOjo, IconOjoCerrado, IconResultados } from '../components/ui/icons';
-import { IlustracionCadenaSuministro } from '../components/ui/IlustracionCadenaSuministro';
 
 /** Mismo panel decorativo que LoginPage: DESIGN.md trata Login y Registro como pestañas de una misma pantalla. */
 function PanelDecorativo() {
@@ -24,10 +23,6 @@ function PanelDecorativo() {
           <span className="text-salvia">nosotros</span>
         </h1>
         <span className="font-data text-[13px] text-salvia">Catálogo nacional de consumo minorista</span>
-      </div>
-
-      <div className="relative z-[2]">
-        <IlustracionCadenaSuministro />
       </div>
 
       <div className="absolute -bottom-[140px] -right-[100px] h-[280px] w-[280px] rounded-full bg-vino opacity-55" />

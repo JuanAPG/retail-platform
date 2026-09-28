@@ -6,7 +6,6 @@ import { mensajeDeError } from '../api/errores';
 import { Field } from '../components/ui/Field';
 import { Switch } from '../components/ui/Switch';
 import { IconCandado, IconCheck, IconCorreo, IconFlecha, IconOjo, IconOjoCerrado } from '../components/ui/icons';
-import { IlustracionCadenaSuministro } from '../components/ui/IlustracionCadenaSuministro';
 
 /** DESIGN.md — pantalla de Acceso. Referencia pixel a pixel: docs/design/prototipos/Main.dc.html. */
 export function LoginPage() {
@@ -75,10 +74,6 @@ export function LoginPage() {
               </span>
             </h1>
             <span className="font-data text-[13px] text-salvia">Consumo minorista</span>
-          </div>
-
-          <div className="relative z-[2]">
-            <IlustracionCadenaSuministro />
           </div>
 
           {/* Orbes decorativos, tal cual Main.dc.html (escalados al panel de 560px). */}
