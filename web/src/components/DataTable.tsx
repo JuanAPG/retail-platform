@@ -12,22 +12,22 @@ interface DataTableProps<T> {
 
 export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
   return (
-    <div className="overflow-hidden rounded border border-slate-200">
+    <div className="overflow-hidden rounded-card border-2 border-arena">
       <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <thead className="bg-arena text-xs font-bold uppercase tracking-wide text-teal">
           <tr>
             {columns.map((col) => (
-              <th key={col.header} className="px-4 py-3 font-medium">
+              <th key={col.header} className="px-4 py-3">
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-salvia/20">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="hover:bg-slate-50">
+            <tr key={rowKey(row)} className="transition hover:bg-arena/40">
               {columns.map((col) => (
-                <td key={col.header} className={`px-4 py-3 text-slate-700 ${col.className ?? ''}`}>
+                <td key={col.header} className={`px-4 py-3 text-tinta ${col.className ?? ''}`}>
                   {col.render(row)}
                 </td>
               ))}
