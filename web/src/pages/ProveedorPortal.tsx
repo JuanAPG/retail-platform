@@ -14,7 +14,7 @@ import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ErrorText } from '../components/ui/ErrorText';
-import { IconCanastas, IconCheck, IconMas, IconPrecios, IconProductos } from '../components/ui/icons';
+import { IconCanastas, IconCheck, IconFlecha, IconPrecios, IconProductos } from '../components/ui/icons';
 
 type Tab = 'mis-productos' | 'proponer-alta' | 'mis-solicitudes' | 'cambio-precio' | 'mi-perfil';
 
@@ -431,7 +431,7 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
         >
           {enviando ? 'Enviando…' : 'Enviar propuesta'}
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-arena text-teal transition group-hover:translate-x-0.5">
-            <IconMas className="h-4 w-4 rotate-45" />
+            <IconFlecha className="h-4 w-4" />
           </span>
         </button>
       </form>
