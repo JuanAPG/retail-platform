@@ -51,4 +51,36 @@ export class DashboardController {
   getSustituciones(@Query() query: SubstitutionQueryDto) {
     return this.dashboardService.getSustituciones(query.categoryId);
   }
+
+  @Get('elasticidad')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Elasticidad promedio y conteo por clasificación.' })
+  @ApiOkResponse({ description: 'Una fila por clasificación (elástica, inelástica, unitaria).' })
+  getElasticidad() {
+    return this.dashboardService.getElasticidad();
+  }
+
+  @Get('elasticidad/sensibles')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Productos más sensibles al precio (mayor |E|).' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Máximo de filas (default 10, máx 50).' })
+  @ApiOkResponse({ description: 'Elasticidades ordenadas por valor absoluto descendente.' })
+  getSensibles(@Query('limit', new ParseIntPipe({ optional: true })) limit?: number) {
+    return this.dashboardService.getSensibles(limit ?? 10);
+  }
+
+  @Get('variacion-precios')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Variación porcentual entre precios consecutivos.' })
+  @ApiQuery({ name: 'presentationId', required: false })
+  @ApiQuery({ name: 'storeId', required: false })
+  @ApiQuery({ name: 'limit', required: false, description: 'Máximo de filas (default 50, máx 200).' })
+  @ApiOkResponse({ description: 'Precio actual, anterior y variación por pareja presentación/tienda.' })
+  getVariacionPrecios(
+    @Query('presentationId') presentationId?: string,
+    @Query('storeId') storeId?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    return this.dashboardService.getVariacionPrecios(presentationId, storeId, limit ?? 50);
+  }
 }

@@ -37,6 +37,35 @@ export interface AsociacionPrincipal {
   consecuente: string | null;
 }
 
+/** Resumen de elasticidad por clasificación (de `v_dashboard_elasticidad`). */
+export interface ElasticidadResumen {
+  clasificacion: string;
+  productos: number;
+  elasticidadPromedio: number | null;
+}
+
+/** Presentación más sensible al precio (de `elasticidades`). */
+export interface ProductoSensible {
+  presentacionId: string;
+  producto: string;
+  presentacion: string;
+  zonaId: string | null;
+  zona: string | null;
+  valor: number;
+  clasificacion: string;
+  observaciones: number;
+}
+
+/** Variación entre precios consecutivos (de `v_variacion_precios`). */
+export interface VariacionPrecio {
+  presentacionId: string;
+  tiendaId: string;
+  fechaVigenciaDesde: string;
+  precioActual: number;
+  precioAnterior: number | null;
+  variacionPct: number | null;
+}
+
 /**
  * M16 — Agregación del tablero. Cada método lee una vista del §16 o
  * delega en el servicio dueño del cálculo; este módulo no calcula nada
@@ -119,5 +148,91 @@ export class DashboardService {
    */
   async getSustituciones(categoryId: string): Promise<SubstitutionPattern[]> {
     return this.substitution.detectPatterns(categoryId);
+  }
+
+  /**
+   * Elasticidad promedio y conteo por clasificación. Solo corridas
+   * `completada`: sin cálculos devuelve `[]`.
+   */
+  async getElasticidad(): Promise<ElasticidadResumen[]> {
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      'SELECT clasificacion, productos, elasticidad_promedio FROM v_dashboard_elasticidad',
+    );
+    return rows.map((row) => ({
+      clasificacion: String(row.clasificacion),
+      productos: Number(row.productos ?? 0),
+      elasticidadPromedio: row.elasticidad_promedio == null ? null : Number(row.elasticidad_promedio),
+    }));
+  }
+
+  /**
+   * Productos más sensibles: las elasticidades con mayor |valor|.
+   * La clasificación sale de la columna generada de la base.
+   */
+  async getSensibles(limit = 10): Promise<ProductoSensible[]> {
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      `SELECT e.presentacion_id, p.nombre AS producto, pp.nombre AS presentacion,
+              e.zona_id, z.nombre AS zona, e.valor::text AS valor,
+              e.clasificacion::text AS clasificacion, e.observaciones
+       FROM elasticidades e
+       JOIN analisis_corridas c ON c.id = e.corrida_id
+       JOIN producto_presentaciones pp ON pp.id = e.presentacion_id
+       JOIN productos p ON p.id = pp.producto_id
+       LEFT JOIN zonas z ON z.id = e.zona_id
+       WHERE c.estado = 'completada'
+       ORDER BY abs(e.valor) DESC
+       LIMIT $1`,
+      [Math.min(limit, 50)],
+    );
+    return rows.map((row) => ({
+      presentacionId: String(row.presentacion_id),
+      producto: String(row.producto),
+      presentacion: String(row.presentacion),
+      zonaId: row.zona_id ?? null,
+      zona: row.zona ?? null,
+      valor: Number(row.valor),
+      clasificacion: String(row.clasificacion),
+      observaciones: Number(row.observaciones ?? 0),
+    }));
+  }
+
+  /**
+   * Variación porcentual entre precios consecutivos. Es posible porque
+   * el histórico no se sobrescribe (RN-06); el primer precio de cada
+   * pareja trae `variacionPct` nulo.
+   */
+  async getVariacionPrecios(
+    presentationId?: string,
+    storeId?: string,
+    limit = 50,
+  ): Promise<VariacionPrecio[]> {
+    const condiciones: string[] = [];
+    const params: string[] = [];
+    if (presentationId) {
+      params.push(presentationId);
+      condiciones.push(`presentacion_id = $${params.length}`);
+    }
+    if (storeId) {
+      params.push(storeId);
+      condiciones.push(`tienda_id = $${params.length}`);
+    }
+    params.push(String(Math.min(limit, 200)));
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      `SELECT presentacion_id, tienda_id, fecha_vigencia_desde::text AS fecha,
+              precio_actual, precio_anterior, variacion_pct
+       FROM v_variacion_precios
+       ${condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : ''}
+       ORDER BY fecha_vigencia_desde DESC
+       LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map((row) => ({
+      presentacionId: String(row.presentacion_id),
+      tiendaId: String(row.tienda_id),
+      fechaVigenciaDesde: String(row.fecha),
+      precioActual: Number(row.precio_actual),
+      precioAnterior: row.precio_anterior == null ? null : Number(row.precio_anterior),
+      variacionPct: row.variacion_pct == null ? null : Number(row.variacion_pct),
+    }));
   }
 }
