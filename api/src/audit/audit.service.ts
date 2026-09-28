@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AccionAuditoria, Auditoria } from '../entities/auditoria.entity';
 import { AuditoriaCambio } from '../entities/auditoria-cambio.entity';
+import { UsuarioSolicitante } from '../common/roles';
 import { AuditFilterDto } from './dto/audit-filter.dto';
 
 export interface AuditCambioInput {
@@ -27,6 +28,16 @@ export interface AuditPage {
   total: number;
   page: number;
   limit: number;
+}
+
+/**
+ * Contexto que los controladores arman con el JWT y la IP, y pasan a los
+ * servicios en sus mutaciones. Todo opcional para no romper llamadores
+ * que no lo proveen (en ese caso el evento queda sin actor, pero queda).
+ */
+export interface AuditContext {
+  actor?: UsuarioSolicitante | null;
+  ip?: string | null;
 }
 
 /**

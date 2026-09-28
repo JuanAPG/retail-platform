@@ -14,6 +14,7 @@ import { ProductoPresentacionEntity } from '../entities/producto-presentacion.en
 import { ProductoRevisionEntity } from '../entities/producto-revision.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
 import { ROL, UsuarioSolicitante } from '../common/roles';
+import { AuditContext, AuditService } from '../audit/audit.service';
 import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -42,6 +43,7 @@ export class ProductsService {
     @InjectRepository(UnidadMedidaEntity)
     private readonly unidadesRepo: Repository<UnidadMedidaEntity>,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
   ) {}
 
   findUnits() {
@@ -106,6 +108,7 @@ export class ProductsService {
   async createProposal(
     dto: CrearPropuestaProductoDto,
     solicitante: UsuarioSolicitante,
+    ctx?: AuditContext,
   ) {
     const proveedor = await this.proveedorDe(solicitante);
 
@@ -141,7 +144,7 @@ export class ProductsService {
     // Producto y su primera presentación se crean juntos o no se crea
     // ninguno: un producto sin presentación no se puede vender ni
     // cotizar, así que dejarlo a medias sería un registro inservible.
-    return this.dataSource.transaction(async (manager) => {
+    const creado = await this.dataSource.transaction(async (manager) => {
       const producto = manager.create(ProductoEntity, {
         sku: dto.sku,
         nombre: dto.nombre,
@@ -168,6 +171,23 @@ export class ProductsService {
         relations: { presentaciones: true },
       });
     });
+
+    await this.audit.log({
+      usuarioId: solicitante.id,
+      rolId: solicitante.rolId,
+      tabla: 'productos',
+      registroId: creado?.id ?? null,
+      accion: 'insert',
+      descripcion: `Propuesta de alta (${dto.sku}) por proveedor.`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'sku', posterior: dto.sku },
+        { campo: 'nombre', posterior: dto.nombre },
+        { campo: 'estatus', posterior: ESTATUS_PRODUCTO.PENDIENTE },
+      ],
+    });
+
+    return creado;
   }
 
   async findOne(id: string): Promise<ProductoEntity> {
@@ -186,7 +206,7 @@ export class ProductsService {
    * sin pasar por la bandeja de aprobación (esa es solo para lo que
    * propone un Proveedor externo) y sin proveedor asociado.
    */
-  async create(dto: CreateProductDto): Promise<ProductoEntity> {
+  async create(dto: CreateProductDto, ctx?: AuditContext): Promise<ProductoEntity> {
     const categoria = await this.categoriasRepo.findOne({ where: { id: dto.categoriaId } });
     if (!categoria) {
       throw new BadRequestException('La categoría indicada no existe.');
@@ -202,7 +222,7 @@ export class ProductsService {
       throw new BadRequestException(`La unidad de medida '${dto.unidadMedida}' no existe en el catálogo.`);
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const creado = await this.dataSource.transaction(async (manager) => {
       const producto = manager.create(ProductoEntity, {
         sku: dto.sku,
         nombre: dto.nombre,
@@ -229,10 +249,33 @@ export class ProductsService {
         relations: { presentaciones: true },
       });
     });
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'productos',
+      registroId: creado.id,
+      accion: 'insert',
+      descripcion: `Alta directa de producto (${dto.sku}).`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'sku', posterior: dto.sku },
+        { campo: 'nombre', posterior: dto.nombre },
+        { campo: 'estatus', posterior: ESTATUS_PRODUCTO.ACTIVO },
+      ],
+    });
+
+    return creado;
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<ProductoEntity> {
+  async update(id: string, dto: UpdateProductDto, ctx?: AuditContext): Promise<ProductoEntity> {
     const producto = await this.findOne(id);
+    const previo: Record<string, string> = {
+      nombre: producto.nombre,
+      descripcion: producto.descripcion ?? '',
+      categoriaId: String(producto.categoriaId),
+      esCanastaBasica: String(producto.esCanastaBasica),
+    };
 
     if (dto.categoriaId !== undefined) {
       const categoria = await this.categoriasRepo.findOne({ where: { id: dto.categoriaId } });
@@ -249,11 +292,31 @@ export class ProductsService {
     });
     await this.productosRepo.save(producto);
 
+    const posterior: Record<string, string> = {
+      nombre: producto.nombre,
+      descripcion: producto.descripcion ?? '',
+      categoriaId: String(producto.categoriaId),
+      esCanastaBasica: String(producto.esCanastaBasica),
+    };
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'productos',
+      registroId: producto.id,
+      accion: 'update',
+      descripcion: `Producto actualizado (${producto.sku}).`,
+      ip: ctx?.ip,
+      cambios: Object.keys(previo)
+        .filter((campo) => previo[campo] !== posterior[campo])
+        .map((campo) => ({ campo, previo: previo[campo], posterior: posterior[campo] })),
+    });
+
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, ctx?: AuditContext): Promise<void> {
     const producto = await this.findOne(id);
+    const sku = producto.sku;
 
     try {
       await this.productosRepo.remove(producto);
@@ -269,6 +332,20 @@ export class ProductsService {
       }
       throw err;
     }
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'productos',
+      registroId: id,
+      accion: 'delete',
+      descripcion: `Producto eliminado (${sku}).`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'sku', previo: sku, posterior: null },
+        { campo: 'nombre', previo: producto.nombre, posterior: null },
+      ],
+    });
   }
 
   // -------------------------------------------------------------------
@@ -287,6 +364,7 @@ export class ProductsService {
   async addPresentation(
     productId: string,
     dto: CreatePresentationDto,
+    ctx?: AuditContext,
   ): Promise<ProductoPresentacionEntity> {
     await this.findOne(productId);
 
@@ -304,10 +382,26 @@ export class ProductsService {
       esPredeterminada: dto.esPredeterminada ?? false,
       activo: true,
     });
-    return this.presentacionesRepo.save(presentacion);
+    const guardada = await this.presentacionesRepo.save(presentacion);
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'producto_presentaciones',
+      registroId: guardada.id,
+      accion: 'insert',
+      descripcion: `Presentación "${dto.nombre}" agregada al producto ${productId}.`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'nombre', posterior: dto.nombre },
+        { campo: 'contenido', posterior: String(dto.contenido) },
+      ],
+    });
+
+    return guardada;
   }
 
-  async removePresentation(id: string): Promise<void> {
+  async removePresentation(id: string, ctx?: AuditContext): Promise<void> {
     const presentacion = await this.presentacionesRepo.findOne({ where: { id } });
     if (!presentacion) {
       throw new NotFoundException('La presentación no existe.');
@@ -323,23 +417,64 @@ export class ProductsService {
       }
       throw err;
     }
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'producto_presentaciones',
+      registroId: id,
+      accion: 'delete',
+      descripcion: `Presentación "${presentacion.nombre}" eliminada.`,
+      ip: ctx?.ip,
+      cambios: [{ campo: 'nombre', previo: presentacion.nombre, posterior: null }],
+    });
   }
 
-  async approve(id: string, solicitante: UsuarioSolicitante) {
-    return this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
+  async approve(id: string, solicitante: UsuarioSolicitante, ip?: string) {
+    const resuelto = await this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
+
+    await this.audit.log({
+      usuarioId: solicitante.id,
+      rolId: solicitante.rolId,
+      tabla: 'productos',
+      registroId: id,
+      accion: 'update',
+      descripcion: `Propuesta aprobada (${resuelto?.sku ?? id}).`,
+      ip,
+      cambios: [{ campo: 'estatus', previo: ESTATUS_PRODUCTO.PENDIENTE, posterior: ESTATUS_PRODUCTO.ACTIVO }],
+    });
+
+    return resuelto;
   }
 
   async reject(
     id: string,
     dto: RechazarProductoDto,
     solicitante: UsuarioSolicitante,
+    ip?: string,
   ) {
-    return this.resolver(
+    const resuelto = await this.resolver(
       id,
       ESTATUS_PRODUCTO.RECHAZADO,
       dto.motivoRechazo,
       solicitante,
     );
+
+    await this.audit.log({
+      usuarioId: solicitante.id,
+      rolId: solicitante.rolId,
+      tabla: 'productos',
+      registroId: id,
+      accion: 'update',
+      descripcion: `Propuesta rechazada (${resuelto?.sku ?? id}): ${dto.motivoRechazo}`,
+      ip,
+      cambios: [
+        { campo: 'estatus', previo: ESTATUS_PRODUCTO.PENDIENTE, posterior: ESTATUS_PRODUCTO.RECHAZADO },
+        { campo: 'motivo_rechazo', previo: null, posterior: dto.motivoRechazo },
+      ],
+    });
+
+    return resuelto;
   }
 
   /**
