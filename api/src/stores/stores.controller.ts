@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -13,7 +14,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { PERFILES_INTERNOS, ROL } from '../common/roles';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PERFILES_INTERNOS, ROL, UsuarioSolicitante } from '../common/roles';
 import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -47,19 +49,32 @@ export class StoresController {
 
   @Post()
   @Roles(ROL.ADMINISTRADOR)
-  create(@Body() dto: CreateStoreDto) {
-    return this.storesService.create(dto);
+  create(
+    @Body() dto: CreateStoreDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.storesService.create(dto, { actor: usuario, ip });
   }
 
   @Patch(':id')
   @Roles(ROL.ADMINISTRADOR)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStoreDto) {
-    return this.storesService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStoreDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.storesService.update(id, dto, { actor: usuario, ip });
   }
 
   @Delete(':id')
   @Roles(ROL.ADMINISTRADOR)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.storesService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.storesService.remove(id, { actor: usuario, ip });
   }
 }

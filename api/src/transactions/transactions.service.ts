@@ -16,6 +16,7 @@ import { TiendaEntity } from '../entities/tienda.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
 import { ProductoEntity } from '../entities/producto.entity';
 import { UsuarioSolicitante } from '../common/roles';
+import { AuditService } from '../audit/audit.service';
 import { BasketsService } from '../baskets/baskets.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
@@ -110,6 +111,7 @@ export class TransactionsService {
     private readonly productosRepo: Repository<ProductoEntity>,
     private readonly dataSource: DataSource,
     private readonly basketsService: BasketsService,
+    private readonly audit: AuditService,
   ) {}
 
   // --- Lectura -----------------------------------------------------
@@ -302,7 +304,11 @@ export class TransactionsService {
 
   // --- CSV: confirm ---------------------------------------------------
 
-  async confirmCsvImport(previewId: string, usuario: UsuarioSolicitante): Promise<CsvImportResult> {
+  async confirmCsvImport(
+    previewId: string,
+    usuario: UsuarioSolicitante,
+    ip?: string,
+  ): Promise<CsvImportResult> {
     const importacion = await this.importacionesRepo.findOne({ where: { id: previewId } });
     if (!importacion) {
       throw new NotFoundException(`No existe la importación ${previewId}.`);
@@ -402,6 +408,26 @@ export class TransactionsService {
     importacion.confirmedAt = new Date();
     importacion.createdTransactions = creadas;
     await this.importacionesRepo.save(importacion);
+
+    // Solo se audita la confirmación (la mutación real). El preview deja
+    // filas en staging pero no crea transacciones ni canastas.
+    await this.audit.log({
+      usuarioId: usuario.id,
+      rolId: usuario.rolId,
+      tabla: 'importaciones',
+      registroId: importacion.id,
+      accion: 'importacion',
+      descripcion:
+        `Importación CSV "${importacion.fileName}" confirmada: ` +
+        `${creadas} transacciones y ${canastas} canastas creadas` +
+        (omitidos.length > 0 ? `, ${omitidos.length} folios omitidos.` : '.'),
+      ip,
+      cambios: [
+        { campo: 'transacciones_creadas', posterior: String(creadas) },
+        { campo: 'canastas_creadas', posterior: String(canastas) },
+        { campo: 'folios_omitidos', posterior: String(omitidos.length) },
+      ],
+    });
 
     return {
       importacionId: importacion.id,

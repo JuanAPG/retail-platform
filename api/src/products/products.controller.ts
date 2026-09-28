@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -103,8 +104,12 @@ export class ProductsController {
   @Post('products')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
   @ApiOperation({ summary: 'Alta directa de un producto, sin pasar por la bandeja de aprobación.' })
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  create(
+    @Body() dto: CreateProductDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.create(dto, { actor: usuario, ip });
   }
 
   @Post('products/proposals')
@@ -115,20 +120,30 @@ export class ProductsController {
   createProposal(
     @Body() dto: CrearPropuestaProductoDto,
     @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
   ) {
-    return this.productsService.createProposal(dto, usuario);
+    return this.productsService.createProposal(dto, usuario, { ip });
   }
 
   @Patch('products/:id')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
-    return this.productsService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateProductDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.update(id, dto, { actor: usuario, ip });
   }
 
   @Delete('products/:id')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.remove(id, { actor: usuario, ip });
   }
 
   // -------------------------------------------------------------------
@@ -143,20 +158,33 @@ export class ProductsController {
 
   @Post('products/:id/presentations')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
-  addPresentation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreatePresentationDto) {
-    return this.productsService.addPresentation(id, dto);
+  addPresentation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreatePresentationDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.addPresentation(id, dto, { actor: usuario, ip });
   }
 
   @Delete('presentations/:id')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
-  removePresentation(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.removePresentation(id);
+  removePresentation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.removePresentation(id, { actor: usuario, ip });
   }
 
   @Patch('products/:id/approve')
   @Roles(...APRUEBAN_PRODUCTOS)
-  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() usuario: UsuarioSolicitante) {
-    return this.productsService.approve(id, usuario);
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.productsService.approve(id, usuario, ip);
   }
 
   @Patch('products/:id/reject')
@@ -165,7 +193,8 @@ export class ProductsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RechazarProductoDto,
     @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
   ) {
-    return this.productsService.reject(id, dto, usuario);
+    return this.productsService.reject(id, dto, usuario, ip);
   }
 }

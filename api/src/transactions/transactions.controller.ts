@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Ip,
   Param,
   Post,
   Query,
@@ -59,8 +60,9 @@ export class TransactionsController {
   confirmCsvImport(
     @Body() dto: ConfirmCsvImportDto,
     @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
   ) {
-    return this.transactionsService.confirmCsvImport(dto.previewId, usuario);
+    return this.transactionsService.confirmCsvImport(dto.previewId, usuario, ip);
   }
 
   @Get()

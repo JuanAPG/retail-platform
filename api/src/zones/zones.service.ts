@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { ZonaEntity } from '../entities/zona.entity';
 import { MunicipioEntity } from '../entities/municipio.entity';
+import { AuditContext, AuditService } from '../audit/audit.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 
@@ -26,6 +27,7 @@ export class ZonesService {
     @InjectRepository(MunicipioEntity)
     private readonly municipiosRepo: Repository<MunicipioEntity>,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
   ) {}
 
   findAll() {
@@ -61,7 +63,7 @@ export class ZonesService {
     return fila?.segmentId ?? null;
   }
 
-  async create(dto: CreateZoneDto): Promise<ZonaEntity> {
+  async create(dto: CreateZoneDto, ctx?: AuditContext): Promise<ZonaEntity> {
     const municipio = await this.municipiosRepo.findOne({ where: { id: dto.municipioId } });
     if (!municipio) {
       throw new BadRequestException('El municipio indicado no existe.');
@@ -75,11 +77,32 @@ export class ZonesService {
       descripcion: dto.descripcion ?? null,
       activo: true,
     });
-    return this.zonasRepo.save(zona);
+    const guardada = await this.zonasRepo.save(zona);
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'zonas',
+      registroId: guardada.id,
+      accion: 'insert',
+      descripcion: `Zona creada (${dto.nombre}).`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'nombre', posterior: dto.nombre },
+        { campo: 'municipioId', posterior: String(dto.municipioId) },
+      ],
+    });
+
+    return guardada;
   }
 
-  async update(id: string, dto: UpdateZoneDto): Promise<ZonaEntity> {
+  async update(id: string, dto: UpdateZoneDto, ctx?: AuditContext): Promise<ZonaEntity> {
     const zona = await this.findOne(id);
+    const previo: Record<string, string> = {
+      nombre: zona.nombre,
+      municipioId: String(zona.municipioId),
+      activo: String(zona.activo),
+    };
 
     if (dto.municipioId !== undefined) {
       const municipio = await this.municipiosRepo.findOne({ where: { id: dto.municipioId } });
@@ -98,11 +121,32 @@ export class ZonesService {
       ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
       ...(dto.activo !== undefined && { activo: dto.activo }),
     });
-    return this.zonasRepo.save(zona);
+    const guardada = await this.zonasRepo.save(zona);
+
+    const posterior: Record<string, string> = {
+      nombre: guardada.nombre,
+      municipioId: String(guardada.municipioId),
+      activo: String(guardada.activo),
+    };
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'zonas',
+      registroId: id,
+      accion: 'update',
+      descripcion: `Zona actualizada (${guardada.nombre}).`,
+      ip: ctx?.ip,
+      cambios: Object.keys(previo)
+        .filter((campo) => previo[campo] !== posterior[campo])
+        .map((campo) => ({ campo, previo: previo[campo], posterior: posterior[campo] })),
+    });
+
+    return guardada;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, ctx?: AuditContext): Promise<void> {
     const zona = await this.findOne(id);
+    const nombre = zona.nombre;
 
     try {
       await this.zonasRepo.remove(zona);
@@ -116,6 +160,17 @@ export class ZonesService {
       }
       throw err;
     }
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'zonas',
+      registroId: id,
+      accion: 'delete',
+      descripcion: `Zona eliminada (${nombre}).`,
+      ip: ctx?.ip,
+      cambios: [{ campo: 'nombre', previo: nombre, posterior: null }],
+    });
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Ip, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -22,8 +22,12 @@ export class PricesController {
 
   @Post()
   @Roles(ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS)
-  create(@Body() dto: CreatePriceDto, @CurrentUser() usuario: UsuarioSolicitante) {
-    return this.pricesService.create(dto, usuario);
+  create(
+    @Body() dto: CreatePriceDto,
+    @CurrentUser() usuario: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.pricesService.create(dto, usuario, ip);
   }
 
   @Get('history')

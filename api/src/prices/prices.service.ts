@@ -5,6 +5,7 @@ import { PriceHistory } from '../entities/price-history.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
 import { TiendaEntity } from '../entities/tienda.entity';
 import { UsuarioSolicitante } from '../common/roles';
+import { AuditService } from '../audit/audit.service';
 import { CreatePriceDto } from './dto/create-price.dto';
 
 export interface ZonePriceComparison {
@@ -31,6 +32,7 @@ export class PricesService {
     @InjectRepository(TiendaEntity)
     private readonly storesRepo: Repository<TiendaEntity>,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -40,7 +42,7 @@ export class PricesService {
    * nueva vigencia) dentro de la misma transacción, porque el índice
    * único `uq_precios_vigente` no permite dos precios vigentes a la vez.
    */
-  async create(dto: CreatePriceDto, solicitante?: UsuarioSolicitante): Promise<PriceHistory> {
+  async create(dto: CreatePriceDto, solicitante?: UsuarioSolicitante, ip?: string): Promise<PriceHistory> {
     const presentation = await this.presentationsRepo.findOne({
       where: { id: dto.presentationId },
     });
@@ -54,8 +56,9 @@ export class PricesService {
     }
 
     const effectiveDate = dto.effectiveDate ?? new Date().toISOString().slice(0, 10);
+    let precioPrevio: string | null = null;
 
-    return this.dataSource.transaction(async (manager) => {
+    const guardado = await this.dataSource.transaction(async (manager) => {
       const current = await manager.findOne(PriceHistory, {
         where: {
           presentationId: dto.presentationId,
@@ -70,6 +73,7 @@ export class PricesService {
             'Ya existe un precio vigente con fecha igual o posterior a la indicada.',
           );
         }
+        precioPrevio = String(current.price);
         current.effectiveUntil = diaAnterior(effectiveDate);
         await manager.save(current);
       }
@@ -86,6 +90,23 @@ export class PricesService {
       const guardado = await manager.save(nuevo);
       return manager.findOneOrFail(PriceHistory, { where: { id: guardado.id } });
     });
+
+    // El precio anterior se cierra, no se sobrescribe: queda como previo.
+    await this.audit.log({
+      usuarioId: solicitante?.id ?? null,
+      rolId: solicitante?.rolId ?? null,
+      tabla: 'precios',
+      registroId: guardado.id,
+      accion: 'insert',
+      descripcion: `Precio registrado (${dto.price}) para presentación ${dto.presentationId} en tienda ${dto.storeId}.`,
+      ip,
+      cambios: [
+        { campo: 'precio_anterior', previo: precioPrevio, posterior: null },
+        { campo: 'precio', previo: null, posterior: String(dto.price) },
+      ],
+    });
+
+    return guardado;
   }
 
   /**
