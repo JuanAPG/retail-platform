@@ -57,6 +57,15 @@ export function LoginPage() {
       <div className="flex h-full w-full max-w-[1280px] max-h-[820px] gap-6">
         {/* Panel decorativo — oculto en pantallas chicas, la sesión importa más que el arte. */}
         <section className="relative hidden w-[560px] flex-shrink-0 flex-col justify-between overflow-hidden rounded-hero bg-teal p-14 text-arena lg:flex">
+          <video
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-80"
+            src="/videos/retailvideo.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+
           <div className="relative z-[2] flex items-center gap-3.5">
             <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal">
               ra
