@@ -15,6 +15,8 @@ import { SegmentosPanel } from './analista/SegmentosPanel';
 import { TransaccionesPanel } from './analista/TransaccionesPanel';
 import { IndicadoresPanel } from './analista/IndicadoresPanel';
 import { ReglasAsociacionPanel } from './analista/ReglasAsociacionPanel';
+import { SustitucionPanel } from './analista/SustitucionPanel';
+import { ElasticidadPanel } from './analista/ElasticidadPanel';
 
 type Tab =
   | 'transacciones'
@@ -22,6 +24,8 @@ type Tab =
   | 'canastas'
   | 'indicadores'
   | 'reglas-asociacion'
+  | 'sustitucion'
+  | 'elasticidad'
   | 'accesibilidad'
   | 'productos'
   | 'tiendas';
@@ -34,6 +38,8 @@ const PASOS: { label: string; tab: Tab }[] = [
   { label: 'Zona y segmento', tab: 'segmentos' },
   { label: 'Indicadores', tab: 'indicadores' },
   { label: 'Asociaciones', tab: 'reglas-asociacion' },
+  { label: 'Sustitución', tab: 'sustitucion' },
+  { label: 'Elasticidad', tab: 'elasticidad' },
   { label: 'Accesibilidad', tab: 'accesibilidad' },
 ];
 
@@ -152,6 +158,8 @@ export function AnalistaPortal() {
         {tab === 'segmentos' && <SegmentosPanel />}
         {tab === 'indicadores' && <IndicadoresPanel />}
         {tab === 'reglas-asociacion' && <ReglasAsociacionPanel />}
+        {tab === 'sustitucion' && <SustitucionPanel />}
+        {tab === 'elasticidad' && <ElasticidadPanel />}
 
         {tab === 'canastas' && (
           <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

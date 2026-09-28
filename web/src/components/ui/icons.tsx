@@ -121,6 +121,14 @@ export function IconElasticidad(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconSustitucion(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 8h13l-3-3M20 16H7l3 3" />
+    </IconBase>
+  );
+}
+
 export function IconTransacciones(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>
