@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Auditoria } from '../entities/auditoria.entity';
 import { AuditoriaCambio } from '../entities/auditoria-cambio.entity';
 import { AuditService } from './audit.service';
+import { AuditController } from './audit.controller';
 
 /**
  * M15 — Auditoría.
@@ -28,6 +29,7 @@ import { AuditService } from './audit.service';
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([Auditoria, AuditoriaCambio])],
+  controllers: [AuditController],
   providers: [AuditService],
   exports: [AuditService],
 })
