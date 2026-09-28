@@ -58,7 +58,7 @@ export function LoginPage() {
         {/* Panel decorativo — oculto en pantallas chicas, la sesión importa más que el arte. */}
         <section className="relative hidden w-[560px] flex-shrink-0 flex-col justify-between overflow-hidden rounded-hero bg-teal p-14 text-arena lg:flex">
           <video
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-80"
+            className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80"
             src="/videos/retailvideo.mp4"
             autoPlay
             loop
