@@ -13,6 +13,7 @@ import { RoleEntity } from '../entities/role.entity';
 import { UsuarioEntity } from '../entities/usuario.entity';
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterProveedorDto } from './dto/register-proveedor.dto';
 import {
@@ -29,6 +30,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
     @InjectRepository(RoleEntity)
     private readonly rolesRepo: Repository<RoleEntity>,
   ) {}
@@ -97,11 +99,12 @@ export class AuthService {
   // ---------------------------------------------------------------
   // LOGIN
   // ---------------------------------------------------------------
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string) {
     const usuario = await this.usersService.findByEmail(dto.email);
 
     // Mensaje deliberadamente genérico: no revelar si el correo existe o
-    // no existe (evita enumeración de cuentas).
+    // no existe (evita enumeración de cuentas). Los intentos fallidos no
+    // se auditan por la misma razón: no se puede atribuir un usuario.
     if (!usuario) {
       throw new UnauthorizedException('Correo o contraseña incorrectos.');
     }
@@ -116,6 +119,16 @@ export class AuthService {
         'Tu cuenta está inactiva o pendiente de aprobación por el Administrador.',
       );
     }
+
+    await this.audit.log({
+      usuarioId: usuario.id,
+      rolId: usuario.rolId,
+      tabla: 'usuarios',
+      registroId: usuario.id,
+      accion: 'login',
+      descripcion: `Inicio de sesión (${usuario.email}).`,
+      ip,
+    });
 
     return this.issueTokens(usuario);
   }

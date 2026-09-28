@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { IncomeSegment } from '../entities/income-segment.entity';
+import { AuditContext, AuditService } from '../audit/audit.service';
 import { CreateSegmentDto } from './dto/create-segment.dto';
 import { UpdateSegmentDto } from './dto/update-segment.dto';
 
@@ -10,9 +11,10 @@ export class SegmentsService {
   constructor(
     @InjectRepository(IncomeSegment)
     private readonly segmentsRepo: Repository<IncomeSegment>,
+    private readonly audit: AuditService,
   ) {}
 
-  async create(dto: CreateSegmentDto): Promise<IncomeSegment> {
+  async create(dto: CreateSegmentDto, ctx?: AuditContext): Promise<IncomeSegment> {
     await this.rechazarDuplicado(dto.code, dto.name);
 
     const segment = this.segmentsRepo.create({
@@ -27,7 +29,23 @@ export class SegmentsService {
       description: dto.description ?? null,
     });
 
-    return this.segmentsRepo.save(segment);
+    const guardado = await this.segmentsRepo.save(segment);
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'segmentos_ingreso',
+      registroId: String(guardado.id),
+      accion: 'insert',
+      descripcion: `Segmento creado (${dto.code} - ${dto.name}).`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'codigo', posterior: dto.code },
+        { campo: 'nombre', posterior: dto.name },
+      ],
+    });
+
+    return guardado;
   }
 
   findAll(): Promise<IncomeSegment[]> {
@@ -42,8 +60,13 @@ export class SegmentsService {
     return segment;
   }
 
-  async update(id: number, dto: UpdateSegmentDto): Promise<IncomeSegment> {
+  async update(id: number, dto: UpdateSegmentDto, ctx?: AuditContext): Promise<IncomeSegment> {
     const segment = await this.findOne(id);
+    const previo: Record<string, string> = {
+      codigo: segment.code,
+      nombre: segment.name,
+      ingreso_min: String(segment.incomeRangeMin),
+    };
 
     if (dto.code || dto.name) {
       await this.rechazarDuplicado(dto.code, dto.name, id);
@@ -61,11 +84,32 @@ export class SegmentsService {
           : segment.incomeRangeMax,
     });
 
-    return this.segmentsRepo.save(segment);
+    const guardado = await this.segmentsRepo.save(segment);
+
+    const posterior: Record<string, string> = {
+      codigo: guardado.code,
+      nombre: guardado.name,
+      ingreso_min: String(guardado.incomeRangeMin),
+    };
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'segmentos_ingreso',
+      registroId: String(id),
+      accion: 'update',
+      descripcion: `Segmento actualizado (${guardado.code}).`,
+      ip: ctx?.ip,
+      cambios: Object.keys(previo)
+        .filter((campo) => previo[campo] !== posterior[campo])
+        .map((campo) => ({ campo, previo: previo[campo], posterior: posterior[campo] })),
+    });
+
+    return guardado;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, ctx?: AuditContext): Promise<void> {
     const segment = await this.findOne(id);
+    const codigo = segment.code;
 
     try {
       await this.segmentsRepo.remove(segment);
@@ -80,6 +124,17 @@ export class SegmentsService {
       }
       throw err;
     }
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'segmentos_ingreso',
+      registroId: String(id),
+      accion: 'delete',
+      descripcion: `Segmento eliminado (${codigo}).`,
+      ip: ctx?.ip,
+      cambios: [{ campo: 'codigo', previo: codigo, posterior: null }],
+    });
   }
 
   /**

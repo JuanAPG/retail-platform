@@ -5,6 +5,7 @@ import { TiendaEntity } from '../entities/tienda.entity';
 import { DireccionEntity } from '../entities/direccion.entity';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
 import { ZonaEntity } from '../entities/zona.entity';
+import { AuditContext, AuditService } from '../audit/audit.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 
@@ -18,6 +19,7 @@ export class StoresService {
     @InjectRepository(ZonaEntity)
     private readonly zonasRepo: Repository<ZonaEntity>,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
   ) {}
 
   findAll() {
@@ -42,7 +44,7 @@ export class StoresService {
    * (zona y código postal) para devolver un 400 legible en vez de que
    * la FK de Postgres truene con un mensaje críptico.
    */
-  async create(dto: CreateStoreDto): Promise<TiendaEntity> {
+  async create(dto: CreateStoreDto, ctx?: AuditContext): Promise<TiendaEntity> {
     const zona = await this.zonasRepo.findOne({ where: { id: dto.zonaId } });
     if (!zona) {
       throw new BadRequestException('La zona indicada no existe.');
@@ -55,7 +57,7 @@ export class StoresService {
       );
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const creada = await this.dataSource.transaction(async (manager) => {
       const direccion = manager.create(DireccionEntity, {
         calle: dto.calle,
         numeroExterior: dto.numeroExterior ?? null,
@@ -78,6 +80,23 @@ export class StoresService {
 
       return manager.findOneOrFail(TiendaEntity, { where: { id: guardada.id } });
     });
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'tiendas',
+      registroId: creada.id,
+      accion: 'insert',
+      descripcion: `Tienda creada (${dto.nombre}).`,
+      ip: ctx?.ip,
+      cambios: [
+        { campo: 'nombre', posterior: dto.nombre },
+        { campo: 'formato', posterior: dto.formato },
+        { campo: 'zonaId', posterior: dto.zonaId },
+      ],
+    });
+
+    return creada;
   }
 
   /**
@@ -86,8 +105,14 @@ export class StoresService {
    * comparte con nadie más, así que no hay riesgo de pisar el domicilio
    * de otra sucursal).
    */
-  async update(id: string, dto: UpdateStoreDto): Promise<TiendaEntity> {
+  async update(id: string, dto: UpdateStoreDto, ctx?: AuditContext): Promise<TiendaEntity> {
     const tienda = await this.findOne(id);
+    const previo: Record<string, string> = {
+      nombre: tienda.nombre,
+      formato: tienda.formato,
+      zonaId: tienda.zonaId,
+      activo: String(tienda.activo),
+    };
 
     if (dto.zonaId) {
       const zona = await this.zonasRepo.findOne({ where: { id: dto.zonaId } });
@@ -103,7 +128,7 @@ export class StoresService {
       }
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const actualizada = await this.dataSource.transaction(async (manager) => {
       const camposDireccion: (keyof CreateStoreDto)[] = [
         'calle',
         'numeroExterior',
@@ -135,10 +160,32 @@ export class StoresService {
 
       return manager.findOneOrFail(TiendaEntity, { where: { id } });
     });
+
+    const posterior: Record<string, string> = {
+      nombre: tienda.nombre,
+      formato: tienda.formato,
+      zonaId: tienda.zonaId,
+      activo: String(tienda.activo),
+    };
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'tiendas',
+      registroId: id,
+      accion: 'update',
+      descripcion: `Tienda actualizada (${tienda.nombre}).`,
+      ip: ctx?.ip,
+      cambios: Object.keys(previo)
+        .filter((campo) => previo[campo] !== posterior[campo])
+        .map((campo) => ({ campo, previo: previo[campo], posterior: posterior[campo] })),
+    });
+
+    return actualizada;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, ctx?: AuditContext): Promise<void> {
     const tienda = await this.findOne(id);
+    const nombre = tienda.nombre;
 
     try {
       await this.tiendasRepo.remove(tienda);
@@ -153,5 +200,16 @@ export class StoresService {
       }
       throw err;
     }
+
+    await this.audit.log({
+      usuarioId: ctx?.actor?.id ?? null,
+      rolId: ctx?.actor?.rolId ?? null,
+      tabla: 'tiendas',
+      registroId: id,
+      accion: 'delete',
+      descripcion: `Tienda eliminada (${nombre}).`,
+      ip: ctx?.ip,
+      cambios: [{ campo: 'nombre', previo: nombre, posterior: null }],
+    });
   }
 }
