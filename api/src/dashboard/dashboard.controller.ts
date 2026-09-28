@@ -1,4 +1,4 @@
-import { Controller, Get, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -82,5 +82,31 @@ export class DashboardController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
     return this.dashboardService.getVariacionPrecios(presentationId, storeId, limit ?? 50);
+  }
+
+  @Get('accesibilidad')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Accesibilidad vigente por zona (última corrida completada).' })
+  @ApiOkResponse({ description: 'Índice por zona con su corrida de origen.' })
+  getAccesibilidad() {
+    return this.dashboardService.getAccesibilidad();
+  }
+
+  @Get('accesibilidad/:zoneId')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Desglose del índice vigente: aporte de cada componente.' })
+  @ApiOkResponse({ description: 'Precio, ingreso, disponibilidad y cobertura con peso y aporte.' })
+  getAccesibilidadDesglose(@Param('zoneId', ParseUUIDPipe) zoneId: string) {
+    return this.dashboardService.getAccesibilidadDesglose(zoneId);
+  }
+
+  @Get('simulacion')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Escenarios creados e impacto estimado en demanda, ingreso y accesibilidad.' })
+  @ApiQuery({ name: 'zoneId', required: false })
+  @ApiQuery({ name: 'indicador', required: false, description: 'Clave del indicador (ej. ingreso_estimado).' })
+  @ApiOkResponse({ description: 'Valor base, simulado y variación por escenario e indicador.' })
+  getSimulacion(@Query('zoneId') zoneId?: string, @Query('indicador') indicador?: string) {
+    return this.dashboardService.getSimulacion(zoneId, indicador);
   }
 }

@@ -66,6 +66,38 @@ export interface VariacionPrecio {
   variacionPct: number | null;
 }
 
+/** Accesibilidad vigente por zona (de `v_dashboard_accesibilidad_zona`). */
+export interface AccesibilidadZona {
+  zonaId: string;
+  zona: string;
+  municipio: string;
+  indice: number;
+  corridaId: string;
+  ejecutadaEn: Date;
+}
+
+/** Aporte de cada componente al índice (de `v_accesibilidad_desglose`). */
+export interface AccesibilidadDesglose {
+  zonaId: string;
+  indice: number;
+  componente: string;
+  valor: number;
+  peso: number;
+  aporte: number;
+}
+
+/** Impacto estimado de un escenario (de `v_dashboard_simulacion`). */
+export interface ImpactoEscenario {
+  escenarioId: string;
+  escenario: string;
+  zonaId: string | null;
+  indicador: string;
+  indicadorNombre: string;
+  valorBase: number;
+  valorSimulado: number;
+  variacionPct: number | null;
+}
+
 /**
  * M16 — Agregación del tablero. Cada método lee una vista del §16 o
  * delega en el servicio dueño del cálculo; este módulo no calcula nada
@@ -233,6 +265,93 @@ export class DashboardService {
       precioActual: Number(row.precio_actual),
       precioAnterior: row.precio_anterior == null ? null : Number(row.precio_anterior),
       variacionPct: row.variacion_pct == null ? null : Number(row.variacion_pct),
+    }));
+  }
+
+  /**
+   * Accesibilidad por zona: solo la corrida `completada` más reciente
+   * de cada una (así lo define la vista). Sin corridas devuelve `[]`.
+   */
+  async getAccesibilidad(): Promise<AccesibilidadZona[]> {
+    const rows: Array<Record<string, string | Date | null>> = await this.dataSource.query(
+      `SELECT zona_id, zona, municipio, indice::text AS indice,
+              corrida_id, ejecutada_en AS "ejecutadaEn"
+       FROM v_dashboard_accesibilidad_zona
+       ORDER BY zona`,
+    );
+    return rows.map((row) => ({
+      zonaId: String(row.zona_id),
+      zona: String(row.zona),
+      municipio: String(row.municipio),
+      indice: Number(row.indice),
+      corridaId: String(row.corrida_id),
+      ejecutadaEn: row.ejecutadaEn as Date,
+    }));
+  }
+
+  /**
+   * Desglose del índice vigente de una zona: cuánto aporta cada
+   * componente (precio, ingreso, disponibilidad, básicos). Es lo que
+   * explica el número en vez de reducirlo a "precio bajo" (RN).
+   */
+  async getAccesibilidadDesglose(zoneId: string): Promise<AccesibilidadDesglose[]> {
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      `SELECT d.zona_id, d.indice::text AS indice, d.componente::text AS componente,
+              d.valor::text AS valor, d.peso::text AS peso, d.aporte::text AS aporte
+       FROM v_accesibilidad_desglose d
+       JOIN analisis_corridas c ON c.id = d.corrida_id
+       WHERE d.zona_id = $1 AND c.ejecutada_en = (
+         SELECT MAX(c2.ejecutada_en)
+         FROM accesibilidad_zona a
+         JOIN analisis_corridas c2 ON c2.id = a.corrida_id
+         WHERE a.zona_id = $1
+       )`,
+      [zoneId],
+    );
+    return rows.map((row) => ({
+      zonaId: String(row.zona_id),
+      indice: Number(row.indice),
+      componente: String(row.componente),
+      valor: Number(row.valor),
+      peso: Number(row.peso),
+      aporte: Number(row.aporte),
+    }));
+  }
+
+  /**
+   * Escenarios creados e impacto estimado en demanda, ingreso y
+   * accesibilidad. Se filtra por zona o por clave de indicador
+   * (`demanda_estimada`, `ingreso_estimado`, `indice_accesibilidad`).
+   */
+  async getSimulacion(zoneId?: string, indicador?: string): Promise<ImpactoEscenario[]> {
+    const condiciones: string[] = [];
+    const params: string[] = [];
+    if (zoneId) {
+      params.push(zoneId);
+      condiciones.push(`zona_id = $${params.length}`);
+    }
+    if (indicador) {
+      params.push(indicador);
+      condiciones.push(`indicador = $${params.length}`);
+    }
+    const rows: Array<Record<string, string | null>> = await this.dataSource.query(
+      `SELECT escenario_id, nombre, zona_id, indicador, indicador_nombre,
+              valor_base::text AS "valorBase", valor_simulado::text AS "valorSimulado",
+              variacion_pct::text AS "variacionPct"
+       FROM v_dashboard_simulacion
+       ${condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : ''}
+       ORDER BY created_at DESC`,
+      params,
+    );
+    return rows.map((row) => ({
+      escenarioId: String(row.escenario_id),
+      escenario: String(row.nombre),
+      zonaId: row.zona_id ?? null,
+      indicador: String(row.indicador),
+      indicadorNombre: String(row.indicador_nombre),
+      valorBase: Number(row.valorBase),
+      valorSimulado: Number(row.valorSimulado),
+      variacionPct: row.variacionPct == null ? null : Number(row.variacionPct),
     }));
   }
 }
