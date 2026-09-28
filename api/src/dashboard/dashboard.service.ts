@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { AnalyticsFilterDto } from '../analytics/dto/analytics-filter.dto';
+import { CategorySpend } from '../analytics/dto/category-spend.dto';
 
 /** Fila de `v_dashboard_kpis_generales` con números ya convertidos. */
 export interface KpisGenerales {
@@ -12,6 +15,15 @@ export interface KpisGenerales {
   productosBasicosDisponibles: number;
 }
 
+/** Bloque de comportamiento: frecuencia + gasto por categoría. */
+export interface Comportamiento {
+  frecuenciaCompra: number;
+  ticketPromedio: number;
+  productosPorCanasta: number;
+  unidadesPorTransaccion: number;
+  gastoPorCategoria: CategorySpend[];
+}
+
 /**
  * M16 — Agregación del tablero. Cada método lee una vista del §16 o
  * delega en el servicio dueño del cálculo; este módulo no calcula nada
@@ -20,7 +32,10 @@ export interface KpisGenerales {
  */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   /**
    * KPIs generales. Son globales por definición (la vista no lleva
@@ -40,5 +55,23 @@ export class DashboardService {
       zonasAnalizadas: Number(row?.zonas_analizadas ?? 0),
       productosBasicosDisponibles: Number(row?.productos_basicos_disponibles ?? 0),
     };
+  }
+
+  /**
+   * Comportamiento con los mismos filtros de M09 (tienda, zona,
+   * segmento, periodo). Delega todo en `AnalyticsService`: la
+   * frecuencia agregada por zona y el gasto por categoría ya están
+   * probados ahí, aquí solo se agrupan para el tablero.
+   */
+  async getComportamiento(filters: AnalyticsFilterDto): Promise<Comportamiento> {
+    const [frecuenciaCompra, ticketPromedio, productosPorCanasta, unidadesPorTransaccion, gastoPorCategoria] =
+      await Promise.all([
+        this.analytics.getPurchaseFrequency(filters),
+        this.analytics.getAverageTicket(filters),
+        this.analytics.getProductsPerBasket(filters),
+        this.analytics.getUnitsPerTransaction(filters),
+        this.analytics.getSpendByCategory(filters),
+      ]);
+    return { frecuenciaCompra, ticketPromedio, productosPorCanasta, unidadesPorTransaccion, gastoPorCategoria };
   }
 }
