@@ -73,6 +73,16 @@ export interface CsvImportResult {
   omitidos: CsvImportOmitido[];
 }
 
+export interface ImportacionPendiente {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  filasTotales: number;
+  filasValidas: number;
+  filasConError: number;
+  cargadoEn: string;
+}
+
 const MAX_ARCHIVO_BYTES = 5 * 1024 * 1024;
 const MAX_ERRORES_PREVIEW = 200;
 
@@ -436,6 +446,22 @@ export class TransactionsService {
       canastasCreadas: canastas,
       omitidos,
     };
+  }
+
+  async listPendingImports(): Promise<ImportacionPendiente[]> {
+    const pendientes = await this.importacionesRepo.find({
+      where: { estado: In(['validado', 'con_errores']) },
+      order: { uploadedAt: 'DESC' },
+    });
+    return pendientes.map((i) => ({
+      importacionId: i.id,
+      fileName: i.fileName,
+      estado: i.estado,
+      filasTotales: i.totalRows,
+      filasValidas: i.validRows,
+      filasConError: i.errorRows,
+      cargadoEn: i.uploadedAt.toISOString(),
+    }));
   }
 
   // --- Validación de filas (privado) -----------------------------------

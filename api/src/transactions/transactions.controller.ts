@@ -65,6 +65,12 @@ export class TransactionsController {
     return this.transactionsService.confirmCsvImport(dto.previewId, usuario, ip);
   }
 
+  @Get('import/pending')
+  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  listPendingImports() {
+    return this.transactionsService.listPendingImports();
+  }
+
   @Get()
   @Roles(...PERFILES_INTERNOS)
   findAll(@Query() filters: TransactionFilterDto) {
