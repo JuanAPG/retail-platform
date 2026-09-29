@@ -448,6 +448,22 @@ export class TransactionsService {
     };
   }
 
+  async listPendingImports(): Promise<ImportacionPendiente[]> {
+    const pendientes = await this.importacionesRepo.find({
+      where: { estado: In(['validado', 'con_errores']) },
+      order: { uploadedAt: 'DESC' },
+    });
+    return pendientes.map((i) => ({
+      importacionId: i.id,
+      fileName: i.fileName,
+      estado: i.estado,
+      filasTotales: i.totalRows,
+      filasValidas: i.validRows,
+      filasConError: i.errorRows,
+      cargadoEn: i.uploadedAt.toISOString(),
+    }));
+  }
+
   // --- Validación de filas (privado) -----------------------------------
 
   private celda(fila: string[], indice: number): string | null {
