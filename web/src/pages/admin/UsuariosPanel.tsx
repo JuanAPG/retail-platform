@@ -275,7 +275,7 @@ export function UsuariosPanel({ estado, busqueda }: UsuariosPanelProps) {
                     {iniciales(u.nombre)}
                   </span>
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate font-display text-[19px] leading-tight text-tinta">
+                    <span className="truncate font-display text-base leading-tight text-tinta sm:text-[19px]">
                       {u.nombre}
                       {esUnoMismo && <span className="ml-1.5 text-xs text-salvia">(tú)</span>}
                     </span>

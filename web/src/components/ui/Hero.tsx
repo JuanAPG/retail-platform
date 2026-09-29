@@ -20,7 +20,7 @@ export function Hero({ title, subtitle, action, decorations, className = '' }: H
         </div>
         {action && <div className="flex gap-3">{action}</div>}
       </div>
-      {decorations}
+      {decorations && <div className="hidden md:contents">{decorations}</div>}
     </section>
   );
 }

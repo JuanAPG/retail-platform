@@ -22,7 +22,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 export function StatusPill({ tone, children, icon }: StatusPillProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${TONE_CLASS[tone]}`}
+      className={`inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${TONE_CLASS[tone]}`}
     >
       {icon}
       {children}

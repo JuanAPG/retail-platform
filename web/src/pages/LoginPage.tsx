@@ -38,9 +38,13 @@ export function LoginPage() {
     setToast(valor ? 'Se recordará tu inicio de sesión' : 'Ya no se recordará tu inicio de sesión');
   }
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa tu correo y contraseña.');
+      return;
+    }
     setSubmitting(true);
     try {
       const usuarioAutenticado = await login(email, password);
@@ -126,7 +130,7 @@ export function LoginPage() {
           <div className="flex flex-col gap-[18px]">
             <h2 className="font-display text-5xl font-normal text-vino">Hola de nuevo</h2>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-[18px]">
               <Field
                 id="email"
                 label="Correo"

@@ -108,7 +108,7 @@ export function ComparacionZonasPanel({ estado, onVolver }: ComparacionZonasPane
           {resultado.map((r) => (
             <Card key={r.zoneId}>
               <div className="flex flex-col gap-0.5">
-                <span className="font-display text-[19px] leading-tight text-tinta">{r.zoneName}</span>
+                <span className="font-display text-base leading-tight text-tinta sm:text-[19px]">{r.zoneName}</span>
                 <span className="font-data text-xs text-teal">{r.municipality}</span>
               </div>
               <p className="text-sm font-semibold text-vino">{r.classification ?? 'Sin clasificar'}</p>

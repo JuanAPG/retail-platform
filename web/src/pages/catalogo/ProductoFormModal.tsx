@@ -50,10 +50,14 @@ export function ProductoFormModal({
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
     if (!categoriaId) {
       setError('Selecciona una categoría.');
       return;
@@ -106,7 +110,7 @@ export function ProductoFormModal({
       }
       onCerrar={onCerrar}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Field id="producto-sku" label="SKU" required disabled={esEdicion} value={sku} onChange={(e) => setSku(e.target.value)} />
           <Field id="producto-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />

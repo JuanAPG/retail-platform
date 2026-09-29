@@ -1,4 +1,5 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import type { NivelPermiso } from '../Sidebar';
 import { IconCerrarSesion, IconChevron } from './icons';
@@ -31,6 +32,9 @@ interface RailProps {
   perfiles?: RailPerfil[];
   onLogout: () => void;
   inicioHref?: string;
+  /** Controlado desde AppShell: el panel lateral de la pantalla reacciona a este mismo estado. */
+  expandido: boolean;
+  onToggleExpandido: () => void;
 }
 
 const PERMISO_TOOLTIP: Partial<Record<NivelPermiso, string>> = {
@@ -40,9 +44,43 @@ const PERMISO_TOOLTIP: Partial<Record<NivelPermiso, string>> = {
   lect_act: 'lectura/actualización',
 };
 
-const CLAVE_EXPANDIDO = 'rail-expandido';
+/**
+ * "expandido" es un concepto de escritorio (el Rail vertical con espacio
+ * para el texto). En el bar horizontal de móvil, un botón "expandido"
+ * intenta ocupar `w-full` de la fila y se come toda la barra — por eso
+ * `expandido` nunca debe llegar a `ModuloBoton` tal cual, sino cruzado con
+ * esto (coincide con el breakpoint `lg` de Tailwind, 1024px).
+ */
+function useEsEscritorio() {
+  const [esEscritorio, setEsEscritorio] = useState(() =>
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1024px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const actualizar = () => setEsEscritorio(mq.matches);
+    actualizar();
+    mq.addEventListener('change', actualizar);
+    return () => mq.removeEventListener('change', actualizar);
+  }, []);
+  return esEscritorio;
+}
 
-function ModuloBoton({ modulo, expandido }: { modulo: RailModule; expandido: boolean }) {
+interface TooltipInfo {
+  label: string;
+  permiso?: string;
+  top: number;
+  left: number;
+}
+
+function ModuloBoton({
+  modulo,
+  expandido,
+  onHover,
+}: {
+  modulo: RailModule;
+  expandido: boolean;
+  onHover: (info: TooltipInfo | null) => void;
+}) {
   const tooltipPermiso = modulo.permiso ? PERMISO_TOOLTIP[modulo.permiso] : undefined;
 
   if (expandido) {
@@ -72,6 +110,17 @@ function ModuloBoton({ modulo, expandido }: { modulo: RailModule; expandido: boo
     );
   }
 
+  // Colapsado: el nombre del módulo se ve al pasar el mouse. El tooltip lo
+  // pinta el Rail en un portal (ver más abajo) — este botón vive dentro de
+  // una lista con scroll propio, que recortaría un tooltip absoluto normal.
+  function mostrar(e: { currentTarget: HTMLElement }) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    onHover({ label: modulo.label, permiso: tooltipPermiso, top: rect.top + rect.height / 2, left: rect.right + 12 });
+  }
+  function ocultar() {
+    onHover(null);
+  }
+
   const contenido = (
     <>
       {modulo.icon}
@@ -80,137 +129,190 @@ function ModuloBoton({ modulo, expandido }: { modulo: RailModule; expandido: boo
           {modulo.badge}
         </span>
       )}
-      <span className="pointer-events-none absolute left-[68px] top-1/2 z-10 hidden -translate-x-2 -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-tinta px-4 py-2.5 text-[13px] font-semibold text-arena opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100 lg:flex">
-        {modulo.label}
-        {tooltipPermiso && <small className="font-medium text-salvia">{tooltipPermiso}</small>}
-      </span>
     </>
   );
 
-  const className = `group relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full transition ${
+  const className = `relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full transition ${
     modulo.active ? 'bg-vino text-arena' : 'text-arena hover:scale-[1.08] hover:bg-salvia hover:text-tinta'
   }`;
 
+  const eventos = { onMouseEnter: mostrar, onMouseLeave: ocultar, onFocus: mostrar, onBlur: ocultar };
+
   if (modulo.href) {
     return (
-      <Link to={modulo.href} aria-label={modulo.label} className={className}>
+      <Link to={modulo.href} aria-label={modulo.label} className={className} {...eventos}>
         {contenido}
       </Link>
     );
   }
 
   return (
-    <button type="button" onClick={modulo.onClick} aria-label={modulo.label} className={className}>
+    <button type="button" onClick={modulo.onClick} aria-label={modulo.label} className={className} {...eventos}>
       {contenido}
     </button>
   );
 }
 
 /** DESIGN.md §4/§5 — Rail: navegación de módulos por rol, fija a la altura de la pantalla. */
-export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/' }: RailProps) {
-  const [expandido, setExpandido] = useState(() => {
-    try {
-      return localStorage.getItem(CLAVE_EXPANDIDO) === '1';
-    } catch {
-      return false;
-    }
-  });
+export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/', expandido, onToggleExpandido }: RailProps) {
+  const esEscritorio = useEsEscritorio();
+  const expandidoEfectivo = expandido && esEscritorio;
+  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ left?: number; right?: number; bottom: number } | null>(null);
+  const avatarBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // El menú de perfiles se pinta con un portal en position: fixed: el Rail
+  // vuelve a recortar su contenido a la cápsula redondeada (overflow-hidden
+  // más abajo) y un menú absoluto normal quedaría cortado a la mitad.
+  useLayoutEffect(() => {
+    if (!menuAbierto || !avatarBtnRef.current) return;
+    const rect = avatarBtnRef.current.getBoundingClientRect();
+    const ancho = 250;
+    const cabeAlaIzquierda = rect.left + ancho <= window.innerWidth - 16;
+    setMenuPos({
+      bottom: window.innerHeight - rect.top + 8,
+      ...(cabeAlaIzquierda ? { left: rect.left } : { right: window.innerWidth - rect.right }),
+    });
+  }, [menuAbierto]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CLAVE_EXPANDIDO, expandido ? '1' : '0');
-    } catch {
-      // Almacenamiento no disponible (modo privado, etc.): la preferencia solo dura la sesión.
+    if (!menuAbierto) return;
+    function dentroDeAlgo(target: Node) {
+      return (avatarBtnRef.current?.contains(target) ?? false) || (menuRef.current?.contains(target) ?? false);
     }
-  }, [expandido]);
+    function alClicFuera(e: MouseEvent) {
+      if (!dentroDeAlgo(e.target as Node)) setMenuAbierto(false);
+    }
+    function alTeclear(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuAbierto(false);
+    }
+    function alHacerScroll(e: Event) {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      setMenuAbierto(false);
+    }
+    document.addEventListener('mousedown', alClicFuera);
+    document.addEventListener('keydown', alTeclear);
+    window.addEventListener('scroll', alHacerScroll, true);
+    window.addEventListener('resize', alHacerScroll);
+    return () => {
+      document.removeEventListener('mousedown', alClicFuera);
+      document.removeEventListener('keydown', alTeclear);
+      window.removeEventListener('scroll', alHacerScroll, true);
+      window.removeEventListener('resize', alHacerScroll);
+    };
+  }, [menuAbierto]);
 
   return (
     <nav
       aria-label="Módulos"
-      className={`z-[4] flex w-full flex-shrink-0 items-center gap-2.5 overflow-x-auto rounded-panel bg-teal px-4 py-2.5 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] lg:w-auto lg:flex-col lg:items-center lg:overflow-x-visible lg:overflow-y-auto lg:rounded-[46px] lg:px-0 lg:py-[18px] lg:transition-[width] lg:duration-200 ${
-        expandido ? 'lg:w-64 lg:items-stretch lg:px-3.5' : 'lg:w-[92px]'
+      className={`z-[4] flex w-full flex-shrink-0 items-center gap-2.5 overflow-x-auto rounded-panel bg-teal px-4 py-2.5 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] lg:w-auto lg:flex-col lg:items-center lg:overflow-hidden lg:rounded-[46px] lg:px-0 lg:py-[18px] lg:transition-[width] lg:duration-200 ${
+        expandidoEfectivo ? 'lg:w-64 lg:items-stretch lg:px-3.5' : 'lg:w-[92px]'
       }`}
     >
-      <Link
-        to={inicioHref}
-        aria-label="Inicio"
-        className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal transition hover:-rotate-12 hover:scale-105 hover:bg-vino hover:text-arena lg:mb-3.5 lg:h-[60px] ${
-          expandido ? 'lg:w-full' : 'lg:w-[60px]'
+      <div
+        className={`flex flex-shrink-0 items-center lg:mb-3.5 ${
+          expandidoEfectivo ? 'lg:w-full lg:justify-between lg:gap-2' : 'lg:flex-col lg:gap-1.5'
         }`}
       >
-        ra
-      </Link>
+        <Link
+          to={inicioHref}
+          aria-label="Inicio"
+          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal transition hover:-rotate-12 hover:scale-105 hover:bg-vino hover:text-arena lg:h-[60px] lg:w-[60px]"
+        >
+          ra
+        </Link>
+        <button
+          type="button"
+          onClick={onToggleExpandido}
+          aria-label={expandidoEfectivo ? 'Contraer menú' : 'Expandir menú'}
+          className="hidden flex-shrink-0 items-center justify-center rounded-full text-arena/70 transition hover:bg-salvia/20 hover:text-arena lg:flex lg:h-8 lg:w-8"
+        >
+          <IconChevron className={`h-4 w-4 transition-transform ${expandidoEfectivo ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
 
-      <div className={`flex flex-1 items-center gap-2.5 lg:flex-col ${expandido ? 'lg:items-stretch' : 'lg:items-center'}`}>
+      <div
+        className={`scrollbar-hidden flex flex-1 items-center gap-2.5 lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:py-1 ${
+          expandidoEfectivo ? 'lg:items-stretch' : 'lg:items-center'
+        }`}
+      >
         {modulos.map((modulo) => (
-          <ModuloBoton key={modulo.key} modulo={modulo} expandido={expandido} />
+          <ModuloBoton key={modulo.key} modulo={modulo} expandido={expandidoEfectivo} onHover={setTooltip} />
         ))}
       </div>
 
       <button
+        ref={avatarBtnRef}
         type="button"
-        onClick={() => setExpandido((v) => !v)}
-        aria-label={expandido ? 'Contraer menú' : 'Expandir menú'}
-        className={`hidden flex-shrink-0 items-center justify-center gap-2 rounded-full text-arena/70 transition hover:bg-salvia/20 hover:text-arena lg:flex lg:h-11 ${
-          expandido ? 'lg:w-full' : 'lg:w-11'
+        onClick={() => setMenuAbierto((v) => !v)}
+        aria-label="Perfil"
+        aria-haspopup="menu"
+        aria-expanded={menuAbierto}
+        className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-[3px] border-teal bg-salvia text-lg font-bold text-tinta shadow-[0_0_0_2px_#708D81] transition hover:shadow-[0_0_0_4px_#F0ECDF] focus-visible:shadow-[0_0_0_4px_#F0ECDF] lg:h-[60px] ${
+          expandidoEfectivo ? 'lg:w-full' : 'lg:w-[60px]'
         }`}
       >
-        <IconChevron className={`h-4 w-4 transition-transform ${expandido ? '-rotate-180' : ''}`} />
-        {expandido && <span className="text-xs font-semibold">Contraer</span>}
+        {iniciales}
       </button>
 
-      {/* pr-4 puentea el hueco entre el avatar y el menú con un div
-          invisible aparte: si el padding fuera parte de este contenedor,
-          desalinearía el avatar respecto a los demás íconos (quedaría
-          recorrido a la izquierda). */}
-      <div className={`group/who relative flex-shrink-0 ${expandido ? 'lg:w-full' : ''}`}>
-        <button
-          type="button"
-          aria-label="Perfil"
-          className={`relative z-[1] flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-teal bg-salvia text-lg font-bold text-tinta shadow-[0_0_0_2px_#708D81] transition group-hover/who:shadow-[0_0_0_4px_#F0ECDF] group-focus-within/who:shadow-[0_0_0_4px_#F0ECDF] lg:h-[60px] ${
-            expandido ? 'lg:w-full lg:gap-3 lg:px-1' : 'lg:w-[60px]'
-          }`}
-        >
-          {iniciales}
-        </button>
-        {!expandido && <div className="absolute left-full top-0 hidden h-full w-4 lg:block" aria-hidden="true" />}
-        <div
-          className={`invisible absolute bottom-[calc(100%+8px)] right-0 z-10 flex min-w-[250px] translate-y-2 flex-col gap-1 rounded-[30px] bg-tinta p-2.5 opacity-0 transition group-hover/who:visible group-hover/who:translate-x-0 group-hover/who:translate-y-0 group-hover/who:opacity-100 group-focus-within/who:visible group-focus-within/who:translate-x-0 group-focus-within/who:translate-y-0 group-focus-within/who:opacity-100 ${
-            expandido
-              ? 'lg:bottom-[calc(100%+8px)] lg:left-0 lg:right-0 lg:translate-y-2 lg:translate-x-0'
-              : 'lg:bottom-0 lg:left-[72px] lg:right-auto lg:top-auto lg:-translate-x-2 lg:translate-y-0'
-          }`}
-        >
-          {perfiles?.map((perfil) => (
-            <Link
-              key={perfil.rol}
-              to={perfil.href}
-              className={`flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm text-arena transition hover:bg-salvia hover:text-tinta ${
-                perfil.actual ? 'bg-teal' : ''
-              }`}
-            >
-              <span
-                className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                  perfil.actual ? 'bg-vino text-arena' : 'bg-salvia text-tinta'
+      {tooltip &&
+        !expandidoEfectivo &&
+        createPortal(
+          <div
+            style={{ position: 'fixed', top: tooltip.top, left: tooltip.left, transform: 'translateY(-50%)' }}
+            className="pointer-events-none z-[200] flex items-center gap-2 whitespace-nowrap rounded-full bg-tinta px-4 py-2.5 text-[13px] font-semibold text-arena shadow-lift"
+          >
+            {tooltip.label}
+            {tooltip.permiso && <small className="font-medium text-salvia">{tooltip.permiso}</small>}
+          </div>,
+          document.body,
+        )}
+
+      {menuAbierto &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', bottom: menuPos.bottom, left: menuPos.left, right: menuPos.right, width: 250 }}
+            className="z-[200] flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-[30px] bg-tinta p-2.5 shadow-lift"
+          >
+            {perfiles?.map((perfil) => (
+              <Link
+                key={perfil.rol}
+                to={perfil.href}
+                onClick={() => setMenuAbierto(false)}
+                className={`flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm text-arena transition hover:bg-salvia hover:text-tinta ${
+                  perfil.actual ? 'bg-teal' : ''
                 }`}
               >
-                {perfil.iniciales}
+                <span
+                  className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    perfil.actual ? 'bg-vino text-arena' : 'bg-salvia text-tinta'
+                  }`}
+                >
+                  {perfil.iniciales}
+                </span>
+                {perfil.rol}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setMenuAbierto(false);
+                onLogout();
+              }}
+              className="flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left text-sm text-arena transition hover:bg-salvia hover:text-tinta"
+            >
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-salvia text-tinta">
+                <IconCerrarSesion className="h-[15px] w-[15px]" />
               </span>
-              {perfil.rol}
-            </Link>
-          ))}
-          <button
-            type="button"
-            onClick={onLogout}
-            className="flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left text-sm text-arena transition hover:bg-salvia hover:text-tinta"
-          >
-            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-salvia text-tinta">
-              <IconCerrarSesion className="h-[15px] w-[15px]" />
-            </span>
-            Cerrar sesión
-          </button>
-        </div>
-      </div>
+              Cerrar sesión
+            </button>
+          </div>,
+          document.body,
+        )}
     </nav>
   );
 }

@@ -119,7 +119,7 @@ export function PreciosPanel() {
         <h2 className="font-slab text-[22px] text-vino">Registrar precio</h2>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="lg:col-span-2">
+          <div className="min-w-0 lg:col-span-2">
             <Select id="precio-producto" label="Producto" value={productoId} onChange={(e) => elegirProducto(e.target.value)} placeholder="Selecciona…">
               {(productos.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
@@ -129,30 +129,34 @@ export function PreciosPanel() {
             </Select>
           </div>
 
-          <Select
-            id="precio-presentacion"
-            label="Presentación"
-            value={presentacionId}
-            onChange={(e) => setPresentacionId(e.target.value)}
-            disabled={!productoSeleccionado}
-            placeholder="Selecciona…"
-          >
-            {(productoSeleccionado?.presentaciones ?? []).map((pr) => (
-              <option key={pr.id} value={pr.id}>
-                {pr.nombre} ({pr.contenido} {pr.unidadMedida?.clave})
-              </option>
-            ))}
-          </Select>
+          <div className="min-w-0">
+            <Select
+              id="precio-presentacion"
+              label="Presentación"
+              value={presentacionId}
+              onChange={(e) => setPresentacionId(e.target.value)}
+              disabled={!productoSeleccionado}
+              placeholder="Selecciona…"
+            >
+              {(productoSeleccionado?.presentaciones ?? []).map((pr) => (
+                <option key={pr.id} value={pr.id}>
+                  {pr.nombre} ({pr.contenido} {pr.unidadMedida?.clave})
+                </option>
+              ))}
+            </Select>
+          </div>
 
-          <Select id="precio-tienda" label="Tienda" value={tiendaId} onChange={(e) => setTiendaId(e.target.value)} placeholder="Selecciona…">
-            {(tiendas.data ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nombre} — {t.zona?.nombre}
-              </option>
-            ))}
-          </Select>
+          <div className="min-w-0">
+            <Select id="precio-tienda" label="Tienda" value={tiendaId} onChange={(e) => setTiendaId(e.target.value)} placeholder="Selecciona…">
+              {(tiendas.data ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre} — {t.zona?.nombre}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-          <label className={labelClass} htmlFor="precio-monto">
+          <label className={`${labelClass} min-w-0`} htmlFor="precio-monto">
             Precio (MXN)
             <input
               id="precio-monto"
@@ -161,18 +165,18 @@ export function PreciosPanel() {
               step="0.01"
               value={precio}
               onChange={(e) => setPrecio(e.target.value)}
-              className={selectClass}
+              className={`${selectClass} min-w-0`}
             />
           </label>
 
-          <label className={labelClass} htmlFor="precio-fecha">
+          <label className={`${labelClass} min-w-0`} htmlFor="precio-fecha">
             Vigente desde
             <input
               id="precio-fecha"
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
-              className={selectClass}
+              className={`${selectClass} min-w-0`}
             />
           </label>
 

@@ -179,7 +179,7 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
               }
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-display text-[19px] leading-tight text-tinta">{t.nombre}</span>
+                <span className="min-w-0 flex-1 truncate font-display text-base leading-tight text-tinta sm:text-[19px]">{t.nombre}</span>
                 <StatusPill tone="neutral">{ETIQUETA_FORMATO[t.formato] ?? t.formato}</StatusPill>
               </div>
               <div className="flex flex-col gap-0.5 font-data text-xs text-teal">

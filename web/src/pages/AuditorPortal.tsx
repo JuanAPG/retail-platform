@@ -53,6 +53,36 @@ function nombreTabla(tabla: string) {
   return NOMBRE_TABLA[tabla] ?? tabla.replace(/_/g, ' ');
 }
 
+const NOMBRE_CAMPO: Record<string, string> = {
+  activo: 'Estado',
+  nombre: 'Nombre',
+  precio: 'Precio',
+  precio_anterior: 'Precio anterior',
+  email: 'Correo',
+  rolId: 'Rol',
+  zonaId: 'Zona',
+  municipioId: 'Municipio',
+  codigo: 'Código',
+  password: 'Contraseña',
+  es_canasta_basica: 'Canasta básica',
+  tiene_web_propia: 'Web propia',
+};
+
+/** "zonaId"/"es_canasta_basica" → "zona Id"/"es canasta basica": para lo que no esté en el diccionario de arriba. */
+function nombreCampo(campo: string) {
+  if (NOMBRE_CAMPO[campo]) return NOMBRE_CAMPO[campo];
+  const conEspacios = campo.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  return conEspacios.charAt(0).toUpperCase() + conEspacios.slice(1);
+}
+
+/** "true"/"false" tal como los guarda la bitácora: en negocio es Activo/Inactivo (o Sí/No si el campo no es de estado). */
+function valorLegible(valor: string | null, campo: string) {
+  if (valor === null) return '—';
+  if (valor === 'true') return campo === 'activo' ? 'Activo' : 'Sí';
+  if (valor === 'false') return campo === 'activo' ? 'Inactivo' : 'No';
+  return valor;
+}
+
 function Placeholder({ titulo, descripcion }: { titulo: string; descripcion: string }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
@@ -202,7 +232,7 @@ function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
                 <div className="flex flex-col gap-1 rounded-card bg-arena px-3.5 py-2.5">
                   {ev.cambios.map((c) => (
                     <span key={c.campo} className="font-data text-xs text-teal">
-                      <strong className="font-semibold text-tinta">{c.campo}</strong>: {c.valorPrevio ?? '—'} → {c.valorPosterior ?? '—'}
+                      <strong className="font-semibold text-tinta">{nombreCampo(c.campo)}</strong>: {valorLegible(c.valorPrevio, c.campo)} → {valorLegible(c.valorPosterior, c.campo)}
                     </span>
                   ))}
                 </div>
@@ -250,7 +280,7 @@ function UsuariosLectura({ estado }: { estado: UseFetchState<Usuario[]> }) {
           {estado.data.map((u) => (
             <Card key={u.id}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-display text-lg text-tinta">{u.nombre}</span>
+                <span className="min-w-0 flex-1 truncate font-display text-lg text-tinta">{u.nombre}</span>
                 <StatusPill tone={u.activo ? 'ok' : 'neutral'}>{u.activo ? 'Activo' : 'Inactivo'}</StatusPill>
               </div>
               <span className="text-xs text-teal">{u.rol}</span>
@@ -313,7 +343,7 @@ function ProveedoresLectura({ estado }: { estado: UseFetchState<Proveedor[]> }) 
           {estado.data.map((p) => (
             <Card key={p.id}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-display text-lg text-tinta">{p.razonSocial}</span>
+                <span className="min-w-0 flex-1 truncate font-display text-lg text-tinta">{p.razonSocial}</span>
                 <StatusPill tone={p.activo ? 'ok' : 'warn'}>{p.activo ? 'Activo' : 'Pendiente'}</StatusPill>
               </div>
               <span className="font-data text-xs text-teal">{p.rfc ?? 'Sin RFC'}</span>

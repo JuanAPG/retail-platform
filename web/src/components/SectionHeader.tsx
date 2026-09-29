@@ -9,7 +9,7 @@ interface SectionHeaderProps {
 
 export function SectionHeader({ title, badge, description, action }: SectionHeaderProps) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="mb-6 flex items-start justify-between gap-4 px-6">
       <div>
         <div className="flex items-center gap-2.5">
           <h1 className="font-display text-3xl text-vino">{title}</h1>

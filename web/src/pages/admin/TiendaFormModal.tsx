@@ -52,10 +52,14 @@ export function TiendaFormModal({
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
     if (!zonaId) {
       setError('Selecciona una zona.');
       return;
@@ -99,7 +103,7 @@ export function TiendaFormModal({
       descripcion="Toda tienda necesita una zona y una dirección con código postal ya catalogado."
       onCerrar={onCerrar}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Field id="tienda-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
           <Select

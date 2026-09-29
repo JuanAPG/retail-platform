@@ -149,7 +149,7 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
               }
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-display text-[19px] leading-tight text-tinta">{z.nombre}</span>
+                <span className="min-w-0 flex-1 truncate font-display text-base leading-tight text-tinta sm:text-[19px]">{z.nombre}</span>
                 <StatusPill tone="neutral">{z.municipio?.nombre}</StatusPill>
               </div>
               <p className="font-data text-xs text-teal">{z.descripcion ?? 'Sin descripción'}</p>

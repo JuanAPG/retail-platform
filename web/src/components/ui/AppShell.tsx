@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Header } from './Header';
 import { Rail, RailModule, RailPerfil } from './Rail';
 
@@ -18,11 +18,16 @@ interface AppShellProps {
   aside?: ReactNode;
 }
 
+const CLAVE_EXPANDIDO = 'rail-expandido';
+
 /**
  * DESIGN.md §4 — Layout base: Rail + Header + columna central + aside.
- * Listo para usarse cuando cada portal se rediseñe; no está conectado a
- * `ProtectedRoute` todavía para no duplicar la barra vieja (TopBar +
- * Sidebar) mientras un portal no le toque su turno.
+ *
+ * El Rail expandido y la columna aside compiten por el mismo ancho: con las
+ * dos abiertas a la vez, el contenido central se aprieta tanto que los
+ * decorados del Hero terminan encimados con el texto. Por eso el estado de
+ * "expandido" vive aquí (no dentro de Rail) y se usa también para ocultar
+ * el aside mientras el Rail esté expandido.
  */
 export function AppShell({
   rolLabel,
@@ -37,9 +42,32 @@ export function AppShell({
   children,
   aside,
 }: AppShellProps) {
+  const [expandido, setExpandido] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_EXPANDIDO) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLAVE_EXPANDIDO, expandido ? '1' : '0');
+    } catch {
+      // Almacenamiento no disponible (modo privado, etc.): la preferencia solo dura la sesión.
+    }
+  }, [expandido]);
+
   return (
     <div className="flex min-h-screen flex-col gap-6 bg-marfil p-4 sm:p-6 lg:flex-row">
-      <Rail modulos={modulos} iniciales={iniciales} perfiles={perfiles} onLogout={onLogout} />
+      <Rail
+        modulos={modulos}
+        iniciales={iniciales}
+        perfiles={perfiles}
+        onLogout={onLogout}
+        expandido={expandido}
+        onToggleExpandido={() => setExpandido((v) => !v)}
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <Header
           rolLabel={rolLabel}
@@ -50,7 +78,16 @@ export function AppShell({
         />
         <div className="flex min-h-0 flex-1 flex-col gap-6 xl:flex-row">
           <div className="flex min-w-0 flex-1 flex-col gap-6">{children}</div>
-          {aside && <aside className="flex flex-col gap-6 xl:w-96 xl:flex-shrink-0">{aside}</aside>}
+          {aside && (
+            <aside
+              className={`flex flex-col gap-6 xl:overflow-hidden xl:transition-[width,opacity] xl:duration-200 ${
+                expandido ? 'xl:w-0 xl:opacity-0' : 'xl:w-96 xl:flex-shrink-0 xl:opacity-100'
+              }`}
+              aria-hidden={expandido}
+            >
+              <div className="flex w-full flex-col gap-6 xl:w-96 xl:flex-shrink-0">{aside}</div>
+            </aside>
+          )}
         </div>
       </div>
     </div>

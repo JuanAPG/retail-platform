@@ -75,8 +75,8 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
   ],
   'Analista comercial': [
     { key: 'transacciones', label: 'Transacciones', icon: <IconTransacciones /> },
-    { key: 'segmentos', label: 'Segmentos de ingreso', icon: <IconSegmentos /> },
     { key: 'canastas', label: 'Canastas', icon: <IconCanastas /> },
+    { key: 'segmentos', label: 'Segmentos de ingreso', icon: <IconSegmentos /> },
     { key: 'reglas-asociacion', label: 'Reglas de asociación', icon: <IconAsociacion /> },
     { key: 'sustitucion', label: 'Sustitución', icon: <IconSustitucion /> },
     { key: 'elasticidad', label: 'Elasticidad de precios', icon: <IconElasticidad /> },

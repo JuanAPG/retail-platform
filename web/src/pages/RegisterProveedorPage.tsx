@@ -109,10 +109,14 @@ export function RegisterProveedorPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
     if (form.password !== form.confirmar) {
       setError('Las contraseñas no coinciden.');
       return;
@@ -196,7 +200,7 @@ export function RegisterProveedorPage() {
               .
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3.5">
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 <Field
                   id="nombreContacto"

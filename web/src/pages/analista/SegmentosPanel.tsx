@@ -123,8 +123,8 @@ export function SegmentosPanel() {
               }
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-display text-[19px] leading-tight text-tinta">{s.name}</span>
-                <span className="font-data rounded-full bg-marfil px-2.5 py-1 text-xs text-teal">{s.code}</span>
+                <span className="min-w-0 flex-1 truncate font-display text-base leading-tight text-tinta sm:text-[19px]">{s.name}</span>
+                <span className="flex-shrink-0 whitespace-nowrap font-data rounded-full bg-marfil px-2.5 py-1 text-xs text-teal">{s.code}</span>
               </div>
               <span className="font-data text-lg font-semibold text-vino">
                 {formatoRango(s.incomeRangeMin, s.incomeRangeMax)}

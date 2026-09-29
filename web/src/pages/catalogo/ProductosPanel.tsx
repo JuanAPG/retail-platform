@@ -121,11 +121,11 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
       />
 
       {categorias.data && categorias.data.length > 0 && (
-        <div className="flex flex-wrap justify-between gap-3 px-1">
+        <div className="scrollbar-hidden flex items-start justify-start gap-6 overflow-x-auto px-4 pb-1 pt-2 sm:justify-center">
           <button
             type="button"
             onClick={() => setCategoriaId('todos')}
-            className="flex flex-col items-center gap-2 text-[13px] font-semibold text-teal"
+            className="flex flex-shrink-0 flex-col items-center gap-2 text-[13px] font-semibold text-teal"
           >
             <span
               className={`flex h-[76px] w-[76px] items-center justify-center rounded-full border-2 transition hover:-translate-y-1.5 ${
@@ -141,7 +141,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               key={c.id}
               type="button"
               onClick={() => setCategoriaId(c.id)}
-              className="flex flex-col items-center gap-2 text-[13px] font-semibold text-teal"
+              className="flex flex-shrink-0 flex-col items-center gap-2 text-[13px] font-semibold text-teal"
             >
               <span
                 className={`flex h-[76px] w-[76px] items-center justify-center rounded-full border-2 transition hover:-translate-y-1.5 ${
@@ -242,7 +242,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               </div>
 
               <div className="flex flex-col gap-1 px-1.5">
-                <h3 className="font-display text-[19px] leading-tight text-tinta">{p.nombre}</h3>
+                <h3 className="font-display text-base leading-tight text-tinta sm:text-[19px]">{p.nombre}</h3>
                 <span className="text-[13px] text-teal">{p.categoria?.nombre}</span>
                 {p.presentaciones.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">

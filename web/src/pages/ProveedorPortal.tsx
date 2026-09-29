@@ -4,7 +4,7 @@ import { useFetch } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
 import { getProductos, getCategorias, getUnidadesMedida, proponerProducto } from '../api/catalogo';
 import { mensajeDeError } from '../api/errores';
-import { EstatusProducto, UnidadMedida } from '../types';
+import { EstatusProducto, Producto, UnidadMedida } from '../types';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { RailModule } from '../components/ui/Rail';
@@ -52,6 +52,49 @@ function Tracker({ estatus }: { estatus: EstatusProducto }) {
   );
 }
 
+/** Compartida entre "Proponer alta" (vista de Admin) y "Mis solicitudes": la lista es la misma, solo cambia si se ve el proveedor de cada una. */
+function SolicitudesLista({
+  solicitudes,
+  mostrarProveedor,
+  loading,
+}: {
+  solicitudes: Producto[];
+  mostrarProveedor: boolean;
+  loading: boolean;
+}) {
+  if (loading) return <p className="text-sm text-teal/70">Cargando…</p>;
+
+  if (solicitudes.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
+        <p className="font-display text-2xl text-teal">Aún no hay solicitudes registradas</p>
+        <p className="text-sm text-teal/70">Las propuestas de alta de producto aparecerán aquí.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {solicitudes.map((p) => (
+        <Card key={p.id}>
+          <div className="flex items-start justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate font-display text-base leading-tight text-tinta sm:text-[19px]">{p.nombre}</span>
+            <StatusPill tone={ESTATUS_TONE[p.estatus]}>{ESTATUS_LABEL[p.estatus]}</StatusPill>
+          </div>
+          {mostrarProveedor && (
+            <span className="truncate text-xs text-teal/70">{p.proveedor?.razonSocial ?? 'Proveedor sin identificar'}</span>
+          )}
+          <Tracker estatus={p.estatus} />
+          <div className="flex items-center justify-between font-data text-xs text-teal">
+            <span>{p.sku}</span>
+            {p.estatus === 'rechazado' && p.motivoRechazo && <span className="text-vino">{p.motivoRechazo}</span>}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export function ProveedorPortal() {
   const { usuario, logout } = useAuth();
 
@@ -70,7 +113,8 @@ export function ProveedorPortal() {
   const enCatalogo = misProductos.filter((p) => p.estatus === 'activo');
   const enRevision = misProductos.filter((p) => p.estatus === 'pendiente_aprobacion');
   const solicitudes = misProductos.filter((p) => p.estatus !== 'activo');
-  const empresa = misProductos.find((p) => p.proveedor)?.proveedor?.razonSocial ?? 'Proveedor Externo';
+  const miProveedor = misProductos.find((p) => p.proveedor)?.proveedor;
+  const empresa = miProveedor?.razonSocial ?? 'Proveedor Externo';
 
   const modulos: RailModule[] = MODULOS_POR_ROL.Proveedor.map((m) => ({
     key: m.key,
@@ -185,43 +229,22 @@ export function ProveedorPortal() {
       )}
 
       {tab === 'proponer-alta' && !esProveedor && (
-        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-          <p className="font-display text-2xl text-teal">Solo un Proveedor puede enviar propuestas</p>
-          <p className="max-w-sm text-sm text-teal/70">
-            El alta queda ligada a la empresa proveedora del usuario que la envía.
-          </p>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-10 text-center">
+            <p className="font-display text-2xl text-teal">Solo un Proveedor puede enviar propuestas</p>
+            <p className="max-w-sm text-sm text-teal/70">
+              El alta queda ligada a la empresa proveedora del usuario que la envía. Aquí puedes ver las que ya se han
+              creado.
+            </p>
+          </div>
+          <SolicitudesLista solicitudes={solicitudes} mostrarProveedor loading={productos.loading} />
         </div>
       )}
 
       {tab === 'mis-solicitudes' && (
         <div className="flex flex-col gap-6">
-          <h1 className="font-display text-4xl text-vino">Mis solicitudes</h1>
-          {productos.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-          {productos.data && solicitudes.length === 0 && (
-            <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-              <p className="font-display text-2xl text-teal">No tienes solicitudes registradas</p>
-              <p className="text-sm text-teal/70">Usa «Proponer alta de producto» para enviar una propuesta.</p>
-            </div>
-          )}
-          {solicitudes.length > 0 && (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {solicitudes.map((p) => (
-                <Card key={p.id}>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-display text-[19px] leading-tight text-tinta">{p.nombre}</span>
-                    <StatusPill tone={ESTATUS_TONE[p.estatus]}>{ESTATUS_LABEL[p.estatus]}</StatusPill>
-                  </div>
-                  <Tracker estatus={p.estatus} />
-                  <div className="flex items-center justify-between font-data text-xs text-teal">
-                    <span>{p.sku}</span>
-                    {p.estatus === 'rechazado' && p.motivoRechazo && (
-                      <span className="text-vino">{p.motivoRechazo}</span>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+          <h1 className="font-display text-4xl text-vino">{esProveedor ? 'Mis solicitudes' : 'Solicitudes de proveedores'}</h1>
+          <SolicitudesLista solicitudes={solicitudes} mostrarProveedor={!esProveedor} loading={productos.loading} />
         </div>
       )}
 
@@ -251,10 +274,37 @@ export function ProveedorPortal() {
                 <span className="text-teal">Correo</span>
                 <span className="font-semibold text-tinta">{usuario?.email}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className={`flex justify-between text-sm ${esProveedor && miProveedor ? 'border-b border-salvia/25 pb-2.5' : ''}`}>
                 <span className="text-teal">Rol</span>
                 <span className="font-semibold text-tinta">{usuario?.rol}</span>
               </div>
+              {/* Lo demás (razón social, RFC, teléfono) vive en la empresa proveedora, no en la cuenta de usuario: solo aplica a un Proveedor real. */}
+              {esProveedor && miProveedor && (
+                <>
+                  <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                    <span className="text-teal">Razón social</span>
+                    <span className="font-semibold text-tinta">{miProveedor.razonSocial}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                    <span className="text-teal">RFC</span>
+                    <span className="font-data font-semibold text-tinta">{miProveedor.rfc ?? 'Sin RFC'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                    <span className="text-teal">Teléfono</span>
+                    <span className="font-semibold text-tinta">{miProveedor.telefono ?? '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-salvia/25 pb-2.5 text-sm">
+                    <span className="text-teal">Cuenta con el sistema</span>
+                    <StatusPill tone={miProveedor.activo ? 'ok' : 'warn'}>{miProveedor.activo ? 'Activa' : 'Pendiente'}</StatusPill>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-teal">Proveedor desde</span>
+                    <span className="font-semibold text-tinta">
+                      {new Intl.DateTimeFormat('es-MX', { dateStyle: 'long' }).format(new Date(miProveedor.createdAt))}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
         </div>
@@ -281,10 +331,14 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function enviar(e: FormEvent) {
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
     if (!categoriaId) {
       setError('Selecciona una categoría.');
       return;
@@ -331,7 +385,7 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
         La propuesta queda en revisión del Gerente de categoría. No aparece en el catálogo hasta que la apruebe.
       </p>
 
-      <form onSubmit={enviar} className="flex max-w-2xl flex-col gap-4 rounded-panel bg-arena p-6">
+      <form onSubmit={enviar} noValidate className="flex max-w-2xl flex-col gap-4 rounded-panel bg-arena p-6">
         {error && <p className="rounded-full bg-vino/10 px-5 py-3 text-sm font-semibold text-vino">{error}</p>}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

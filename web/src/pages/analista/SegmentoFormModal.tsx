@@ -28,9 +28,14 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
 
     const payload: CrearSegmentoPayload = {
       code: code.trim(),
@@ -74,7 +79,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
       descripcion="El rango de ingreso no basta por sí solo: documenta también de dónde sale el dato, cada cuánto se actualiza, cómo se relaciona con la zona y qué limitaciones tiene."
       onCerrar={onCerrar}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Field
             id="segmento-code"
