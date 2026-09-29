@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,14 +17,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UsuarioSolicitante } from '../common/roles';
 import { UsersService } from './users.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-
-interface UsuarioAutenticado {
-  id: string;
-  rol: string;
-}
 
 /**
  * CRUD de usuarios del Portal Admin.
@@ -54,8 +51,12 @@ export class UsersController {
   @Post()
   @Roles('Administrador')
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateUsuarioDto) {
-    return this.usersService.create(dto);
+  create(
+    @Body() dto: CreateUsuarioDto,
+    @CurrentUser() solicitante: UsuarioSolicitante,
+    @Ip() ip: string,
+  ) {
+    return this.usersService.create(dto, solicitante, ip);
   }
 
   @Patch(':id')
@@ -63,17 +64,19 @@ export class UsersController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUsuarioDto,
-    @CurrentUser() solicitante: UsuarioAutenticado,
+    @CurrentUser() solicitante: UsuarioSolicitante,
+    @Ip() ip: string,
   ) {
-    return this.usersService.update(id, dto, solicitante.id);
+    return this.usersService.update(id, dto, solicitante.id, ip);
   }
 
   @Delete(':id')
   @Roles('Administrador')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() solicitante: UsuarioAutenticado,
+    @CurrentUser() solicitante: UsuarioSolicitante,
+    @Ip() ip: string,
   ) {
-    return this.usersService.remove(id, solicitante.id);
+    return this.usersService.remove(id, solicitante.id, ip);
   }
 }

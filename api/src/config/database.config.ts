@@ -17,6 +17,9 @@ import { PriceHistory } from '../entities/price-history.entity';
 import { IncomeSegment } from '../entities/income-segment.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { Importacion } from '../entities/importacion.entity';
+import { ImportacionFila } from '../entities/importacion-fila.entity';
+import { ImportacionError } from '../entities/importacion-error.entity';
 import { Basket } from '../entities/basket.entity';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
@@ -34,6 +37,8 @@ import { ScenarioChange } from '../entities/scenario-change.entity';
 import { ScenarioResult } from '../entities/scenario-result.entity';
 import { Recommendation } from '../entities/recommendation.entity';
 import { RecommendationEvidence } from '../entities/recommendation-evidence.entity';
+import { Auditoria } from '../entities/auditoria.entity';
+import { AuditoriaCambio } from '../entities/auditoria-cambio.entity';
 
 export default registerAs(
   'database',
@@ -65,6 +70,9 @@ export default registerAs(
       IncomeSegment,
       Transaction,
       TransactionDetail,
+      Importacion,
+      ImportacionFila,
+      ImportacionError,
       Basket,
       AnalysisRun,
       AnalysisRunParameter,
@@ -82,6 +90,8 @@ export default registerAs(
       ScenarioResult,
       Recommendation,
       RecommendationEvidence,
+      Auditoria,
+      AuditoriaCambio,
     ],
     // El schema ya fue creado con schema.sql (DDL versionado en el repo).
     // NUNCA se activa synchronize aquí: TypeORM solo lee/escribe filas,
