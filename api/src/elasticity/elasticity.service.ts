@@ -222,7 +222,7 @@ export class ElasticityService {
 
     let bars: ElasticityChartBar[];
     let note: string;
-    const basis = `corrida del ${run.executedOn}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
+    const basis = `análisis del ${run.executedOn}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
     if (groupBy === 'zone') {
       bars = zones.map((z) => {
         const found = zoneValues.find((v) => v.zoneId === z.id);

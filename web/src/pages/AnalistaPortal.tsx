@@ -3,7 +3,7 @@ import { AppShell } from '../components/ui/AppShell';
 import { RailModule } from '../components/ui/Rail';
 import { useFetch, UseFetchState } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
-import { getTiendas, getProductos } from '../api/catalogo';
+import { getTiendas, getProductos, getZonas } from '../api/catalogo';
 import { getSegmentos } from '../api/segmentos';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
@@ -17,6 +17,7 @@ import { IndicadoresPanel } from './analista/IndicadoresPanel';
 import { ReglasAsociacionPanel } from './analista/ReglasAsociacionPanel';
 import { SustitucionPanel } from './analista/SustitucionPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
+import { AccesibilidadPanel } from './analista/AccesibilidadPanel';
 
 type Tab =
   | 'transacciones'
@@ -90,7 +91,7 @@ function SegmentosResumen({ segmentos }: { segmentos: UseFetchState<IncomeSegmen
   );
 }
 
-/** M12 no existe como módulo todavía: placeholder honesto, sin inventar índices por zona. */
+/** Resumen compacto: el índice es por zona y segmento, así que aquí solo se invita a calcularlo en su pestaña. */
 function AccesibilidadResumen() {
   return (
     <section className="flex flex-col gap-3 rounded-panel bg-teal p-6 text-arena">
@@ -99,7 +100,7 @@ function AccesibilidadResumen() {
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-arena/10">
           <IconAccesibilidad className="h-5 w-5" />
         </span>
-        <p className="text-sm opacity-85">Aún no hay indicadores de accesibilidad calculados.</p>
+        <p className="text-sm opacity-85">Calcula el índice por zona y segmento desde la pestaña Accesibilidad.</p>
       </div>
     </section>
   );
@@ -113,6 +114,7 @@ export function AnalistaPortal() {
   const tiendas = useFetch(getTiendas, []);
   const productos = useFetch(getProductos, []);
   const segmentos = useFetch(getSegmentos, []);
+  const zonas = useFetch(getZonas, []);
 
   const modulos: RailModule[] = MODULOS_POR_ROL['Analista comercial'].map((m) => ({
     key: m.key,
@@ -168,14 +170,7 @@ export function AnalistaPortal() {
           </div>
         )}
 
-        {tab === 'accesibilidad' && (
-          <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-            <p className="font-display text-2xl text-teal">Aún no hay indicadores de accesibilidad</p>
-            <p className="max-w-sm text-sm text-teal/70">
-              Calcula el índice de accesibilidad económica por zona y segmento cuando el módulo esté construido.
-            </p>
-          </div>
-        )}
+        {tab === 'accesibilidad' && <AccesibilidadPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
         {tab === 'productos' && <ProductosLectura estado={productos} />}
         {tab === 'tiendas' && <TiendasLectura estado={tiendas} />}
