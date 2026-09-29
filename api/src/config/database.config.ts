@@ -17,6 +17,9 @@ import { PriceHistory } from '../entities/price-history.entity';
 import { IncomeSegment } from '../entities/income-segment.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
+import { Importacion } from '../entities/importacion.entity';
+import { ImportacionFila } from '../entities/importacion-fila.entity';
+import { ImportacionError } from '../entities/importacion-error.entity';
 import { Basket } from '../entities/basket.entity';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
@@ -67,6 +70,9 @@ export default registerAs(
       IncomeSegment,
       Transaction,
       TransactionDetail,
+      Importacion,
+      ImportacionFila,
+      ImportacionError,
       Basket,
       AnalysisRun,
       AnalysisRunParameter,
