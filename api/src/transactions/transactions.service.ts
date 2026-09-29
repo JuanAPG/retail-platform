@@ -73,6 +73,16 @@ export interface CsvImportResult {
   omitidos: CsvImportOmitido[];
 }
 
+export interface ImportacionPendiente {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  filasTotales: number;
+  filasValidas: number;
+  filasConError: number;
+  cargadoEn: string;
+}
+
 const MAX_ARCHIVO_BYTES = 5 * 1024 * 1024;
 const MAX_ERRORES_PREVIEW = 200;
 
