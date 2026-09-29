@@ -2,6 +2,9 @@ import { FormEvent, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { mensajeDeError } from '../../api/errores';
 import { actualizarUsuario, crearUsuario, ActualizarUsuarioPayload } from '../../api/usuarios';
+import { Field } from '../../components/ui/Field';
+import { Select } from '../../components/ui/Select';
+import { Switch } from '../../components/ui/Switch';
 import { Rol, Usuario } from '../../types';
 
 interface UsuarioFormModalProps {
@@ -97,111 +100,69 @@ export function UsuarioFormModal({
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label
-            htmlFor="usuario-nombre"
-            className="mb-1 block text-xs font-medium uppercase text-slate-500"
-          >
-            Nombre completo
-          </label>
-          <input
-            id="usuario-nombre"
-            type="text"
-            required
-            minLength={3}
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          />
-        </div>
+        <Field
+          id="usuario-nombre"
+          label="Nombre completo"
+          required
+          minLength={3}
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+        />
+
+        <Field
+          id="usuario-email"
+          label="Correo electrónico"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
         <div>
-          <label
-            htmlFor="usuario-email"
-            className="mb-1 block text-xs font-medium uppercase text-slate-500"
-          >
-            Correo electrónico
-          </label>
-          <input
-            id="usuario-email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="usuario-password"
-            className="mb-1 block text-xs font-medium uppercase text-slate-500"
-          >
-            Contraseña {esEdicion && <span className="normal-case text-slate-400">(opcional)</span>}
-          </label>
-          <input
+          <Field
             id="usuario-password"
+            label={esEdicion ? 'Contraseña (opcional)' : 'Contraseña'}
             type="password"
             required={!esEdicion}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder={esEdicion ? 'Déjala vacía para conservar la actual' : ''}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1.5 text-xs text-teal/70">
             Mínimo 8 caracteres, con mayúscula, minúscula y número.
           </p>
         </div>
 
-        <div>
-          <label
-            htmlFor="usuario-rol"
-            className="mb-1 block text-xs font-medium uppercase text-slate-500"
-          >
-            Rol
-          </label>
-          <select
-            id="usuario-rol"
-            value={rolId}
-            onChange={(e) => setRolId(Number(e.target.value))}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          >
-            {roles.map((rol) => (
-              <option key={rol.id} value={rol.id}>
-                {rol.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select id="usuario-rol" label="Rol" value={rolId} onChange={(e) => setRolId(Number(e.target.value))}>
+          {roles.map((rol) => (
+            <option key={rol.id} value={rol.id}>
+              {rol.nombre}
+            </option>
+          ))}
+        </Select>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={activo}
-            onChange={(e) => setActivo(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
+        <Switch checked={activo} onChange={setActivo}>
           Cuenta activa (puede iniciar sesión)
-        </label>
+        </Switch>
 
         {error && (
-          <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
             {error}
           </p>
         )}
 
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onCerrar}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear usuario'}
           </button>

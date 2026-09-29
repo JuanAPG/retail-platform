@@ -1,22 +1,31 @@
 import { useState } from 'react';
-import { SectionHeader } from '../../components/SectionHeader';
-import { DataTable } from '../../components/DataTable';
-import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { useFetch } from '../../hooks/useFetch';
-import {
-  getProductosPendientes,
-  aprobarProducto,
-  rechazarProducto,
-} from '../../api/catalogo';
+import { getProductosPendientes, aprobarProducto, rechazarProducto } from '../../api/catalogo';
 import { mensajeDeError } from '../../api/errores';
 import { Producto } from '../../types';
+import { ApprovalItem, ApprovalQueue } from '../../components/ui/ApprovalQueue';
+import { TextArea } from '../../components/ui/TextArea';
+import { ErrorText } from '../../components/ui/ErrorText';
+import { IconPropuesta } from '../../components/ui/icons';
+
+function fechaCorta(iso: string | undefined): string {
+  if (!iso) return '—';
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(fecha);
+}
 
 /**
  * Bandeja de revisión del Gerente de categoría: resuelve las altas que
  * proponen los proveedores. La ruta /productos/pendientes responde 403
  * a cualquier otro perfil, así que esta pantalla no es solo un menú
  * escondido — el dato tampoco se entrega.
+ *
+ * Nota de fidelidad: Categoria.dc.html muestra tabs "Pendientes /
+ * Aprobados / Rechazados" con historial, pero el backend solo expone
+ * las pendientes (no hay endpoint de historial todavía) — se muestra
+ * solo lo que realmente existe.
  */
 export function AprobacionesPanel() {
   const pendientes = useFetch(getProductosPendientes, []);
@@ -42,71 +51,46 @@ export function AprobacionesPanel() {
 
   const filas = pendientes.data ?? [];
 
+  const items: ApprovalItem[] = filas.map((p) => ({
+    id: p.id,
+    avatar: <IconPropuesta className="h-[18px] w-[18px]" />,
+    title: p.nombre,
+    subtitle: p.proveedor?.razonSocial ?? 'Alta interna',
+    approveLabel: enProceso === p.id ? 'Aprobando…' : 'Aprobar alta',
+    onApprove: () => aprobar(p),
+    onReject: () => setARechazar(p),
+    detail: (
+      <>
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-salvia px-2.5 py-1 text-xs font-semibold text-tinta">
+            {p.categoria?.nombre ?? 'Sin categoría'}
+          </span>
+          <span className="font-data rounded-full bg-arena/[0.14] px-2.5 py-1 text-xs text-arena">
+            {fechaCorta(p.createdAt)}
+          </span>
+          <span className="font-data rounded-full bg-arena/[0.14] px-2.5 py-1 text-xs text-arena">{p.sku}</span>
+        </div>
+        <p className="text-sm leading-relaxed text-arena">{p.descripcion ?? 'Sin descripción adicional.'}</p>
+      </>
+    ),
+  }));
+
   return (
-    <section>
-      <SectionHeader
-        title="Aprobaciones de proveedor"
-        badge="APRUEBA"
-        description="Altas propuestas por proveedores externos, pendientes de revisión."
-      />
+    <section className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="font-slab text-[26px] text-teal">Aprobaciones</h2>
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-vino font-display text-lg text-arena">
+          {filas.length}
+        </span>
+      </div>
 
       {aviso && (
-        <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {aviso}
-        </p>
+        <p className="rounded-full bg-salvia/25 px-4 py-2.5 text-sm font-semibold text-teal">{aviso}</p>
       )}
-      {error && (
-        <p className="mb-4 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {error}
-        </p>
-      )}
+      {error && <p className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">{error}</p>}
+      {pendientes.error && <ErrorText>{pendientes.error}</ErrorText>}
 
-      {pendientes.loading && <p className="text-sm text-slate-500">Cargando propuestas…</p>}
-      {pendientes.error && <p className="text-sm text-rose-600">{pendientes.error}</p>}
-
-      {pendientes.data && filas.length === 0 && (
-        <EmptyState
-          title="No hay solicitudes pendientes"
-          description="Cuando un proveedor proponga un producto, aparecerá aquí para tu revisión."
-        />
-      )}
-
-      {filas.length > 0 && (
-        <DataTable
-          rowKey={(p) => p.id}
-          rows={filas}
-          columns={[
-            { header: 'SKU', render: (p) => p.sku },
-            { header: 'Producto', render: (p) => p.nombre },
-            { header: 'Categoría', render: (p) => p.categoria?.nombre ?? '—' },
-            {
-              header: 'Proveedor',
-              render: (p) => p.proveedor?.razonSocial ?? 'Alta interna',
-            },
-            {
-              header: 'Acciones',
-              render: (p) => (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => aprobar(p)}
-                    disabled={enProceso === p.id}
-                    className="rounded border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                  >
-                    {enProceso === p.id ? 'Aprobando…' : 'Aprobar'}
-                  </button>
-                  <button
-                    onClick={() => setARechazar(p)}
-                    disabled={enProceso === p.id}
-                    className="rounded border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              ),
-            },
-          ]}
-        />
-      )}
+      <ApprovalQueue items={items} emptyLabel="Todo al día" />
 
       {aRechazar && (
         <ModalRechazo
@@ -153,43 +137,32 @@ function ModalRechazo({ producto, onCerrar, onRechazado }: ModalRechazoProps) {
   }
 
   return (
-    <Modal
-      titulo="Rechazar propuesta"
-      descripcion={`${producto.sku} — ${producto.nombre}`}
-      onCerrar={onCerrar}
-    >
+    <Modal titulo="Rechazar propuesta" descripcion={`${producto.sku} — ${producto.nombre}`} onCerrar={onCerrar}>
       {error && (
-        <p className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {error}
-        </p>
+        <p className="mb-3 rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">{error}</p>
       )}
 
-      <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="motivo">
-        Motivo del rechazo
-      </label>
-      <textarea
+      <TextArea
         id="motivo"
+        label="Motivo del rechazo"
         rows={4}
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
-        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         placeholder="Explica qué debe corregir el proveedor para volver a proponerlo."
+        hint="El proveedor verá este texto en «Mis solicitudes». Mínimo 10 caracteres."
       />
-      <p className="mt-1 text-xs text-slate-500">
-        El proveedor verá este texto en «Mis solicitudes». Mínimo 10 caracteres.
-      </p>
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex justify-end gap-2.5">
         <button
           onClick={onCerrar}
-          className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
         >
           Cancelar
         </button>
         <button
           onClick={confirmar}
           disabled={!motivoValido || enviando}
-          className="rounded bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
         >
           {enviando ? 'Rechazando…' : 'Rechazar propuesta'}
         </button>

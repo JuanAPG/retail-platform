@@ -3,13 +3,13 @@ import { SectionHeader } from '../../components/SectionHeader';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState } from '../../components/EmptyState';
 import { Badge } from '../../components/Badge';
+import { Select } from '../../components/ui/Select';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { useFetch } from '../../hooks/useFetch';
 import { getCategorias } from '../../api/catalogo';
 import { getPatronesSustitucion } from '../../api/elasticidad';
 import { SubstitutionPattern } from '../../types';
 import { formatearDia } from './corridaFormato';
-
-const selectCls = 'w-full rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-900';
 
 const TIPO: Record<SubstitutionPattern['type'], { texto: string; tono: 'warning' | 'neutral'; flecha: string }> = {
   // Dirigido: B reemplaza a A cuando A sube de precio.
@@ -37,7 +37,7 @@ export function SustitucionPanel() {
   const lista = patrones.data ?? [];
 
   return (
-    <section>
+    <section className="flex flex-col gap-6">
       <SectionHeader
         title="Sustitución"
         description="Productos de una misma categoría que se reemplazan entre sí: la gente compra uno u otro."
@@ -46,25 +46,21 @@ export function SustitucionPanel() {
             type="button"
             onClick={patrones.refetch}
             disabled={!categoria || patrones.loading}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-4 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta disabled:cursor-not-allowed disabled:opacity-50"
           >
             {patrones.loading && categoria ? 'Cargando…' : 'Actualizar'}
           </button>
         }
       />
 
-      <div className="mb-6 max-w-sm">
-        <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="sus-categoria">
-          Categoría
-        </label>
-        <select id="sus-categoria" className={selectCls} value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-          <option value="">Elige una categoría</option>
+      <div className="max-w-sm">
+        <Select id="sus-categoria" label="Categoría" value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Elige una categoría">
           {(categorias.data ?? []).map((c) => (
             <option key={c.id} value={String(c.id)}>
               {c.nombre}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {!categoria && (
@@ -73,14 +69,14 @@ export function SustitucionPanel() {
           description="Se buscan sustitutos entre los productos de esa categoría, con las canastas registradas."
         />
       )}
-      {categoria && patrones.loading && <p className="text-sm text-slate-500">Buscando patrones…</p>}
+      {categoria && patrones.loading && <p className="text-sm text-teal/70">Buscando patrones…</p>}
       {categoria && !patrones.loading && patrones.error && (
         <div className="flex items-center gap-3">
-          <p className="text-sm text-red-600">{patrones.error}</p>
+          <ErrorText>{patrones.error}</ErrorText>
           <button
             type="button"
             onClick={patrones.refetch}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 shrink-0 items-center rounded-full border-2 border-salvia/60 px-4 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Reintentar
           </button>
@@ -93,7 +89,7 @@ export function SustitucionPanel() {
         />
       )}
       {categoria && !patrones.loading && !patrones.error && lista.length > 0 && (
-        <>
+        <div className="flex flex-col gap-2">
           <DataTable
             rowKey={(p) => `${p.originProductId}-${p.targetProductId}-${p.type}`}
             rows={lista}
@@ -102,11 +98,10 @@ export function SustitucionPanel() {
                 header: 'Producto → Lo reemplaza',
                 render: (p) => (
                   <div>
-                    <p className="text-slate-900">
-                      {p.originProductName} <span className="text-slate-400">{TIPO[p.type].flecha}</span>{' '}
-                      {p.targetProductName}
+                    <p className="text-tinta">
+                      {p.originProductName} <span className="text-teal/50">{TIPO[p.type].flecha}</span> {p.targetProductName}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 font-data text-xs text-teal/70">
                       lift {p.lift.toLocaleString('es-MX', dosDecimales)} · r{' '}
                       {p.priceCorrelation === null ? '—' : p.priceCorrelation.toLocaleString('es-MX', dosDecimales)} ·{' '}
                       {p.observations} canastas
@@ -120,39 +115,37 @@ export function SustitucionPanel() {
                 className: 'w-56',
                 render: (p) => (
                   <div className="flex items-center gap-2">
-                    <div className="h-2 flex-1 rounded bg-slate-100">
-                      <div className="h-2 rounded bg-slate-700" style={{ width: `${p.score * 100}%` }} />
+                    <div className="h-2 flex-1 rounded-full bg-marfil">
+                      <div className="h-2 rounded-full bg-vino" style={{ width: `${p.score * 100}%` }} />
                     </div>
-                    <span className="w-12 text-right tabular-nums">{Math.round(p.score * 100)} %</span>
+                    <span className="w-12 text-right font-data text-xs tabular-nums text-teal">{Math.round(p.score * 100)} %</span>
                   </div>
                 ),
               },
             ]}
           />
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="text-xs text-teal/70">
             Datos del {formatearDia(lista[0].periodStart)} al {formatearDia(lista[0].periodEnd)}.
           </p>
-        </>
+        </div>
       )}
 
       {/* Umbrales copiados de substitution.service.ts (PRICE_CORRELATION_MIN,
           MIN_BASKETS_PER_PRODUCT, MIN_EXPECTED_TOGETHER): si cambian allá, actualizar aquí. */}
-      <details className="mt-6 text-sm text-slate-700">
-        <summary className="cursor-pointer text-slate-500">Cómo se detecta (método y supuestos)</summary>
+      <details className="text-sm text-teal">
+        <summary className="cursor-pointer font-semibold text-teal/70">Cómo se detecta (método y supuestos)</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>
-            Regla: dos productos de la categoría se compran juntos menos de lo esperado (lift &lt; 1), contando solo
-            las canastas con productos de esa categoría.
+            Regla: dos productos de la misma categoría se compran juntos menos de lo que se esperaría si no tuvieran
+            relación entre sí, considerando solo las canastas que incluyen productos de esa categoría.
           </li>
           <li>
-            Correlación: si además, cuando A está más caro (precio vigente del histórico de precios), las canastas
-            llevan más B (r ≥ 0.3), el tipo es «Por precio»; si no, «Por preferencia».
+            Tipo: si las canastas llevan más del segundo producto cuando el primero sube de precio, se clasifica como
+            «Por precio»; si no hay esa relación, como «Por preferencia».
           </li>
-          <li>
-            Mínimos: cada producto en al menos 2 canastas, y que por azar se esperara verlos juntos al menos una vez.
-          </li>
-          <li>No detecta sustitución por desabasto: no hay historial de inventario.</li>
-          <li>Se calcula al momento con las canastas registradas y no se guarda como corrida.</li>
+          <li>Mínimos: cada producto debe aparecer en al menos 2 canastas, con suficientes datos para que la comparación sea confiable.</li>
+          <li>No detecta sustitución por falta de inventario: el sistema no lleva historial de existencias.</li>
+          <li>Se calcula al momento con las canastas registradas; a diferencia de otros análisis, este no se guarda para consultarlo después.</li>
         </ol>
       </details>
     </section>

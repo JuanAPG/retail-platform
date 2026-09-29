@@ -7,6 +7,10 @@ import {
   actualizarProducto,
   crearProductoDirecto,
 } from '../../api/catalogo';
+import { Field } from '../../components/ui/Field';
+import { Select } from '../../components/ui/Select';
+import { Switch } from '../../components/ui/Switch';
+import { TextArea } from '../../components/ui/TextArea';
 import { CategoriaProducto, Producto, UnidadMedida } from '../../types';
 
 interface ProductoFormModalProps {
@@ -46,10 +50,14 @@ export function ProductoFormModal({
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
     if (!categoriaId) {
       setError('Selecciona una categoría.');
       return;
@@ -102,148 +110,91 @@ export function ProductoFormModal({
       }
       onCerrar={onCerrar}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Campo id="producto-sku" label="SKU">
-            <input
-              id="producto-sku"
-              type="text"
-              required
-              disabled={esEdicion}
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              className={`${inputClass} disabled:bg-slate-100 disabled:text-slate-400`}
-            />
-          </Campo>
-          <Campo id="producto-nombre" label="Nombre">
-            <input
-              id="producto-nombre"
-              type="text"
-              required
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
+          <Field id="producto-sku" label="SKU" required disabled={esEdicion} value={sku} onChange={(e) => setSku(e.target.value)} />
+          <Field id="producto-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </div>
 
-        <Campo id="producto-descripcion" label="Descripción (opcional)">
-          <textarea
-            id="producto-descripcion"
-            rows={2}
-            value={descripcion ?? ''}
-            onChange={(e) => setDescripcion(e.target.value)}
-            className={inputClass}
-          />
-        </Campo>
+        <TextArea
+          id="producto-descripcion"
+          label="Descripción (opcional)"
+          rows={2}
+          value={descripcion ?? ''}
+          onChange={(e) => setDescripcion(e.target.value)}
+        />
 
-        <div className="grid grid-cols-2 gap-3">
-          <Campo id="producto-categoria" label="Categoría">
-            <select
-              id="producto-categoria"
-              value={categoriaId}
-              onChange={(e) => setCategoriaId(Number(e.target.value))}
-              className={inputClass}
-            >
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <label className="flex items-end gap-2 pb-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={esCanastaBasica}
-              onChange={(e) => setEsCanastaBasica(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            Es canasta básica
-          </label>
+        <div className="grid grid-cols-2 items-end gap-3">
+          <Select id="producto-categoria" label="Categoría" value={categoriaId} onChange={(e) => setCategoriaId(Number(e.target.value))}>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </Select>
+          <div className="pb-3.5">
+            <Switch checked={esCanastaBasica} onChange={setEsCanastaBasica}>
+              Es canasta básica
+            </Switch>
+          </div>
         </div>
 
         {!esEdicion && (
           <>
-            <p className="text-xs font-medium uppercase text-slate-400">Primera presentación</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-salvia">Primera presentación</p>
             <div className="grid grid-cols-3 gap-3">
-              <Campo id="producto-presentacion" label="Nombre">
-                <input
-                  id="producto-presentacion"
-                  type="text"
-                  required
-                  value={presentacion}
-                  onChange={(e) => setPresentacion(e.target.value)}
-                  className={inputClass}
-                />
-              </Campo>
-              <Campo id="producto-contenido" label="Contenido">
-                <input
-                  id="producto-contenido"
-                  type="number"
-                  required
-                  min={0}
-                  step="0.001"
-                  value={contenido}
-                  onChange={(e) => setContenido(e.target.value)}
-                  className={inputClass}
-                />
-              </Campo>
-              <Campo id="producto-unidad" label="Unidad">
-                <select
-                  id="producto-unidad"
-                  value={unidadMedida}
-                  onChange={(e) => setUnidadMedida(e.target.value)}
-                  className={inputClass}
-                >
-                  {unidadesMedida.map((u) => (
-                    <option key={u.clave} value={u.clave}>
-                      {u.clave} — {u.nombre}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
+              <Field
+                id="producto-presentacion"
+                label="Nombre"
+                required
+                value={presentacion}
+                onChange={(e) => setPresentacion(e.target.value)}
+              />
+              <Field
+                id="producto-contenido"
+                label="Contenido"
+                type="number"
+                required
+                min={0}
+                step="0.001"
+                value={contenido}
+                onChange={(e) => setContenido(e.target.value)}
+                dataFont
+              />
+              <Select id="producto-unidad" label="Unidad" value={unidadMedida} onChange={(e) => setUnidadMedida(e.target.value)}>
+                {unidadesMedida.map((u) => (
+                  <option key={u.clave} value={u.clave}>
+                    {u.clave} — {u.nombre}
+                  </option>
+                ))}
+              </Select>
             </div>
           </>
         )}
 
         {error && (
-          <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
             {error}
           </p>
         )}
 
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onCerrar}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear producto'}
           </button>
         </div>
       </form>
     </Modal>
-  );
-}
-
-const inputClass =
-  'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-
-function Campo({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium uppercase text-slate-500">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }

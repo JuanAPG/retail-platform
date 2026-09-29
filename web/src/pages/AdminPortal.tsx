@@ -1,108 +1,70 @@
 import { useState } from 'react';
-import { PortalLayout } from '../components/PortalLayout';
-import { SectionHeader } from '../components/SectionHeader';
-import { DataTable } from '../components/DataTable';
-import { Badge } from '../components/Badge';
-import { EmptyState } from '../components/EmptyState';
+import { AppShell } from '../components/ui/AppShell';
+import { RailModule } from '../components/ui/Rail';
 import { useFetch } from '../hooks/useFetch';
+import { useAuth } from '../context/AuthContext';
 import { getTiendas, getZonas, getProveedores } from '../api/catalogo';
 import { getUsuarios } from '../api/usuarios';
-import { BienvenidaPanel, TabAdmin } from './admin/BienvenidaPanel';
+import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
+import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { UsuariosPanel } from './admin/UsuariosPanel';
+import { TiendasPanel } from './admin/TiendasPanel';
 import { ZonasPanel } from './admin/ZonasPanel';
 import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
-import { TiendasPanel } from './admin/TiendasPanel';
+import { ProveedoresPanel } from './admin/ProveedoresPanel';
+import { AuditoriaPanel } from './admin/AuditoriaPanel';
+
+type TabAdmin = 'usuarios' | 'tiendas' | 'zonas' | 'comparar-zonas' | 'proveedores' | 'auditoria';
 
 export function AdminPortal() {
-  const [tab, setTab] = useState<TabAdmin>('inicio');
+  const { usuario, logout } = useAuth();
+  const [tab, setTab] = useState<TabAdmin>('usuarios');
+  const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
 
   const usuarios = useFetch(getUsuarios, []);
   const tiendas = useFetch(getTiendas, []);
   const zonas = useFetch(getZonas, []);
   const proveedores = useFetch(getProveedores, []);
 
-  const proveedoresPendientes = proveedores.data?.filter((p) => !p.activo).length;
+  const proveedoresPendientes = proveedores.data?.filter((p) => !p.activo).length ?? 0;
 
-  const sidebarItems = [
-    { label: 'Inicio', active: tab === 'inicio', onClick: () => setTab('inicio') },
-    { label: 'Usuarios', active: tab === 'usuarios', onClick: () => setTab('usuarios') },
-    { label: 'Tiendas', active: tab === 'tiendas', onClick: () => setTab('tiendas') },
-    { label: 'Zonas', active: tab === 'zonas', onClick: () => setTab('zonas') },
-    {
-      label: 'Comparar zonas',
-      active: tab === 'comparar-zonas',
-      onClick: () => setTab('comparar-zonas'),
-    },
-    {
-      label: 'Proveedores',
-      active: tab === 'proveedores',
-      onClick: () => setTab('proveedores'),
-      contador: proveedoresPendientes || undefined,
-    },
-    {
-      label: 'Auditoría',
-      nivel: 'lectura' as const,
-      active: tab === 'auditoria',
-      onClick: () => setTab('auditoria'),
-    },
-  ];
+  const modulos: RailModule[] = MODULOS_POR_ROL.Administrador.map((m) => ({
+    key: m.key,
+    label: m.label,
+    icon: m.icon,
+    permiso: m.permiso,
+    active: m.key === tab || (m.key === 'zonas' && tab === 'comparar-zonas'),
+    badge: m.key === 'proveedores' ? proveedoresPendientes : undefined,
+    onClick: () => setTab(m.key as TabAdmin),
+  }));
+
+  // Mismo atajo que antes daba `SelectorDePortal`: el Admin recorre
+  // todos los portales sin cerrar sesión, ahora desde el menú del Rail.
+  const perfiles = perfilesParaAdmin('/admin');
+
+  const iniciales = usuario?.nombre ? inicialesDeTexto(usuario.nombre) : '?';
+  const primerNombre = usuario?.nombre?.split(' ')[0] ?? '';
 
   return (
-    <PortalLayout breadcrumb="Portal Admin" rolLabel="Administrador" sidebarItems={sidebarItems}>
-      {tab === 'inicio' && (
-        <BienvenidaPanel
-          usuarios={usuarios}
-          tiendas={tiendas}
-          zonas={zonas}
-          proveedores={proveedores}
-          onIrA={setTab}
-        />
-      )}
-
-      {tab === 'usuarios' && <UsuariosPanel estado={usuarios} />}
-
+    <AppShell
+      rolLabel="Administrador"
+      nombre={primerNombre}
+      modulos={modulos}
+      iniciales={iniciales}
+      perfiles={perfiles}
+      onLogout={logout}
+      buscador={
+        tab === 'usuarios'
+          ? { placeholder: 'Buscar por nombre o correo', value: busquedaUsuarios, onChange: setBusquedaUsuarios }
+          : undefined
+      }
+    >
+      {tab === 'usuarios' && <UsuariosPanel estado={usuarios} busqueda={busquedaUsuarios} />}
       {tab === 'tiendas' && <TiendasPanel estado={tiendas} />}
-
-      {tab === 'zonas' && <ZonasPanel estado={zonas} />}
-
-      {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} />}
-
-      {tab === 'proveedores' && (
-        <section>
-          <SectionHeader title="Proveedores" description="Empresas proveedoras registradas." />
-          {proveedores.loading && <p className="text-sm text-slate-500">Cargando proveedores…</p>}
-          {proveedores.error && <p className="text-sm text-rose-600">{proveedores.error}</p>}
-          {proveedores.data && (
-            <DataTable
-              rowKey={(p) => p.id}
-              rows={proveedores.data}
-              columns={[
-                { header: 'Razón social', render: (p) => p.razonSocial },
-                { header: 'RFC', render: (p) => p.rfc ?? '—' },
-                { header: 'Correo', render: (p) => p.email },
-                {
-                  header: 'Estado',
-                  render: (p) => (
-                    <Badge tone={p.activo ? 'positive' : 'warning'}>
-                      {p.activo ? 'Activo' : 'Pendiente de aprobación'}
-                    </Badge>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </section>
-      )}
-
-      {tab === 'auditoria' && (
-        <section>
-          <SectionHeader title="Auditoría" badge="SOLO LECTURA" description="Bitácora del sistema." />
-          <EmptyState
-            title="Aún no hay eventos de auditoría"
-            description="La bitácora se llenará conforme el equipo construya los módulos de negocio y se registren operaciones."
-          />
-        </section>
-      )}
-    </PortalLayout>
+      {tab === 'zonas' && <ZonasPanel estado={zonas} onComparar={() => setTab('comparar-zonas')} />}
+      {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} onVolver={() => setTab('zonas')} />}
+      {tab === 'proveedores' && <ProveedoresPanel estado={proveedores} />}
+      {tab === 'auditoria' && <AuditoriaPanel />}
+    </AppShell>
   );
 }

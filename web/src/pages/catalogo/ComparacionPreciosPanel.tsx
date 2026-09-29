@@ -1,86 +1,96 @@
-import { useState } from 'react';
-import { SectionHeader } from '../../components/SectionHeader';
-import { DataTable } from '../../components/DataTable';
-import { EmptyState } from '../../components/EmptyState';
 import { useFetch } from '../../hooks/useFetch';
-import { getProductos } from '../../api/catalogo';
 import { compararPreciosEntreZonas } from '../../api/precios';
+import { Producto } from '../../types';
+import { IconPrecios } from '../../components/ui/icons';
+
+interface ComparacionPreciosPanelProps {
+  producto: Producto | null;
+}
 
 function formatoMoneda(valor: number): string {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(valor);
 }
 
-/** M08 — Compara el precio VIGENTE de un producto entre las zonas donde se vende. */
-export function ComparacionPreciosPanel() {
-  const productos = useFetch(getProductos, []);
-  const [productoId, setProductoId] = useState('');
-
+/**
+ * M08 — Compara el precio vigente de un producto entre zonas.
+ *
+ * Nota de fidelidad: Categoria.dc.html muestra esta tarjeta comparando
+ * PRECIO POR TIENDA Y PRESENTACIÓN (con chips de 500 g/1 kg), pero el
+ * endpoint real (`compararPreciosEntreZonas`) agrega por ZONA, no por
+ * tienda ni presentación — se mantiene la receta visual (tarjeta vino,
+ * fila con círculo + nombre + precio, la más barata resaltada) sobre
+ * los datos que el backend sí entrega.
+ */
+export function ComparacionPreciosPanel({ producto }: ComparacionPreciosPanelProps) {
   const comparacion = useFetch(
-    () => (productoId ? compararPreciosEntreZonas(productoId) : Promise.resolve(null)),
-    [productoId],
+    () => (producto ? compararPreciosEntreZonas(producto.id) : Promise.resolve(null)),
+    [producto?.id],
   );
 
   const zonas = comparacion.data?.zones ?? [];
+  const min = zonas.length > 0 ? Math.min(...zonas.map((z) => z.averagePrice)) : null;
+  const max = zonas.length > 0 ? Math.max(...zonas.map((z) => z.averagePrice)) : null;
+  const promedio = zonas.length > 0 ? zonas.reduce((acc, z) => acc + z.averagePrice, 0) / zonas.length : null;
+  const variacion = min && max && min > 0 ? (((max - min) / min) * 100).toFixed(1) : null;
 
   return (
-    <section>
-      <SectionHeader
-        title="Comparación de precios entre zonas"
-        description="Precio vigente promedio, mínimo y máximo de un producto en cada zona donde se vende."
-      />
-
-      <div className="mb-6 max-w-md">
-        <label htmlFor="comparacion-producto" className="mb-1 block text-xs font-medium uppercase text-slate-500">
-          Producto
-        </label>
-        <select
-          id="comparacion-producto"
-          value={productoId}
-          onChange={(e) => setProductoId(e.target.value)}
-          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-        >
-          <option value="">Selecciona un producto…</option>
-          {(productos.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.sku} — {p.nombre}
-            </option>
-          ))}
-        </select>
+    <section className="flex flex-col gap-4 rounded-panel bg-vino p-6 text-arena">
+      <div className="flex items-center gap-3 px-1">
+        <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena text-vino">
+          <IconPrecios className="h-5 w-5" />
+        </span>
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-display text-xl leading-tight">
+            {producto ? producto.nombre : 'Comparar precios'}
+          </span>
+          <span className="font-data text-xs opacity-80">
+            {producto ? producto.sku : 'Elige un producto del catálogo'}
+          </span>
+        </div>
       </div>
 
-      {!productoId && (
-        <EmptyState
-          title="Selecciona un producto"
-          description="Elige un producto arriba para comparar su precio entre zonas."
-        />
+      {!producto && (
+        <p className="px-1 text-sm leading-relaxed opacity-90">
+          Usa el ícono de precio en cualquier tarjeta del catálogo para comparar sus precios entre zonas.
+        </p>
       )}
 
-      {productoId && comparacion.loading && (
-        <p className="text-sm text-slate-500">Calculando comparación…</p>
-      )}
-      {productoId && comparacion.error && (
-        <p className="text-sm text-rose-600">{comparacion.error}</p>
-      )}
-
-      {productoId && comparacion.data && zonas.length === 0 && (
-        <EmptyState
-          title="Este producto no tiene precios vigentes"
-          description="No hay ningún precio activo para este producto en ninguna tienda todavía."
-        />
+      {producto && comparacion.loading && <p className="px-1 text-sm">Calculando…</p>}
+      {producto && comparacion.error && <p className="px-1 text-sm">{comparacion.error}</p>}
+      {producto && comparacion.data && zonas.length === 0 && (
+        <p className="px-1 text-sm opacity-90">Este producto no tiene precios vigentes todavía.</p>
       )}
 
       {zonas.length > 0 && (
-        <DataTable
-          rowKey={(z) => z.zoneId}
-          rows={zonas}
-          columns={[
-            { header: 'Zona', render: (z) => z.zoneName },
-            { header: 'Precio promedio', render: (z) => formatoMoneda(z.averagePrice) },
-            { header: 'Mínimo', render: (z) => formatoMoneda(z.minPrice) },
-            { header: 'Máximo', render: (z) => formatoMoneda(z.maxPrice) },
-            { header: 'Tiendas', render: (z) => z.storeCount },
-          ]}
-        />
+        <div className="flex flex-col gap-2">
+          {zonas.map((z) => (
+            <div
+              key={z.zoneId}
+              className={`flex items-center gap-3 rounded-full px-2.5 py-2 pr-4 transition hover:translate-x-1 ${
+                z.averagePrice === min ? 'bg-salvia text-tinta' : 'bg-arena/10'
+              }`}
+            >
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-arena text-sm font-bold text-vino">
+                {z.zoneName.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="flex-1 truncate text-[15px] font-semibold">{z.zoneName}</span>
+              <span className="font-data text-[15px]">{formatoMoneda(z.averagePrice)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {promedio !== null && variacion !== null && (
+        <div className="flex gap-2">
+          <div className="flex flex-1 flex-col rounded-full bg-teal px-4 py-2.5">
+            <span className="text-[11px] font-semibold opacity-75">Promedio</span>
+            <span className="font-data text-base">{formatoMoneda(promedio)}</span>
+          </div>
+          <div className="flex flex-1 flex-col rounded-full bg-tinta px-4 py-2.5">
+            <span className="text-[11px] font-semibold opacity-75">Variación</span>
+            <span className="font-data text-base">+{variacion}%</span>
+          </div>
+        </div>
       )}
     </section>
   );
