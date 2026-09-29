@@ -7,6 +7,7 @@ import { getUsuarios } from '../api/usuarios';
 import { getTiendas, getZonas, getProveedores, getProductos } from '../api/catalogo';
 import { getTransacciones } from '../api/transacciones';
 import { getHistorialPrecios } from '../api/precios';
+import { getBitacora } from '../api/auditoria';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Hero } from '../components/ui/Hero';
@@ -14,10 +15,43 @@ import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ErrorText } from '../components/ui/ErrorText';
-import { IconAuditoria, IconCandado } from '../components/ui/icons';
-import { Producto, Proveedor, Tienda, Transaction, Usuario, Zona } from '../types';
+import { IconAuditoria, IconCandado, IconFlecha } from '../components/ui/icons';
+import { AccionAuditoria, Producto, Proveedor, Tienda, Transaction, Usuario, Zona } from '../types';
 
 type Tab = 'bitacora' | 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'productos' | 'precios' | 'transacciones';
+
+const NOMBRE_ACCION: Record<AccionAuditoria, string> = {
+  insert: 'Alta',
+  update: 'Modificación',
+  delete: 'Baja',
+  login: 'Inicio de sesión',
+  importacion: 'Importación',
+};
+
+const TONO_ACCION: Record<AccionAuditoria, 'ok' | 'warn' | 'neutral'> = {
+  insert: 'ok',
+  update: 'neutral',
+  delete: 'warn',
+  login: 'neutral',
+  importacion: 'ok',
+};
+
+const NOMBRE_TABLA: Record<string, string> = {
+  productos: 'Productos',
+  producto_presentaciones: 'Presentaciones',
+  precios: 'Precios',
+  usuarios: 'Usuarios',
+  transacciones: 'Transacciones',
+  transaccion_detalles: 'Líneas de venta',
+  proveedores: 'Proveedores',
+  tiendas: 'Tiendas',
+  zonas: 'Zonas',
+  segmentos_ingreso: 'Segmentos de ingreso',
+};
+
+function nombreTabla(tabla: string) {
+  return NOMBRE_TABLA[tabla] ?? tabla.replace(/_/g, ' ');
+}
 
 function Placeholder({ titulo, descripcion }: { titulo: string; descripcion: string }) {
   return (
@@ -40,12 +74,6 @@ function EncabezadoLectura({ titulo }: { titulo: string }) {
   );
 }
 
-/**
- * M15 (Auditoría) todavía no existe como módulo backend — es de Juan
- * Ángel, pendiente. Auditor.dc.html simula una bitácora completa con
- * eventos de ejemplo; se deja como placeholder honesto en vez de
- * inventar registros que el sistema todavía no genera.
- */
 export function AuditorPortal() {
   const { usuario, logout } = useAuth();
   const [tab, setTab] = useState<Tab>('bitacora');
@@ -80,23 +108,7 @@ export function AuditorPortal() {
       perfiles={perfiles}
       onLogout={logout}
     >
-      {tab === 'bitacora' && (
-        <div className="flex flex-col gap-6">
-          <Hero
-            title="Bitácora"
-            subtitle="Registro inmutable de operaciones"
-            decorations={
-              <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
-                <IconCandado className="mt-8 h-[74px] w-[74px]" />
-              </div>
-            }
-          />
-          <Placeholder
-            titulo="Aún no hay eventos registrados"
-            descripcion="Conforme se construya el módulo de Auditoría (M15) y se registren operaciones, aparecerán aquí con usuario, acción, tabla y estado previo/posterior."
-          />
-        </div>
-      )}
+      {tab === 'bitacora' && <BitacoraPanel usuarios={usuarios} />}
 
       {tab === 'usuarios' && <UsuariosLectura estado={usuarios} />}
       {tab === 'tiendas' && <TiendasLectura estado={tiendas} />}
@@ -106,6 +118,124 @@ export function AuditorPortal() {
       {tab === 'transacciones' && <TransaccionesLectura estado={transacciones} />}
       {tab === 'precios' && <PreciosLectura productos={productos} />}
     </AppShell>
+  );
+}
+
+const LIMITE_BITACORA = 20;
+
+function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
+  const [accion, setAccion] = useState<AccionAuditoria | ''>('');
+  const [page, setPage] = useState(1);
+
+  const bitacora = useFetch(
+    () => getBitacora({ accion: accion || undefined, page, limit: LIMITE_BITACORA }),
+    [accion, page],
+  );
+
+  const eventos = bitacora.data?.data ?? [];
+  const total = bitacora.data?.total ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / LIMITE_BITACORA));
+
+  function nombreUsuario(usuarioId: string | null) {
+    if (!usuarioId) return 'Sistema';
+    return usuarios.data?.find((u) => u.id === usuarioId)?.nombre ?? 'Usuario dado de baja';
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Hero
+        title="Bitácora"
+        subtitle="Registro de operaciones del sistema"
+        decorations={
+          <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
+            <IconCandado className="mt-8 h-[74px] w-[74px]" />
+          </div>
+        }
+      />
+
+      <div className="max-w-xs">
+        <Select
+          id="bitacora-accion"
+          label="Tipo de operación"
+          value={accion}
+          onChange={(e) => {
+            setAccion(e.target.value as AccionAuditoria | '');
+            setPage(1);
+          }}
+          placeholder="Todas"
+        >
+          {[
+            <option key="" value="">Todas</option>,
+            ...(Object.keys(NOMBRE_ACCION) as AccionAuditoria[]).map((a) => (
+              <option key={a} value={a}>{NOMBRE_ACCION[a]}</option>
+            )),
+          ]}
+        </Select>
+      </div>
+
+      {bitacora.loading && <p className="text-sm text-teal/70">Cargando…</p>}
+      {bitacora.error && <ErrorText>{bitacora.error}</ErrorText>}
+
+      {bitacora.data && eventos.length === 0 && (
+        <Placeholder
+          titulo="Aún no hay eventos registrados"
+          descripcion="Aquí aparecerán las operaciones importantes del sistema (altas, cambios y bajas), con quién las hizo y cuándo."
+        />
+      )}
+
+      {eventos.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {eventos.map((ev) => (
+            <Card key={ev.id}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <StatusPill tone={TONO_ACCION[ev.accion]}>{NOMBRE_ACCION[ev.accion]}</StatusPill>
+                  <span className="text-sm font-bold text-tinta">{nombreTabla(ev.tablaAfectada)}</span>
+                </div>
+                <span className="font-data text-xs text-teal">
+                  {new Date(ev.fecha).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
+                </span>
+              </div>
+              <span className="text-xs text-teal">{nombreUsuario(ev.usuarioId)}</span>
+              {ev.descripcion && <span className="text-sm text-tinta/80">{ev.descripcion}</span>}
+              {ev.cambios.length > 0 && (
+                <div className="flex flex-col gap-1 rounded-card bg-arena px-3.5 py-2.5">
+                  {ev.cambios.map((c) => (
+                    <span key={c.campo} className="font-data text-xs text-teal">
+                      <strong className="font-semibold text-tinta">{c.campo}</strong>: {c.valorPrevio ?? '—'} → {c.valorPosterior ?? '—'}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {eventos.length > 0 && totalPaginas > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            aria-label="Página anterior"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-arena text-teal transition hover:bg-teal hover:text-arena disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <IconFlecha className="h-4 w-4 rotate-180" />
+          </button>
+          <span className="font-data text-xs text-teal">Página {page} de {totalPaginas}</span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
+            disabled={page >= totalPaginas}
+            aria-label="Página siguiente"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-arena text-teal transition hover:bg-teal hover:text-arena disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <IconFlecha className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

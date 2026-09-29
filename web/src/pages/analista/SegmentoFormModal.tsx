@@ -71,7 +71,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
   return (
     <Modal
       titulo={esEdicion ? 'Editar segmento de ingreso' : 'Nuevo segmento de ingreso'}
-      descripcion="El rango numérico no basta: RN-01/RN-02 y la retroalimentación del profesor exigen justificar fuente, frecuencia de actualización, relación con zona y limitaciones."
+      descripcion="El rango de ingreso no basta por sí solo: documenta también de dónde sale el dato, cada cuánto se actualiza, cómo se relaciona con la zona y qué limitaciones tiene."
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -147,7 +147,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
           rows={2}
           value={zoneRelation}
           onChange={(e) => setZoneRelation(e.target.value)}
-          placeholder="Se asigna a la ZONA agregada (RN-02); nunca a una persona ni compra individual."
+          placeholder="Se asigna a la zona agregada; nunca a una persona ni a una compra individual."
         />
 
         <TextArea

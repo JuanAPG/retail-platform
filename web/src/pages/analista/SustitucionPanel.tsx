@@ -136,18 +136,16 @@ export function SustitucionPanel() {
         <summary className="cursor-pointer font-semibold text-teal/70">Cómo se detecta (método y supuestos)</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>
-            Regla: dos productos de la categoría se compran juntos menos de lo esperado (lift &lt; 1), contando solo
-            las canastas con productos de esa categoría.
+            Regla: dos productos de la misma categoría se compran juntos menos de lo que se esperaría si no tuvieran
+            relación entre sí, considerando solo las canastas que incluyen productos de esa categoría.
           </li>
           <li>
-            Correlación: si además, cuando A está más caro (precio vigente del histórico de precios), las canastas
-            llevan más B (r ≥ 0.3), el tipo es «Por precio»; si no, «Por preferencia».
+            Tipo: si las canastas llevan más del segundo producto cuando el primero sube de precio, se clasifica como
+            «Por precio»; si no hay esa relación, como «Por preferencia».
           </li>
-          <li>
-            Mínimos: cada producto en al menos 2 canastas, y que por azar se esperara verlos juntos al menos una vez.
-          </li>
-          <li>No detecta sustitución por desabasto: no hay historial de inventario.</li>
-          <li>Se calcula al momento con las canastas registradas y no se guarda como corrida.</li>
+          <li>Mínimos: cada producto debe aparecer en al menos 2 canastas, con suficientes datos para que la comparación sea confiable.</li>
+          <li>No detecta sustitución por falta de inventario: el sistema no lleva historial de existencias.</li>
+          <li>Se calcula al momento con las canastas registradas; a diferencia de otros análisis, este no se guarda para consultarlo después.</li>
         </ol>
       </details>
     </section>

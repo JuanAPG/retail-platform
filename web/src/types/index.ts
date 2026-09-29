@@ -483,6 +483,52 @@ export interface ElasticityChartData {
   note: string;
 }
 
+/** M15 — Acciones posibles de un evento de bitácora. */
+export type AccionAuditoria = 'insert' | 'update' | 'delete' | 'login' | 'importacion';
+
+/** M15 — Un campo modificado dentro de un evento de auditoría. */
+export interface AuditoriaCambio {
+  campo: string;
+  valorPrevio: string | null;
+  valorPosterior: string | null;
+}
+
+/** M15 — Un evento de la bitácora (GET /auditoria). */
+export interface Auditoria {
+  id: string;
+  usuarioId: string | null;
+  rolId: number | null;
+  tablaAfectada: string;
+  registroId: string | null;
+  accion: AccionAuditoria;
+  descripcion: string | null;
+  direccionIp: string | null;
+  fecha: string;
+  cambios: AuditoriaCambio[];
+}
+
+/** M15 — Filtros opcionales de GET /auditoria. */
+export interface AuditoriaFiltros {
+  tabla?: string;
+  registroId?: string;
+  usuarioId?: string;
+  accion?: AccionAuditoria;
+  /** ISO `yyyy-mm-dd`. */
+  dateFrom?: string;
+  /** ISO `yyyy-mm-dd`, inclusivo. */
+  dateTo?: string;
+  page?: number;
+  limit?: number;
+}
+
+/** M15 — Respuesta paginada de GET /auditoria. */
+export interface AuditoriaPagina {
+  data: Auditoria[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 /** M11 — Un par de sustitutos de GET /substitution/patterns. */
 export interface SubstitutionPattern {
   originProductId: string;

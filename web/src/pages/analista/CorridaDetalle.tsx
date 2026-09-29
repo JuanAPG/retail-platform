@@ -19,7 +19,7 @@ const PALETA = ['bg-teal text-arena', 'bg-salvia text-tinta', 'bg-tinta text-are
 
 /** M10 — Una corrida de Apriori: con qué datos, parámetros y supuestos se obtuvo, y sus reglas (RF-15). */
 export function CorridaDetalle({ corrida, loading, error, onReintentar, tiendas, zonas, segmentos }: CorridaDetalleProps) {
-  if (loading) return <p className="text-sm text-teal/70">Cargando corrida…</p>;
+  if (loading) return <p className="text-sm text-teal/70">Cargando análisis…</p>;
   if (error) {
     return (
       <div className="flex items-center gap-3">
@@ -33,8 +33,8 @@ export function CorridaDetalle({ corrida, loading, error, onReintentar, tiendas,
   if (!corrida) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-        <p className="font-display text-xl text-teal">Ninguna corrida seleccionada</p>
-        <p className="text-sm text-teal/70">Selecciona una del historial o corre una nueva.</p>
+        <p className="font-display text-xl text-teal">Ningún análisis seleccionado</p>
+        <p className="text-sm text-teal/70">Selecciona uno del historial o genera uno nuevo.</p>
       </div>
     );
   }
@@ -86,12 +86,12 @@ export function CorridaDetalle({ corrida, loading, error, onReintentar, tiendas,
 
       {corrida.status === 'fallida' ? (
         <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">La corrida no se completó</p>
+          <p className="text-sm font-semibold text-vino">El análisis no se completó</p>
           <p className="mt-1 break-words text-sm text-vino/80">{corrida.errorMessage}</p>
         </div>
       ) : reglas.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-          <p className="font-display text-xl text-teal">La corrida no generó reglas</p>
+          <p className="font-display text-xl text-teal">El análisis no generó reglas</p>
           <p className="max-w-sm text-sm text-teal/70">
             Ninguna combinación superó el soporte y la confianza mínimos. Prueba bajando alguno de los dos.
           </p>
@@ -100,7 +100,7 @@ export function CorridaDetalle({ corrida, loading, error, onReintentar, tiendas,
         <>
           <p className="px-1 text-sm text-teal/70">
             {reglas.length} regla(s)
-            {excluidas > 0 && `; ${excluidas} excluida(s) por combinar categorías vetadas (RN-10)`}.
+            {excluidas > 0 && `; ${excluidas} excluida(s) por combinar categorías que no pueden mezclarse`}.
           </p>
           <div className="flex flex-col gap-2">
             {reglas.map((r) => (

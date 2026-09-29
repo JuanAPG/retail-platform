@@ -116,7 +116,7 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
       {!cargando && datos && (
         <div className="flex flex-col gap-4 rounded-panel bg-arena p-6">
           <p className="text-sm text-teal/70">
-            {datos.productName} {datos.presentationName} · corrida del {formatearFechaHora(datos.executedAt)} · observaciones{' '}
+            {datos.productName} {datos.presentationName} · análisis del {formatearFechaHora(datos.executedAt)} · observaciones{' '}
             {GRANULARIDAD[datos.granularity]} · datos del {formatearDia(datos.periodStart)} al {formatearDia(datos.periodEnd)}
           </p>
 

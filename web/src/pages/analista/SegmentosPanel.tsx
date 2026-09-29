@@ -59,7 +59,7 @@ export function SegmentosPanel() {
     <div className="flex flex-col gap-6">
       <Hero
         title="Segmentos"
-        subtitle="Rangos de ingreso por zona (RN-01, RN-02)"
+        subtitle="Rangos de ingreso por zona"
         action={
           <CtaButton
             onClick={() => {

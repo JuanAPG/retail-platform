@@ -17,14 +17,14 @@ interface HeaderProps {
 /** DESIGN.md §4/§5 — Header: rol + saludo, buscador y campana. */
 export function Header({ rolLabel, nombre, buscador, onNotificaciones, notificacionesPendientes }: HeaderProps) {
   return (
-    <header className="flex items-center gap-4">
-      <div className="flex min-w-[260px] flex-col">
+    <header className="flex flex-wrap items-center gap-4">
+      <div className="flex min-w-0 flex-shrink-0 flex-col sm:min-w-[260px]">
         <span className="text-sm font-semibold text-salvia">{rolLabel}</span>
         <span className="font-slab text-[30px] font-extrabold text-vino">Hola, {nombre}</span>
       </div>
 
       {buscador && (
-        <label className="flex h-14 flex-1 items-center gap-3 rounded-full border-2 border-transparent bg-arena px-[22px] text-teal transition focus-within:border-vino focus-within:bg-marfil hover:border-salvia/50">
+        <label className="order-3 flex h-14 w-full min-w-[220px] flex-1 items-center gap-3 rounded-full border-2 border-transparent bg-arena px-[22px] text-teal transition focus-within:border-vino focus-within:bg-marfil hover:border-salvia/50 sm:order-none sm:w-auto">
           <IconBuscar />
           <input
             type="search"

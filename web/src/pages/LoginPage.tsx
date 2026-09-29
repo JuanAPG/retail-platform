@@ -119,7 +119,7 @@ export function LoginPage() {
               to="/registro-proveedor"
               className="flex h-12 flex-1 items-center justify-center rounded-full text-[15px] font-bold text-teal transition hover:bg-salvia/25"
             >
-              Soy proveedor
+              Registrarse
             </Link>
           </div>
 

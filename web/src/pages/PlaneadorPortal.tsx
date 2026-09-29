@@ -88,7 +88,7 @@ export function PlaneadorPortal() {
           />
           <PlaceholderHonesto
             titulo="El motor de simulación aún no está construido"
-            descripcion="Esta pantalla mostrará el formulario de parámetros (producto, zona, segmento, tipo de cambio) en cuanto el módulo de Simulación (M13) esté listo."
+            descripcion="Próximamente podrás elegir un producto, zona y segmento, proponer un nuevo precio o empaque, y ver el impacto estimado antes de aplicarlo."
             icono={<IconSimulacion className="h-6 w-6" />}
           />
         </div>
@@ -124,7 +124,7 @@ export function PlaneadorPortal() {
           </div>
           <PlaceholderHonesto
             titulo="Aún no hay recomendaciones generadas"
-            descripcion="El motor de recomendaciones (M14) explicará aquí qué recomienda, por qué, con qué datos y qué impacto estima."
+            descripcion="Próximamente verás aquí cada recomendación con qué se sugiere, por qué, con qué datos se generó y qué impacto estima."
             icono={<IconRecomendaciones className="h-6 w-6" />}
           />
         </div>

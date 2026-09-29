@@ -37,7 +37,7 @@ export function ReglasAsociacionPanel() {
       setSeleccionada(reglas[0].runId);
       corridas.refetch();
     } else {
-      setAviso('La corrida no generó reglas con esos umbrales; prueba bajando el soporte o la confianza.');
+      setAviso('El análisis no generó reglas con esos umbrales; prueba bajando el soporte o la confianza.');
       void abrirMasReciente();
     }
   }
@@ -49,7 +49,7 @@ export function ReglasAsociacionPanel() {
     <div className="flex flex-col gap-6">
       <Hero
         title="Asociaciones"
-        subtitle="Productos que se compran juntos (Apriori)"
+        subtitle="Productos que se compran juntos"
         decorations={
           <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
             <IconAsociacion className="mt-8 h-[74px] w-[74px]" />
@@ -80,7 +80,7 @@ export function ReglasAsociacionPanel() {
       {!corridas.loading && !corridas.error && lista.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
           <p className="font-display text-2xl text-teal">Aún no se ha ejecutado ningún análisis</p>
-          <p className="text-sm text-teal/70">Corre Apriori sobre las canastas para descubrir productos que se compran juntos.</p>
+          <p className="text-sm text-teal/70">Genera un análisis sobre las canastas para descubrir qué productos se compran juntos.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -121,7 +121,7 @@ export function ReglasAsociacionPanel() {
           </div>
 
           <div>
-            <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-teal/70">Detalle de la corrida</h2>
+            <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-teal/70">Detalle del análisis</h2>
             <CorridaDetalle
               corrida={detalle.data}
               loading={Boolean(seleccionada) && detalle.loading}

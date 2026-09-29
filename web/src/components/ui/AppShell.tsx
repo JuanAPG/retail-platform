@@ -38,7 +38,7 @@ export function AppShell({
   aside,
 }: AppShellProps) {
   return (
-    <div className="flex min-h-screen gap-6 bg-marfil p-6">
+    <div className="flex min-h-screen flex-col gap-6 bg-marfil p-4 sm:p-6 lg:flex-row">
       <Rail modulos={modulos} iniciales={iniciales} perfiles={perfiles} onLogout={onLogout} />
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         <Header
@@ -48,9 +48,9 @@ export function AppShell({
           onNotificaciones={onNotificaciones}
           notificacionesPendientes={notificacionesPendientes}
         />
-        <div className="flex min-h-0 flex-1 gap-6">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 xl:flex-row">
           <div className="flex min-w-0 flex-1 flex-col gap-6">{children}</div>
-          {aside && <aside className="flex w-96 flex-shrink-0 flex-col gap-6">{aside}</aside>}
+          {aside && <aside className="flex flex-col gap-6 xl:w-96 xl:flex-shrink-0">{aside}</aside>}
         </div>
       </div>
     </div>

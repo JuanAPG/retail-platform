@@ -54,7 +54,7 @@ export function ElasticidadPanel() {
     <section className="flex flex-col gap-6">
       <SectionHeader
         title="Elasticidad de precios"
-        description="Cuánto cambia la cantidad vendida cuando cambia el precio. Cada cálculo se guarda como corrida con sus parámetros y supuestos."
+        description="Cuánto cambia la cantidad vendida cuando cambia el precio. Cada cálculo se guarda como un análisis, con sus parámetros y supuestos."
       />
 
       <form onSubmit={calcular} className="flex flex-col gap-4 rounded-panel bg-arena p-6">

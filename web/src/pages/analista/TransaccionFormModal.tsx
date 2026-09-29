@@ -89,7 +89,7 @@ export function TransaccionFormModal({ tiendas, productos, onCerrar, onGuardado 
   }
 
   return (
-    <Modal titulo="Nueva transacción" descripcion="Registro manual. Al guardar se construye su canasta (M07)." onCerrar={onCerrar}>
+    <Modal titulo="Nueva transacción" descripcion="Registro manual. Al guardar se construye su canasta de compra." onCerrar={onCerrar}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Select id="trx-tienda" label="Tienda" value={storeId} onChange={(e) => setStoreId(e.target.value)} placeholder="Elige…">

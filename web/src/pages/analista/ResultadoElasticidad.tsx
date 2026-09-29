@@ -14,7 +14,7 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="font-slab text-[22px] text-vino">Resultado de la corrida</h2>
+        <h2 className="font-slab text-[22px] text-vino">Resultado del análisis</h2>
         <p className="text-sm text-teal/70">
           Observaciones {GRANULARIDAD[resultado.granularity]} · datos del {formatearDia(resultado.periodStart)} al{' '}
           {formatearDia(resultado.periodEnd)}
@@ -24,7 +24,7 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
       {results.length === 0 ? (
         <div className="rounded-full bg-vino/10 px-5 py-3">
           <p className="text-sm font-semibold text-vino">
-            Ninguna combinación tuvo datos suficientes. La corrida quedó guardada; abajo están los motivos.
+            Ninguna combinación tuvo datos suficientes. El análisis quedó guardado; abajo están los motivos.
           </p>
         </div>
       ) : (

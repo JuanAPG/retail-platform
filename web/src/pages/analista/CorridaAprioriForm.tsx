@@ -69,7 +69,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
       });
       onTerminada(reglas);
     } catch (err) {
-      setError(mensajeDeError(err, 'No se pudo correr Apriori. Intenta de nuevo.'));
+      setError(mensajeDeError(err, 'No se pudo generar el análisis. Intenta de nuevo.'));
       if ((err as AxiosError).response?.status === 500) onFallida();
     } finally {
       setCorriendo(false);
@@ -78,7 +78,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
 
   return (
     <form onSubmit={correr} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
-      <h2 className="font-slab text-[22px] text-vino">Nueva corrida</h2>
+      <h2 className="font-slab text-[22px] text-vino">Nuevo análisis</h2>
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <label className={labelClass} htmlFor="apr-soporte">
@@ -181,7 +181,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
           className="flex h-[52px] shrink-0 items-center gap-2.5 rounded-full bg-teal px-6 text-[15px] font-bold text-arena transition hover:bg-vino disabled:opacity-50"
         >
           <IconSimulacion className="h-[18px] w-[18px]" />
-          {corriendo ? 'Corriendo…' : 'Correr Apriori'}
+          {corriendo ? 'Analizando…' : 'Analizar'}
         </button>
       </div>
     </form>

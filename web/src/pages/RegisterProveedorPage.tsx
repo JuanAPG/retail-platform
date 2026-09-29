@@ -181,12 +181,20 @@ export function RegisterProveedorPage() {
               Iniciar sesión
             </Link>
             <span className="flex h-12 flex-1 items-center justify-center rounded-full bg-vino text-[15px] font-bold text-arena">
-              Soy proveedor
+              Registrarse
             </span>
           </div>
 
           <div className="flex flex-col gap-4">
             <h2 className="font-display text-4xl text-vino">Vende con nosotros</h2>
+            <p className="-mt-2 text-sm text-teal/70">
+              Este registro es para dar de alta tu catálogo como proveedor externo. Si tu negocio quiere contratar la
+              plataforma en vez de vender en ella, escríbenos a{' '}
+              <a href="mailto:ventas@retail.mx" className="font-semibold text-vino underline decoration-vino/40 hover:text-teal">
+                ventas@retail.mx
+              </a>
+              .
+            </p>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
