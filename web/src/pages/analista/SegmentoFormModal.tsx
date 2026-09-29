@@ -2,6 +2,8 @@ import { FormEvent, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { mensajeDeError } from '../../api/errores';
 import { CrearSegmentoPayload, actualizarSegmento, crearSegmento } from '../../api/segmentos';
+import { Field } from '../../components/ui/Field';
+import { TextArea } from '../../components/ui/TextArea';
 import { IncomeSegment } from '../../types';
 
 interface SegmentoFormModalProps {
@@ -26,9 +28,14 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (!e.currentTarget.checkValidity()) {
+      setError('Completa los campos obligatorios.');
+      return;
+    }
 
     const payload: CrearSegmentoPayload = {
       code: code.trim(),
@@ -69,167 +76,125 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
   return (
     <Modal
       titulo={esEdicion ? 'Editar segmento de ingreso' : 'Nuevo segmento de ingreso'}
-      descripcion="El rango numérico no basta: RN-01/RN-02 y la retroalimentación del profesor exigen justificar fuente, frecuencia de actualización, relación con zona y limitaciones."
+      descripcion="El rango de ingreso no basta por sí solo: documenta también de dónde sale el dato, cada cuánto se actualiza, cómo se relaciona con la zona y qué limitaciones tiene."
       onCerrar={onCerrar}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Campo id="segmento-code" label="Código">
-            <input
-              id="segmento-code"
-              type="text"
-              required
-              maxLength={20}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="ING_1"
-              className={inputClass}
-            />
-          </Campo>
-          <Campo id="segmento-name" label="Nombre">
-            <input
-              id="segmento-name"
-              type="text"
-              required
-              maxLength={60}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ingreso bajo"
-              className={inputClass}
-            />
-          </Campo>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Campo id="segmento-min" label="Ingreso mínimo">
-            <input
-              id="segmento-min"
-              type="number"
-              required
-              min={0}
-              step="0.01"
-              value={incomeRangeMin}
-              onChange={(e) => setIncomeRangeMin(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
-          <Campo id="segmento-max" label="Ingreso máximo (vacío = sin tope)">
-            <input
-              id="segmento-max"
-              type="number"
-              min={0}
-              step="0.01"
-              value={incomeRangeMax}
-              onChange={(e) => setIncomeRangeMax(e.target.value)}
-              className={inputClass}
-            />
-          </Campo>
-        </div>
-
-        <Campo id="segmento-source" label="Fuente">
-          <input
-            id="segmento-source"
-            type="text"
+          <Field
+            id="segmento-code"
+            label="Código"
             required
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="INEGI - ENIGH, ingreso corriente trimestral por hogar (AMM)"
-            className={inputClass}
+            maxLength={20}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="ING_1"
+            dataFont
           />
-        </Campo>
-
-        <Campo id="segmento-frecuencia" label="Frecuencia de actualización">
-          <input
-            id="segmento-frecuencia"
-            type="text"
+          <Field
+            id="segmento-name"
+            label="Nombre"
             required
             maxLength={60}
-            value={updateFrequency}
-            onChange={(e) => setUpdateFrequency(e.target.value)}
-            placeholder="Anual, al publicarse la ENIGH"
-            className={inputClass}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ingreso bajo"
           />
-        </Campo>
+        </div>
 
-        <Campo id="segmento-relacion-zona" label="Relación con zona">
-          <textarea
-            id="segmento-relacion-zona"
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            id="segmento-min"
+            label="Ingreso mínimo"
+            type="number"
             required
-            rows={2}
-            value={zoneRelation}
-            onChange={(e) => setZoneRelation(e.target.value)}
-            placeholder="Se asigna a la ZONA agregada (RN-02); nunca a una persona ni compra individual."
-            className={inputClass}
+            min={0}
+            step="0.01"
+            value={incomeRangeMin}
+            onChange={(e) => setIncomeRangeMin(e.target.value)}
+            dataFont
           />
-        </Campo>
+          <Field
+            id="segmento-max"
+            label="Ingreso máximo (vacío = sin tope)"
+            type="number"
+            min={0}
+            step="0.01"
+            value={incomeRangeMax}
+            onChange={(e) => setIncomeRangeMax(e.target.value)}
+            dataFont
+          />
+        </div>
 
-        <Campo id="segmento-limitaciones" label="Limitaciones">
-          <textarea
-            id="segmento-limitaciones"
-            required
-            rows={2}
-            value={limitations}
-            onChange={(e) => setLimitations(e.target.value)}
-            placeholder="No captura variación de ingreso dentro de la misma zona."
-            className={inputClass}
-          />
-        </Campo>
+        <Field
+          id="segmento-source"
+          label="Fuente"
+          required
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          placeholder="INEGI - ENIGH, ingreso corriente trimestral por hogar (AMM)"
+        />
 
-        <Campo id="segmento-descripcion" label="Descripción (opcional)">
-          <input
-            id="segmento-descripcion"
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className={inputClass}
-          />
-        </Campo>
+        <Field
+          id="segmento-frecuencia"
+          label="Frecuencia de actualización"
+          required
+          maxLength={60}
+          value={updateFrequency}
+          onChange={(e) => setUpdateFrequency(e.target.value)}
+          placeholder="Anual, al publicarse la ENIGH"
+        />
+
+        <TextArea
+          id="segmento-relacion-zona"
+          label="Relación con zona"
+          required
+          rows={2}
+          value={zoneRelation}
+          onChange={(e) => setZoneRelation(e.target.value)}
+          placeholder="Se asigna a la zona agregada; nunca a una persona ni a una compra individual."
+        />
+
+        <TextArea
+          id="segmento-limitaciones"
+          label="Limitaciones"
+          required
+          rows={2}
+          value={limitations}
+          onChange={(e) => setLimitations(e.target.value)}
+          placeholder="No captura variación de ingreso dentro de la misma zona."
+        />
+
+        <Field
+          id="segmento-descripcion"
+          label="Descripción (opcional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
 
         {error && (
-          <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">
             {error}
           </p>
         )}
 
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onCerrar}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 items-center rounded-full border-2 border-salvia/60 px-5 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={guardando}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear segmento'}
           </button>
         </div>
       </form>
     </Modal>
-  );
-}
-
-const inputClass =
-  'w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-
-function Campo({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium uppercase text-slate-500">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }

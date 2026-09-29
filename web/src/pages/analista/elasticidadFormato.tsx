@@ -9,9 +9,9 @@ export const CLASIFICACION: Record<
   ElasticityClass,
   { texto: string; tono: 'negative' | 'positive' | 'neutral'; barra: string }
 > = {
-  elastic: { texto: 'Elástica', tono: 'negative', barra: 'bg-rose-400' },
-  inelastic: { texto: 'Inelástica', tono: 'positive', barra: 'bg-emerald-400' },
-  unitary: { texto: 'Unitaria', tono: 'neutral', barra: 'bg-slate-400' },
+  elastic: { texto: 'Elástica', tono: 'negative', barra: 'bg-vino' },
+  inelastic: { texto: 'Inelástica', tono: 'positive', barra: 'bg-salvia' },
+  unitary: { texto: 'Unitaria', tono: 'neutral', barra: 'bg-teal' },
 };
 
 export function ClasificacionBadge({ clase }: { clase: ElasticityClass }) {

@@ -27,6 +27,11 @@ export interface RecommendationDraft {
   evidence: EvidenceDraft[];
 }
 
+/** Fecha de ejecución en formato legible para las evidencias ("28/09/26, 02:15"), no ISO crudo. */
+function formatearFecha(fecha: Date): string {
+  return fecha.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 const ELASTICITY_HIGH = 2;
 const ELASTICITY_LOW = 0.3;
 const ACCESSIBILITY_LOW = 0.4;
@@ -158,7 +163,7 @@ export class RecommendationsService {
         {
           dimension: 'zona',
           referenceId: f.zonaId,
-          description: `Índice de accesibilidad ${f.indice}, calculado en la corrida del ${f.ejecutadaEn.toISOString()}.`,
+          description: `Índice de accesibilidad ${f.indice}, calculado en el análisis del ${formatearFecha(f.ejecutadaEn)}.`,
         },
       ],
     }));
@@ -206,7 +211,7 @@ export class RecommendationsService {
         {
           dimension: 'producto',
           referenceId: f.presentacionId,
-          description: `Elasticidad ${f.valor}${lugar}, calculada en la corrida del ${f.ejecutadaEn.toISOString()}.`,
+          description: `Elasticidad ${f.valor}${lugar}, calculada en el análisis del ${formatearFecha(f.ejecutadaEn)}.`,
         },
       ];
 

@@ -1,4 +1,4 @@
-import { Badge } from '../../components/Badge';
+import { StatusPill } from '../../components/ui/StatusPill';
 import { AnalysisRunStatus } from '../../types';
 
 /** M10 — Formatos compartidos por el historial y el detalle de corridas. */
@@ -25,12 +25,12 @@ export function formatearDia(dia: string): string {
   return `${d}/${mes}/${anio}`;
 }
 
-const ESTADO: Record<AnalysisRunStatus, { texto: string; tono: 'positive' | 'negative' | 'warning' }> = {
-  completada: { texto: 'Completada', tono: 'positive' },
-  fallida: { texto: 'Fallida', tono: 'negative' },
-  en_proceso: { texto: 'En proceso', tono: 'warning' },
+const ESTADO: Record<AnalysisRunStatus, { texto: string; tono: 'ok' | 'warn' | 'neutral' }> = {
+  completada: { texto: 'Completada', tono: 'ok' },
+  fallida: { texto: 'Fallida', tono: 'warn' },
+  en_proceso: { texto: 'En proceso', tono: 'neutral' },
 };
 
 export function EstadoCorridaBadge({ estado }: { estado: AnalysisRunStatus }) {
-  return <Badge tone={ESTADO[estado].tono}>{ESTADO[estado].texto}</Badge>;
+  return <StatusPill tone={ESTADO[estado].tono}>{ESTADO[estado].texto}</StatusPill>;
 }

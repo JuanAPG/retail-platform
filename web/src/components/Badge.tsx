@@ -1,18 +1,21 @@
+import { ReactNode } from 'react';
+
 interface BadgeProps {
-  children: React.ReactNode;
+  children: ReactNode;
   tone?: 'neutral' | 'positive' | 'warning' | 'negative';
 }
 
 const TONE_CLASS: Record<NonNullable<BadgeProps['tone']>, string> = {
-  neutral: 'bg-slate-100 text-slate-600',
-  positive: 'bg-emerald-100 text-emerald-700',
-  warning: 'bg-amber-100 text-amber-700',
-  negative: 'bg-rose-100 text-rose-700',
+  neutral: 'bg-arena text-teal',
+  positive: 'bg-salvia text-tinta',
+  warning: 'bg-vino/15 text-vino',
+  negative: 'bg-vino text-arena',
 };
 
+/** DESIGN.md §5 — mismo lenguaje de pastilla que StatusPill, para etiquetas cortas fuera de tablas. */
 export function Badge({ children, tone = 'neutral' }: BadgeProps) {
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}>
+    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TONE_CLASS[tone]}`}>
       {children}
     </span>
   );

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Planeador · Simulación</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&amp;family=Josefin+Slab:wght@600;700&amp;family=Figtree:wght@400;500;600;700&amp;family=Montserrat:wght@400;500;600;700&amp;display=swap">
+<style>
+
+body{margin:0;background:#FAF8F2}
+*{box-sizing:border-box}
+a{color:#003C3E}a:hover{color:#708D81}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+input{font-family:inherit}
+.d{font-family:'Young Serif',Georgia,serif;letter-spacing:-0.015em;font-weight:400 !important;font-synthesis:none}
+.d:not(h1):not(.logo){font-family:'Josefin Slab','Rockwell',Georgia,serif;font-weight:700 !important;letter-spacing:0;font-synthesis:none}
+.m{font-family:'Montserrat',system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em;font-weight:500}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.rail{width:92px;background:#003C3E;border-radius:46px;padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:4}
+.logo{width:60px;height:60px;border-radius:50%;background:#F0ECDF;color:#003C3E;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;margin-bottom:14px;text-decoration:none;transition:transform .3s}
+.logo:hover{transform:rotate(-12deg) scale(1.06);background:#8E0A0A;color:#F0ECDF}
+.ni{position:relative;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#F0ECDF;transition:background .25s,transform .25s,color .25s}
+.ni:hover{background:#708D81;color:#040404;transform:scale(1.08)}
+.ni.on{background:#8E0A0A;color:#F0ECDF}
+.tip{position:absolute;left:68px;top:50%;transform:translate(-8px,-50%);background:#040404;color:#F0ECDF;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;opacity:0;pointer-events:none;transition:.2s;display:flex;gap:8px;align-items:center}
+.tip small{color:#708D81;font-weight:500}
+.ni:hover .tip{opacity:1;transform:translate(0,-50%)}
+.bd{position:absolute;top:0;right:0;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:#8E0A0A;color:#F0ECDF;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #003C3E}
+.who{position:relative;margin-top:auto}
+.av{width:60px;height:60px;border-radius:50%;background:#708D81;color:#040404;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;transition:.25s;border:3px solid #003C3E;box-shadow:0 0 0 2px #708D81}
+.who:hover .av,.who:focus-within .av{box-shadow:0 0 0 4px #F0ECDF}
+.menu{position:absolute;left:72px;bottom:0;background:#040404;border-radius:30px;padding:10px;display:flex;flex-direction:column;gap:4px;min-width:250px;opacity:0;visibility:hidden;transform:translateX(-8px);transition:.2s}
+.menu::before{content:'';position:absolute;left:-16px;top:0;bottom:0;width:16px}
+.who:hover .menu,.who:focus-within .menu{opacity:1;visibility:visible;transform:none}
+.menu a{color:#F0ECDF;text-decoration:none;padding:11px 14px;border-radius:999px;font-size:14px;display:flex;align-items:center;gap:10px;transition:.2s}
+.menu a:hover{background:#708D81;color:#040404}
+.menu a.cur{background:#003C3E}
+.menu a.cur .dot{background:#8E0A0A;color:#F0ECDF}
+.menu .dot{width:28px;height:28px;border-radius:50%;background:#708D81;color:#040404;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.search{flex:1;height:56px;border-radius:999px;background:#F0ECDF;border:2px solid transparent;display:flex;align-items:center;gap:12px;padding:0 22px;color:#003C3E;transition:.25s}
+.search:hover{border-color:rgba(112,141,129,.5)}
+.search:focus-within{border-color:#8E0A0A;background:#FAF8F2}
+.search input{flex:1;border:0;background:none;outline:none;font-size:15px;color:#040404}
+.search input::placeholder{color:#708D81}
+.ib{width:56px;height:56px;border-radius:50%;background:#F0ECDF;color:#003C3E;display:flex;align-items:center;justify-content:center;position:relative;transition:.25s}
+.ib:hover{background:#003C3E;color:#F0ECDF;transform:rotate(-8deg)}
+.ib .pip{position:absolute;top:13px;right:14px;width:10px;height:10px;border-radius:50%;background:#8E0A0A;border:2px solid #F0ECDF}
+.cta{height:52px;padding:0 24px 0 18px;border-radius:999px;background:#8E0A0A;color:#F0ECDF;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;transition:.25s}
+.cta:hover{background:#F0ECDF;color:#8E0A0A;transform:translateY(-2px)}
+.cta .pl{width:32px;height:32px;border-radius:50%;background:#F0ECDF;color:#8E0A0A;display:flex;align-items:center;justify-content:center;transition:.3s}
+.cta:hover .pl{transform:rotate(90deg);background:#8E0A0A;color:#F0ECDF}
+.kc{border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;transition:transform .35s cubic-bezier(.2,.8,.2,1);position:absolute}
+.kc:hover{transform:scale(1.08) rotate(-4deg)}
+.cat{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#003C3E}
+.cat .c{width:76px;height:76px;border-radius:50%;background:#F0ECDF;border:2px solid rgba(112,141,129,.35);display:flex;align-items:center;justify-content:center;transition:.25s}
+.cat:hover .c{transform:translateY(-5px);background:#003C3E;color:#F0ECDF;border-color:#003C3E}
+.cat.on .c{background:#8E0A0A;color:#F0ECDF;border-color:#8E0A0A}
+.cat.on{color:#040404}
+.pc{background:#F0ECDF;border-radius:32px;padding:14px;display:flex;flex-direction:column;gap:12px;transition:.3s cubic-bezier(.2,.8,.2,1);border:2px solid transparent;position:relative}
+.pc:hover{transform:translateY(-6px);border-color:#708D81;box-shadow:0 22px 30px -22px rgba(0,60,62,.55)}
+.pc.sel{border-color:#8E0A0A;box-shadow:0 0 0 4px rgba(142,10,10,.12)}
+.vis{height:136px;border-radius:24px;background:rgba(112,141,129,.2);display:flex;align-items:center;justify-content:center;transition:.3s;position:relative;color:#003C3E}
+.pc:hover .vis{background:#708D81;color:#040404}
+.vis svg{width:84px;height:84px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+.pc:hover .vis svg{transform:scale(1.12) rotate(-7deg)}
+.pill{border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ok{background:#FAF8F2;color:#003C3E}
+.warn{background:#8E0A0A;color:#F0ECDF}
+.bas{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:#8E0A0A;color:#F0ECDF;display:flex;align-items:center;justify-content:center}
+.bas .i{width:18px;height:18px}
+.acts{display:flex;gap:6px;opacity:.35;transition:.25s}
+.pc:hover .acts{opacity:1}
+.cb{width:44px;height:44px;border-radius:50%;background:#FAF8F2;color:#003C3E;display:flex;align-items:center;justify-content:center;transition:.2s}
+.cb .i{width:19px;height:19px}
+.cb:hover{background:#003C3E;color:#F0ECDF;transform:scale(1.1)}
+.cb.del:hover{background:#8E0A0A;color:#F0ECDF}
+.tab{flex:1;justify-content:center;height:40px;padding:0 8px;border-radius:999px;font-size:12.5px;font-weight:600;color:#003C3E;display:flex;align-items:center;gap:6px;transition:.2s}
+.tab:hover{background:rgba(112,141,129,.25)}
+.tab.on{background:#003C3E;color:#F0ECDF}
+.tab.on b{color:#F0ECDF;background:#8E0A0A;border-radius:999px;padding:2px 7px;opacity:1}
+.tab b{font-weight:700;opacity:.7}
+.ap{border-radius:28px;background:#FAF8F2;border:2px solid transparent;transition:.25s;overflow:hidden}
+.ap:hover{border-color:#708D81}
+.ap.open{background:#003C3E;color:#F0ECDF;border-color:#003C3E}
+.aph{width:100%;display:flex;align-items:center;gap:12px;padding:10px 14px 10px 10px;text-align:left}
+.apa{width:48px;height:48px;border-radius:50%;background:#708D81;color:#040404;}
+.ap.open .apa{background:#8E0A0A;color:#F0ECDF}
+.apa{display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.3s}
+.ap:hover .apa{transform:rotate(-10deg)}
+.chev{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:.3s;flex-shrink:0}
+.ap.open .chev{transform:rotate(90deg);background:#F0ECDF;color:#003C3E}
+.yes{flex:1;height:48px;border-radius:999px;background:#F0ECDF;color:#003C3E;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s}
+.yes:hover{background:#8E0A0A;color:#F0ECDF}
+.no{width:48px;height:48px;border-radius:50%;border:2px solid rgba(240,236,223,.4);color:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.2s}
+.no:hover{background:#8E0A0A;border-color:#8E0A0A}
+.more{width:48px;height:48px;border-radius:50%;border:2px solid rgba(240,236,223,.4);color:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.2s}
+.more:hover{background:#F0ECDF;color:#003C3E}
+.st{display:flex;align-items:center;gap:12px;padding:8px 16px 8px 8px;border-radius:999px;color:#040404;background:#FAF8F2;transition:.25s;border:2px solid transparent}
+.st:hover{border-color:#F0ECDF;transform:translateX(4px)}
+.st.best{background:#708D81}
+.st .si{width:40px;height:40px;border-radius:50%;background:#F0ECDF;color:#003C3E;display:flex;align-items:center;justify-content:center;font-weight:700}
+.st.best .si{background:#8E0A0A;color:#F0ECDF}
+.lnk{font-size:13px;font-weight:600;color:#003C3E;display:flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:999px;transition:.2s}
+.lnk:hover{background:#003C3E;color:#F0ECDF}
+
+
+.menu a{padding:9px 14px}
+.row{display:flex;align-items:center;gap:14px;padding:8px 18px 8px 8px;border-radius:999px;background:#F0ECDF;border:2px solid transparent;transition:.25s;width:100%;text-align:left}
+.row:hover{border-color:#708D81;transform:translateX(4px)}
+.row.sel{background:#003C3E;color:#F0ECDF;border-color:#003C3E}
+.row.sel .ra{background:#8E0A0A;color:#F0ECDF}
+.ra{width:44px;height:44px;border-radius:50%;background:#708D81;color:#040404;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;transition:.3s}
+.row:hover .ra{transform:rotate(-10deg)}
+.chip{height:44px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;background:#F0ECDF;color:#003C3E;border:2px solid transparent;transition:.2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.chip:hover{border-color:#708D81}
+.chip.on{background:#8E0A0A;color:#F0ECDF}
+.chip b{font-family:'Montserrat',sans-serif;font-weight:600;font-size:12px;opacity:.75}
+.sw{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#003C3E}
+.sw .k{width:52px;height:32px;border-radius:999px;background:rgba(112,141,129,.35);position:relative;transition:.25s;flex-shrink:0}
+.sw .k::after{content:'';position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#FAF8F2;transition:.25s}
+.sw:hover .k{background:rgba(112,141,129,.6)}
+.sw.on .k{background:#003C3E}
+.sw.on .k::after{left:24px;background:#F0ECDF}
+.go{height:54px;padding:0 24px;border-radius:999px;background:#003C3E;color:#F0ECDF;font-weight:700;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:.25s}
+.go:hover{background:#8E0A0A;transform:translateX(3px)}
+.gh{height:54px;padding:0 20px;border-radius:999px;color:#003C3E;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:2px solid rgba(112,141,129,.6);transition:.2s}
+.gh:hover{background:#708D81;color:#040404;border-color:#708D81}
+.card{background:#F0ECDF;border-radius:40px;padding:24px;display:flex;flex-direction:column;gap:16px}
+.h2{margin:0;font-size:26px;color:#8E0A0A}
+.uc{background:#F0ECDF;border-radius:32px;padding:18px;display:flex;flex-direction:column;gap:14px;border:2px solid transparent;transition:.3s cubic-bezier(.2,.8,.2,1)}
+.uc:hover{transform:translateY(-6px);border-color:#708D81;box-shadow:0 22px 30px -22px rgba(0,60,62,.55)}
+.uc .acts{display:flex;gap:6px;opacity:.35;transition:.25s}
+.uc:hover .acts{opacity:1}
+.big{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0;transition:.35s}
+.uc:hover .big{transform:rotate(-10deg) scale(1.06)}
+.flow{display:flex;align-items:center;gap:0}
+.fs{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#003C3E;width:96px;text-align:center}
+.fs .c{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#F0ECDF;border:2px solid rgba(112,141,129,.5);transition:.3s}
+.fs:hover .c{transform:translateY(-4px) scale(1.06)}
+.fs.done .c{background:#708D81;border-color:#708D81;color:#040404}
+.fs.now .c{background:#8E0A0A;border-color:#8E0A0A;color:#F0ECDF;box-shadow:0 0 0 6px rgba(142,10,10,.15)}
+.fl2{flex:1;height:6px;border-radius:999px;background:rgba(112,141,129,.3);margin-bottom:26px}
+.fl2.done{background:#708D81}
+.drop{border-radius:40px;border:2px dashed rgba(240,236,223,.5);padding:18px 22px;display:flex;align-items:center;gap:16px;transition:.25s;cursor:pointer;color:#F0ECDF;text-align:left}
+.drop:hover{background:rgba(240,236,223,.08);border-color:#F0ECDF}
+.drop .c{width:60px;height:60px;border-radius:50%;background:#8E0A0A;color:#F0ECDF;display:flex;align-items:center;justify-content:center;transition:.3s;flex-shrink:0}
+.drop:hover .c{transform:translateY(-4px)}
+.stack{display:flex}
+.stack span{width:40px;height:40px;border-radius:50%;border:3px solid #F0ECDF;margin-left:-10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;transition:.25s}
+.stack span:first-child{margin-left:0}
+.rule{display:flex;align-items:center;gap:14px;padding:10px 18px 10px 10px;border-radius:999px;background:#FAF8F2;border:2px solid transparent;transition:.25s}
+.rule:hover{border-color:#8E0A0A}
+.rule:hover .stack span{margin-left:-4px}
+.rule:hover .stack span:first-child{margin-left:0}
+.bar{height:44px;border-radius:999px;background:#FAF8F2;position:relative;overflow:hidden;display:flex;align-items:center;padding:0 16px;font-size:13px;font-weight:600;transition:.25s}
+.bar:hover{transform:translateX(4px)}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:#708D81;transition:.4s}
+.bar:hover i{background:#003C3E}
+.bar:hover span{color:#F0ECDF}
+.bar span{position:relative;z-index:1;display:flex;justify-content:space-between;width:100%;transition:.25s}
+.dots{display:flex;gap:4px}
+.dots b{width:14px;height:14px;border-radius:50%;background:#708D81;display:block}
+.dots b.lo{background:#8E0A0A}
+.ev{display:flex;align-items:center;gap:14px;padding:10px 18px 10px 10px;border-radius:999px;background:#F0ECDF;border:2px solid transparent;transition:.25s;width:100%;text-align:left}
+.ev:hover{border-color:#708D81;transform:translateX(4px)}
+.ev.sel{background:#003C3E;color:#F0ECDF}
+.act{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aI{background:#708D81;color:#040404}
+.aU{background:#003C3E;color:#F0ECDF}
+.aD{background:#8E0A0A;color:#F0ECDF}
+.ev.sel .aU{background:#F0ECDF;color:#003C3E}
+.json{border-radius:28px;background:#003C3E;color:#F0ECDF;padding:16px 20px;font-family:'Montserrat',sans-serif;font-size:13px;line-height:1.7;display:flex;flex-direction:column}
+.json .hl{background:#8E0A0A;border-radius:999px;padding:0 8px;margin-left:-8px;align-self:flex-start}
+.rec{background:#FAF8F2;border-radius:32px;padding:18px;display:flex;flex-direction:column;gap:10px;border:2px solid transparent;transition:.3s}
+.rec:hover{border-color:#8E0A0A;transform:translateY(-4px)}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#708D81}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:18px;border-radius:999px;background:#FAF8F2;outline:none;margin:0;cursor:pointer}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:40px;height:40px;border-radius:50%;background:#8E0A0A;border:5px solid #F0ECDF;box-shadow:0 0 0 2px #8E0A0A;transition:transform .2s}
+.rng:hover::-webkit-slider-thumb{transform:scale(1.15)}
+.rng::-moz-range-thumb{width:32px;height:32px;border-radius:50%;background:#8E0A0A;border:5px solid #F0ECDF}
+.oc{width:140px;height:140px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.oc:hover{transform:scale(1.07)}
+.sc{flex:1;border-radius:32px;padding:16px 18px;background:#FAF8F2;display:flex;flex-direction:column;gap:6px;border:2px solid transparent;transition:.25s}
+.sc:hover{border-color:#003C3E}
+
+
+</style>
+</helmet>
+<div style="width: 1440px; height: 1300px; display: flex; gap: 24px; padding: 24px; background: #FAF8F2; color: #040404; font-family: 'Figtree', system-ui, sans-serif;">
+<nav class="rail" aria-label="Módulos">
+<a class="logo d" href="Main.dc.html" aria-label="Inicio">ra</a>
+<button class="ni on" aria-label="Nueva simulación"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg><span class="tip">Nueva simulación</span></button>
+<button class="ni" aria-label="Historial"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="tip">Historial</span></button>
+<button class="ni" aria-label="Resultados"><svg class="i" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></svg><span class="tip">Resultados</span></button>
+<button class="ni" aria-label="Recomendaciones"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg><span class="bd">{{recN}}</span><span class="tip">Recomendaciones</span></button>
+<button class="ni" aria-label="Productos"><svg class="i" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3.5"/><circle cx="17" cy="7" r="3.5"/><circle cx="7" cy="17" r="3.5"/><circle cx="17" cy="17" r="3.5"/></svg><span class="tip">Productos <small>lectura</small></span></button>
+<button class="ni" aria-label="Tiendas"><svg class="i" viewBox="0 0 24 24"><path d="M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/><path d="M3 10l2-6h14l2 6a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/></svg><span class="tip">Tiendas <small>lectura</small></span></button>
+<button class="ni" aria-label="Precios"><svg class="i" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/></svg><span class="tip">Precios <small>lectura</small></span></button>
+<button class="ni" aria-label="Transacciones"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span class="tip">Transacciones <small>lectura</small></span></button>
+<div class="who">
+<button class="av" aria-label="Perfil">JS</button>
+<div class="menu">
+<a href="Admin.dc.html"><span class="dot">ML</span>Administrador</a>
+<a href="Categoria.dc.html"><span class="dot">RM</span>Gerente de Categoría</a>
+<a href="Precios.dc.html"><span class="dot">LV</span>Responsable de Precios</a>
+<a href="Analista.dc.html"><span class="dot">CR</span>Analista</a>
+<a href="Auditor.dc.html"><span class="dot">AT</span>Auditor</a>
+<a class="cur" href="Planeador.dc.html"><span class="dot">JS</span>Planeador</a>
+<a href="Proveedor.dc.html"><span class="dot">ER</span>Proveedor Externo</a>
+<a href="Main.dc.html"><span class="dot"><svg class="i" style="width: 15px; height: 15px;" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/></svg></span>Cerrar sesión</a>
+</div>
+</div>
+</nav>
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px;">
+<header style="display: flex; align-items: center; gap: 16px;">
+<div style="display: flex; flex-direction: column; min-width: 260px;">
+<span style="font-size: 14px; color: #708D81; font-weight: 600;">Planeador</span>
+<span class="d" style="font-size: 30px; font-weight: 800; color: #8E0A0A;">Hola, Jorge</span>
+</div>
+<label class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" placeholder="Buscar simulación" aria-label="Buscar simulación"></label>
+<button class="ib" aria-label="Notificaciones"><svg class="i" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="pip"></span></button>
+</header>
+<div style="display: flex; gap: 24px; flex-grow: 1; min-height: 0;">
+
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px;">
+<section style="height: 230px; border-radius: 44px; background: #003C3E; color: #F0ECDF; position: relative; overflow: hidden; padding: 34px 40px; display: flex; flex-direction: column; justify-content: space-between;">
+<h1 class="d" style="margin: 0; font-size: 72px; line-height: 0.95; position: relative; z-index: 2;">Simulación</h1>
+<div style="display: flex; gap: 8px; position: relative; z-index: 2;">
+<sc-for list="{{types}}" as="t" hint-placeholder-count="3"><button class="{{t.cls}}" onClick="{{t.pick}}">{{t.n}}</button></sc-for>
+</div>
+<div class="kc" style="width: 230px; height: 230px; right: -40px; top: -60px; background: #708D81; color: #040404;"><span class="d" style="font-size: 52px; line-height: 1; margin: 40px 40px 0 0;">48</span><span style="font-size: 13px; font-weight: 600; margin-right: 40px;">simulaciones</span></div>
+<div class="kc" style="width: 110px; height: 110px; right: 200px; top: 24px; background: #8E0A0A; color: #F0ECDF;"><span class="d" style="font-size: 32px; line-height: 1;">7</span><span style="font-size: 12px; font-weight: 600;">borradores</span></div>
+</section>
+
+<section class="card" style="gap: 20px;">
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<span class="lbl" style="padding-left: 6px;">Producto · presentación</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap;"><sc-for list="{{prods}}" as="c" hint-placeholder-count="3"><button class="{{c.cls}}" onClick="{{c.pick}}">{{c.n}}</button></sc-for></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<span class="lbl" style="padding-left: 6px;">Zona</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap;"><sc-for list="{{zones}}" as="c" hint-placeholder-count="3"><button class="{{c.cls}}" onClick="{{c.pick}}">{{c.n}}</button></sc-for></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<span class="lbl" style="padding-left: 6px;">Segmento</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap;"><sc-for list="{{segs}}" as="c" hint-placeholder-count="3"><button class="{{c.cls}}" onClick="{{c.pick}}">{{c.n}}</button></sc-for></div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 28px;">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 10px;">
+<span class="lbl" style="padding-left: 6px;">{{leverLabel}}</span>
+<input class="rng" type="range" min="0" max="30" step="1" value="{{pct}}" onChange="{{onPct}}" aria-label="{{leverLabel}}">
+<div class="m" style="display: flex; justify-content: space-between; font-size: 12px; color: #003C3E;"><span>0%</span><span>30%</span></div>
+</div>
+<span class="d" style="font-size: 64px; color: #8E0A0A; min-width: 130px; text-align: right;">{{pctLabel}}</span>
+</div>
+<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+<button class="go" onClick="{{save}}"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>Simular y guardar</button>
+<button class="gh" onClick="{{recommend}}"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg>Generar recomendación</button>
+<span class="pill" style="background: #FAF8F2; color: #003C3E; padding: 10px 16px; margin-left: auto;">{{model}}</span>
+</div>
+</section>
+
+<section style="display: flex; gap: 20px; align-items: center;">
+<div class="oc" style="background: #003C3E; color: #F0ECDF;"><span style="font-size: 12px; font-weight: 600; opacity: .8;">Ventas uds</span><span class="d" style="font-size: 32px;">{{dq}}</span></div>
+<div class="oc" style="background: {{revBg}}; color: {{revFg}};"><span style="font-size: 12px; font-weight: 600; opacity: .8;">Ingresos</span><span class="d" style="font-size: 32px;">{{dr}}</span></div>
+<div class="oc" style="background: #708D81; color: #040404;"><span style="font-size: 12px; font-weight: 600; opacity: .8;">Demanda</span><span class="d" style="font-size: 24px;">{{elast}}</span></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0;">
+<span class="lbl" style="padding-left: 6px;">Comparar escenarios</span>
+<div style="display: flex; gap: 10px;">
+<sc-for list="{{scen}}" as="x" hint-placeholder-count="2">
+<div class="sc" style="background: #F0ECDF;">
+<span style="display: flex; justify-content: space-between; align-items: center;"><span class="d" style="font-size: 20px; color: #8E0A0A;">{{x.k}}</span><button class="cb" style="width: 32px; height: 32px;" onClick="{{x.rm}}" aria-label="Quitar"><svg class="i" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+<span style="font-size: 13px; font-weight: 700;">{{x.name}}</span>
+<span class="m" style="font-size: 12px; color: #003C3E;">uds {{x.dq}} · ingreso {{x.dr}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+</div>
+
+<aside style="width: 380px; flex-shrink: 0; display: flex; flex-direction: column; gap: 24px;">
+<section class="card">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px;">
+<h2 class="d h2">Recomendaciones</h2>
+<span class="d" style="width: 44px; height: 44px; border-radius: 50%; background: #8E0A0A; color: #F0ECDF; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{recN}}</span>
+</div>
+<sc-for list="{{recs}}" as="r" hint-placeholder-count="3">
+<article class="rec">
+<span class="d" style="font-size: 18px; line-height: 1.2; color: #003C3E;">{{r.what}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px;"><span class="lbl">Por qué</span><span style="font-size: 14px; line-height: 1.4;">{{r.why}}</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px;"><sc-for list="{{r.data}}" as="dd" hint-placeholder-count="3"><span class="pill m" style="background: #F0ECDF; color: #003C3E;">{{dd.t}}</span></sc-for></div>
+<span class="pill" style="align-self: flex-start; background: #003C3E; color: #F0ECDF; padding: 8px 14px;"><svg class="i" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>{{r.impact}}</span>
+</article>
+</sc-for>
+</section>
+</aside>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    this.state = Object.assign({}, this.state || {}, { type: 'Descuento', prod: 'frijol', zone: 'Norte', seg: 'D+', pct: 15,
+      scen: [{ k: 'A', name: 'Frijol 1 kg · −10% · Oriente', dq: '+15.8%', dr: '+4.2%' }], extra: [] });
+  }
+  renderVals() {
+    const s = this.state, set = (o) => this.setState(o);
+    const P = { frijol: { n: 'Frijol negro · 1 kg', short: 'Frijol 1 kg', e: 1.32, model: 'RA-0041' }, arroz: { n: 'Arroz extra largo · 2 kg', short: 'Arroz 2 kg', e: 0.84, model: 'RA-0038' }, leche: { n: 'Leche entera · 1 L', short: 'Leche 1 L', e: 0.46, model: 'RA-0035' } };
+    const ZM = { Norte: 1.1, Oriente: 1.2, Centro: 0.9, Sur: 1.0 };
+    const mk = (obj, key, cur) => Object.keys(obj).map((k) => ({ n: obj[k].n || k, cls: cur === k ? 'chip on' : 'chip', pick: () => set({ [key]: k }) }));
+    const types = ['Formato de tienda', 'Empaque', 'Descuento'].map((n) => ({ n, cls: s.type === n ? 'chip on' : 'chip', pick: () => set({ type: n }) }));
+    const prods = mk(P, 'prod', s.prod);
+    const zones = Object.keys(ZM).map((n) => ({ n, cls: s.zone === n ? 'chip on' : 'chip', pick: () => set({ zone: n }) }));
+    const segs = ['D+', 'D', 'C', 'C+'].map((n) => ({ n, cls: s.seg === n ? 'chip on' : 'chip', pick: () => set({ seg: n }) }));
+    const p = P[s.prod], d = s.pct / 100;
+    const E = p.e * ZM[s.zone];
+    const dq = E * d, dr = (1 - d) * (1 + dq) - 1;
+    const pct = (v) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(1) + '%';
+    const cls = E > 1.05 ? 'Elástica' : E < 0.95 ? 'Inelástica' : 'Unitaria';
+    const lever = { 'Descuento': 'Descuento', 'Empaque': 'Ajuste de precio por empaque', 'Formato de tienda': 'Ajuste de precio por formato' }[s.type];
+    const name = p.short + ' · −' + s.pct + '% · ' + s.zone;
+    const scen = s.scen.map((x, i) => Object.assign({}, x, { rm: () => set({ scen: s.scen.filter((_, j) => j !== i) }) }));
+    const base = [
+      { what: 'Descuento de 10% en Frijol negro 1 kg · Zona Oriente', why: 'Demanda elástica (E −1.32) y accesibilidad de 68% en el segmento D.', data: ['RA-0041', 'Oct–Nov 2024', '10 tiendas'], impact: '+15.8% uds · +4.2% ingreso' },
+      { what: 'Presentación de 500 g de Arroz en Zona Norte', why: 'La canasta D+ compra fraccionado; regla Arroz → Frijol con lift 1.25.', data: ['Apriori #12', 'D+', '15 tiendas'], impact: '+6% acceso a canasta básica' },
+      { what: 'Mantener el precio de Leche 1 L', why: 'Demanda inelástica (E −0.46): un descuento no eleva el volumen.', data: ['RA-0035', 'Oct–Nov 2024'], impact: 'Evita −4% de ingreso' }
+    ];
+    const recs = s.extra.concat(base).map((r) => Object.assign({}, r, { data: r.data.map((t) => ({ t })) }));
+    return {
+      types, prods, zones, segs, pct: s.pct, pctLabel: s.pct + '%', leverLabel: lever,
+      onPct: (e) => set({ pct: parseInt(e.target.value, 10) }),
+      dq: pct(dq), dr: pct(dr), elast: cls, model: 'Modelo ' + p.model + ' · E −' + E.toFixed(2),
+      revBg: dr < 0 ? '#8E0A0A' : '#F0ECDF', revFg: dr < 0 ? '#F0ECDF' : '#003C3E',
+      scen,
+      save: () => set({ scen: s.scen.concat([{ k: String.fromCharCode(65 + s.scen.length % 26), name, dq: pct(dq), dr: pct(dr) }]).slice(-2) }),
+      recommend: () => set({ extra: [{ what: s.type + ' de ' + s.pct + '% en ' + p.short + ' · Zona ' + s.zone, why: 'Demanda ' + cls.toLowerCase() + ' (E −' + E.toFixed(2) + ') para el segmento ' + s.seg + '.', data: [p.model, 'Oct–Nov 2024', s.seg], impact: pct(dq) + ' uds · ' + pct(dr) + ' ingreso' }].concat(s.extra) }),
+      recs, recN: recs.length
+    };
+  }
+}
+</script>
+</body>
+</html>

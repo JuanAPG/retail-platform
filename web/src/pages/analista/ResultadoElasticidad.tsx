@@ -12,17 +12,19 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
   const { results, insufficient, assumptions } = resultado;
 
   return (
-    <div className="mb-8">
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">Resultado de la corrida</h2>
-      <p className="mb-3 text-sm text-slate-500">
-        Observaciones {GRANULARIDAD[resultado.granularity]} · datos del {formatearDia(resultado.periodStart)} al{' '}
-        {formatearDia(resultado.periodEnd)}
-      </p>
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2 className="font-slab text-[22px] text-vino">Resultado del análisis</h2>
+        <p className="text-sm text-teal/70">
+          Observaciones {GRANULARIDAD[resultado.granularity]} · datos del {formatearDia(resultado.periodStart)} al{' '}
+          {formatearDia(resultado.periodEnd)}
+        </p>
+      </div>
 
       {results.length === 0 ? (
-        <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-800">
-            Ninguna combinación tuvo datos suficientes. La corrida quedó guardada; abajo están los motivos.
+        <div className="rounded-full bg-vino/10 px-5 py-3">
+          <p className="text-sm font-semibold text-vino">
+            Ninguna combinación tuvo datos suficientes. El análisis quedó guardado; abajo están los motivos.
           </p>
         </div>
       ) : (
@@ -37,21 +39,21 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
               header: 'E',
               render: (r) => (
                 <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span className="tabular-nums">{formatearE(r.value)}</span>
+                  <span className="font-data tabular-nums">{formatearE(r.value)}</span>
                   {r.atypical && <AtipicaBadge />}
                 </span>
               ),
             },
             { header: 'Clasificación', render: (r) => <ClasificacionBadge clase={r.classification} /> },
-            { header: 'R²', className: 'tabular-nums', render: (r) => formatearR2(r.rSquared) },
-            { header: 'Obs.', className: 'tabular-nums', render: (r) => r.observations },
+            { header: 'R²', className: 'font-data tabular-nums', render: (r) => formatearR2(r.rSquared) },
+            { header: 'Obs.', className: 'font-data tabular-nums', render: (r) => r.observations },
           ]}
         />
       )}
 
       {insufficient.length > 0 && (
-        <details className="mt-4 text-sm text-slate-700" open={results.length === 0}>
-          <summary className="cursor-pointer text-slate-500">Sin datos suficientes ({insufficient.length})</summary>
+        <details className="text-sm text-teal" open={results.length === 0}>
+          <summary className="cursor-pointer font-semibold text-teal/70">Sin datos suficientes ({insufficient.length})</summary>
           <div className="mt-2">
             <DataTable
               rowKey={(r) => `${r.presentationId}-${r.zoneId ?? 'nacional'}`}
@@ -60,8 +62,8 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
                 { header: 'Producto', render: (r) => r.productName },
                 { header: 'Presentación', render: (r) => r.presentationName },
                 { header: 'Zona', render: (r) => r.zoneName },
-                { header: 'Obs.', className: 'tabular-nums', render: (r) => r.observations },
-                { header: 'Precios', className: 'tabular-nums', render: (r) => r.distinctPrices },
+                { header: 'Obs.', className: 'font-data tabular-nums', render: (r) => r.observations },
+                { header: 'Precios', className: 'font-data tabular-nums', render: (r) => r.distinctPrices },
                 { header: 'Motivo', render: (r) => r.reason },
               ]}
             />
@@ -69,8 +71,8 @@ export function ResultadoElasticidad({ resultado }: { resultado: ElasticityResul
         </details>
       )}
 
-      <details className="mt-3 text-sm text-slate-700">
-        <summary className="cursor-pointer text-slate-500">Supuestos ({assumptions.length})</summary>
+      <details className="text-sm text-teal">
+        <summary className="cursor-pointer font-semibold text-teal/70">Supuestos ({assumptions.length})</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           {assumptions.map((a) => (
             <li key={a}>{a}</li>

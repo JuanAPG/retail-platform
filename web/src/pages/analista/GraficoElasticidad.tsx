@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { EmptyState } from '../../components/EmptyState';
+import { Select } from '../../components/ui/Select';
+import { ErrorText } from '../../components/ui/ErrorText';
 import { getGraficoElasticidad } from '../../api/elasticidad';
 import { mensajeDeError } from '../../api/errores';
 import { ElasticityChartBar, ElasticityChartData, ElasticityChartValue, Producto } from '../../types';
 import { formatearDia, formatearFechaHora } from './corridaFormato';
 import { AtipicaBadge, CLASIFICACION, ClasificacionBadge, formatearE, formatearR2, GRANULARIDAD } from './elasticidadFormato';
-
-const selectCls = 'w-full rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-900';
 
 interface GraficoElasticidadProps {
   productos: Producto[];
@@ -19,7 +19,7 @@ interface GraficoElasticidadProps {
 
 /**
  * M11 — Gráfico comparativo de una presentación por zona o por segmento.
- * Barras de Tailwind (sin librería): el largo es |E| y la línea marca
+ * Barras propias (sin librería): el largo es |E| y la línea marca
  * |E| = 1, la frontera entre inelástica y elástica.
  */
 export function GraficoElasticidad({ productos, presentacionId, onPresentacion, runId }: GraficoElasticidadProps) {
@@ -64,39 +64,30 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
   const escala = Math.max(1.2, ...valores.filter((v): v is number => v !== null).map(Math.abs));
 
   return (
-    <div className="mb-8">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Gráfico comparativo</h2>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-slab text-[22px] text-vino">Gráfico comparativo</h2>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1">
-          <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="gra-presentacion">
-            Presentación
-          </label>
-          <select
-            id="gra-presentacion"
-            className={selectCls}
-            value={presentacionId}
-            onChange={(e) => onPresentacion(e.target.value)}
-          >
-            <option value="">Elige una presentación</option>
-            {productos.map((p) => (
-              <optgroup key={p.id} label={p.nombre}>
-                {p.presentaciones.map((pp) => (
-                  <option key={pp.id} value={pp.id}>
-                    {p.nombre} · {pp.nombre}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <Select id="gra-presentacion" label="Presentación" value={presentacionId} onChange={(e) => onPresentacion(e.target.value)} placeholder="Elige una presentación">
+            {productos.flatMap((p) =>
+              p.presentaciones.map((pp) => (
+                <option key={pp.id} value={pp.id}>
+                  {p.nombre} · {pp.nombre}
+                </option>
+              )),
+            )}
+          </Select>
         </div>
-        <div className="flex overflow-hidden rounded border border-slate-300 text-sm" role="group" aria-label="Agrupar por">
+        <div className="flex gap-1 rounded-full bg-arena p-1.5" role="group" aria-label="Agrupar por">
           {(['zone', 'segment'] as const).map((opcion) => (
             <button
               key={opcion}
               type="button"
               onClick={() => setAgrupar(opcion)}
-              className={`px-3 py-1.5 ${agrupar === opcion ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+              className={`flex h-11 items-center rounded-full px-4 text-sm font-bold transition ${
+                agrupar === opcion ? 'bg-vino text-arena' : 'text-teal hover:bg-salvia/25'
+              }`}
             >
               {opcion === 'zone' ? 'Por zona' : 'Por segmento'}
             </button>
@@ -107,15 +98,15 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
       {!presentacionId && (
         <EmptyState title="Elige una presentación" description="El gráfico compara su elasticidad entre zonas o segmentos." />
       )}
-      {cargando && <p className="text-sm text-slate-500">Cargando gráfico…</p>}
+      {cargando && <p className="text-sm text-teal/70">Cargando gráfico…</p>}
       {!cargando && sinResultados && <EmptyState title="Sin elasticidades para esta presentación" description={sinResultados} />}
       {!cargando && error && (
         <div className="flex items-center gap-3">
-          <p className="text-sm text-red-600">{error}</p>
+          <ErrorText>{error}</ErrorText>
           <button
             type="button"
             onClick={() => setIntento((n) => n + 1)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            className="flex h-11 shrink-0 items-center rounded-full border-2 border-salvia/60 px-4 text-sm font-bold text-teal transition hover:bg-salvia hover:text-tinta"
           >
             Reintentar
           </button>
@@ -123,13 +114,13 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
       )}
 
       {!cargando && datos && (
-        <div className="rounded border border-slate-200 px-4 py-4">
-          <p className="mb-4 text-sm text-slate-500">
-            {datos.productName} {datos.presentationName} · corrida del {formatearFechaHora(datos.executedAt)} · observaciones{' '}
+        <div className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+          <p className="text-sm text-teal/70">
+            {datos.productName} {datos.presentationName} · análisis del {formatearFechaHora(datos.executedAt)} · observaciones{' '}
             {GRANULARIDAD[datos.granularity]} · datos del {formatearDia(datos.periodStart)} al {formatearDia(datos.periodEnd)}
           </p>
 
-          <div className="mb-1 flex text-xs text-slate-400">
+          <div className="flex text-xs text-teal/60">
             <span className="w-36 shrink-0" />
             <span className="relative flex-1">
               <span className="absolute -translate-x-1/2" style={{ left: `${(1 / escala) * 100}%` }}>
@@ -139,18 +130,18 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
             <span className="w-72 shrink-0" />
           </div>
 
-          <ul className="space-y-2">
+          <ul className="flex flex-col gap-2.5">
             {datos.bars.map((b) => (
               <Fila key={b.key} etiqueta={b.label} valor={b} escala={escala} zonas={b.zones} />
             ))}
           </ul>
           {datos.national && (
-            <ul className="mt-3 border-t border-slate-200 pt-3">
+            <ul className="flex flex-col gap-2.5 border-t-2 border-salvia/20 pt-3">
               <Fila etiqueta="Nacional" valor={datos.national} escala={escala} destacada />
             </ul>
           )}
 
-          <p className="mt-4 text-xs text-slate-500">{datos.note}</p>
+          <p className="text-xs text-teal/70">{datos.note}</p>
         </div>
       )}
     </div>
@@ -169,35 +160,33 @@ function Fila({ etiqueta, valor, escala, zonas, destacada }: FilaProps) {
   const lineaUnitaria = `${(1 / escala) * 100}%`;
   return (
     <li className="flex items-center gap-3 text-sm">
-      <span className={`w-36 shrink-0 truncate ${destacada ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-        {etiqueta}
-      </span>
-      <span className="relative h-6 flex-1 rounded bg-slate-50">
+      <span className={`w-36 shrink-0 truncate ${destacada ? 'font-bold text-tinta' : 'text-teal'}`}>{etiqueta}</span>
+      <span className="relative h-6 flex-1 rounded-full bg-marfil">
         {valor.value === null || valor.classification === null ? (
-          <span className="absolute inset-0 flex items-center rounded border border-dashed border-slate-300 px-2 text-xs text-slate-400">
+          <span className="absolute inset-0 flex items-center rounded-full border-2 border-dashed border-salvia/50 px-2 text-xs text-teal/60">
             sin datos suficientes
           </span>
         ) : (
           <span
-            className={`absolute inset-y-0 left-0 rounded ${CLASIFICACION[valor.classification].barra}`}
+            className={`absolute inset-y-0 left-0 rounded-full ${CLASIFICACION[valor.classification].barra}`}
             style={{ width: `${(Math.abs(valor.value) / escala) * 100}%` }}
           />
         )}
-        <span className="absolute inset-y-0 border-l border-dashed border-slate-500" style={{ left: lineaUnitaria }} />
+        <span className="absolute inset-y-0 border-l border-dashed border-vino/60" style={{ left: lineaUnitaria }} />
       </span>
       <span className="flex w-72 shrink-0 flex-wrap items-center gap-2">
         {valor.value !== null && valor.classification !== null && (
           <>
-            <span className="tabular-nums font-medium text-slate-900">{formatearE(valor.value)}</span>
+            <span className="font-data tabular-nums font-semibold text-tinta">{formatearE(valor.value)}</span>
             <ClasificacionBadge clase={valor.classification} />
             {valor.value > 0 && <AtipicaBadge />}
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-teal/70">
               {valor.rSquared !== null && `R² ${formatearR2(valor.rSquared)} · `}
               {valor.observations} obs.
             </span>
           </>
         )}
-        {zonas && zonas.length > 0 && <span className="w-full text-xs text-slate-400">{zonas.join(', ')}</span>}
+        {zonas && zonas.length > 0 && <span className="w-full text-xs text-teal/60">{zonas.join(', ')}</span>}
       </span>
     </li>
   );

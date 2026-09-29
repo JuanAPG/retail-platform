@@ -15,7 +15,7 @@ export function mensajeDeError(
   const error = err as AxiosError<{ message?: string | string[] }>;
 
   if (error?.isAxiosError && !error.response) {
-    return 'No se pudo conectar con el servidor. Verifica que el backend esté corriendo y que VITE_API_URL apunte a la dirección correcta.';
+    return 'No se pudo conectar con el sistema. Verifica tu conexión e intenta de nuevo en unos minutos.';
   }
 
   const message = error?.response?.data?.message;
