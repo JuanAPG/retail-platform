@@ -219,7 +219,7 @@ export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/',
         <Link
           to={inicioHref}
           aria-label="Inicio"
-          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal transition hover:-rotate-12 hover:scale-105 hover:bg-vino hover:text-arena"
+          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena font-display text-[22px] font-extrabold text-teal transition hover:-rotate-12 hover:scale-105 hover:bg-vino hover:text-arena lg:h-[60px] lg:w-[60px]"
         >
           ra
         </Link>
@@ -250,8 +250,8 @@ export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/',
         aria-label="Perfil"
         aria-haspopup="menu"
         aria-expanded={menuAbierto}
-        className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-[3px] border-teal bg-salvia text-lg font-bold text-tinta shadow-[0_0_0_2px_#708D81] transition hover:shadow-[0_0_0_4px_#F0ECDF] focus-visible:shadow-[0_0_0_4px_#F0ECDF] ${
-          expandidoEfectivo ? 'lg:w-full' : ''
+        className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-[3px] border-teal bg-salvia text-lg font-bold text-tinta shadow-[0_0_0_2px_#708D81] transition hover:shadow-[0_0_0_4px_#F0ECDF] focus-visible:shadow-[0_0_0_4px_#F0ECDF] lg:h-[60px] ${
+          expandidoEfectivo ? 'lg:w-full' : 'lg:w-[60px]'
         }`}
       >
         {iniciales}
