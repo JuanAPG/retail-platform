@@ -207,7 +207,7 @@ export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/',
   return (
     <nav
       aria-label="Módulos"
-      className={`z-[4] flex w-full flex-shrink-0 items-center gap-2.5 overflow-x-auto rounded-panel bg-teal px-4 py-2.5 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] lg:w-auto lg:flex-col lg:items-center lg:overflow-hidden lg:rounded-[46px] lg:px-0 lg:py-[18px] lg:transition-[width] lg:duration-200 ${
+      className={`z-[4] flex w-full flex-shrink-0 items-center gap-2.5 overflow-x-auto rounded-panel bg-teal px-4 py-2.5 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] lg:flex-col lg:items-center lg:overflow-hidden lg:rounded-[46px] lg:px-0 lg:py-[18px] lg:transition-[width] lg:duration-200 ${
         expandidoEfectivo ? 'lg:w-64 lg:items-stretch lg:px-3.5' : 'lg:w-[92px]'
       }`}
     >
