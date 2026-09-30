@@ -1,117 +1,90 @@
-# Convenciones del equipo
+# Convenciones del equipo — Sprint 2+3 (microservicios)
 
-## Arquitectura: monolito modular
+## Arquitectura: 10 microservicios + 3 clientes
 
-Todo el backend vive en **un solo proyecto NestJS** (`api/`). Cada módulo de negocio es
-una carpeta bajo `api/src/`.
+El backend ya no es un monolito: `api/` queda congelado como fuente de extracción y
+cada frente vive en su propia carpeta con su propio contenedor. La web es un cliente
+más, no un microservicio.
 
-**No se crean microservicios ni carpetas `*-service`.** La extracción se decide hasta el
-Parcial 2 y solo para los módulos que la justifiquen. Si algo parece "más limpio"
-separado, no lo separes: es una decisión de equipo tomada a propósito.
+| Frente | Carpeta | Responsable | Rama | Depende de |
+|---|---|---|---|---|
+| Plantilla transversal | `services/` (base) | Juan Angel | `feature/infra-estandar` | Ninguna (se abre primera) |
+| auth-service | `services/auth-service/` | Juan Angel | `feature/auth-service` | infra-estandar |
+| audit-service | `services/audit-service/` | Juan Angel | `feature/audit-service` | infra-estandar |
+| catalog-service | `services/catalog-service/` | Pamela | `feature/catalog-service` | infra-estandar, auth-service |
+| notifications-service | `services/notifications-service/` | Juan Angel | `feature/notifications-service` | infra-estandar, catalog-service |
+| pricing-service | `services/pricing-service/` | Pamela | `feature/pricing-service` | infra-estandar, catalog-service |
+| core-process-service | `services/core-process-service/` | Juan Angel | `feature/core-process-service` | infra-estandar, auth-service, catalog-service |
+| algorithms-core | `services/algorithms-core/` | Leonardo | `feature/algorithms-core` | infra-estandar, core-process-service, pricing-service |
+| documents-service | `services/documents-service/` | Pamela | `feature/documents-service` | infra-estandar, core-process-service |
+| analytics-stats (Python) | `services/analytics-stats/` | Leonardo | `feature/analytics-stats` | infra-estandar, core-process-service |
+| decision-service | `services/decision-service/` | Fernando | `feature/decision-service` | infra-estandar, pricing-service, algorithms-core |
+| web ampliado | `web/` | Pamela | `feature/web-ampliado` | catalog, pricing, documents funcionales |
+| app móvil (Kotlin) | `mobile/` | Fernando | `feature/app-movil` | auth, catalog, pricing, core-process funcionales |
+| app escritorio (Electron) | `desktop/` | Fernando | `feature/app-escritorio` | auth, core-process, algorithms-core, catalog funcionales |
 
-## Reparto de módulos y ramas
+Orden sugerido de apertura: infra-estandar → auth-service, audit-service →
+catalog-service, notifications-service → pricing-service, core-process-service →
+algorithms-core, documents-service → analytics-stats, decision-service →
+web-ampliado, app-movil, app-escritorio. Nadie abre una rama que necesite un
+servicio sin contrato definido.
 
-| Módulo | Carpeta en `api/src/` | Responsable | Rama |
-|---|---|---|---|
-| M02 Tiendas | `stores/` | Pamela | `feature/m02-tiendas` |
-| M03 Zonas | `zones/` | Pamela | `feature/m03-zonas` |
-| M04 Productos y presentaciones | `products/` | Pamela | `feature/m04-productos` |
-| M05 Segmentos de ingreso | `segments/` | Pamela | `feature/m05-segmentos` |
-| M06 Transacciones + CSV | `transactions/` | Juan Angel | `feature/m06-transacciones` |
-| M07 Canastas | `baskets/` | Fernando | `feature/m07-canastas` |
-| M08 Precios | `prices/` | Pamela | `feature/m08-precios` |
-| M09 Analítica descriptiva | `analytics/` | Leonardo | `feature/m09-analitica` |
-| M10 Asociación (Apriori) | `association/` | Leonardo | `feature/m10-asociacion` |
-| M11 Elasticidad y sustitución | `elasticity/` | Leonardo | `feature/m11-elasticidad` |
-| M12 Accesibilidad | `accessibility/` | Fernando | `feature/m12-accesibilidad` |
-| M13 Simulación | `simulation/` | Fernando | `feature/m13-simulacion` |
-| M14 Recomendaciones | `recommendations/` | Fernando | `feature/m14-recomendaciones` |
-| M15 Auditoría | `audit/` | Juan Angel | `feature/m15-auditoria` |
+## Cómo arrancar tu frente
 
-Cada `*.module.ts` ya tiene documentado su alcance y sus reglas de negocio. Léelo antes
-de empezar: ahí están las restricciones que el profesor va a revisar.
-
-## Cómo arrancar tu módulo
-
-Tu módulo ya existe, está vacío y **ya está registrado** en `app.module.ts`. Dentro de tu
-carpeta creas lo que necesites:
+**No partas de cero: parte de `feature/infra-estandar`.** Trae la plantilla NestJS
+y la plantilla FastAPI con `/v1/health`, manejo de errores, logging, snippet de
+validación JWT + Redis y Dockerfile base ya resueltos. Para apps cliente, parte
+del scaffolding que deja Fernando en Fase B (auth + navegación base).
 
 ```
-api/src/<tu-modulo>/
-├── <tu-modulo>.module.ts      # ya existe: agrega imports/controllers/providers aquí
-├── <tu-modulo>.controller.ts
-├── <tu-modulo>.service.ts
-└── dto/
+services/<tu-servicio>/
+├── src/                 # o app/ en FastAPI
+├── Dockerfile           # propio, desde la plantilla (no inventes otro)
+└── README.md            # cómo levantarlo solo + su /v1/health
 ```
 
-Y su pantalla correspondiente en `web/src/pages/`.
+Regla de oro: toca **solo tu carpeta** (`services/<tuyo>/`, `mobile/`, `desktop/` o
+tu parte de `web/`). Los archivos compartidos están listados abajo: avisa antes de
+tocarlos. Si necesitas algo de un frente ajeno que aún no existe, no lo escribas
+tú — pídelo en el chat del equipo.
 
 ## Archivos compartidos: coordinar antes de tocar
 
-Estos son los que provocan conflictos si dos personas los editan a la vez. No están
-prohibidos, pero **avisa en el chat del equipo antes**:
-
 | Archivo | Por qué |
 |---|---|
-| `api/src/app.module.ts` | **No debería hacer falta tocarlo.** Los 14 módulos ya están registrados. Si crees que lo necesitas, pregunta primero |
-| `api/src/entities/` | Una entidad por tabla, compartida. Agrega la tuya; no modifiques las ajenas |
-| `api/src/common/` | Guards, decoradores y `roles.ts`. Cambiar un nombre de rol afecta a todos |
-| `db/schema.sql` | Ver abajo |
-| `web/src/App.tsx` y `web/src/routes/` | Rutas y mapa de portales |
-| `web/src/api/catalogo.ts` | Agrupa las llamadas de M02, M03 y M04. Si crece, pártelo por módulo |
-| `web/src/types/index.ts` | Interfaces calcadas de las entidades del backend |
+| `infra/docker-compose.yml` | Lo coordina Juan Angel. 10 servicios + postgres/mongo/redis; un cambio de puerto o variable rompe a todos |
+| Formato de error / logging / health | Definidos en `feature/infra-estandar`. **No inventes el propio** en tu servicio |
+| `docs/contratos/` | JSON+XSD por endpoint, se acuerdan en Fase A antes que los clientes |
+| `db/schema.sql` | Postgres compartido con tablas por dueño: solo agregas TUS tablas |
+| `web/src/App.tsx` y `web/src/routes/` | Rutas y mapa de portales (frente web) |
+| `web/src/types/index.ts` | Interfaces calcadas de los contratos, no de entidades internas |
+| `mobile/` y `desktop/` tipos y clientes HTTP | Un solo cliente por app; móvil JSON exclusivo, escritorio XML exclusivo con XSD |
 
-## Cambios al esquema de la base de datos
+## Cambios al esquema de datos
 
-TypeORM corre con `synchronize: false` **a propósito**: nadie quiere que el arranque de
-la app altere tablas solo. El DDL de `db/schema.sql` es la fuente de verdad.
+Postgres compartido, `synchronize: false`, `db/schema.sql` fuente de verdad. Solo
+agregas las tablas de TU servicio y avisas al equipo para recrear volúmenes.
+MongoDB: colecciones `reportes` (documents-service) y `notificaciones`
+(notifications-service), con índice por fecha/usuario. Redis: sesiones, revocados,
+caché de catálogos, rate-limit — todos los servicios lo consultan al autorizar.
 
-Si tu módulo necesita una tabla nueva:
+## Modelo de datos heredado (no se renegocia)
 
-1. Agrega el `CREATE TABLE` a `db/schema.sql`.
-2. Agrega los datos mínimos de prueba a `db/data_retail.sql`, con `ON CONFLICT ... DO
-   NOTHING` para que el archivo se pueda volver a ejecutar sin duplicar nada.
-3. Crea la entidad TypeORM en `api/src/entities/`, con los nombres de columna reales
-   (`@Column({ name: 'snake_case' })`).
-4. **Avísale al equipo**, porque los demás tienen que recrear su base:
-   `docker compose -f infra/docker-compose.yml down -v && ... up -d`.
+- Precios, inventario y líneas de venta cuelgan de la **PRESENTACIÓN**, no del producto.
+- `transacciones_detalle` guarda `presentacion_id`; el producto sale por join.
+- Segmentos por **zona agregada**; nunca inferir ingreso individual.
+- Toda salida calculada cuelga de una corrida (parámetros + supuestos + filtros).
+- Auditoría append-only; cambios en `auditoria_cambios`, no en JSON.
 
-El `initdb` de Postgres solo corre cuando el volumen se crea desde cero: cambiar el SQL
-sin borrar el volumen no hace nada.
+## Reglas de permisos y estándar transversal
 
-## Modelo de datos: lo que cambió al normalizar (esquema v3)
-
-Si tu módulo toca el catálogo, lee esto antes de escribir consultas:
-
-- **El precio, el inventario y las líneas de venta cuelgan de la PRESENTACIÓN**
-  (`producto_presentaciones`), no del producto. `productos` ya no tiene
-  `unidad_medida`.
-- **`transacciones_detalle` guarda `presentacion_id`, no `producto_id`.** El producto
-  sale por join; guardar los dos permitiría que se contradijeran. Usa la vista
-  `v_transaccion_detalle`, que ya entrega ambos.
-- **`tiendas.direccion` ya no existe**: es `direccion_id` → tabla `direcciones`.
-  `tiene_web_propia` tampoco: si hay fila en `tienda_canal_web`, tiene web.
-- **`zonas` ya no guarda segmento ni clustering.** La clasificación vigente está en
-  `zona_clasificaciones` (`WHERE vigente`), y las medidas —ingreso estimado, población,
-  disponibilidad— en `indicador_valores`.
-- **Los indicadores son filas, no columnas.** Para agregar uno, inserta en `indicadores`
-  y escribe en `indicador_valores`. Nunca un `ALTER TABLE`.
-- **Toda salida calculada necesita una corrida.** Crea primero un `analisis_corridas`
-  con su periodo, sus parámetros y sus supuestos, y cuelga el resultado de ahí. Sin eso
-  el resultado no es reproducible y el requerimiento lo exige explícitamente.
-- **La auditoría es append-only** y sus campos modificados van en `auditoria_cambios`,
-  no en un JSON.
-
-## Reglas de permisos
-
-- Usa las constantes de `api/src/common/roles.ts`, **nunca literales**. Un acento
-  distinto compila igual y abre un hueco silencioso.
-- Un método sin `@Roles()` queda abierto a cualquier usuario autenticado. Es el default;
-  decídelo a conciencia.
-- El recorte por dueño del dato va en la consulta SQL, no en el frontend. Filtrar en el
-  navegador es cosmético: la respuesta HTTP sigue trayendo todo.
-- Cualquier cambio a la matriz de perfiles debe reflejarse en
-  `docs/matriz-perfiles-permisos.docx` (avisar al equipo; no se edita automáticamente).
+- JWT validado contra `auth-service` **más** sesión activa en Redis. Sin esa
+  consulta, el token no vale aunque firme bien.
+- Rutas `/v1/`, mismo cuerpo de error, `GET /v1/health`, logging por operación,
+  Swagger con ejemplos JSON **y** XML.
+- Móvil = JSON exclusivo; escritorio = XML exclusivo validado con XSD.
+- Nombres de rol con las constantes compartidas, nunca literales. Cambios a la
+  matriz también en `docs/matriz-perfiles-permisos.docx` (avisar al equipo).
 
 ## Flujo de trabajo paso a paso
 
@@ -130,90 +103,82 @@ git config --get user.email     # verifica antes del primer commit
 ### Cada vez que empiezas algo
 
 ```bash
-# 1. Parte SIEMPRE de main actualizado. Ramificar de una rama vieja es
-#    la causa número uno de conflictos gigantes al final.
+# 1. Parte SIEMPRE de main actualizado.
 git checkout main
 git pull origin main
 
 # 2. Crea tu rama con el nombre que te toca (ver tabla de arriba)
-git checkout -b feature/m06-transacciones
+git checkout -b feature/auth-service
 
 # 3. Trabaja. Commits pequeños y frecuentes, no uno gigante al final.
-git add api/src/transactions web/src/pages/TransaccionesPage.tsx
-git commit -m "feat(m06): valida el formato del CSV antes de insertar"
+git add services/auth-service
+git commit -m "feat(auth-service): emite JWT y guarda sesión en Redis"
 
 # 4. Sube tu rama (la primera vez con -u; después basta `git push`)
-git push -u origin feature/m06-transacciones
+git push -u origin feature/auth-service
 ```
 
 Luego abre el Pull Request en GitHub: **Compare & pull request** → base `main`,
 compare tu rama.
 
-### Mantener tu rama al día
-
-Mientras tú trabajas, otros mergean a `main`. Trae esos cambios cada dos o tres días:
+### Mantener tu rama al día (cada dos o tres días, sin colchón no hay de otra)
 
 ```bash
 git checkout main
 git pull origin main
-git checkout feature/m06-transacciones
+git checkout feature/auth-service
 git merge main
 git push
 ```
 
 Se usa `merge` y no `rebase` a propósito: `rebase` reescribe la historia y obliga a
-`push --force`, que si alguien más ya bajó tu rama le destruye el trabajo. Con `merge`
-eso no puede pasar. Si aparece un conflicto:
-
-```bash
-# Edita los archivos marcados con <<<<<<< y >>>>>>>, quédate con lo correcto
-git add <archivo-resuelto>
-git commit          # cierra el merge
-git push
-```
+`push --force`, que si alguien más ya bajó tu rama le destruye el trabajo.
 
 ### Después de que aprueben tu PR
-
-Mergea desde GitHub (botón **Merge pull request**) y limpia:
 
 ```bash
 git checkout main
 git pull origin main
-git branch -d feature/m06-transacciones          # borra la local
+git branch -d feature/auth-service          # borra la local
 ```
 
 La rama remota se borra sola si está activado *Automatically delete head branches*.
 
-### Regla de oro para no estorbarse
+## Gate obligatorio antes de abrir cualquier PR
 
-Toca **solo tu carpeta** de `api/src/` y tu pantalla de `web/src/pages/`. Los archivos
-compartidos están listados abajo: avisa antes de tocarlos. Si necesitas algo de un
-módulo ajeno que aún no existe, no lo escribas tú — pídelo en el chat del equipo.
+Si tu frente no cumple esto, el PR se regresa sin revisar:
+
+- El servicio compila y levanta con `docker compose up` sin errores.
+- Responde en `/v1/health`.
+- Swagger con ejemplo de petición/respuesta en JSON **y** en XML.
+- Usa el formato estándar de error de `feature/infra-estandar`.
+- Valida JWT contra auth-service y consulta Redis (sesión activa).
+- Al menos una prueba unitaria y una de integración.
+- Apps: contra servicios reales, no mocks. Móvil: cámara y GPS probables en
+  dispositivo o emulador. Escritorio: XML real validado con XSD.
+- Si tocaste un archivo compartido, lo avisas en la descripción del PR.
 
 ## Ramas (GitHub Flow)
 
 - `main` siempre desplegable, protegida (requiere PR + 1 aprobación)
-- Ramas de trabajo: `feature/mXX-nombre`, `fix/nombre-corto`, `docs/nombre-corto`
+- Ramas: `feature/<servicio-o-frente>` en minúsculas con guiones (ver tabla)
 - Se borran al hacer merge
-- Actualiza tu rama con `main` cada dos o tres días: mientras más tiempo pase, más caro
-  el merge
-- Una rama = un módulo = un PR. No mezcles dos módulos en la misma rama
+- Actualiza tu rama con `main` cada dos o tres días
+- Una rama = un frente = un PR. No mezcles dos frentes en la misma rama
 
-## Commits (Conventional Commits)
+## Commits (Conventional Commits con alcance del servicio)
 
 ```
-feat:     nueva función
-fix:      corrección de bug
-docs:     solo documentación
-chore:    config, dependencias, sin cambio de lógica
-refactor: cambio de código sin alterar comportamiento
+feat(auth-service): emite JWT y guarda sesión en Redis
+fix(pricing-service): corrige histórico por presentación
+docs: actualiza contratos de catalog-service
+chore: agrega Redis a docker-compose
+refactor(decision-service): simplifica cálculo de accesibilidad
 ```
-
-Ejemplo: `feat(m06): importación de transacciones desde CSV`
 
 **Cada quien hace commits con su propia cuenta de Git.** Commits atribuidos a otra
-identidad, o documentación sin commits de código real, no cuentan como participación —
-esto ya generó observaciones del profesor en el primer avance. Verifica con:
+identidad, o documentación sin commits de código real, no cuentan como participación.
+Verifica con:
 
 ```bash
 git config user.name && git config user.email
@@ -221,48 +186,36 @@ git config user.name && git config user.email
 
 ## Pull Requests
 
-- Título claro con el módulo: `feat(m06): importación de transacciones por CSV`
-- Descripción de qué y por qué, y cómo probarlo (con qué usuario entrar y qué debe verse)
+- Título claro con el frente: `feat(auth-service): login con sesión en Redis`
+- Descripción de qué y por qué, y cómo probarlo (contra qué servicios y con qué
+  usuario/rol, qué debe verse en Swagger en JSON y en XML)
 - Ligar el PR a la tarea del Sprint Backlog
 - **Mínimo 1 aprobación** antes de mergear a `main`. Nadie aprueba su propio PR
-- El CI (`.github/workflows/ci.yml`) tiene que pasar en verde
-- Antes de abrirlo, que compile en local:
-
-```bash
-cd api && npm run build
-cd ../web && npm run build
-```
+- El CI tiene que pasar en verde
+- Criterios por frente en la tabla de ramas (ej. core-process-service: que
+  algorithms-core lea canastas reales; decision-service: simulación completa con
+  datos reales de pricing y algorithms-core)
 
 ### Al revisar el PR de alguien más
 
-No es trámite: es la única red que tiene el equipo hasta que existan pruebas.
-
-- Descarga la rama y córrela (`git checkout feature/mXX-...`), no solo leas el diff
-- Revisa que no haya tocado carpetas de otros módulos ni `app.module.ts`
-- Si agregó tablas, que también estén en `db/schema.sql` y `db/data_retail.sql`
+- Descarga la rama y córrela, no solo leas el diff
+- Revisa que no haya tocado carpetas de otros frentes ni inventado su propio
+  formato de error, versionado o health
+- Si agregó tablas, que sean solo las suyas y estén en `db/schema.sql`
 - Comenta lo que veas raro; aprobar sin leer no cuenta como participación
 
-## Configuración del repositorio (una vez, la hace el dueño del repo)
-
-En GitHub → **Settings**:
-
-1. **Branches → Add branch protection rule**, patrón `main`:
-   - *Require a pull request before merging* → *Require approvals*: **1**
-   - *Require status checks to pass before merging* → selecciona los checks
-     `build (api)` y `build (web)`
-   - *Require branches to be up to date before merging*
-2. **General → Pull Requests → Automatically delete head branches**
-
-Los status checks **no aparecen en esa lista hasta que el workflow corrió al menos una
-vez**. Si no los ves, abre un PR de prueba primero, deja que corra el CI, y regresa a
-configurar la protección.
-
-## Verificación local rápida
+## Verificación local y demo end-to-end (Fase D)
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d postgres pgadmin api web
-docker compose -f infra/docker-compose.yml logs -f api
+docker compose -f infra/docker-compose.yml up -d
+curl localhost:3001/v1/health   # cada servicio en su puerto
 ```
 
-Front en http://localhost:5173, API y Swagger en http://localhost:3001/docs.
-Credenciales de prueba en [web/README.md](web/README.md).
+La demo cruza móvil (JSON) → microservicios + Redis/Mongo/Postgres → web →
+escritorio (XML). Si falta tiempo, recortar en este orden: push móvil real, Excel
+con formato en escritorio, locks en Redis, cobertura fuera de
+auth/core/algorithms. **No se recorta:** JSON+XML en los 10, 4+ microservicios por
+app, Redis en la autenticación de todos, demo end-to-end.
+
+Front en su puerto Vite, Swagger en cada servicio (`/docs`). Credenciales de prueba
+en [web/README.md](web/README.md). GCP y Secret Manager, hasta el Parcial 3.
