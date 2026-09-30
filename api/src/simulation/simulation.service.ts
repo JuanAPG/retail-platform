@@ -25,6 +25,11 @@ interface ResultInput {
   simulatedValue: number;
 }
 
+/** Fecha en el nombre del escenario en formato legible ("28/09/26, 02:15"), no ISO crudo. */
+function formatearFecha(fecha: Date): string {
+  return fecha.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 /**
  * M13 — Simulación de escenarios, según Contrato de Métodos y Endpoints.
  * Cada simulación (precio o presentación) se guarda automáticamente como
@@ -74,7 +79,7 @@ export class SimulationService {
 
     const escenario = await this.saveScenario(
       {
-        nombre: `Cambio de precio - ${info.productName} ${info.presentationName} (${new Date().toISOString()})`,
+        nombre: `Cambio de precio - ${info.productName} ${info.presentationName} (${formatearFecha(new Date())})`,
         zonaId: dto.zoneId,
         changes,
         results,
@@ -143,7 +148,7 @@ export class SimulationService {
 
     const escenario = await this.saveScenario(
       {
-        nombre: `Comparación de presentaciones - ${new Date().toISOString()}`,
+        nombre: `Comparación de presentaciones - ${formatearFecha(new Date())}`,
         zonaId: dto.zoneId ?? null,
         changes,
         results,

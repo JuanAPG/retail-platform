@@ -18,6 +18,7 @@ import { ReglasAsociacionPanel } from './analista/ReglasAsociacionPanel';
 import { SustitucionPanel } from './analista/SustitucionPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AccesibilidadPanel } from './analista/AccesibilidadPanel';
+import { CanastasPanel } from './analista/CanastasPanel';
 
 type Tab =
   | 'transacciones'
@@ -163,12 +164,7 @@ export function AnalistaPortal() {
         {tab === 'sustitucion' && <SustitucionPanel />}
         {tab === 'elasticidad' && <ElasticidadPanel />}
 
-        {tab === 'canastas' && (
-          <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-            <p className="font-display text-2xl text-teal">Aún no se ha generado ninguna canasta</p>
-            <p className="max-w-sm text-sm text-teal/70">Las canastas se construyen a partir de las transacciones registradas.</p>
-          </div>
-        )}
+        {tab === 'canastas' && <CanastasPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
         {tab === 'accesibilidad' && <AccesibilidadPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 

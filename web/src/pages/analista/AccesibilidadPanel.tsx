@@ -129,12 +129,6 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
           </div>
         )}
       </div>
-
-      <p className="px-1 text-xs text-teal/60">
-        La accesibilidad es un indicador analítico para comparar zonas entre sí, no una medida absoluta de bienestar:
-        un índice alto no garantiza que todas las familias del segmento puedan comprar la canasta, y uno bajo no
-        implica que ninguna pueda.
-      </p>
     </section>
   );
 }

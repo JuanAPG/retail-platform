@@ -12,9 +12,9 @@ interface HeroProps {
 /** DESIGN.md §5 — Hero. */
 export function Hero({ title, subtitle, action, decorations, className = '' }: HeroProps) {
   return (
-    <section className={`relative h-[240px] overflow-hidden rounded-hero bg-teal p-10 text-arena ${className}`}>
+    <section className={`relative min-h-[240px] overflow-hidden rounded-hero bg-teal p-10 text-arena ${className}`}>
       <div className="relative z-[2] flex h-full flex-col justify-between">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex max-w-[65%] flex-col gap-1.5 sm:max-w-[60%]">
           <h1 className="font-display text-7xl font-normal leading-[0.95]">{title}</h1>
           {subtitle && <span className="font-display text-2xl text-salvia">{subtitle}</span>}
         </div>

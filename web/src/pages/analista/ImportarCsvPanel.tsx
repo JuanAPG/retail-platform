@@ -1,9 +1,65 @@
 import { useRef, useState } from 'react';
+import { useFetch } from '../../hooks/useFetch';
 import { mensajeDeError } from '../../api/errores';
-import { confirmarCsv, previsualizarCsv } from '../../api/transacciones';
+import { confirmarCsv, getImportacionesPendientes, previsualizarCsv } from '../../api/transacciones';
 import { CsvImportResult, CsvPreview } from '../../types';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { IconCerrar, IconCheck } from '../../components/ui/icons';
+
+const formatoFecha = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+
+/** M06 — Validaste un CSV pero no llegaste a confirmarlo (se cerró la pestaña, etc.): aquí se retoma sin volver a subirlo. */
+function ImportacionesPendientes({ onConfirmada }: { onConfirmada: (mensaje: string) => void }) {
+  const pendientes = useFetch(getImportacionesPendientes, []);
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const lista = pendientes.data ?? [];
+
+  async function confirmar(importacionId: string) {
+    setError(null);
+    setConfirmandoId(importacionId);
+    try {
+      const res = await confirmarCsv(importacionId);
+      onConfirmada(
+        `Importación confirmada: ${res.transaccionesCreadas} transacciones y ${res.canastasCreadas} canastas.` +
+          (res.omitidos.length > 0 ? ` (${res.omitidos.length} grupos omitidos.)` : ''),
+      );
+      pendientes.refetch();
+    } catch (err) {
+      setError(mensajeDeError(err, 'No se pudo confirmar la importación.'));
+    } finally {
+      setConfirmandoId(null);
+    }
+  }
+
+  if (lista.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-panel border-2 border-dashed border-salvia bg-arena/40 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-teal/70">Importaciones sin confirmar</p>
+      {error && <p className="text-xs font-semibold text-vino">{error}</p>}
+      {lista.map((imp) => (
+        <div key={imp.importacionId} className="flex flex-wrap items-center justify-between gap-3 rounded-full bg-marfil px-4 py-2.5">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-bold text-tinta">{imp.fileName}</span>
+            <span className="font-data text-xs text-teal">
+              {imp.filasValidas} válidas de {imp.filasTotales} · {formatoFecha.format(new Date(imp.cargadoEn))}
+            </span>
+          </div>
+          {imp.estado === 'con_errores' && <StatusPill tone="warn">{imp.filasConError} con error</StatusPill>}
+          <button
+            type="button"
+            onClick={() => confirmar(imp.importacionId)}
+            disabled={confirmandoId !== null || imp.filasValidas === 0}
+            className="flex h-9 flex-shrink-0 items-center rounded-full bg-vino px-4 text-xs font-bold text-arena transition hover:bg-teal disabled:opacity-50"
+          >
+            {confirmandoId === imp.importacionId ? 'Confirmando…' : 'Confirmar'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface ImportarCsvPanelProps {
   onImportado: (mensaje: string) => void;
@@ -77,6 +133,8 @@ export function ImportarCsvPanel({ onImportado }: ImportarCsvPanelProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      <ImportacionesPendientes onConfirmada={onImportado} />
+
       {!archivo && (
         <label className="flex cursor-pointer items-center gap-4 rounded-panel border-2 border-dashed border-salvia/50 bg-arena p-5 text-arena transition hover:border-arena hover:bg-teal">
           <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-vino text-arena">

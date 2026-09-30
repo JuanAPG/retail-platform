@@ -132,12 +132,6 @@ export function ReglasAsociacionPanel() {
           </div>
         </div>
       )}
-
-      <p className="px-1 text-xs text-teal/60">
-        Soporte: en qué porcentaje de las canastas aparece la regla completa. Confianza: de quienes compran lo
-        primero, qué porcentaje lleva también lo segundo. Lift mayor a 1: se compran juntos más de lo que explicaría
-        la popularidad de cada producto.
-      </p>
     </div>
   );
 }
