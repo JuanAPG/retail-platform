@@ -3,6 +3,10 @@
 Materia: Integración de Aplicaciones Computacionales. Equipo de 4, metodología SCRUM.
 Repo: `IntegracionProyectoFinal` (GitHub, cuenta personal de Juan Angel, público).
 
+Sprint 2+3 unificado: 30 de septiembre al 13 de octubre de 2026 (14 días corridos,
+**sin colchón**). Entrega: Parcial 2. El plan original (Sprint 2 + Sprint 3 con margen)
+se consumió rehaciendo el Sprint 1 como monolito modular; este backlog parte de ahí.
+
 ## Qué hace el sistema
 
 Analiza cómo varían las canastas de consumo según zona, nivel de ingreso y precio, para
@@ -15,156 +19,204 @@ ASOCIACIONES → SUSTITUCIÓN → ELASTICIDAD → ACCESIBILIDAD →
 SIMULACIÓN → RECOMENDACIONES
 ```
 
-## Decisión arquitectónica vigente: MONOLITO, no microservicios todavía
+## Decisión arquitectónica vigente: 10 MICROSERVICIOS JUSTIFICADOS
 
-El primer avance fue rechazado por adelantar arquitectura distribuida (`auth-service`,
-microservicios) antes de tener el problema de negocio resuelto. Regla actual:
+El Parcial 1 rechazó adelantar arquitectura distribuida sin justificarla, y difirió la
+decisión de qué extraer hasta este parcial. Ese momento es ahora: cada microservicio
+corresponde a un módulo que ya existe o a un RF pendiente — ninguno es relleno.
 
-- Todo el backend vive en **un solo proyecto NestJS**, organizado en módulos (no
-  microservicios): `TransactionsModule`, `BasketsModule`, `ZonesModule`,
-  `SegmentsModule`, `PricesModule`, `AnalyticsModule`, `ElasticityModule`,
-  `AccessibilityModule`, `SimulationModule`, `RecommendationsModule`, `AuditModule`.
-- **No crear microservicios nuevos** ni renombrar módulos como `*-service` hasta que el
-  monolito esté completo y estable. La extracción a microservicios se decide hasta el
-  Parcial 2 (Sprint 3, 3–13 oct), y solo para los módulos que lo justifiquen.
-- App móvil (Android) y app de escritorio: pospuestas, no se tocan hasta Sprint 3.
+| # | Microservicio | Responsabilidad | Origen |
+|---|---|---|---|
+| 1 | `auth-service` | Login, JWT, renovación, revocación vía Redis | M01, se extrae |
+| 2 | `catalog-service` | Tiendas, Zonas, Productos y Presentaciones, Segmentos | M02–M05, se combinan |
+| 3 | `pricing-service` | Precios, histórico, comparación entre zonas | M08, se extrae |
+| 4 | `core-process-service` | Transacciones (manual + CSV) y construcción de canastas | M06+M07, se combinan |
+| 5 | `algorithms-core` | Apriori, Elasticidad, Sustitución (TS, **sin reescribir**) | M10+M11, se empaqueta |
+| 6 | `analytics-stats` | Clustering, hipótesis, ANOVA, proporciones (RF-16/20/21/22) | Nuevo, Python/FastAPI |
+| 7 | `decision-service` | Accesibilidad, Simulación, Recomendaciones | M12+M13+M14, se combinan |
+| 8 | `documents-service` | Reportes, PDF/Excel, historial en MongoDB | Nuevo (M16) |
+| 9 | `notifications-service` | Notificaciones internas (alta proveedor, cambios de precio) | Nuevo (M17) |
+| 10 | `audit-service` | Bitácora y consultas históricas | M15, se extrae |
+
+Reglas vigentes:
+
+- `api/` (monolito) queda como **fuente de extracción congelada**: el código se
+  traslada a `services/`, no se duplica ni recibe features nuevas.
+- El sistema **web es el cliente** que consume los 10 microservicios, no uno de ellos.
+- **Estándar transversal obligatorio** en los 10: rutas `/v1/`, JWT validado contra
+  `auth-service` **más** sesión activa en Redis (ningún servicio confía ciegamente en
+  el token), respuestas **JSON y XML** según `Accept` (XSD por endpoint XML), mismo
+  formato de error, logging por operación, `GET /v1/health`, Swagger con ejemplos en
+  ambos formatos, Dockerfile propio por servicio.
+- **Contratos primero:** `docs/contratos/` (JSON+XSD por endpoint) se redacta y revisa
+  en equipo en Fase A, antes de tocar las apps cliente.
 
 ## Stack tecnológico
 
-**Backend (monolito):** Node.js + TypeScript + NestJS + TypeORM + `pg` (PostgreSQL) +
-`@nestjs/jwt` + Passport + `bcrypt` + `class-validator` / `class-transformer` +
-`@nestjs/swagger` + `@nestjs/config`.
+**Microservicios NestJS (1–5, 7–10):** Node.js + TypeScript + NestJS + TypeORM + `pg` +
+`@nestjs/jwt` + `bcrypt` + `class-validator` / `class-transformer` +
+`@nestjs/swagger` + `@nestjs/config`. Plantilla común en `feature/infra-estandar`.
 
-**Frontend:** React + Vite + React Router + axios + Tailwind CSS.
+**`analytics-stats`:** Python + FastAPI (nuevo, sin código previo que migrar).
 
-**Datos:** PostgreSQL 16. **Decisión vigente (revisión del esquema v3): TODO el modelo
-analítico vive en PostgreSQL** — canastas, indicadores, corridas, Apriori, elasticidad,
-sustitución, accesibilidad y simulación. El dashboard vence antes que el Parcial 2 y
-partir el modelo entre dos bases lo obligaría a unir resultados en memoria, sin
-integridad referencial. MongoDB 7 (encuestas, catálogos flexibles, bitácora) y Redis 7
-(caché de sesiones y precios) se evalúan hasta el Parcial 2, y solo para lo que lo
-justifique.
+**App móvil (JSON exclusivo):** Android nativo **Kotlin** + Retrofit + Room (offline) +
+cámara (código de barras, RF-34) + GPS (ubicación de tienda, RF-37). Proceso de
+campo: captura e investigación de mercado.
 
-**Infra local:** Docker Compose (servicios: postgres, pgadmin, mongodb, mongo-express,
-redis, api, web). Credenciales hardcodeadas y Redis sin auth **a propósito**: es entorno
-de desarrollo temprano en localhost, no producción. Antes de GCP (Parcial 3) esto se
-mueve a Secret Manager y Redis lleva `requirepass`.
+**App de escritorio (XML exclusivo):** **Electron + TypeScript**. Proceso distinto:
+análisis y gestión comercial (importar ventas, Apriori, elasticidad, comparar zonas,
+validación XSD, exportación inicial). No debe ser una copia de la web.
 
-**Nube (a partir de Parcial 3):** GCP — VPC con subredes pública (Load Balancer) y
-privadas (Cloud Run/GKE, Cloud SQL, Memorystore), CI/CD con GitHub Actions +
-Artifact Registry.
+**Frontend web:** React + Vite + React Router + axios + Tailwind CSS (+ Highcharts en
+la ampliación).
 
-**Futuro (cuando se extraigan microservicios):** Python + FastAPI para los servicios de
-algoritmos (Apriori, FP-Growth, clustering, pruebas estadísticas).
+**Datos:** PostgreSQL 16 **compartido, tablas por dueño** (cada servicio solo escribe
+sus tablas; `db/schema.sql` sigue siendo la fuente de verdad). MongoDB 7 con
+operación real: historial de reportes (`documents-service`) y notificaciones
+(`notifications-service`) con inserción, consulta, actualización, agregación,
+filtrado e índice por fecha/usuario. Redis 7 consultado por **todos** en
+autorización: sesiones activas, tokens revocados, caché de catálogos, rate-limit de
+login.
 
-## Equipo y roles técnicos (vigentes desde Sprint 1 revisado)
+**Infra local:** Docker Compose (10 microservicios + postgres, pgadmin, mongodb,
+mongo-express, redis). Credenciales hardcodeadas y Redis sin auth **a propósito**:
+desarrollo temprano en localhost, no producción. GCP y Secret Manager, hasta el
+Parcial 3.
 
-| Integrante | Rol técnico | Módulos de este sprint |
-|---|---|---|
-| Juan Angel Galván Navarro | Arquitectura, DevOps, Seguridad (+ desarrollo) | Transacciones + importación CSV, Auditoría, refactor a monolito modular |
-| Pamela Rodríguez de la Rosa | Backend Web y Microservicios Core | Tiendas, Zonas, Productos y presentaciones, Segmentos, Precios |
-| Leonardo Rangel Castro | Datos y Algoritmos | Analítica descriptiva, Apriori, Elasticidad, sustitución |
-| Fernando Olivares del Valle | Aplicaciones Cliente (temporal en análisis aplicado) | Canastas, Accesibilidad, Simulación, Recomendaciones |
+## Equipo y frentes (Sprint 2+3)
+
+| Integrante | Microservicios / frente |
+|---|---|
+| Juan Angel Galván Navarro | `auth-service`, `core-process-service`, `notifications-service`, `audit-service`; estándar transversal y Dockerfiles de los 10; docker-compose |
+| Pamela Rodríguez de la Rosa | `catalog-service`, `pricing-service`, `documents-service`; sistema web ampliado |
+| Leonardo Rangel Castro | `algorithms-core`, `analytics-stats` |
+| Fernando Olivares del Valle | `decision-service`; app móvil Android; app de escritorio |
 
 Nota: los roles de Leonardo y Pamela están **intercambiados** respecto al plan original
 (Leonardo era backend, ahora es algoritmos; Pamela era algoritmos, ahora es backend).
 Esto todavía no está actualizado en `Documento_Planeacion_SCRUM.docx`.
 
-Product Owner: Juan Angel. Scrum Master: rotativo por sprint. Sprints de 2 semanas.
+Product Owner: Juan Angel. Scrum Master: rotativo por sprint. Fases: A 30/9–2/10
+(contratos + plantilla), B 3–6/10 (extracción + Redis + Mongo), C 7–10/10 (apps +
+web), D 11–13/10 (pruebas + demo end-to-end). Sin margen entre fases: lo que falte
+se resuelve dentro de la siguiente.
 
 ## Reglas de trabajo
 
 - Cada quien hace commits con su **propia** cuenta de Git. Commits atribuidos a otra
   identidad, o documentación sin commits de código real, no cuentan como participación
   (esto generó observaciones negativas del profesor en el primer avance).
-- Cada integrante construye backend **y** su pantalla de frontend correspondiente.
-- Ramas por módulo: `feature/m06-transacciones`, `feature/m07-canastas`, etc.
+- Ramas por microservicio: `feature/auth-service`, `feature/catalog-service`, etc.
+  (ver tabla y orden con dependencias en CONTRIBUTING.md).
 - PR con al menos 1 aprobación antes de mergear a `main`.
-- Commits en Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`.
-- La demo debe correr de principio a fin sin tocar la base de datos a mano.
+- Commits en Conventional Commits con alcance del servicio: `feat(auth-service): …`.
+- La demo debe correr de principio a fin sin tocar la base de datos a mano, cruzando
+  móvil → microservicio → Redis/Mongo/Postgres → web → escritorio vía XML.
+- Si falta tiempo, recortar en este orden: push móvil real, Excel con formato en
+  escritorio, locks en Redis, cobertura fuera de auth/core/algorithms. **No se
+  recorta:** JSON+XML en los 10, 4+ microservicios por app cliente, Redis en la
+  autenticación de todos, demo end-to-end.
 
 ## Estructura del repo
 
 ```
 IntegracionProyectoFinal/
-├── api/          # Backend NestJS (monolito modular)
-├── web/          # Frontend React/Vite
-├── mobile/       # App Android — pospuesta hasta Sprint 3
-├── desktop/      # App de escritorio — pospuesta hasta Sprint 3
-├── services/     # Microservicios — no existen todavía, no crear aún
+├── api/          # Monolito NestJS — fuente de extracción CONGELADA, no agregar features
+├── services/
+│   ├── auth-service/
+│   ├── catalog-service/
+│   ├── pricing-service/
+│   ├── core-process-service/
+│   ├── algorithms-core/
+│   ├── analytics-stats/   # Python/FastAPI
+│   ├── decision-service/
+│   ├── documents-service/
+│   ├── notifications-service/
+│   └── audit-service/
+├── web/          # Cliente React/Vite (consume los 10 microservicios)
+├── mobile/       # App Android Kotlin (JSON exclusivo)
+├── desktop/      # App Electron+TS (XML exclusivo)
 ├── infra/
-│   └── docker-compose.yml
+│   └── docker-compose.yml   # 10 microservicios + postgres/mongo/redis
 ├── docs/
 │   ├── analisis-problema.md
 │   ├── requerimientos.md      # RF-01 a RF-48, RNF-01 a RNF-10
 │   ├── historias-usuario.md
 │   ├── reglas-negocio.md
 │   ├── matriz-perfiles-permisos.docx
+│   ├── contratos/             # JSON+XSD por endpoint (Fase A, antes que clientes)
 │   ├── arquitectura/
 │   └── modelo-datos/
+├── db/           # schema.sql + data_retail.sql (Postgres compartido)
 ├── .gitignore
 ├── README.md
 └── CONTRIBUTING.md
 ```
 
-## Estado actual (Sprint 1 revisado, 5–18 sept)
+## Estado actual (inicio Sprint 2+3, 30 sept)
 
-Ya existe y es estable: autenticación JWT + control de acceso por rol, y toda la
-documentación base (análisis, requerimientos, reglas de negocio, diseño de datos).
+Ya existe y funciona en el monolito (M01–M15, flujo completo demostrado): login,
+importar CSV, canastas, asociaciones, elasticidad, accesibilidad, simulación,
+recomendaciones, auditoría, más CSV de 100 canastas y dashboard M16.
 
-Pendiente este sprint — flujo obligatorio a demostrar sin tocar la BD manualmente:
+Pendiente — flujo cruzado a demostrar (Fase D):
 
 ```
-Login → Importar transacciones (CSV) → Validar → Almacenar en PostgreSQL →
-Construir canastas → Clasificar por zona/segmento → Calcular indicadores →
-Identificar asociaciones → Calcular elasticidad → Calcular accesibilidad →
-Crear escenario → Modificar precio/empaque → Simular → Comparar escenarios →
-Generar recomendación → Registrar auditoría
+Móvil (JSON): login → levantar precio (pricing) / registrar venta (core-process)
+  → microservicios + Redis/Mongo/Postgres
+  → Web: consultar, simular, recomendar
+  → Escritorio (XML): importar ventas, Apriori, elasticidad, comparar zonas
 ```
 
-Detalles importantes de negocio a respetar en el código:
+Detalles de negocio a respetar en el código (heredados del monolito):
 
 - **Transacción:** tiene `tienda`, `fecha`, `total` y `detalles[]` (producto,
   presentación, cantidad, precio_unitario, subtotal). Una canasta = una transacción.
 - **Presentaciones:** relación 1-a-muchos con `producto` (ej. 500 g / 250 g / 1 kg), no
-  un campo plano. Ya implementado: tabla `producto_presentaciones`. Precios, inventario
-  y líneas de venta apuntan a la PRESENTACIÓN, nunca al producto.
+  un campo plano. Precios, inventario y líneas de venta apuntan a la PRESENTACIÓN,
+  nunca al producto.
 - **Segmentos de ingreso:** por zona agregada, nunca inferir el ingreso exacto de una
   persona a partir de su compra individual.
-- **Apriori:** debe guardar la corrida completa para poder reproducirla. Ya modelado:
-  `analisis_corridas` + `analisis_corrida_parametros` + `_supuestos` + `_filtros`. El
-  antecedente de una regla es un conjunto de productos (`regla_asociacion_items`), no
-  un campo de texto.
-- **Elasticidad:** clasificar como elástica (`|E| > 1`), inelástica (`|E| < 1`) o
-  unitaria (`|E| ≈ 1`); conservar datos usados, periodo y supuestos.
+- **Apriori:** debe guardar la corrida completa para poder reproducirla (parámetros,
+  supuestos, filtros; antecedente como conjunto, no texto).
+- **Elasticidad:** elástica (`|E| > 1`), inelástica (`|E| < 1`), unitaria (`|E| ≈ 1`);
+  conservar datos usados, periodo y supuestos.
 - **Accesibilidad:** nunca reducirla a "precio bajo". Combina precio + ingreso del
-  segmento + disponibilidad + productos básicos. Documentar que es un indicador
-  analítico, no una medida absoluta de bienestar.
+  segmento + disponibilidad + productos básicos; es un indicador analítico, no una
+  medida absoluta de bienestar.
 - **Recomendaciones:** motor de reglas simple (no IA todavía). Cada recomendación debe
   explicar qué recomienda, por qué, con qué datos y qué impacto estima.
+- **Nuevo transversal:** todo endpoint bajo `/v1/`, error estándar, `GET /v1/health`,
+  logging por operación, JWT + sesión Redis, dual JSON/XML con XSD.
 
 ## Requerimientos
 
 48 RF (RF-01 a RF-48) y 10 RNF (RNF-01 a RNF-10) — ver `docs/requerimientos.md`.
-Los más recientes que cambian el modelo de datos: RF-35 (presentaciones como tabla
-relacionada), RF-12 (flujo de Proveedor con aprobación de Gerente de categoría), RF-15
-(soporte/confianza configurables en Apriori/FP-Growth), RF-29 (exportar PDF/Excel).
+Nuevos en este sprint: RF-16 (clustering), RF-20/21/22 (hipótesis, ANOVA,
+proporciones), RF-33 a RF-40 (móvil: sesión, cámara, GPS), RF-42 a RF-48
+(escritorio: proceso de análisis en XML), RF-29 (PDF/Excel en `documents-service`).
 
 ## Calendario
 
 | Hito | Fecha |
 |---|---|
-| Parcial 1 | 4 sept (ya entregado, con observaciones) |
+| Parcial 1 | 4 sept (entregado, con observaciones corregidas en monolito) |
+| Sprint 2+3 (backlog unificado) | 30 sept – 13 oct |
 | Parcial 2 | 13 oct |
 | Parcial 3 | 27 nov |
 | Entrega final | 1 dic |
 
 ## Al trabajar en este repo
 
-- Si vas a tocar un módulo, revisa primero si ya existe dentro de `api/src/` como
-  módulo NestJS antes de crear uno nuevo.
-- No propongas separar nada en microservicio independiente todavía, aunque parezca
-  "más limpio" — es una decisión de equipo ya tomada y pospuesta a propósito.
+- Si vas a tocar un microservicio, revisa primero si ya existe en `services/` y parte
+  de la plantilla `feature/infra-estandar`; no inventes tu propio formato de error,
+  versionado, health ni logging.
+- Los contratos (`docs/contratos/`) se escriben antes que los clientes: no construyas
+  pantallas contra respuestas no acordadas.
+- Móvil consume JSON exclusivo; escritorio, XML exclusivo validado con XSD. No los
+  mezcles ni hagas una copia de la otra.
+- Cada servicio escribe solo sus tablas en el Postgres compartido; Mongo y Redis
+  tienen los usos fijados arriba, no los uses para otra cosa sin acordarlo.
 - No inventes credenciales seguras para local: seguimos con las simples de
   `infra/docker-compose.yml` hasta el despliegue en GCP.
 - Cualquier cambio a la matriz de perfiles y permisos debe reflejarse también en
