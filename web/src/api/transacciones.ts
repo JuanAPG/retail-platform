@@ -34,3 +34,18 @@ export const previsualizarCsv = (archivo: File) => {
 /** Inserta las filas válidas del preview y construye sus canastas. */
 export const confirmarCsv = (previewId: string) =>
   apiClient.post<CsvImportResult>('/transactions/import/confirm', { previewId }).then((r) => r.data);
+
+/** M06 — Una importación ya validada (preview) que nadie confirmó todavía. */
+export interface ImportacionPendiente {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  filasTotales: number;
+  filasValidas: number;
+  filasConError: number;
+  cargadoEn: string;
+}
+
+/** Para retomar una importación validada sin volver a subir el archivo. */
+export const getImportacionesPendientes = () =>
+  apiClient.get<ImportacionPendiente[]>('/transactions/import/pending').then((r) => r.data);

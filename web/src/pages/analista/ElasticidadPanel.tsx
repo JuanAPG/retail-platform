@@ -128,13 +128,6 @@ export function ElasticidadPanel() {
         }}
         runId={runGrafico}
       />
-
-      <p className="text-xs text-teal/70">
-        E = −1.5: si el precio sube 1 %, la cantidad vendida baja 1.5 %. Elástica (|E| &gt; 1): la demanda reacciona más
-        que el precio, y subirlo reduce el ingreso. Inelástica (|E| &lt; 1): reacciona menos. Unitaria (|E| ≈ 1).
-        Atípica (E &gt; 0): la demanda subió con el precio, casi siempre por pocos datos u otros factores. Es un
-        indicador analítico: léelo junto con el R² y el número de observaciones.
-      </p>
     </section>
   );
 }

@@ -3,7 +3,7 @@ import { AppShell } from '../components/ui/AppShell';
 import { RailModule } from '../components/ui/Rail';
 import { useFetch, UseFetchState } from '../hooks/useFetch';
 import { useAuth } from '../context/AuthContext';
-import { getProductos, getTiendas } from '../api/catalogo';
+import { getProductos, getTiendas, getZonas } from '../api/catalogo';
 import { getTransacciones } from '../api/transacciones';
 import { getHistorialPrecios } from '../api/precios';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
@@ -11,10 +11,13 @@ import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
-import { Hero } from '../components/ui/Hero';
 import { ErrorText } from '../components/ui/ErrorText';
-import { IconRecomendaciones, IconResultados, IconSimulacion } from '../components/ui/icons';
+import { IconResultados } from '../components/ui/icons';
 import { Producto, Tienda, Transaction } from '../types';
+import { NuevaSimulacionPanel } from './planeador/NuevaSimulacionPanel';
+import { HistorialSimulacionesPanel } from './planeador/HistorialSimulacionesPanel';
+import { ResultadosSimulacionPanel } from './planeador/ResultadosSimulacionPanel';
+import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
 
 type Tab =
   | 'nueva-simulacion'
@@ -36,21 +39,20 @@ function PlaceholderHonesto({ titulo, descripcion, icono }: { titulo: string; de
   );
 }
 
-/**
- * M13 (Simulación) y M14 (Recomendaciones) todavía no existen como
- * módulo backend — son de Fernando, pendientes. Precios.dc.html/
- * Planeador.dc.html simulan un motor de elasticidad con coeficientes
- * inventados a mano; se deja como placeholder honesto en vez de fingir
- * un cálculo que no existe (misma decisión que ya tomamos para
- * Elasticidad en el portal de Precios).
- */
 export function PlaneadorPortal() {
   const { usuario, logout } = useAuth();
   const [tab, setTab] = useState<Tab>('nueva-simulacion');
+  const [escenariosSeleccionados, setEscenariosSeleccionados] = useState<string[]>([]);
 
   const productos = useFetch(getProductos, []);
   const tiendas = useFetch(getTiendas, []);
+  const zonas = useFetch(getZonas, []);
   const transacciones = useFetch(getTransacciones, []);
+
+  // M10/M11/M13/M14 comparten el mismo criterio: calcular/generar es de
+  // Administrador y Analista comercial; el Planeador (y los demás) solo
+  // consultan lo ya guardado.
+  const puedeSimular = usuario?.rol === 'Administrador' || usuario?.rol === 'Analista comercial';
 
   const modulos: RailModule[] = MODULOS_POR_ROL.Planeador.map((m) => ({
     key: m.key,
@@ -76,59 +78,29 @@ export function PlaneadorPortal() {
       onLogout={logout}
     >
       {tab === 'nueva-simulacion' && (
-        <div className="flex flex-col gap-6">
-          <Hero
-            title="Simulación"
-            subtitle="Escenarios hipotéticos de formato, empaque o descuento"
-            decorations={
-              <div className="absolute -top-[54px] right-[100px] flex h-[184px] w-[184px] items-center justify-center rounded-full bg-salvia text-tinta">
-                <IconSimulacion className="mt-8 h-[74px] w-[74px]" />
-              </div>
-            }
-          />
-          <PlaceholderHonesto
-            titulo="El motor de simulación aún no está construido"
-            descripcion="Próximamente podrás elegir un producto, zona y segmento, proponer un nuevo precio o empaque, y ver el impacto estimado antes de aplicarlo."
-            icono={<IconSimulacion className="h-6 w-6" />}
-          />
-        </div>
+        <NuevaSimulacionPanel productos={productos.data ?? []} zonas={zonas.data ?? []} puedeSimular={puedeSimular} />
       )}
 
       {tab === 'historial-simulaciones' && (
-        <div className="flex flex-col gap-6">
-          <h1 className="font-display text-4xl text-vino">Historial</h1>
-          <PlaceholderHonesto
-            titulo="Aún no has ejecutado ninguna simulación"
-            descripcion="Las simulaciones que ejecutes aparecerán aquí con su fecha y resultado."
-            icono={<IconResultados className="h-6 w-6" />}
-          />
-        </div>
+        <HistorialSimulacionesPanel
+          zonas={zonas.data ?? []}
+          seleccionados={escenariosSeleccionados}
+          onCambiarSeleccion={setEscenariosSeleccionados}
+          onVerResultados={() => setTab('resultados')}
+        />
       )}
 
       {tab === 'resultados' && (
-        <div className="flex flex-col gap-6">
-          <h1 className="font-display text-4xl text-vino">Resultados</h1>
-          <PlaceholderHonesto
-            titulo="Sin escenarios para comparar todavía"
-            descripcion="Cuando guardes dos o más simulaciones podrás compararlas aquí lado a lado."
-            icono={<IconResultados className="h-6 w-6" />}
-          />
-        </div>
+        <ResultadosSimulacionPanel
+          seleccionados={escenariosSeleccionados}
+          onElegirOtros={() => {
+            setEscenariosSeleccionados([]);
+            setTab('historial-simulaciones');
+          }}
+        />
       )}
 
-      {tab === 'recomendaciones' && (
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-4xl text-vino">Recomendaciones</h1>
-            <StatusPill tone="neutral">0</StatusPill>
-          </div>
-          <PlaceholderHonesto
-            titulo="Aún no hay recomendaciones generadas"
-            descripcion="Próximamente verás aquí cada recomendación con qué se sugiere, por qué, con qué datos se generó y qué impacto estima."
-            icono={<IconRecomendaciones className="h-6 w-6" />}
-          />
-        </div>
-      )}
+      {tab === 'recomendaciones' && <RecomendacionesPanel zonas={zonas.data ?? []} puedeGenerar={puedeSimular} />}
 
       {tab === 'productos' && <ProductosLectura estado={productos} />}
       {tab === 'tiendas' && <TiendasLectura estado={tiendas} />}
