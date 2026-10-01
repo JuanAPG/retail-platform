@@ -8,9 +8,11 @@ import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { AuditReporter } from './common/audit/audit-reporter.service';
 import { UsersController } from './users/users.controller';
 import { RolesController } from './users/roles.controller';
 import { UsersService } from './users/users.service';
+import { RolesService } from './users/roles.service';
 import { ModuloEntity } from './entities/modulo.entity';
 import { ProveedorEntity } from './entities/proveedor.entity';
 import { RolModuloPermisoEntity } from './entities/rol-modulo-permiso.entity';
@@ -39,7 +41,7 @@ import { UsuarioEntity } from './entities/usuario.entity';
     JwtModule.register({}),
   ],
   controllers: [HealthController, AuthController, UsersController, RolesController],
-  providers: [AuthService, UsersService, SessionGuard],
+  providers: [AuthService, UsersService, RolesService, AuditReporter, SessionGuard],
   exports: [SessionGuard],
 })
 export class AppModule {}
