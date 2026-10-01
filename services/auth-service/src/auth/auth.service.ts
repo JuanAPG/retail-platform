@@ -23,8 +23,8 @@ import { RegisterProveedorDto } from './dto/register-proveedor.dto';
 
 const PROVEEDOR_ROL_NOMBRE = 'Proveedor';
 
-/** `15m`, `7d`, `3600` → segundos para los TTL de Redis. */
-function aSegundos(expresion: string): number {
+/** `15m`, `7d`, `3600` → segundos para los TTL de Redis. Exportada para probarla. */
+export function aSegundos(expresion: string): number {
   const coincidencia = /^(\d+)([smhd])?$/.exec(expresion.trim());
   if (!coincidencia) return 900;
   const valor = parseInt(coincidencia[1], 10);
