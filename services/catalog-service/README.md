@@ -12,7 +12,7 @@ de negocio.
 
 | Módulo | Rutas | Estado |
 |---|---|---|
-| Segmentos (M05) | `/v1/segments` | pendiente |
+| Segmentos (M05) | `/v1/segments` | migrado (sin auditoría, pendiente) |
 | Tiendas (M02) | `/v1/stores` | pendiente |
 | Zonas y municipios (M03) | `/v1/zones`, `/v1/municipalities` | pendiente |
 | Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, … | pendiente |

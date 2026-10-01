@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { SegmentsModule } from './segments/segments.module';
 
 /**
  * catalog-service: tiendas, zonas, productos/presentaciones y segmentos
@@ -19,6 +20,7 @@ import { SessionGuard } from './common/auth/session.guard';
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    SegmentsModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
