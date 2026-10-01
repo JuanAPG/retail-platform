@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de auth-service (Fase A). Espacio de nombres fijo `auth/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="auth/v1"
+           xmlns:auth="auth/v1"
+           elementFormDefault="qualified">
+
+  <xs:element name="loginRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="email" type="xs:string"/>
+        <xs:element name="password" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="loginResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="accessToken" type="xs:string"/>
+        <xs:element name="refreshToken" type="xs:string"/>
+        <xs:element name="usuario" type="auth:usuario"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="refreshRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="refreshToken" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="refreshResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="accessToken" type="xs:string"/>
+        <xs:element name="refreshToken" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="validateRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="token" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="validateResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="active" type="xs:boolean"/>
+        <xs:element name="user" type="auth:usuario" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="usuario">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="rolId" type="xs:integer"/>
+      <xs:element name="rol" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
