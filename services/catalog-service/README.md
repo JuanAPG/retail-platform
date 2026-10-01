@@ -1,36 +1,44 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# catalog-service
 
-Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
-modifica por servicio**, solo se agregan módulos de negocio.
+Catálogos de la plataforma: tiendas, zonas/municipios, productos y presentaciones, y
+segmentos de ingreso (M02–M05, extraídos del monolito `api/`). Puerto **3102**.
+Contrato: [`docs/contratos/catalog-service.md`](../../docs/contratos/catalog-service.md) y `.xsd`.
 
-## Qué trae resuelto
+Parte de la plantilla `template-nest` (health, error estándar, logging, XML por `Accept`,
+`SessionGuard` con JWT + Redis); eso **no se modifica**. Aquí se agregan solo los módulos
+de negocio.
 
-- `GET /v1/health` sin auth (`src/health/`)
-- Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
-- `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
-  (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
+## Estado de la migración
 
-## Cómo copiarme a un servicio nuevo (5 pasos)
+| Módulo | Rutas | Estado |
+|---|---|---|
+| Segmentos (M05) | `/v1/segments` | pendiente |
+| Tiendas (M02) | `/v1/stores` | pendiente |
+| Zonas y municipios (M03) | `/v1/zones`, `/v1/municipalities` | pendiente |
+| Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, … | pendiente |
 
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
+## Levantarlo solo
 
-## Probarla sola
+Requiere Postgres con `db/schema.sql` aplicado y Redis (ver `infra/docker-compose.yml`).
 
 ```bash
 npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
+cp .env.example .env     # PORT=3102, DB_* y REDIS_* de localhost
+npm run start:dev
+curl localhost:3102/v1/health
 ```
+
+Swagger en `http://localhost:3102/docs`.
+
+## Pruebas
+
+```bash
+npm test                 # unitarias
+npm run test:integracion # integración (contra Postgres y Redis reales)
+```
+
+## Datos
+
+Postgres compartido, `synchronize: false`, `db/schema.sql` es la fuente de verdad. Este
+servicio solo escribe las tablas de catálogo (`tiendas`, `zonas`, `productos`,
+`producto_presentaciones`, `segmentos_ingreso`, …).
