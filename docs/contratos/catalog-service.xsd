@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de catalog-service (Fase A). Espacio de nombres fijo `catalog/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`.
+     Secciones: segments (esta versión). Se agregan stores, zones y products. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="catalog/v1"
+           xmlns:cat="catalog/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== /v1/segments ===== -->
+
+  <xs:complexType name="segment">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="incomeRangeMin" type="xs:decimal"/>
+      
+      <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="updateFrequency" type="xs:string"/>
+      <xs:element name="zoneRelation" type="xs:string"/>
+      <xs:element name="limitations" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="segmentRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="name" type="xs:string"/>
+        <xs:element name="incomeRangeMin" type="xs:decimal"/>
+        <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+        <xs:element name="source" type="xs:string"/>
+        <xs:element name="updateFrequency" type="xs:string"/>
+        <xs:element name="zoneRelation" type="xs:string"/>
+        <xs:element name="limitations" type="xs:string"/>
+        <xs:element name="description" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="segmentResponse" type="cat:segment"/>
+
+  <xs:element name="segmentListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:segment" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
