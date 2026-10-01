@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Contrato XML de catalog-service (Fase A). Espacio de nombres fijo `catalog/v1`.
      Los endpoints responden esta envoltura cuando `Accept: application/xml`.
-     Secciones: segments (esta versión). Se agregan stores, zones y products. -->
+     Secciones: segments, municipalities, zones, stores. Se agrega products. -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
            targetNamespace="catalog/v1"
            xmlns:cat="catalog/v1"
@@ -50,6 +50,205 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element name="item" type="cat:segment" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/municipalities y /v1/zones ===== -->
+
+  <xs:complexType name="municipality">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="nombre" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/municipalities (arreglo plano, sin paginar) -->
+  <xs:element name="municipalityListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:municipality" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="zone">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="municipioId" type="xs:integer"/>
+      <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="municipio" type="cat:municipality"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/zones y PATCH /v1/zones/:id (PATCH: todos opcionales, más activo) -->
+  <xs:element name="zoneRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="municipioId" type="xs:integer"/>
+        <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+        <xs:element name="activo" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="zoneResponse" type="cat:zone"/>
+
+  <xs:element name="zoneListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:zone" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/zones/compare (arreglo plano; null = indicador aún no calculado) -->
+  <xs:complexType name="zoneComparisonRow">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="municipality" type="xs:string"/>
+      <xs:element name="classification" type="xs:string" minOccurs="0"/>
+      <xs:element name="estimatedIncome" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="population" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="availability" type="xs:decimal" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="zoneCompareResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:zoneComparisonRow" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/stores ===== -->
+
+  <xs:simpleType name="storeFormat">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="supermercado"/>
+      <xs:enumeration value="minimarket"/>
+      <xs:enumeration value="tienda_conveniencia"/>
+      <xs:enumeration value="mayorista"/>
+      <xs:enumeration value="otro"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="postalCode">
+    <xs:sequence>
+      <xs:element name="codigoPostal" type="xs:string"/>
+      <xs:element name="municipioId" type="xs:integer"/>
+      <xs:element name="municipio" type="cat:municipality"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/stores/catalog/postal-codes (arreglo plano, sin paginar) -->
+  <xs:element name="postalCodeListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:postalCode" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="address">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="calle" type="xs:string"/>
+      <xs:element name="numeroExterior" type="xs:string" minOccurs="0"/>
+      <xs:element name="numeroInterior" type="xs:string" minOccurs="0"/>
+      <xs:element name="colonia" type="xs:string" minOccurs="0"/>
+      <xs:element name="codigoPostal" type="xs:string"/>
+      <xs:element name="referencia" type="xs:string" minOccurs="0"/>
+      <xs:element name="latitud" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="longitud" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="codigoPostalRef" type="cat:postalCode"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Solo lectura: el catálogo de proveedores es de auth-service -->
+  <xs:complexType name="supplier">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="razonSocial" type="xs:string"/>
+      <xs:element name="rfc" type="xs:string" minOccurs="0"/>
+      <xs:element name="contactoNombre" type="xs:string" minOccurs="0"/>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="telefono" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="store">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="direccionId" type="xs:string"/>
+      <xs:element name="zonaId" type="xs:string"/>
+      <xs:element name="proveedorId" type="xs:string" minOccurs="0"/>
+      <xs:element name="formato" type="cat:storeFormat"/>
+      <xs:element name="numeroSucursal" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="direccion" type="cat:address"/>
+      <xs:element name="zona" type="cat:zone"/>
+      <xs:element name="proveedor" type="cat:supplier" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/stores (obligatorios: nombre, formato, zonaId, calle, codigoPostal).
+       PATCH /v1/stores/:id: todos opcionales, más activo. -->
+  <xs:element name="storeRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="formato" type="cat:storeFormat"/>
+        <xs:element name="zonaId" type="xs:string"/>
+        <xs:element name="numeroSucursal" type="xs:string" minOccurs="0"/>
+        <xs:element name="proveedorId" type="xs:string" minOccurs="0"/>
+        <xs:element name="calle" type="xs:string"/>
+        <xs:element name="numeroExterior" type="xs:string" minOccurs="0"/>
+        <xs:element name="numeroInterior" type="xs:string" minOccurs="0"/>
+        <xs:element name="colonia" type="xs:string" minOccurs="0"/>
+        <xs:element name="codigoPostal" type="xs:string"/>
+        <xs:element name="activo" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="storeResponse" type="cat:store"/>
+
+  <xs:element name="storeListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:store" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
