@@ -6,6 +6,7 @@ import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 import { SegmentsModule } from './segments/segments.module';
+import { ZonesModule } from './zones/zones.module';
 
 /**
  * catalog-service: tiendas, zonas, productos/presentaciones y segmentos
@@ -21,6 +22,7 @@ import { SegmentsModule } from './segments/segments.module';
     }),
     JwtModule.register({}),
     SegmentsModule,
+    ZonesModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
