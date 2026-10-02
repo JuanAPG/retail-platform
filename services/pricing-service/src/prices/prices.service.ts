@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
-import { Pagina } from '../common/dto/pagination.dto';
+import { CacheService } from '../common/cache/cache.service';
+import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { PriceHistory } from '../entities/price-history.entity';
 import { CreatePriceDto } from './dto/create-price.dto';
@@ -43,6 +44,29 @@ function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
 }
 
+/**
+ * Caché de lecturas (Redis, prefijo `pricing:`). Se cachean el historial y la
+ * comparación por zonas de un producto. Todo lo cacheado de un producto cuelga
+ * de UNA versión (`pricing:v:<productId>`): registrar un precio sube la versión
+ * y las llaves viejas quedan huérfanas hasta que caducan.
+ *
+ * El TTL de 5 min acota lo que la versión no ve: cambios que hace
+ * catalog-service (renombrar una tienda o zona, mover una tienda de zona,
+ * borrar una presentación) y que alteran lo que se muestra de un precio.
+ */
+export const TTL_PRECIOS_SEGUNDOS = 300;
+export const llaveVersionProducto = (productId: string) => `pricing:v:${productId}`;
+
+/** Un precio a insertar; lo comparten el alta directa y la aprobación de una propuesta. */
+export interface NuevoPrecio {
+  presentationId: string;
+  storeId: string;
+  price: string;
+  effectiveDate: string;
+  origen: 'interno' | 'propuesta_proveedor_aprobada';
+  createdBy: string;
+}
+
 @Injectable()
 export class PricesService {
   constructor(
@@ -50,7 +74,40 @@ export class PricesService {
     private readonly pricesRepo: Repository<PriceHistory>,
     private readonly dataSource: DataSource,
     private readonly audit: AuditReporter,
+    private readonly cache: CacheService,
   ) {}
+
+  /**
+   * Inserta un precio dentro de la transacción de quien llama. El histórico
+   * nunca se sobrescribe (RN-06): si ya hay un precio vigente para esa
+   * pareja, se cierra (se le pone `effectiveUntil` un día antes de la nueva
+   * vigencia), porque el índice único `uq_precios_vigente` no permite dos
+   * precios vigentes a la vez.
+   *
+   * @throws ConflictException si el vigente tiene fecha igual o posterior.
+   */
+  async registrarPrecio(
+    manager: EntityManager,
+    datos: NuevoPrecio,
+  ): Promise<{ id: string; precioPrevio: string | null }> {
+    const vigente = await manager.findOne(PriceHistory, {
+      where: { presentationId: datos.presentationId, storeId: datos.storeId, vigente: true },
+    });
+    if (vigente) {
+      if (vigente.effectiveDate >= datos.effectiveDate) {
+        throw new ConflictException('Ya existe un precio vigente con fecha igual o posterior a la indicada.');
+      }
+      await manager.update(PriceHistory, { id: vigente.id }, { effectiveUntil: diaAnterior(datos.effectiveDate) });
+    }
+
+    const nuevo = await manager.save(manager.create(PriceHistory, datos));
+    return { id: nuevo.id, precioPrevio: vigente?.price ?? null };
+  }
+
+  /** Invalida lo cacheado de un producto (historial y comparación). Llamar DESPUÉS de confirmar la escritura. */
+  invalidarProducto(productId: string): Promise<void> {
+    return this.cache.invalidarGrupo(llaveVersionProducto(productId));
+  }
 
   /**
    * Registra un precio nuevo para presentación+tienda. El histórico
@@ -68,29 +125,16 @@ export class PricesService {
     const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
 
     try {
-      const { id, precioPrevio } = await this.dataSource.transaction(async (manager) => {
-        const vigente = await manager.findOne(PriceHistory, {
-          where: { presentationId: dto.presentationId, storeId: dto.storeId, vigente: true },
-        });
-        if (vigente) {
-          if (vigente.effectiveDate >= effectiveDate) {
-            throw new ConflictException('Ya existe un precio vigente con fecha igual o posterior a la indicada.');
-          }
-          await manager.update(PriceHistory, { id: vigente.id }, { effectiveUntil: diaAnterior(effectiveDate) });
-        }
-
-        const nuevo = await manager.save(
-          manager.create(PriceHistory, {
-            presentationId: dto.presentationId,
-            storeId: dto.storeId,
-            price: String(dto.price),
-            effectiveDate,
-            origen: 'interno',
-            createdBy: solicitante.id,
-          }),
-        );
-        return { id: nuevo.id, precioPrevio: vigente?.price ?? null };
-      });
+      const { id, precioPrevio } = await this.dataSource.transaction((manager) =>
+        this.registrarPrecio(manager, {
+          presentationId: dto.presentationId,
+          storeId: dto.storeId,
+          price: String(dto.price),
+          effectiveDate,
+          origen: 'interno',
+          createdBy: solicitante.id,
+        }),
+      );
 
       // Después de confirmar la transacción: la auditoría nunca rompe ni
       // retrasa de forma notable el alta (el reporter traga sus propios errores).
@@ -110,6 +154,8 @@ export class PricesService {
       });
 
       const [creado] = await this.detallar([id]);
+      // El historial y la comparación cacheados de este producto ya no valen.
+      await this.invalidarProducto(creado.presentation.productoId);
       return creado;
     } catch (err) {
       // 23505 = unique_violation: otra petición registró un precio vigente
@@ -126,6 +172,16 @@ export class PricesService {
    * una presentación específica. Paginado; lo más reciente primero.
    */
   async findHistory(filtros: PriceHistoryQueryDto): Promise<Pagina<PriceDto>> {
+    const page = filtros.page ?? PAGINA_DEFAULT;
+    const limit = Math.min(filtros.limit ?? LIMITE_DEFAULT, LIMITE_MAXIMO);
+    const version = await this.cache.version(llaveVersionProducto(filtros.productId));
+    const clave = `pricing:history:${filtros.productId}:v${version}:${filtros.presentationId ?? 'all'}:p${page}:l${limit}`;
+
+    // La existencia del producto se verifica dentro de la carga: un 404 no se cachea.
+    return this.cache.obtener(clave, TTL_PRECIOS_SEGUNDOS, () => this.consultarHistorial(filtros));
+  }
+
+  private async consultarHistorial(filtros: PriceHistoryQueryDto): Promise<Pagina<PriceDto>> {
     await this.exigirProducto(filtros.productId);
 
     const qb = this.pricesRepo
@@ -149,6 +205,13 @@ export class PricesService {
    * vende. La zona no vive en `precios`: se deriva de `tiendas.zona_id`.
    */
   async compareAcrossZones(productId: string): Promise<PriceComparisonResult> {
+    const version = await this.cache.version(llaveVersionProducto(productId));
+    return this.cache.obtener(`pricing:compare:${productId}:v${version}`, TTL_PRECIOS_SEGUNDOS, () =>
+      this.consultarComparacion(productId),
+    );
+  }
+
+  private async consultarComparacion(productId: string): Promise<PriceComparisonResult> {
     await this.exigirProducto(productId);
 
     const filas: Record<string, string>[] = await this.dataSource.query(

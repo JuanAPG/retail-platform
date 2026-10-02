@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { CacheService } from '../common/cache/cache.service';
 import { SessionGuard } from '../common/auth/session.guard';
 import { PriceHistory } from '../entities/price-history.entity';
 import { PricesController } from './prices.controller';
@@ -15,7 +16,7 @@ import { PricesService } from './prices.service';
 @Module({
   imports: [TypeOrmModule.forFeature([PriceHistory]), JwtModule.register({})],
   controllers: [PricesController],
-  providers: [PricesService, SessionGuard, AuditReporter],
+  providers: [PricesService, SessionGuard, AuditReporter, CacheService],
   exports: [PricesService],
 })
 export class PricesModule {}
