@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { CacheService } from '../common/cache/cache.service';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
 import { TiendaEntity } from '../entities/tienda.entity';
 import { ZonaEntity } from '../entities/zona.entity';
@@ -30,13 +31,19 @@ function crearServicio() {
   const dataSource = {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
+  // Caché "transparente" por omisión: siempre MISS (ejecuta la carga). Los tests de caché
+  // sobreescriben `obtener` para simular un HIT.
+  const cache = {
+    obtener: jest.fn((_clave: string, _ttl: number, cargar: () => Promise<unknown>) => cargar()),
+  };
   const servicio = new StoresService(
     tiendas as unknown as Repository<TiendaEntity>,
     codigos as unknown as Repository<CodigoPostalEntity>,
     zonas as unknown as Repository<ZonaEntity>,
     dataSource as unknown as DataSource,
+    cache as unknown as CacheService,
   );
-  return { tiendas, codigos, zonas, manager, dataSource, servicio };
+  return { tiendas, codigos, zonas, manager, dataSource, cache, servicio };
 }
 
 describe('StoresService', () => {
@@ -140,5 +147,36 @@ describe('StoresService', () => {
     expect(qb.leftJoinAndSelect).toHaveBeenCalledTimes(6);
     expect(qb.orderBy).toHaveBeenCalledWith('t.nombre', 'ASC');
     expect(pagina).toEqual({ data: [{ id: 't-1' }], total: 1, page: 1, limit: 20 });
+  });
+});
+
+describe('StoresService — caché de catálogos', () => {
+  it('los códigos postales se cachean 1 hora bajo catalog:postal-codes y salen de la base solo en un MISS', async () => {
+    const { codigos, cache, servicio } = crearServicio();
+    codigos.find.mockResolvedValue([{ codigoPostal: '64000' }]);
+
+    expect(await servicio.findPostalCodes()).toEqual([{ codigoPostal: '64000' }]);
+    expect(cache.obtener).toHaveBeenCalledWith('catalog:postal-codes', 3600, expect.any(Function));
+    expect(codigos.find).toHaveBeenCalledWith({ order: { codigoPostal: 'ASC' } });
+  });
+
+  it('en un HIT de códigos postales no se consulta la base', async () => {
+    const { codigos, cache, servicio } = crearServicio();
+    cache.obtener.mockResolvedValue([{ codigoPostal: '99999' }]);
+
+    expect(await servicio.findPostalCodes()).toEqual([{ codigoPostal: '99999' }]);
+    expect(codigos.find).not.toHaveBeenCalled();
+  });
+
+  it('crear una tienda valida el código postal contra la base, no contra la caché', async () => {
+    const { zonas, codigos, cache, servicio } = crearServicio();
+    zonas.findOne.mockResolvedValue({ id: 'zona-1' });
+    codigos.findOne.mockResolvedValue(null);
+
+    await expect(
+      servicio.create({ nombre: 'T', formato: 'otro', zonaId: 'zona-1', calle: 'C', codigoPostal: '00000' }),
+    ).rejects.toThrow(/00000/);
+    expect(codigos.findOne).toHaveBeenCalledWith({ where: { codigoPostal: '00000' } });
+    expect(cache.obtener).not.toHaveBeenCalled();
   });
 });

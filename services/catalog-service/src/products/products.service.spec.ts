@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { CacheService } from '../common/cache/cache.service';
 import { CategoriaProductoEntity } from '../entities/categoria-producto.entity';
 import { ProductoEntity } from '../entities/producto.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
@@ -57,6 +58,11 @@ function crearServicio() {
   const dataSource = {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
+  // Caché "transparente" por omisión: siempre MISS (ejecuta la carga). Los tests de caché
+  // sobreescriben `obtener` para simular un HIT.
+  const cache = {
+    obtener: jest.fn((_clave: string, _ttl: number, cargar: () => Promise<unknown>) => cargar()),
+  };
   const servicio = new ProductsService(
     proveedores as unknown as Repository<ProveedorEntity>,
     categorias as unknown as Repository<CategoriaProductoEntity>,
@@ -64,8 +70,9 @@ function crearServicio() {
     presentaciones as unknown as Repository<ProductoPresentacionEntity>,
     unidades as unknown as Repository<UnidadMedidaEntity>,
     dataSource as unknown as DataSource,
+    cache as unknown as CacheService,
   );
-  return { proveedores, categorias, productos, presentaciones, unidades, manager, dataSource, servicio };
+  return { proveedores, categorias, productos, presentaciones, unidades, manager, dataSource, cache, servicio };
 }
 
 describe('ProductsService — productos y presentaciones', () => {
@@ -336,5 +343,52 @@ describe('ProductsService — propuestas y revisión', () => {
 
     expect(qb.where).toHaveBeenCalledWith('p.estatus = :estatus', { estatus: 'pendiente_aprobacion' });
     expect(qb.orderBy).toHaveBeenCalledWith('p.createdAt', 'ASC');
+  });
+});
+
+describe('ProductsService — caché de catálogos', () => {
+  it('las categorías se cachean 1 hora bajo catalog:categories y salen de la base solo en un MISS', async () => {
+    const { categorias, cache, servicio } = crearServicio();
+    categorias.find.mockResolvedValue([{ id: 1, nombre: 'Abarrotes' }]);
+
+    const resultado = await servicio.findCategories();
+
+    expect(cache.obtener).toHaveBeenCalledWith('catalog:categories', 3600, expect.any(Function));
+    expect(categorias.find).toHaveBeenCalledWith({ order: { nombre: 'ASC' } });
+    expect(resultado).toEqual([{ id: 1, nombre: 'Abarrotes' }]);
+  });
+
+  it('en un HIT de categorías no se consulta la base', async () => {
+    const { categorias, cache, servicio } = crearServicio();
+    cache.obtener.mockResolvedValue([{ id: 9, nombre: 'Desde Redis' }]);
+
+    expect(await servicio.findCategories()).toEqual([{ id: 9, nombre: 'Desde Redis' }]);
+    expect(categorias.find).not.toHaveBeenCalled();
+  });
+
+  it('las unidades se cachean 1 hora bajo catalog:units', async () => {
+    const { unidades, cache, servicio } = crearServicio();
+    unidades.find.mockResolvedValue([{ id: 1, clave: 'kg' }]);
+
+    await servicio.findUnits();
+
+    expect(cache.obtener).toHaveBeenCalledWith('catalog:units', 3600, expect.any(Function));
+    expect(unidades.find).toHaveBeenCalledWith({ order: { clave: 'ASC' } });
+  });
+
+  it('lo mutable NO se cachea: el listado de productos y la bandeja siempre consultan la base', async () => {
+    const { productos, cache, servicio } = crearServicio();
+    const qb: Record<string, jest.Mock> = {};
+    for (const m of ['leftJoinAndSelect', 'where', 'orderBy', 'addOrderBy', 'skip', 'take']) {
+      qb[m] = jest.fn().mockReturnValue(qb);
+    }
+    qb.getManyAndCount = jest.fn().mockResolvedValue([[], 0]);
+    productos.createQueryBuilder.mockReturnValue(qb);
+
+    await servicio.findPending({});
+    await servicio.findAll({ id: 'u1', email: 'a@b', rol: 'Administrador', rolId: 1 }, {});
+
+    expect(cache.obtener).not.toHaveBeenCalled();
+    expect(productos.createQueryBuilder).toHaveBeenCalledTimes(2);
   });
 });
