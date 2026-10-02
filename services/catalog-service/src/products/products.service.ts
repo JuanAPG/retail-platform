@@ -8,6 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { CacheService } from '../common/cache/cache.service';
+import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { ROL } from '../common/roles';
@@ -52,20 +54,25 @@ export class ProductsService {
     @InjectRepository(UnidadMedidaEntity)
     private readonly unidadesRepo: Repository<UnidadMedidaEntity>,
     private readonly dataSource: DataSource,
+    private readonly cache: CacheService,
   ) {}
 
   // -------------------------------------------------------------------
   // Catálogos de referencia
   // -------------------------------------------------------------------
 
-  /** Catálogo chico e inmutable: arreglo plano, sin paginar. */
+  /** Catálogo chico e inmutable: arreglo plano, sin paginar. Cacheado en Redis (ver common/cache/catalogos.ts). */
   findUnits() {
-    return this.unidadesRepo.find({ order: { clave: 'ASC' } });
+    return this.cache.obtener(LLAVES_CATALOGO.unidades, TTL_CATALOGOS_SEGUNDOS, () =>
+      this.unidadesRepo.find({ order: { clave: 'ASC' } }),
+    );
   }
 
-  /** Catálogo chico e inmutable: arreglo plano, sin paginar. */
+  /** Catálogo chico e inmutable: arreglo plano, sin paginar. Cacheado en Redis (ver common/cache/catalogos.ts). */
   findCategories() {
-    return this.categoriasRepo.find({ order: { nombre: 'ASC' } });
+    return this.cache.obtener(LLAVES_CATALOGO.categorias, TTL_CATALOGOS_SEGUNDOS, () =>
+      this.categoriasRepo.find({ order: { nombre: 'ASC' } }),
+    );
   }
 
   /** Padrón de empresas proveedoras: paginado, por razón social. */

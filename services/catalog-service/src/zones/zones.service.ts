@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { ZonaEntity } from '../entities/zona.entity';
 import { MunicipioEntity } from '../entities/municipio.entity';
+import { CacheService } from '../common/cache/cache.service';
+import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { CreateZoneDto } from './dto/create-zone.dto';
@@ -31,6 +33,7 @@ export class ZonesService {
     @InjectRepository(MunicipioEntity)
     private readonly municipiosRepo: Repository<MunicipioEntity>,
     private readonly dataSource: DataSource,
+    private readonly cache: CacheService,
   ) {}
 
   /** Orden fijo por nombre (ver contrato). El municipio viene por la relación eager. */
@@ -43,9 +46,11 @@ export class ZonesService {
     return paginar(qb, filtros);
   }
 
-  /** Catálogo chico e inmutable: arreglo plano, sin paginar. */
+  /** Catálogo chico e inmutable: arreglo plano, sin paginar. Cacheado en Redis (ver common/cache/catalogos.ts). */
   findMunicipalities() {
-    return this.municipiosRepo.find({ order: { nombre: 'ASC' } });
+    return this.cache.obtener(LLAVES_CATALOGO.municipios, TTL_CATALOGOS_SEGUNDOS, () =>
+      this.municipiosRepo.find({ order: { nombre: 'ASC' } }),
+    );
   }
 
   async findOne(id: string): Promise<ZonaEntity> {

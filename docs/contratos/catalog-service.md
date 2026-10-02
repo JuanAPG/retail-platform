@@ -562,3 +562,26 @@ precios, su inventario y sus precios propuestos (así está definido en el esque
 | 403 | Rol sin permiso; empresa proveedora inactiva o no vinculada |
 | 404 | Producto o presentación inexistente |
 | 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada; borrado con ventas |
+
+---
+
+## Caché (Redis)
+
+Los **cuatro catálogos planos** se cachean en Redis (prefijo `catalog:`, TTL **1 hora**), porque cada
+pantalla y la app móvil los piden para llenar listas y casi nunca cambian:
+
+| Ruta | Llave |
+|---|---|
+| `GET /v1/product-categories` | `catalog:categories` |
+| `GET /v1/units` | `catalog:units` |
+| `GET /v1/municipalities` | `catalog:municipalities` |
+| `GET /v1/stores/catalog/postal-codes` | `catalog:postal-codes` |
+
+- Son de **solo lectura** en este servicio (ninguna ruta los modifica), así que no hay invalidación al
+  escribir: un cambio manual en la base se ve al caducar el TTL (o borrando la llave).
+- **No** se cachean zonas, tiendas, productos, presentaciones ni segmentos: cambian con las escrituras
+  del propio servicio y se paginan/filtran.
+- La caché **no se salta la seguridad**: el token, la sesión en Redis y el rol se validan antes que la caché.
+- Si Redis no responde o el valor guardado está corrupto, el servicio responde desde Postgres como si no
+  hubiera caché. El cuerpo (JSON o XML) es el mismo con o sin caché.
+- Otros servicios deben pedir estos catálogos por la API, no leer las llaves de Redis directamente.

@@ -5,6 +5,8 @@ import { TiendaEntity } from '../entities/tienda.entity';
 import { DireccionEntity } from '../entities/direccion.entity';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
 import { ZonaEntity } from '../entities/zona.entity';
+import { CacheService } from '../common/cache/cache.service';
+import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { CreateStoreDto } from './dto/create-store.dto';
@@ -23,6 +25,7 @@ export class StoresService {
     @InjectRepository(ZonaEntity)
     private readonly zonasRepo: Repository<ZonaEntity>,
     private readonly dataSource: DataSource,
+    private readonly cache: CacheService,
   ) {}
 
   /**
@@ -44,9 +47,11 @@ export class StoresService {
     return paginar(qb, filtros);
   }
 
-  /** Catálogo para el formulario de alta: arreglo plano, sin paginar. */
+  /** Catálogo para el formulario de alta: arreglo plano, sin paginar. Cacheado en Redis (ver common/cache/catalogos.ts). */
   findPostalCodes() {
-    return this.codigosPostalesRepo.find({ order: { codigoPostal: 'ASC' } });
+    return this.cache.obtener(LLAVES_CATALOGO.codigosPostales, TTL_CATALOGOS_SEGUNDOS, () =>
+      this.codigosPostalesRepo.find({ order: { codigoPostal: 'ASC' } }),
+    );
   }
 
   async findOne(id: string): Promise<TiendaEntity> {

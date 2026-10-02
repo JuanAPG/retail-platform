@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { CacheService } from '../common/cache/cache.service';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
 import { DireccionEntity } from '../entities/direccion.entity';
 import { ProveedorEntity } from '../entities/proveedor.entity';
@@ -27,7 +28,7 @@ import { StoresService } from './stores.service';
     JwtModule.register({}),
   ],
   controllers: [StoresController],
-  providers: [StoresService, SessionGuard],
+  providers: [StoresService, SessionGuard, CacheService],
   exports: [StoresService],
 })
 export class StoresModule {}

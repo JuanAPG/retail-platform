@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { CacheService } from '../common/cache/cache.service';
 import { MunicipioEntity } from '../entities/municipio.entity';
 import { ZonaEntity } from '../entities/zona.entity';
 import { ZonesService } from './zones.service';
@@ -14,12 +15,18 @@ function crearServicio() {
   };
   const municipios = { findOne: jest.fn(), find: jest.fn() };
   const dataSource = { query: jest.fn() };
+  // Caché "transparente" por omisión: siempre MISS (ejecuta la carga). Los tests de caché
+  // sobreescriben `obtener` para simular un HIT.
+  const cache = {
+    obtener: jest.fn((_clave: string, _ttl: number, cargar: () => Promise<unknown>) => cargar()),
+  };
   const servicio = new ZonesService(
     zonas as unknown as Repository<ZonaEntity>,
     municipios as unknown as Repository<MunicipioEntity>,
     dataSource as unknown as DataSource,
+    cache as unknown as CacheService,
   );
-  return { zonas, municipios, dataSource, servicio };
+  return { zonas, municipios, dataSource, cache, servicio };
 }
 
 describe('ZonesService', () => {
@@ -116,5 +123,34 @@ describe('ZonesService', () => {
     dataSource.query.mockResolvedValueOnce([]);
 
     await expect(servicio.compareZones(['a'])).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ZonesService — caché de catálogos', () => {
+  it('los municipios se cachean 1 hora bajo catalog:municipalities y salen de la base solo en un MISS', async () => {
+    const { municipios, cache, servicio } = crearServicio();
+    municipios.find.mockResolvedValue([{ id: 2, nombre: 'Monterrey' }]);
+
+    expect(await servicio.findMunicipalities()).toEqual([{ id: 2, nombre: 'Monterrey' }]);
+    expect(cache.obtener).toHaveBeenCalledWith('catalog:municipalities', 3600, expect.any(Function));
+    expect(municipios.find).toHaveBeenCalledWith({ order: { nombre: 'ASC' } });
+  });
+
+  it('en un HIT de municipios no se consulta la base', async () => {
+    const { municipios, cache, servicio } = crearServicio();
+    cache.obtener.mockResolvedValue([{ id: 7, nombre: 'Desde Redis' }]);
+
+    expect(await servicio.findMunicipalities()).toEqual([{ id: 7, nombre: 'Desde Redis' }]);
+    expect(municipios.find).not.toHaveBeenCalled();
+  });
+
+  it('las zonas (mutables) no se cachean: crear una no deja datos viejos en ningún lado', async () => {
+    const { zonas, municipios, cache, servicio } = crearServicio();
+    municipios.findOne.mockResolvedValue({ id: 2 });
+    zonas.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'z-1', nombre: 'Zona Norte' });
+
+    await servicio.create({ nombre: 'Zona Norte', municipioId: 2 });
+
+    expect(cache.obtener).not.toHaveBeenCalled();
   });
 });

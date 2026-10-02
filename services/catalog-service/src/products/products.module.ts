@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { CacheService } from '../common/cache/cache.service';
 import { CategoriaProductoEntity } from '../entities/categoria-producto.entity';
 import { ProductoEntity } from '../entities/producto.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
@@ -30,7 +31,7 @@ import { ProductsService } from './products.service';
     JwtModule.register({}),
   ],
   controllers: [ProductsController],
-  providers: [ProductsService, SessionGuard],
+  providers: [ProductsService, SessionGuard, CacheService],
   exports: [ProductsService],
 })
 export class ProductsModule {}
