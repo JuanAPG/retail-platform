@@ -16,6 +16,10 @@ de negocio.
 | POST | `/v1/prices` | Administrador, Responsable de precios |
 | GET | `/v1/prices/history?productId=&presentationId=` | Los 6 perfiles internos (paginado) |
 | GET | `/v1/prices/compare-zones?productId=` | Los 6 perfiles internos (agregado, sin paginar) |
+| POST | `/v1/price-proposals` | Proveedor |
+| GET | `/v1/price-proposals?status=` | Proveedor (solo las suyas), Administrador, Gerente de categoría, Responsable de precios, Auditor |
+| PATCH | `/v1/price-proposals/:id/approve` | Administrador, Gerente de categoría |
+| PATCH | `/v1/price-proposals/:id/reject` | Administrador, Gerente de categoría |
 
 Reglas que conviene tener presentes:
 
@@ -31,8 +35,9 @@ Reglas que conviene tener presentes:
 |---|---|
 | Registro, historial y comparación por zonas | migrado |
 | Auditoría del alta de precios (a `audit-service`) | migrado |
-| Caché de precios en Redis | pendiente |
-| Propuestas de precio del Proveedor (`precios_propuestos_proveedor`) | fuera de alcance por ahora |
+| Caché en Redis del historial y la comparación por zonas | migrado |
+| Propuestas de precio del Proveedor (RN-14) | migrado, con decisiones por confirmar (abajo) |
+| Notificaciones de propuestas y cambios de precio | pendiente (`notifications-service`) |
 
 ## Auditoría
 
@@ -41,6 +46,39 @@ precio anterior y el nuevo, el actor y la IP (`src/common/audit/audit-reporter.s
 reporter de `auth-service`). El reporte **nunca rompe** el alta: si `audit-service` no responde, el
 precio se registra igual. Historial de un precio:
 `GET http://localhost:3110/v1/auditoria?tabla=precios&registroId=<id>`.
+
+## Propuestas de precio del Proveedor (RN-14)
+
+Un Proveedor propone un precio para una presentación de **su** producto (activo); alguien interno lo
+aprueba o rechaza. Al aprobar, quien aprueba **elige las tiendas** (`storeIds`) y la fecha: el precio
+entra a `precios` con `origen = propuesta_proveedor_aprobada`, cerrando el vigente de cada tienda
+(reusa `PricesService.registrarPrecio`). Es **todo o nada** en una transacción, y dos revisores
+simultáneos no se pisan (el segundo recibe 409). El Proveedor ve sus propuestas y, si se rechazan, el motivo.
+
+**Decisiones por confirmar con el equipo** (RN-14 no está en el repo; cada una es fácil de cambiar):
+
+| Decisión actual | Dónde cambiarla |
+|---|---|
+| Aprueban Administrador y Gerente de categoría | constante `APRUEBAN_PRECIOS` en `src/common/roles.ts` |
+| La propuesta no trae tienda; quien aprueba la elige | `ApprovePriceProposalDto` y `PriceProposalsService.approve` |
+| El precio propuesto es de **venta** (entra a `precios`), no costo de compra | contrato; `unidad_compra` solo es informativo |
+| Una propuesta pendiente por presentación y proveedor | `PriceProposalsService.create` |
+
+## Caché en Redis
+
+Se cachean `GET /v1/prices/history` y `GET /v1/prices/compare-zones` (prefijo `pricing:`, TTL 5 min).
+Todo lo cacheado de un producto cuelga de una **versión** (`pricing:v:<productId>`): cada precio nuevo
+(alta directa o aprobación de propuesta) la sube, así que la respuesta **nunca es anterior a un precio ya
+registrado**; las llaves viejas caducan solas. El TTL acota lo que la versión no ve (cambios de
+`catalog-service`: renombrar una tienda o zona, mover una tienda de zona). Los errores no se cachean y
+**si Redis falla, el servicio responde desde Postgres** (`src/common/cache/cache.service.ts`).
+
+Convención de llaves: `<servicio>:<recurso>[:<parámetros>]` con un prefijo por servicio (`pricing:`,
+`catalog:`; más `session:` y `revoked:` de autenticación). Ver las llaves en vivo:
+`docker exec retail_redis redis-cli --scan --pattern 'pricing:*'`.
+
+> `src/common/auth/redis.client.ts` (plantilla, no se modifica) lista los usos de Redis y solo nombra
+> `catalog:*`; falta que Juan agregue `pricing:*` ahí.
 
 ## Levantarlo solo
 
@@ -71,6 +109,8 @@ Para probar rutas protegidas desde Swagger: **Authorize** con el `accessToken` d
   ```bash
   docker compose -f infra/docker-compose.yml up -d --no-deps pricing-service
   ```
+  El `--watch` del contenedor **no detecta cambios** hechos desde Windows (montaje de Docker Desktop):
+  tras editar código, `docker compose -f infra/docker-compose.yml restart pricing-service`.
 - **Producción** (GCP, Parcial 3): el `Dockerfile` de esta carpeta, multi-etapa; arranca con
   `node dist/main.js`. El `.dockerignore` evita enviar `node_modules` al contexto de build.
   ```bash
