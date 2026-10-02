@@ -10,7 +10,7 @@ sesión activa en Redis (`SessionGuard`).
 Rutas y campos en **inglés**, igual que `Contrato_Metodos_Endpoints` (Sprint 1).
 
 > Secciones de este contrato, en orden de migración desde el monolito:
-> `/v1/segments` · `/v1/zones` y `/v1/municipalities` · `/v1/stores` · `/v1/products` (pendiente).
+> `/v1/segments` · `/v1/zones` y `/v1/municipalities` · `/v1/stores` · `/v1/products` y presentaciones.
 > Cada una se agrega al migrarse su módulo.
 
 ---
@@ -352,3 +352,213 @@ Response `204`. Se borra también su dirección (es exclusiva de la tienda). Ine
 | 403 | Rol sin permiso sobre la ruta |
 | 404 | Zona o tienda inexistente; `compare` sin ninguna zona existente |
 | 409 | Zona duplicada en el municipio; borrado con registros asociados |
+
+---
+
+## /v1/products, /v1/presentations, catálogos de producto (M04)
+
+Precios, inventario y líneas de venta cuelgan de la **PRESENTACIÓN**, nunca del
+producto (RF-35). Un producto se da de alta siempre **con su primera presentación**
+(una sin la otra no se puede cotizar ni vender).
+
+### Rutas
+
+| Método | Ruta | Roles |
+|---|---|---|
+| GET | `/v1/product-categories` | Cualquier usuario autenticado |
+| GET | `/v1/units` | Cualquier usuario autenticado |
+| GET | `/v1/providers` | Administrador, Analista comercial, Gerente de categoría, Auditor |
+| GET | `/v1/products` | Los 7 perfiles (**el Proveedor solo ve los suyos**) |
+| GET | `/v1/products/pending` | Administrador, Gerente de categoría |
+| GET | `/v1/products/:id` | Los 6 perfiles internos |
+| POST | `/v1/products` | Administrador, Gerente de categoría |
+| POST | `/v1/products/proposals` | Proveedor |
+| PATCH | `/v1/products/:id` | Administrador, Gerente de categoría |
+| DELETE | `/v1/products/:id` | Administrador, Gerente de categoría |
+| PATCH | `/v1/products/:id/approve` | Administrador, Gerente de categoría |
+| PATCH | `/v1/products/:id/reject` | Administrador, Gerente de categoría |
+| GET | `/v1/products/:id/presentations` | Los 6 perfiles internos |
+| POST | `/v1/products/:id/presentations` | Administrador, Gerente de categoría |
+| DELETE | `/v1/presentations/:id` | Administrador, Gerente de categoría |
+
+`:id` es UUID; otro valor → `400`. Los perfiles de consulta (Auditor, Analista,
+Planeador) no tienen ninguna ruta de escritura sobre productos.
+
+### Objeto Product
+
+```json
+{
+  "id": "uuid",
+  "sku": "ABA-ARR-001",
+  "nombre": "Arroz blanco 1 kg",
+  "descripcion": null,
+  "categoriaId": 1,
+  "esCanastaBasica": true,
+  "estatus": "activo",
+  "proveedorId": null,
+  "createdAt": "2026-09-25T19:21:10.262Z",
+  "updatedAt": "2026-09-25T19:21:10.262Z",
+  "categoria": { "id": 1, "nombre": "Abarrotes", "categoriaPadreId": null, "descripcion": null },
+  "proveedor": null,
+  "presentaciones": [ { "…": "objeto Presentation" } ]
+}
+```
+
+- `estatus`: `pendiente_aprobacion | activo | rechazado | inactivo`.
+- `proveedor` es `null` (alta directa) o el registro de `proveedores` (ver Store). Es de
+  `auth-service`; aquí solo se **lee**.
+- El **motivo de rechazo no viaja en el producto**: queda en el historial de revisiones
+  (`producto_revisiones`). Pendiente decidir cómo lo consulta el Proveedor.
+
+### Objeto Presentation
+
+```json
+{
+  "id": "uuid",
+  "productoId": "uuid",
+  "nombre": "1 kg",
+  "contenido": "1.000",
+  "unidadMedidaId": 1,
+  "codigoBarras": null,
+  "esPredeterminada": true,
+  "activo": true,
+  "createdAt": "…",
+  "updatedAt": "…",
+  "unidadMedida": { "id": 1, "clave": "kg", "nombre": "Kilogramo", "tipo": "masa", "factorBase": "1.000000" }
+}
+```
+
+`contenido` y `factorBase` son **cadenas decimales** (para no perder precisión).
+
+### Catálogos
+
+- `GET /v1/product-categories` → arreglo plano ordenado por `nombre`:
+  `[{ "id", "nombre", "categoriaPadreId", "descripcion" }]`.
+- `GET /v1/units` → arreglo plano ordenado por `clave`:
+  `[{ "id", "clave", "nombre", "tipo", "factorBase" }]`.
+  Ambos son catálogos chicos e inmutables en la práctica: **sin paginar**
+  (excepción declarada en `paginacion.md`). Los lee también el Proveedor, que los
+  necesita para proponer.
+- `GET /v1/providers` → **paginado**, orden `razonSocial` ascendente; cada elemento es
+  un Supplier (`id`, `razonSocial`, `rfc`, `contactoNombre`, `email`, `telefono`,
+  `activo`, `createdAt`, `updatedAt`).
+
+### GET /v1/products
+
+Paginado (`page`, `limit`), orden fijo `nombre` ascendente.
+Response `200`: `{ "data": [Product], "total": n, "page": 1, "limit": 20 }`.
+
+**El recorte por dueño del dato se hace en la consulta**, no en el cliente: un
+Proveedor recibe únicamente los productos de su empresa (vínculo por correo:
+`usuarios.email` = `proveedores.email`, ambos únicos); los perfiles internos ven el
+catálogo completo. Un Proveedor sin empresa vinculada → `403`.
+
+### GET /v1/products/pending
+
+Bandeja de propuestas por revisar. Paginado, orden fijo `createdAt` **ascendente**
+(las más antiguas primero: es una cola de trabajo). Solo `estatus =
+pendiente_aprobacion`.
+
+### GET /v1/products/:id
+
+Response `200`: Product con sus presentaciones. Inexistente → `404`.
+
+### POST /v1/products — alta directa
+
+Nace `activo` y sin proveedor. Pensada para Administrador/Gerente; aquí sí se puede
+marcar `esCanastaBasica` (clasificación de negocio, RN-04).
+
+```json
+{
+  "sku": "ABA-ARR-001",
+  "nombre": "Arroz blanco 1 kg",
+  "descripcion": "Opcional",
+  "categoriaId": 1,
+  "esCanastaBasica": true,
+  "presentacion": "1 kg",
+  "contenido": 1,
+  "unidadMedida": "kg"
+}
+```
+
+| Campo | Regla |
+|---|---|
+| `sku` | obligatorio, ≤ 40, único (`409` si existe) |
+| `nombre` | obligatorio, ≤ 150 |
+| `categoriaId` | obligatorio, entero positivo de una categoría existente (si no → `400`) |
+| `presentacion` | obligatorio, ≤ 60 (nombre de la primera presentación) |
+| `contenido` | obligatorio, numérico mayor a 0 |
+| `unidadMedida` | obligatorio, ≤ 10, **clave** del catálogo (`kg`, `g`, `l`, `ml`, `pza`…); inexistente → `400` |
+| `descripcion`, `esCanastaBasica` | opcionales |
+
+Response `201`: Product con su presentación (marcada `esPredeterminada: true`).
+Producto y presentación se crean en una sola transacción.
+
+### POST /v1/products/proposals — propuesta del Proveedor
+
+Mismo cuerpo que el alta directa **sin `esCanastaBasica`**. El servidor fija lo que
+el proveedor no decide: `proveedorId` sale del token, `estatus` es
+`pendiente_aprobacion` y `esCanastaBasica` es `false`. Mandar `proveedorId`,
+`estatus` o `esCanastaBasica` → `400` (campo no permitido).
+
+Response `201`: Product pendiente. Empresa proveedora inactiva → `403`; cuenta sin
+empresa vinculada → `403`; `sku` repetido → `409`.
+
+### PATCH /v1/products/:id
+
+Cuerpo (todos opcionales): `nombre`, `descripcion`, `categoriaId`, `esCanastaBasica`.
+**No acepta `estatus`**: solo cambia por `approve` / `reject`, para que toda decisión
+quede en `producto_revisiones`. Response `200`: Product actualizado.
+
+### DELETE /v1/products/:id
+
+Response `204`. Borra también sus presentaciones. Si alguna presentación tiene ventas
+→ `409` y no se borra nada.
+
+### PATCH /v1/products/:id/approve
+
+Sin cuerpo. Pasa el producto a `activo` y registra quién lo resolvió y cuándo.
+Response `200`: Product. Solo se resuelve lo `pendiente_aprobacion`; una propuesta ya
+resuelta → `409` (para que dos revisores no se sobrescriban).
+
+### PATCH /v1/products/:id/reject
+
+```json
+{ "motivoRechazo": "La ficha técnica no acredita el certificado orgánico." }
+```
+
+`motivoRechazo`: obligatorio, mínimo 10 caracteres. Pasa el producto a `rechazado` y
+guarda motivo, revisor y fecha. Response `200`: Product. Ya resuelta → `409`.
+
+### GET /v1/products/:id/presentations
+
+Arreglo plano de Presentation (las de un solo producto; **sin paginar**), orden
+`nombre`. Producto inexistente → `404`.
+
+### POST /v1/products/:id/presentations
+
+```json
+{ "nombre": "500 g", "contenido": 500, "unidadMedida": "g", "codigoBarras": "7501234567890", "esPredeterminada": false }
+```
+
+`nombre` obligatorio ≤ 60; `contenido` numérico > 0; `unidadMedida` clave existente;
+`codigoBarras` opcional ≤ 20; `esPredeterminada` opcional (default `false`).
+Response `201`: Presentation. Producto inexistente → `404`; unidad inexistente → `400`.
+Como **solo puede haber una presentación predeterminada por producto**, marcar
+`esPredeterminada: true` cuando ya existe otra → `409`.
+
+### DELETE /v1/presentations/:id
+
+Response `204`. Inexistente → `404`. Con ventas asociadas → `409` (desactivar en lugar
+de borrar). **Atención:** si no tiene ventas, el borrado arrastra en cascada sus
+precios, su inventario y sus precios propuestos (así está definido en el esquema).
+
+### Códigos de error de esta sección
+
+| Status | Cuándo |
+|---|---|
+| 400 | Cuerpo inválido, campo no permitido, `:id` no UUID, categoría o unidad inexistente |
+| 401 | Sin token, token revocado o sin sesión en Redis |
+| 403 | Rol sin permiso; empresa proveedora inactiva o no vinculada |
+| 404 | Producto o presentación inexistente |
+| 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada; borrado con ventas |
