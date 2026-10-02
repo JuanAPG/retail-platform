@@ -339,8 +339,9 @@ dirección se actualiza la dirección de la tienda (es exclusiva de ella). Respo
 
 ### DELETE /v1/stores/:id
 
-Response `204`. Inexistente → `404`. Con transacciones u otros registros asociados →
-`409` (desactivar en lugar de borrar).
+Response `204`. Se borra también su dirección (es exclusiva de la tienda). Inexistente →
+`404`. Con transacciones u otros registros asociados → `409` y no se borra nada
+(desactivar en lugar de borrar).
 
 ### Códigos de error de zonas y tiendas
 
