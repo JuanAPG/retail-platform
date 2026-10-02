@@ -30,9 +30,17 @@ Reglas que conviene tener presentes:
 | Alcance | Estado |
 |---|---|
 | Registro, historial y comparación por zonas | migrado |
-| Auditoría del alta de precios | pendiente (`TODO(audit)` en el servicio) |
+| Auditoría del alta de precios (a `audit-service`) | migrado |
 | Caché de precios en Redis | pendiente |
 | Propuestas de precio del Proveedor (`precios_propuestos_proveedor`) | fuera de alcance por ahora |
+
+## Auditoría
+
+Cada alta exitosa de un precio se reporta a `audit-service` (`AUDIT_SERVICE_URL`, puerto 3110) con el
+precio anterior y el nuevo, el actor y la IP (`src/common/audit/audit-reporter.service.ts`, el mismo
+reporter de `auth-service`). El reporte **nunca rompe** el alta: si `audit-service` no responde, el
+precio se registra igual. Historial de un precio:
+`GET http://localhost:3110/v1/auditoria?tabla=precios&registroId=<id>`.
 
 ## Levantarlo solo
 
@@ -84,6 +92,10 @@ PRICING_BASE_URL=http://localhost:3113 npm run test:integracion
 La integración registra precios reales: escoge una pareja presentación+tienda **sin precios** en
 el seed y borra lo que crea, así el historial del seed no se altera. Los usuarios que escriben
 precios deben existir en `usuarios` (`precios.creado_por` es llave foránea).
+
+También comprueba la bitácora, así que necesita `audit-service` arriba
+(`docker compose -f infra/docker-compose.yml up -d --no-deps audit-service`). La bitácora es
+append-only: cada corrida deja 3 eventos de `precios` que no se borran.
 
 ## Datos
 

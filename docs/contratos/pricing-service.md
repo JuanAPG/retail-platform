@@ -159,8 +159,29 @@ Los importes de este agregado son **números** (promedio calculado), a diferenci
 | 404 | Producto inexistente (history, compare-zones) |
 | 409 | Fecha de vigencia no posterior al precio vigente; registro simultáneo |
 
+### Auditoría
+
+Cada `POST /v1/prices` **exitoso** se reporta a `audit-service` (`POST /v1/auditoria`, ver
+`audit-service.md`) con `tabla: "precios"`, `accion: "insert"`, el `registroId` del precio nuevo,
+el actor (`usuarioId`, `rolId`) y su IP. Los `cambios` llevan el precio que se cerró y el nuevo:
+
+```json
+[
+  { "campo": "precio_anterior", "previo": "40.00", "posterior": null },
+  { "campo": "precio", "previo": null, "posterior": "42.5" }
+]
+```
+
+(`precio_anterior.previo` es `null` si era el primer precio de esa presentación y tienda.)
+El historial de un precio se consulta con `GET /v1/auditoria?tabla=precios&registroId=<id>`.
+
+- El reporte ocurre **después** de confirmar la transacción y **nunca rompe** el alta: si
+  `audit-service` no responde, el precio se registra igual y solo se deja una advertencia en el log.
+- Las peticiones rechazadas (400, 409) no generan evento. Las lecturas tampoco.
+- Requiere `AUDIT_SERVICE_URL` (por omisión no reporta).
+
 ### Pendiente (no es parte de este contrato todavía)
 
 - Propuestas de precio del Proveedor y su aprobación.
-- Reporte de cambios a auditoría (insert) — se define al coordinar con `audit-service`.
 - Notificación de cambios de precio (`notifications-service`).
+- Caché de precios en Redis.
