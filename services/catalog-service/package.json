@@ -4,7 +4,7 @@
   "private": true,
   "description": "Catálogo: tiendas, zonas, productos/presentaciones y segmentos (M02–M05).",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build -p tsconfig.build.json",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "test": "jest --testPathIgnorePatterns=test/",

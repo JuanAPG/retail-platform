@@ -11,6 +11,8 @@ import { QueryFailedError, Repository } from 'typeorm';
 import { UsuarioEntity } from '../entities/usuario.entity';
 import { RoleEntity } from '../entities/role.entity';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { paginar } from '../common/helpers/pagination.helper';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
@@ -68,9 +70,13 @@ export class UsersService {
   // CRUD (Portal Admin)
   // ---------------------------------------------------------------
 
-  async findAll() {
-    const usuarios = await this.usuariosRepo.find({ order: { nombre: 'ASC' } });
-    return usuarios.map((usuario) => this.toPublic(usuario));
+  async findAll(filtros?: PaginationDto) {
+    const qb = this.usuariosRepo
+      .createQueryBuilder('usuario')
+      .leftJoinAndSelect('usuario.rol', 'rol')
+      .orderBy('usuario.nombre', 'ASC');
+    const pagina = await paginar(qb, filtros ?? {});
+    return { ...pagina, data: pagina.data.map((usuario) => this.toPublic(usuario)) };
   }
 
   async findOne(id: string) {

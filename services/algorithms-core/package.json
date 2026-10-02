@@ -4,7 +4,7 @@
   "private": true,
   "description": "Plantilla transversal de microservicio NestJS (Sprint 2+3). Copiar a services/<nuevo>, no publicar.",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build -p tsconfig.build.json",
     "start": "nest start",
     "start:dev": "nest start --watch"
   },
