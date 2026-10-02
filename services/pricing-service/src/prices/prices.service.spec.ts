@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { PriceHistory } from '../entities/price-history.entity';
 import { PricesService } from './prices.service';
 
@@ -44,11 +45,13 @@ function crearServicio() {
     query: jest.fn(),
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
+  const audit = { reportar: jest.fn().mockResolvedValue(undefined) };
   const servicio = new PricesService(
     repo as unknown as Repository<PriceHistory>,
     dataSource as unknown as DataSource,
+    audit as unknown as AuditReporter,
   );
-  return { repo, manager, dataSource, servicio };
+  return { repo, manager, dataSource, audit, servicio };
 }
 
 /** Existen presentación y tienda; luego la consulta de detalle devuelve `detalle`. */
@@ -170,6 +173,63 @@ describe('PricesService.create', () => {
     manager.save.mockRejectedValue(new Error('conexión caída'));
 
     await expect(servicio.create(dto, usuario)).rejects.toThrow('conexión caída');
+  });
+});
+
+describe('PricesService.create — auditoría', () => {
+  it('reporta el alta con el precio anterior, el actor y la IP, después de confirmar la transacción', async () => {
+    const { dataSource, manager, audit, servicio } = crearServicio();
+    existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
+    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-08-01' });
+
+    await servicio.create(dto, usuario, '172.18.0.9');
+
+    expect(audit.reportar).toHaveBeenCalledTimes(1);
+    expect(audit.reportar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabla: 'precios',
+        registroId: 'nuevo-id',
+        accion: 'insert',
+        usuarioId: 'u-1',
+        rolId: 4,
+        ip: '172.18.0.9',
+        cambios: [
+          { campo: 'precio_anterior', previo: '40.00', posterior: null },
+          { campo: 'precio', previo: null, posterior: '42.5' },
+        ],
+      }),
+    );
+    // Se reporta solo después de que la transacción terminó.
+    expect(dataSource.transaction.mock.invocationCallOrder[0]).toBeLessThan(audit.reportar.mock.invocationCallOrder[0]);
+  });
+
+  it('el primer precio de una pareja reporta precio_anterior nulo', async () => {
+    const { dataSource, manager, audit, servicio } = crearServicio();
+    existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
+    manager.findOne.mockResolvedValue(null);
+
+    await servicio.create(dto, usuario);
+
+    expect(audit.reportar.mock.calls[0][0].cambios[0]).toEqual({ campo: 'precio_anterior', previo: null, posterior: null });
+    expect(audit.reportar.mock.calls[0][0].ip).toBeNull();
+  });
+
+  it('no reporta nada si el alta falla (validación, 409 o error de la base)', async () => {
+    const { dataSource, manager, audit, servicio } = crearServicio();
+
+    dataSource.query.mockResolvedValueOnce([]); // presentación inexistente
+    await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(BadRequestException);
+
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
+    await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
+
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    manager.findOne.mockResolvedValue(null);
+    manager.save.mockRejectedValue(errorSql('23505'));
+    await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
+
+    expect(audit.reportar).not.toHaveBeenCalled();
   });
 });
 

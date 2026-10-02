@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
@@ -42,14 +43,13 @@ function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
 }
 
-// TODO(audit): reportar el insert de cada precio a auditoría cuando se acuerde
-// con audit-service (pendiente en el contrato).
 @Injectable()
 export class PricesService {
   constructor(
     @InjectRepository(PriceHistory)
     private readonly pricesRepo: Repository<PriceHistory>,
     private readonly dataSource: DataSource,
+    private readonly audit: AuditReporter,
   ) {}
 
   /**
@@ -59,7 +59,7 @@ export class PricesService {
    * nueva vigencia) dentro de la misma transacción, porque el índice
    * único `uq_precios_vigente` no permite dos precios vigentes a la vez.
    */
-  async create(dto: CreatePriceDto, solicitante: SesionUsuario): Promise<PriceDto> {
+  async create(dto: CreatePriceDto, solicitante: SesionUsuario, ip?: string): Promise<PriceDto> {
     // Presentaciones y tiendas son de catalog-service: solo se verifica que existan.
     await this.exigirExistencia('producto_presentaciones', dto.presentationId, 'La presentación indicada no existe.');
     await this.exigirExistencia('tiendas', dto.storeId, 'La tienda indicada no existe.');
@@ -68,7 +68,7 @@ export class PricesService {
     const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
 
     try {
-      const id = await this.dataSource.transaction(async (manager) => {
+      const { id, precioPrevio } = await this.dataSource.transaction(async (manager) => {
         const vigente = await manager.findOne(PriceHistory, {
           where: { presentationId: dto.presentationId, storeId: dto.storeId, vigente: true },
         });
@@ -89,7 +89,24 @@ export class PricesService {
             createdBy: solicitante.id,
           }),
         );
-        return nuevo.id;
+        return { id: nuevo.id, precioPrevio: vigente?.price ?? null };
+      });
+
+      // Después de confirmar la transacción: la auditoría nunca rompe ni
+      // retrasa de forma notable el alta (el reporter traga sus propios errores).
+      await this.audit.reportar({
+        tabla: 'precios',
+        registroId: id,
+        accion: 'insert',
+        descripcion: `Precio registrado (${dto.price}) para presentación ${dto.presentationId} en tienda ${dto.storeId}.`,
+        // El precio anterior se cierra, no se sobrescribe: queda como previo.
+        cambios: [
+          { campo: 'precio_anterior', previo: precioPrevio, posterior: null },
+          { campo: 'precio', previo: null, posterior: String(dto.price) },
+        ],
+        usuarioId: solicitante.id,
+        rolId: solicitante.rolId,
+        ip: ip ?? null,
       });
 
       const [creado] = await this.detallar([id]);

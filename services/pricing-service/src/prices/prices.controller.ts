@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Ip, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,8 +31,8 @@ export class PricesController {
   })
   @ApiRespuesta(201, 'Precio registrado, ya vigente.', muestras.precio)
   @ApiErrores(400, 401, 403, 409)
-  create(@Body() dto: CreatePriceDto, @CurrentUser() usuario: SesionUsuario) {
-    return this.pricesService.create(dto, usuario);
+  create(@Body() dto: CreatePriceDto, @CurrentUser() usuario: SesionUsuario, @Ip() ip: string) {
+    return this.pricesService.create(dto, usuario, ip);
   }
 
   @Get('history')
