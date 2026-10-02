@@ -28,13 +28,43 @@ npm run start:dev
 curl localhost:3102/v1/health
 ```
 
-Swagger en `http://localhost:3102/docs`.
+## Swagger
+
+`http://localhost:3102/docs` (JSON crudo en `/docs-json`). Cada ruta lleva ejemplo de
+respuesta en **JSON y XML** y sus errores estándar. El XML de ejemplo se genera desde el
+ejemplo JSON con la misma lógica del `XmlInterceptor` (`src/common/swagger/ejemplos.ts`),
+así que no se escribe a mano. Los datos de ejemplo viven en `src/common/swagger/muestras.ts`.
+
+Una ruta nueva se documenta con `@ApiOperation`, `@ApiRespuesta(status, descripcion, ejemplo)`
+y `@ApiErrores(...)`; la prueba `test/swagger.spec.ts` falla si falta alguna.
+
+Para probar rutas protegidas desde Swagger: **Authorize** con el `accessToken` de
+`POST http://localhost:3101/v1/auth/login`.
+
+## Docker
+
+- **Desarrollo / demo** (lo usa `infra/docker-compose.yml`): imagen `node:20` con la carpeta
+  montada y `npm run start:dev`. Necesita postgres y redis arriba; la primera vez tarda ~1 min
+  por el `npm install`.
+  ```bash
+  docker compose -f infra/docker-compose.yml up -d catalog-service
+  ```
+- **Producción** (GCP, Parcial 3): el `Dockerfile` de esta carpeta, multi-etapa; arranca con
+  `node dist/main.js`. El `.dockerignore` evita enviar `node_modules` al contexto de build.
+  ```bash
+  docker build -t catalog-service .
+  docker run --network <red-de-compose> -p 3102:3102 -e PORT=3102 -e SERVICE_NAME=catalog-service \
+    -e JWT_ACCESS_SECRET=... -e REDIS_HOST=redis -e DB_HOST=postgres -e DB_USER=... \
+    -e DB_PASSWORD=... -e DB_NAME=retaildb catalog-service
+  ```
 
 ## Pruebas
 
 ```bash
 npm test                 # unitarias
-npm run test:integracion # integración (contra Postgres y Redis reales)
+npm run test:integracion # integración: requiere el servicio, Postgres y Redis arriba
+# contra otro host/puerto (p. ej. la imagen de producción en el 3112):
+CATALOG_BASE_URL=http://localhost:3112 npm run test:integracion
 ```
 
 ## Datos
