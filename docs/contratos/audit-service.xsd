@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de audit-service (Fase A). Espacio de nombres fijo `audit/v1`. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="audit/v1"
+           xmlns:audit="audit/v1"
+           elementFormDefault="qualified">
+
+  <xs:element name="eventoRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="tabla" type="xs:string"/>
+        <xs:element name="registroId" type="xs:string" minOccurs="0"/>
+        <xs:element name="accion" type="audit:accion"/>
+        <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+        <xs:element name="cambios" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="cambio" type="audit:cambio" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="usuarioId" type="xs:string" minOccurs="0"/>
+        <xs:element name="rolId" type="xs:integer" minOccurs="0"/>
+        <xs:element name="ip" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="accion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="insert"/>
+      <xs:enumeration value="update"/>
+      <xs:enumeration value="delete"/>
+      <xs:enumeration value="login"/>
+      <xs:enumeration value="importacion"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="cambio">
+    <xs:sequence>
+      <xs:element name="campo" type="xs:string"/>
+      <xs:element name="previo" type="xs:string" minOccurs="0"/>
+      <xs:element name="posterior" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
