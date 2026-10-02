@@ -9,12 +9,17 @@
  * ella y al final borra lo que creó: el historial del seed no se toca.
  * `precios.creado_por` es llave foránea a `usuarios`, por eso el token del
  * Responsable de precios usa el id de un usuario real (se busca con `pg`).
+ *
+ * También verifica que cada alta quede en la bitácora de audit-service, que debe
+ * estar arriba (`docker compose up -d audit-service`). La bitácora es append-only:
+ * esos eventos se quedan, y las aserciones filtran por el id del precio creado.
  */
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
+const AUDIT_BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
 const SECRET = process.env.JWT_ACCESS_SECRET ?? 'dev_access_secret_solo_para_local';
 
 const redis = new Redis({
@@ -51,9 +56,27 @@ async function http(metodo: string, ruta: string, token?: string, cuerpo?: objec
   return { estado: respuesta.status, cuerpo: !accept && texto ? JSON.parse(texto) : null, texto };
 }
 
+type EventoAuditoria = {
+  accion: string;
+  usuarioId: string | null;
+  tablaAfectada: string;
+  cambios: { campo: string; valorPrevio: string | null; valorPosterior: string | null }[];
+};
+
+/** Eventos de la bitácora de audit-service (`GET /v1/auditoria`) para `precios`. */
+async function bitacora(token: string, registroId?: string): Promise<{ total: number; data: EventoAuditoria[] }> {
+  const filtro = registroId ? `&registroId=${registroId}` : '';
+  const r = await fetch(`${AUDIT_BASE}/v1/auditoria?tabla=precios&limit=1${filtro}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(r.status).toBe(200);
+  return r.json();
+}
+
 describe('/v1/prices (integración, requiere stack)', () => {
   let precios: string; // Responsable de precios (usuario real)
   let admin: string;
+  let auditor: string;
   let planeador: string;
   let proveedor: string;
   let presentationId: string;
@@ -80,6 +103,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
     precios = await sesion(await usuarioReal('Responsable de precios'), 'Responsable de precios');
     admin = await sesion(await usuarioReal('Administrador'), 'Administrador');
     planeador = await sesion('it-pr-planeador', 'Planeador');
+    auditor = await sesion('it-pr-auditor', 'Auditor');
     proveedor = await sesion('it-pr-prov', 'Proveedor');
 
     // Una pareja presentación+tienda sin ningún precio en el seed.
@@ -141,9 +165,28 @@ describe('/v1/prices (integración, requiere stack)', () => {
     });
     expect(primero.cuerpo.createdBy).toBeTruthy();
 
+    // Quedó en la bitácora: insert, con el actor del token y sin precio anterior.
+    const eventoUno = await bitacora(auditor, primero.cuerpo.id);
+    expect(eventoUno.total).toBe(1);
+    expect(eventoUno.data[0]).toMatchObject({
+      accion: 'insert',
+      tablaAfectada: 'precios',
+      usuarioId: primero.cuerpo.createdBy,
+    });
+    expect(eventoUno.data[0].cambios).toEqual(
+      expect.arrayContaining([expect.objectContaining({ campo: 'precio', valorPosterior: '40' })]),
+    );
+
     const segundo = await http('POST', '/v1/prices', admin, alta(42.5, '2026-02-20'));
     expect(segundo.estado).toBe(201);
     expect(segundo.cuerpo).toMatchObject({ price: '42.50', vigente: true });
+
+    // El segundo evento conserva el precio que se cerró.
+    const eventoDos = await bitacora(auditor, segundo.cuerpo.id);
+    expect(eventoDos.total).toBe(1);
+    expect(eventoDos.data[0].cambios).toEqual(
+      expect.arrayContaining([expect.objectContaining({ campo: 'precio_anterior', valorPrevio: '40.00' })]),
+    );
 
     const historial = await http('GET', `/v1/prices/history?productId=${productId}&presentationId=${presentationId}`, planeador);
     expect(historial.estado).toBe(200);
@@ -153,9 +196,13 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(viejo).toMatchObject({ price: '40.00', effectiveDate: '2026-01-10', effectiveUntil: '2026-02-19', vigente: false });
   });
 
-  it('no permite registrar hacia atrás ni el mismo día del vigente (409)', async () => {
+  it('no permite registrar hacia atrás ni el mismo día del vigente (409), y no deja evento en la bitácora', async () => {
+    const eventosAntes = (await bitacora(auditor)).total;
+
     expect((await http('POST', '/v1/prices', precios, alta(50, '2026-02-20'))).estado).toBe(409);
     expect((await http('POST', '/v1/prices', precios, alta(50, '2026-01-01'))).estado).toBe(409);
+
+    expect((await bitacora(auditor)).total).toBe(eventosAntes);
 
     const historial = await http('GET', `/v1/prices/history?productId=${productId}&presentationId=${presentationId}`, precios);
     expect(historial.cuerpo.total).toBe(2); // los intentos fallidos no escribieron nada
