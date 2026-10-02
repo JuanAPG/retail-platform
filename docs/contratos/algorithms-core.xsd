@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de algorithms-core (Fase A). Espacio de nombres fijo `algorithms/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`.
+     Secciones: association (M10), elasticity y substitution (M11).
+
+     Convenciones de este esquema:
+     - Objetos con xs:all: los campos pueden llegar en cualquier orden (salen del
+       orden de llaves del objeto JS, que no es parte del contrato).
+     - Todo arreglo se envuelve en <item> por elemento (ver paginacion.md);
+       arreglo vacío = elemento vacío.
+     - Un null sale como elemento vacío (<lift/>): los campos que admiten null
+       usan los tipos *OrEmpty. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="algorithms/v1"
+           xmlns:alg="algorithms/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== Tipos simples ===== -->
+
+  <xs:simpleType name="empty">
+    <xs:restriction base="xs:string">
+      <xs:length value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="decimalOrEmpty">
+    <xs:union memberTypes="xs:decimal alg:empty"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="integerOrEmpty">
+    <xs:union memberTypes="xs:integer alg:empty"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="runStatus">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="completada"/>
+      <xs:enumeration value="fallida"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ruleSide">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="antecedente"/>
+      <xs:enumeration value="consecuente"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="filterDimension">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="tienda"/>
+      <xs:enumeration value="zona"/>
+      <xs:enumeration value="segmento"/>
+      <xs:enumeration value="categoria"/>
+      <xs:enumeration value="producto"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="elasticityClass">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="elastic"/>
+      <xs:enumeration value="inelastic"/>
+      <xs:enumeration value="unitary"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="elasticityClassOrEmpty">
+    <xs:union memberTypes="alg:elasticityClass alg:empty"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="granularity">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="day"/>
+      <xs:enumeration value="week"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="chartGrouping">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="zone"/>
+      <xs:enumeration value="segment"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="substitutionType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="precio"/>
+      <xs:enumeration value="preferencia"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Mismos rangos que AprioriParamsDto. -->
+  <xs:simpleType name="minSupport">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0.01"/>
+      <xs:maxInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="minConfidence">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="maxItemsetSize">
+    <xs:restriction base="xs:integer">
+      <xs:minInclusive value="2"/>
+      <xs:maxInclusive value="4"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="stringList">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== /v1/association (M10) ===== -->
+
+  <xs:complexType name="runUser">
+    <!-- Vacío (<user/>) si la corrida no tiene usuario. -->
+    <xs:all>
+      <xs:element name="id" type="xs:string" minOccurs="0"/>
+      <xs:element name="nombre" type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="runParameter">
+    <xs:all>
+      <xs:element name="runId" type="xs:string"/>
+      <xs:element name="key" type="xs:string"/>
+      <xs:element name="value" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="runParameterList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:runParameter" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="runAssumption">
+    <xs:all>
+      <xs:element name="runId" type="xs:string"/>
+      <xs:element name="order" type="xs:integer"/>
+      <xs:element name="assumption" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="runAssumptionList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:runAssumption" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="runFilter">
+    <xs:all>
+      <xs:element name="runId" type="xs:string"/>
+      <xs:element name="dimension" type="alg:filterDimension"/>
+      <xs:element name="referenceId" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="runFilterList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:runFilter" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ruleProduct">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="sku" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="categoriaId" type="xs:integer"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ruleItem">
+    <xs:all>
+      <xs:element name="ruleId" type="xs:string"/>
+      <xs:element name="productId" type="xs:string"/>
+      <xs:element name="side" type="alg:ruleSide"/>
+      <xs:element name="product" type="alg:ruleProduct"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ruleItemList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:ruleItem" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="rule">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="runId" type="xs:string"/>
+      <xs:element name="support" type="xs:decimal"/>
+      <xs:element name="confidence" type="xs:decimal"/>
+      <xs:element name="lift" type="alg:decimalOrEmpty"/>
+      <xs:element name="transactionCount" type="alg:integerOrEmpty"/>
+      <!-- El antecedente es un CONJUNTO: varios ítems con side=antecedente. -->
+      <xs:element name="items" type="alg:ruleItemList"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ruleList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:rule" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="run">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="type" type="xs:string"/>
+      <xs:element name="status" type="alg:runStatus"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="user" type="alg:runUser"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="periodStart" type="xs:date"/>
+      <xs:element name="periodEnd" type="xs:date"/>
+      <xs:element name="transactionsConsidered" type="alg:integerOrEmpty"/>
+      <xs:element name="basketsConsidered" type="alg:integerOrEmpty"/>
+      <xs:element name="errorMessage" type="xs:string"/>
+      <xs:element name="parameters" type="alg:runParameterList"/>
+      <!-- Solo en GET /v1/association/runs/:id -->
+      <xs:element name="assumptions" type="alg:runAssumptionList" minOccurs="0"/>
+      <xs:element name="filters" type="alg:runFilterList" minOccurs="0"/>
+      <xs:element name="results" type="alg:ruleList" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- POST /v1/association/apriori/run -->
+  <xs:element name="aprioriRunRequest">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="minSupport" type="alg:minSupport"/>
+        <xs:element name="minConfidence" type="alg:minConfidence"/>
+        <xs:element name="maxItemsetSize" type="alg:maxItemsetSize" minOccurs="0"/>
+        <xs:element name="storeId" type="xs:string" minOccurs="0"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="segmentId" type="xs:positiveInteger" minOccurs="0"/>
+        <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
+        <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Arreglo plano de reglas (sin paginar). -->
+  <xs:element name="aprioriRunResponse" type="alg:ruleList"/>
+
+  <!-- GET /v1/association/runs (paginado) -->
+  <xs:element name="runListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="alg:run" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/association/runs/:id -->
+  <xs:element name="runResponse" type="alg:run"/>
+
+  <!-- ===== /v1/elasticity (M11) ===== -->
+
+  <xs:complexType name="elasticityResultItem">
+    <xs:all>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="productName" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
+      <!-- Vacío = agregado nacional (zoneName "Nacional"). -->
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="value" type="xs:decimal"/>
+      <xs:element name="classification" type="alg:elasticityClass"/>
+      <xs:element name="rSquared" type="alg:decimalOrEmpty"/>
+      <xs:element name="observations" type="xs:integer"/>
+      <xs:element name="atypical" type="xs:boolean"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="elasticityResultList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:elasticityResultItem" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="insufficientElasticity">
+    <xs:all>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="productName" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="observations" type="xs:integer"/>
+      <xs:element name="distinctPrices" type="xs:integer"/>
+      <xs:element name="reason" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="insufficientElasticityList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:insufficientElasticity" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/elasticity/calculate -->
+  <xs:element name="elasticityCalculateRequest">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="presentationId" type="xs:string" minOccurs="0"/>
+        <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
+        <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
+        <xs:element name="granularity" type="alg:granularity" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="elasticityCalculateResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="runId" type="xs:string"/>
+        <xs:element name="periodStart" type="xs:date"/>
+        <xs:element name="periodEnd" type="xs:date"/>
+        <xs:element name="granularity" type="alg:granularity"/>
+        <xs:element name="results" type="alg:elasticityResultList"/>
+        <xs:element name="insufficient" type="alg:insufficientElasticityList"/>
+        <xs:element name="assumptions" type="alg:stringList"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/elasticity/chart (agregado, sin paginar) -->
+  <xs:complexType name="chartBar">
+    <xs:all>
+      <xs:element name="key" type="xs:string"/>
+      <xs:element name="label" type="xs:string"/>
+      <!-- value, classification y rSquared vacíos = sin datos suficientes. -->
+      <xs:element name="value" type="alg:decimalOrEmpty"/>
+      <xs:element name="classification" type="alg:elasticityClassOrEmpty"/>
+      <xs:element name="observations" type="xs:integer"/>
+      <xs:element name="rSquared" type="alg:decimalOrEmpty"/>
+      <!-- Solo con groupBy=segment: zonas que se promediaron. -->
+      <xs:element name="zones" type="alg:stringList" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="chartBarList">
+    <xs:sequence>
+      <xs:element name="item" type="alg:chartBar" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="chartNational">
+    <!-- Vacío (<national/>) si el agregado nacional no tuvo datos suficientes. -->
+    <xs:all>
+      <xs:element name="value" type="alg:decimalOrEmpty" minOccurs="0"/>
+      <xs:element name="classification" type="alg:elasticityClassOrEmpty" minOccurs="0"/>
+      <xs:element name="observations" type="xs:integer" minOccurs="0"/>
+      <xs:element name="rSquared" type="alg:decimalOrEmpty" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="elasticityChartResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="runId" type="xs:string"/>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="productName" type="xs:string"/>
+        <xs:element name="presentationName" type="xs:string"/>
+        <xs:element name="groupBy" type="alg:chartGrouping"/>
+        <xs:element name="executedAt" type="xs:dateTime"/>
+        <xs:element name="granularity" type="alg:granularity"/>
+        <xs:element name="periodStart" type="xs:date"/>
+        <xs:element name="periodEnd" type="xs:date"/>
+        <xs:element name="bars" type="alg:chartBarList"/>
+        <xs:element name="national" type="alg:chartNational"/>
+        <xs:element name="note" type="xs:string"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/elasticity/current (paginado) -->
+  <xs:complexType name="currentElasticity">
+    <xs:all>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="productName" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
+      <!-- Vacío = agregado nacional (zoneName "Nacional"). -->
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="value" type="xs:decimal"/>
+      <xs:element name="classification" type="alg:elasticityClass"/>
+      <xs:element name="rSquared" type="alg:decimalOrEmpty"/>
+      <xs:element name="observations" type="xs:integer"/>
+      <xs:element name="runId" type="xs:string"/>
+      <xs:element name="executedAt" type="xs:dateTime"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="currentElasticityListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="alg:currentElasticity" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/substitution (M11) ===== -->
+
+  <xs:complexType name="substitutionPattern">
+    <xs:all>
+      <xs:element name="originProductId" type="xs:string"/>
+      <xs:element name="originProductName" type="xs:string"/>
+      <xs:element name="targetProductId" type="xs:string"/>
+      <xs:element name="targetProductName" type="xs:string"/>
+      <xs:element name="type" type="alg:substitutionType"/>
+      <xs:element name="score" type="xs:decimal"/>
+      <xs:element name="lift" type="xs:decimal"/>
+      <xs:element name="priceCorrelation" type="alg:decimalOrEmpty"/>
+      <xs:element name="observations" type="xs:integer"/>
+      <xs:element name="periodStart" type="xs:date"/>
+      <xs:element name="periodEnd" type="xs:date"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- GET /v1/substitution/patterns: arreglo plano (al vuelo, sin paginar). -->
+  <xs:element name="substitutionPatternListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="alg:substitutionPattern" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Error estándar ===== -->
+
+  <xs:simpleType name="errorCode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <!-- Texto, o lista de <item> cuando son varios errores de validación. -->
+        <xs:element name="message">
+          <xs:complexType mixed="true">
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="code" type="alg:errorCode"/>
+        <xs:element name="details" type="xs:anyType" minOccurs="0"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

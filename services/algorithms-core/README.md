@@ -1,36 +1,74 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# algorithms-core
 
-Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
-modifica por servicio**, solo se agregan módulos de negocio.
+Algoritmos de la plataforma: reglas de asociación con Apriori (M10), elasticidad
+precio-demanda y patrones de sustitución (M11), extraídos del monolito `api/` sin
+reescribirlos. Puerto **3105**.
+Contrato: [`docs/contratos/algorithms-core.md`](../../docs/contratos/algorithms-core.md) y `.xsd`.
 
-## Qué trae resuelto
+Parte de la plantilla `template-nest` (health, error estándar, logging, XML por `Accept`,
+`SessionGuard` con JWT + Redis); eso **no se modifica**. Aquí se agregan solo los módulos
+de negocio.
 
-- `GET /v1/health` sin auth (`src/health/`)
-- Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
-- `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
-  (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
+## Estado de la migración
 
-## Cómo copiarme a un servicio nuevo (5 pasos)
+| Módulo | Rutas | Estado |
+|---|---|---|
+| Base del servicio | `/v1/health` | listo: Postgres, roles (`RolesGuard`, `@Roles`, `@CurrentUser`) y jest |
+| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/runs`, `/v1/association/runs/:id` | pendiente (Fase B) |
+| Elasticidad (M11) | `/v1/elasticity/calculate`, `/v1/elasticity/chart`, `/v1/elasticity/current` | pendiente (Fase B) |
+| Sustitución (M11) | `/v1/substitution/patterns` | pendiente (Fase B) |
 
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
+## Levantarlo solo
 
-## Probarla sola
+Requiere Postgres con `db/schema.sql` aplicado y Redis (ver `infra/docker-compose.yml`).
 
 ```bash
 npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
+cp .env.example .env     # PORT=3105, DB_* y REDIS_* de localhost
+npm run start:dev
+curl localhost:3105/v1/health
+curl -H 'Accept: application/xml' localhost:3105/v1/health
 ```
+
+## Swagger
+
+`http://localhost:3105/docs` (JSON crudo en `/docs-json`). Para probar rutas protegidas:
+**Authorize** con el `accessToken` de `POST http://localhost:3101/v1/auth/login`.
+
+## Docker
+
+- **Desarrollo / demo** (lo usa `infra/docker-compose.yml`): imagen `node:20` con la carpeta
+  montada y `npm run start:dev`. Necesita postgres y redis arriba; la primera vez tarda ~1 min
+  por el `npm install`.
+  ```bash
+  docker compose -f infra/docker-compose.yml up -d postgres redis algorithms-core
+  ```
+- **Producción** (GCP, Parcial 3): el `Dockerfile` de esta carpeta, multi-etapa; arranca con
+  `node dist/main.js` y solo dependencias de producción. El `.dockerignore` evita enviar
+  `node_modules` al contexto de build.
+  ```bash
+  docker build -t algorithms-core .
+  docker run --network retail-platform_retail_net -p 3105:3105 -e PORT=3105 \
+    -e SERVICE_NAME=algorithms-core -e JWT_ACCESS_SECRET=dev_access_secret_solo_para_local \
+    -e REDIS_HOST=redis -e DB_HOST=postgres -e DB_USER=retail_user \
+    -e DB_PASSWORD=retail_pass_2026 -e DB_NAME=retaildb algorithms-core
+  ```
+
+## Pruebas
+
+```bash
+npm test                 # unitarias (*.spec.ts dentro de src/)
+npm run test:integracion # integración (Fase D): requiere el servicio, auth, Postgres y Redis arriba
+```
+
+## Datos
+
+Postgres compartido, `synchronize: false`, `db/schema.sql` es la fuente de verdad. Este
+servicio solo escribe sus tablas: `analisis_corridas` y sus hijas
+(`analisis_corrida_parametros`, `analisis_corrida_supuestos`, `analisis_corrida_filtros`),
+`reglas_asociacion`, `regla_asociacion_items`, `reglas_exclusion_asociacion` y
+`elasticidades`.
+
+Lo que lee de otros servicios (canastas de core-process, precios de pricing, catálogo de
+catalog) está en la sección *Lo que consume algorithms-core* del contrato: en Fase B por
+SQL de solo lectura, en Fase C por HTTP.
