@@ -1,36 +1,29 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# audit-service — bitácora y consultas históricas (Sprint 2+3)
 
-Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
-modifica por servicio**, solo se agregan módulos de negocio.
+Dueño de `auditoria` y `auditoria_cambios` (Postgres compartido, solo
+escribe sus tablas). Parte de la plantilla transversal: health, error
+estándar, logging, XML y `SessionGuard` ya vienen resueltos.
 
-## Qué trae resuelto
+## Endpoints (`/v1/`, JSON y XML)
 
-- `GET /v1/health` sin auth (`src/health/`)
-- Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
-- `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
-  (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/v1/auditoria` | ninguna (red privada) | Registra un evento → `201 {id}`. Sin guard a propósito: la auditoría nunca bloquea al reportero |
+| `GET` | `/v1/auditoria` | SessionGuard, Administrador y Auditor | Bitácora paginada `{data,total,page,limit}` con filtros `tabla, registroId, usuarioId, accion, dateFrom, dateTo` |
 
-## Cómo copiarme a un servicio nuevo (5 pasos)
+Contrato con ejemplos: `docs/contratos/audit-service.md` + `audit-service.xsd`.
+`Historial por entidad` = `GET /v1/auditoria?tabla=X&registroId=Y`.
 
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
-
-## Probarla sola
+## Correr y probar
 
 ```bash
 npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
+PORT=3110 SERVICE_NAME=audit-service npm run start:dev
+npm test                                   # unitarias (sin infra)
+npm run test:integracion                   # requiere stack (VM)
 ```
+
+Diferencias con M15: rutas bajo `/v1/`, `AuditFilterDto` extiende el
+`PaginationDto` transversal, `POST` de eventos para llamadas entre
+servicios (misma forma que espera el `AuditReporter` de auth-service) y
+`bcryptjs` no aplica aquí (sin passwords en este servicio).

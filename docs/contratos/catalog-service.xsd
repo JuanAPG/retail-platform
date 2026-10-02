@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de catalog-service (Fase A). Espacio de nombres fijo `catalog/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`.
+     Secciones: segments, municipalities, zones, stores, products y presentations. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="catalog/v1"
+           xmlns:cat="catalog/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== /v1/segments ===== -->
+
+  <xs:complexType name="segment">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="incomeRangeMin" type="xs:decimal"/>
+      
+      <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="updateFrequency" type="xs:string"/>
+      <xs:element name="zoneRelation" type="xs:string"/>
+      <xs:element name="limitations" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="segmentRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="name" type="xs:string"/>
+        <xs:element name="incomeRangeMin" type="xs:decimal"/>
+        <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+        <xs:element name="source" type="xs:string"/>
+        <xs:element name="updateFrequency" type="xs:string"/>
+        <xs:element name="zoneRelation" type="xs:string"/>
+        <xs:element name="limitations" type="xs:string"/>
+        <xs:element name="description" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="segmentResponse" type="cat:segment"/>
+
+  <xs:element name="segmentListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:segment" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/municipalities y /v1/zones ===== -->
+
+  <xs:complexType name="municipality">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="nombre" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/municipalities (arreglo plano, sin paginar) -->
+  <xs:element name="municipalityListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:municipality" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="zone">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="municipioId" type="xs:integer"/>
+      <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="municipio" type="cat:municipality"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/zones y PATCH /v1/zones/:id (PATCH: todos opcionales, más activo) -->
+  <xs:element name="zoneRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="municipioId" type="xs:integer"/>
+        <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+        <xs:element name="activo" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="zoneResponse" type="cat:zone"/>
+
+  <xs:element name="zoneListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:zone" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/zones/compare (arreglo plano; null = indicador aún no calculado) -->
+  <xs:complexType name="zoneComparisonRow">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="municipality" type="xs:string"/>
+      <xs:element name="classification" type="xs:string" minOccurs="0"/>
+      <xs:element name="estimatedIncome" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="population" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="availability" type="xs:decimal" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="zoneCompareResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:zoneComparisonRow" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/stores ===== -->
+
+  <xs:simpleType name="storeFormat">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="supermercado"/>
+      <xs:enumeration value="minimarket"/>
+      <xs:enumeration value="tienda_conveniencia"/>
+      <xs:enumeration value="mayorista"/>
+      <xs:enumeration value="otro"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="postalCode">
+    <xs:sequence>
+      <xs:element name="codigoPostal" type="xs:string"/>
+      <xs:element name="municipioId" type="xs:integer"/>
+      <xs:element name="municipio" type="cat:municipality"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/stores/catalog/postal-codes (arreglo plano, sin paginar) -->
+  <xs:element name="postalCodeListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:postalCode" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="address">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="calle" type="xs:string"/>
+      <xs:element name="numeroExterior" type="xs:string" minOccurs="0"/>
+      <xs:element name="numeroInterior" type="xs:string" minOccurs="0"/>
+      <xs:element name="colonia" type="xs:string" minOccurs="0"/>
+      <xs:element name="codigoPostal" type="xs:string"/>
+      <xs:element name="referencia" type="xs:string" minOccurs="0"/>
+      <xs:element name="latitud" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="longitud" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="codigoPostalRef" type="cat:postalCode"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Solo lectura: el catálogo de proveedores es de auth-service -->
+  <xs:complexType name="supplier">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="razonSocial" type="xs:string"/>
+      <xs:element name="rfc" type="xs:string" minOccurs="0"/>
+      <xs:element name="contactoNombre" type="xs:string" minOccurs="0"/>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="telefono" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="store">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="direccionId" type="xs:string"/>
+      <xs:element name="zonaId" type="xs:string"/>
+      <xs:element name="proveedorId" type="xs:string" minOccurs="0"/>
+      <xs:element name="formato" type="cat:storeFormat"/>
+      <xs:element name="numeroSucursal" type="xs:string" minOccurs="0"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="direccion" type="cat:address"/>
+      <xs:element name="zona" type="cat:zone"/>
+      <xs:element name="proveedor" type="cat:supplier" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/stores (obligatorios: nombre, formato, zonaId, calle, codigoPostal).
+       PATCH /v1/stores/:id: todos opcionales, más activo. -->
+  <xs:element name="storeRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="formato" type="cat:storeFormat"/>
+        <xs:element name="zonaId" type="xs:string"/>
+        <xs:element name="numeroSucursal" type="xs:string" minOccurs="0"/>
+        <xs:element name="proveedorId" type="xs:string" minOccurs="0"/>
+        <xs:element name="calle" type="xs:string"/>
+        <xs:element name="numeroExterior" type="xs:string" minOccurs="0"/>
+        <xs:element name="numeroInterior" type="xs:string" minOccurs="0"/>
+        <xs:element name="colonia" type="xs:string" minOccurs="0"/>
+        <xs:element name="codigoPostal" type="xs:string"/>
+        <xs:element name="activo" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="storeResponse" type="cat:store"/>
+
+  <xs:element name="storeListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:store" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/products, /v1/presentations y catálogos de producto ===== -->
+
+  <xs:simpleType name="productStatus">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pendiente_aprobacion"/>
+      <xs:enumeration value="activo"/>
+      <xs:enumeration value="rechazado"/>
+      <xs:enumeration value="inactivo"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="category">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="categoriaPadreId" type="xs:integer" minOccurs="0"/>
+      <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="unit">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="clave" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="tipo" type="xs:string"/>
+      <xs:element name="factorBase" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/product-categories (arreglo plano, sin paginar) -->
+  <xs:element name="categoryListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:category" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/units (arreglo plano, sin paginar) -->
+  <xs:element name="unitListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:unit" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/providers (paginado) -->
+  <xs:element name="supplierListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:supplier" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="presentation">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="productoId" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="contenido" type="xs:decimal"/>
+      <xs:element name="unidadMedidaId" type="xs:integer"/>
+      <xs:element name="codigoBarras" type="xs:string" minOccurs="0"/>
+      <xs:element name="esPredeterminada" type="xs:boolean"/>
+      <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="unidadMedida" type="cat:unit"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="product">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="sku" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+      <xs:element name="categoriaId" type="xs:integer"/>
+      <xs:element name="esCanastaBasica" type="xs:boolean"/>
+      <xs:element name="estatus" type="cat:productStatus"/>
+      <xs:element name="proveedorId" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="updatedAt" type="xs:dateTime"/>
+      <xs:element name="categoria" type="cat:category"/>
+      <xs:element name="proveedor" type="cat:supplier" minOccurs="0"/>
+      <xs:element name="presentaciones">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="cat:presentation" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/products (alta directa) y POST /v1/products/proposals
+       (propuesta del Proveedor: sin esCanastaBasica) -->
+  <xs:element name="productRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="sku" type="xs:string"/>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+        <xs:element name="categoriaId" type="xs:integer"/>
+        <xs:element name="esCanastaBasica" type="xs:boolean" minOccurs="0"/>
+        <xs:element name="presentacion" type="xs:string"/>
+        <xs:element name="contenido" type="xs:decimal"/>
+        <xs:element name="unidadMedida" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/products/:id (todos opcionales; sin estatus) -->
+  <xs:element name="productUpdateRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string" minOccurs="0"/>
+        <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+        <xs:element name="categoriaId" type="xs:integer" minOccurs="0"/>
+        <xs:element name="esCanastaBasica" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/products/:id/reject -->
+  <xs:element name="productRejectRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="motivoRechazo">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="10"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/products/:id, POST (201), PATCH, approve y reject (200) -->
+  <xs:element name="productResponse" type="cat:product"/>
+
+  <!-- GET /v1/products y GET /v1/products/pending (paginados) -->
+  <xs:element name="productListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:product" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/products/:id/presentations -->
+  <xs:element name="presentationRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="contenido" type="xs:decimal"/>
+        <xs:element name="unidadMedida" type="xs:string"/>
+        <xs:element name="codigoBarras" type="xs:string" minOccurs="0"/>
+        <xs:element name="esPredeterminada" type="xs:boolean" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="presentationResponse" type="cat:presentation"/>
+
+  <!-- GET /v1/products/:id/presentations (arreglo plano, sin paginar) -->
+  <xs:element name="presentationListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="cat:presentation" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
