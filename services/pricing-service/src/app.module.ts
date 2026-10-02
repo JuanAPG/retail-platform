@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { PricesModule } from './prices/prices.module';
 
 /**
  * pricing-service: histórico versionado de precios por presentación y
@@ -20,6 +21,7 @@ import { SessionGuard } from './common/auth/session.guard';
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    PricesModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
