@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { CacheService } from '../common/cache/cache.service';
 import { MunicipioEntity } from '../entities/municipio.entity';
 import { ZonaEntity } from '../entities/zona.entity';
 import { ZonesController } from './zones.controller';
@@ -15,7 +16,7 @@ import { ZonesService } from './zones.service';
 @Module({
   imports: [TypeOrmModule.forFeature([ZonaEntity, MunicipioEntity]), JwtModule.register({})],
   controllers: [ZonesController],
-  providers: [ZonesService, SessionGuard],
+  providers: [ZonesService, SessionGuard, CacheService],
   exports: [ZonesService],
 })
 export class ZonesModule {}
