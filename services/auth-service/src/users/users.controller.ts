@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -18,6 +19,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ROL } from '../common/roles';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { UsersService } from './users.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
@@ -35,8 +37,8 @@ export class UsersController {
 
   @Get()
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() filtros: PaginationDto) {
+    return this.usersService.findAll(filtros);
   }
 
   @Get(':id')
