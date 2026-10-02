@@ -249,9 +249,10 @@ export class PricesService {
   /**
    * Arma la forma del contrato (precio + resumen de presentación y tienda)
    * para los ids dados, conservando su orden. Una sola consulta con joins a
-   * las tablas de catalog-service, que aquí solo se leen.
+   * las tablas de catalog-service, que aquí solo se leen. Es pública porque la
+   * aprobación de propuestas de precio devuelve los precios que crea.
    */
-  private async detallar(ids: string[]): Promise<PriceDto[]> {
+  async detallar(ids: string[]): Promise<PriceDto[]> {
     if (ids.length === 0) return [];
     const filas: Record<string, unknown>[] = await this.dataSource.query(
       `

@@ -6,6 +6,7 @@ import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 import { PricesModule } from './prices/prices.module';
+import { PriceProposalsModule } from './price-proposals/price-proposals.module';
 
 /**
  * pricing-service: histórico versionado de precios por presentación y
@@ -22,6 +23,7 @@ import { PricesModule } from './prices/prices.module';
     }),
     JwtModule.register({}),
     PricesModule,
+    PriceProposalsModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
