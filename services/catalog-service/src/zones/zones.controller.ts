@@ -12,12 +12,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { isUUID } from 'class-validator';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
+import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
+import { muestras } from '../common/swagger/muestras';
 import { ZonesService } from './zones.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
@@ -37,12 +39,18 @@ export class ZonesController {
 
   @Get('zones')
   @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Lista paginada de zonas, por nombre.' })
+  @ApiRespuesta(200, 'Página de zonas.', pagina([muestras.zona]))
+  @ApiErrores(400, 401, 403)
   findAll(@Query() filtros: ZoneFilterDto) {
     return this.zonesService.findAll(filtros);
   }
 
   @Get('municipalities')
   @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Catálogo de municipios (arreglo plano, sin paginar).' })
+  @ApiRespuesta(200, 'Municipios ordenados por nombre.', [muestras.municipio])
+  @ApiErrores(401, 403)
   findMunicipalities() {
     return this.zonesService.findMunicipalities();
   }
@@ -51,7 +59,12 @@ export class ZonesController {
   // interprete como un id de zona.
   @Get('zones/compare')
   @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Compara zonas por clasificación vigente e indicadores (solo lectura, sin paginar).' })
   @ApiQuery({ name: 'ids', required: true, description: 'Ids de zona (UUID) separados por coma.' })
+  @ApiRespuesta(200, 'Una fila por zona; los indicadores son null si Analítica aún no los calculó.', [
+    muestras.comparacionZona,
+  ])
+  @ApiErrores(400, 401, 403, 404)
   compareZones(@Query('ids') ids?: string) {
     const zoneIds = (ids ?? '')
       .split(',')
@@ -69,18 +82,27 @@ export class ZonesController {
 
   @Get('zones/:id')
   @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({ summary: 'Detalle de una zona.' })
+  @ApiRespuesta(200, 'La zona.', muestras.zona)
+  @ApiErrores(400, 401, 403, 404)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.zonesService.findOne(id);
   }
 
   @Post('zones')
   @Roles(ROL.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Crea una zona (solo Administrador).' })
+  @ApiRespuesta(201, 'Zona creada, activa.', muestras.zona)
+  @ApiErrores(400, 401, 403, 409)
   create(@Body() dto: CreateZoneDto) {
     return this.zonesService.create(dto);
   }
 
   @Patch('zones/:id')
   @Roles(ROL.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Edita una zona; `activo: false` la desactiva sin borrarla.' })
+  @ApiRespuesta(200, 'Zona actualizada.', muestras.zona)
+  @ApiErrores(400, 401, 403, 404, 409)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateZoneDto) {
     return this.zonesService.update(id, dto);
   }
@@ -88,6 +110,9 @@ export class ZonesController {
   @Delete('zones/:id')
   @HttpCode(204)
   @Roles(ROL.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Elimina una zona. 409 si tiene tiendas asociadas (desactívala en su lugar).' })
+  @ApiSinCuerpo(204, 'Eliminada, sin cuerpo.')
+  @ApiErrores(400, 401, 403, 404, 409)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.zonesService.remove(id);
   }
