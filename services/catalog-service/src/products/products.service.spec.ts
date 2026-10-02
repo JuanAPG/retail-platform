@@ -51,6 +51,7 @@ function crearServicio() {
   const manager = {
     create: jest.fn((_entidad, valores) => ({ ...valores })),
     save: jest.fn(async (x) => ({ id: 'nuevo-id', ...x })),
+    update: jest.fn(async () => ({ affected: 1 })),
     findOneOrFail: jest.fn(async () => ({ id: 'nuevo-id' })),
   };
   const dataSource = {
@@ -213,5 +214,127 @@ describe('ProductsService — lectura según el perfil', () => {
     expect(qb.orderBy).toHaveBeenCalledWith('p.nombre', 'ASC');
     expect(qb.skip).toHaveBeenCalledWith(5);
     expect(pagina).toEqual({ data: [{ id: 'p-1' }], total: 1, page: 2, limit: 5 });
+  });
+});
+
+describe('ProductsService — propuestas y revisión', () => {
+  const proveedorUsuario: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
+  const gerente: SesionUsuario = { id: 'u-ger', email: 'g@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+  const propuesta = {
+    sku: 'LDN-NEW-1',
+    nombre: 'Queso nuevo',
+    categoriaId: 1,
+    presentacion: '400 g',
+    contenido: 400,
+    unidadMedida: 'g',
+  };
+
+  it('la propuesta nace pendiente, ligada a la empresa del token y sin canasta básica', async () => {
+    const { proveedores, categorias, productos, unidades, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1', activo: true });
+    categorias.findOne.mockResolvedValue({ id: 1 });
+    productos.findOne.mockResolvedValue(null);
+    unidades.findOne.mockResolvedValue({ id: 4, clave: 'g' });
+
+    await servicio.createProposal(propuesta, proveedorUsuario);
+
+    expect(manager.create.mock.calls[0][1]).toMatchObject({
+      estatus: 'pendiente_aprobacion',
+      proveedorId: 'prov-1',
+      esCanastaBasica: false,
+    });
+  });
+
+  it('una empresa proveedora inactiva no puede proponer (403)', async () => {
+    const { proveedores, dataSource, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1', activo: false });
+
+    await expect(servicio.createProposal(propuesta, proveedorUsuario)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('una cuenta Proveedor sin empresa vinculada no puede proponer (403)', async () => {
+    const { proveedores, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue(null);
+
+    await expect(servicio.createProposal(propuesta, proveedorUsuario)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('la propuesta con SKU repetido responde 409', async () => {
+    const { proveedores, categorias, productos, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1', activo: true });
+    categorias.findOne.mockResolvedValue({ id: 1 });
+    productos.findOne.mockResolvedValue({ id: 'otro' });
+
+    await expect(servicio.createProposal(propuesta, proveedorUsuario)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('approve pasa a activo y deja constancia de quién y cuándo, en la misma transacción', async () => {
+    const { productos, manager, dataSource, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+
+    await servicio.approve('p-1', gerente);
+
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(manager.update).toHaveBeenCalledWith(
+      ProductoEntity,
+      { id: 'p-1', estatus: 'pendiente_aprobacion' },
+      { estatus: 'activo' },
+    );
+    expect(manager.create.mock.calls[0][1]).toMatchObject({
+      productoId: 'p-1',
+      estatusResultante: 'activo',
+      revisadoPor: 'u-ger',
+      motivo: null,
+    });
+    expect(manager.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('reject guarda el motivo en la revisión', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+
+    await servicio.reject('p-1', { motivoRechazo: 'Falta la ficha técnica.' }, gerente);
+
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, expect.anything(), { estatus: 'rechazado' });
+    expect(manager.create.mock.calls[0][1]).toMatchObject({
+      estatusResultante: 'rechazado',
+      motivo: 'Falta la ficha técnica.',
+    });
+  });
+
+  it('resolver una propuesta ya resuelta responde 409 sin tocar nada', async () => {
+    const { productos, dataSource, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'activo' });
+
+    await expect(servicio.approve('p-1', gerente)).rejects.toBeInstanceOf(ConflictException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('si otro revisor gana la carrera, el UPDATE no afecta filas y responde 409 sin registrar revisión', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+    manager.update.mockResolvedValue({ affected: 0 });
+
+    await expect(servicio.approve('p-1', gerente)).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('resolver un producto inexistente responde 404', async () => {
+    const { productos, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue(null);
+
+    await expect(servicio.approve('x', gerente)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('la bandeja solo trae pendientes, las más antiguas primero', async () => {
+    const { productos, servicio } = crearServicio();
+    const qb = crearQb();
+    productos.createQueryBuilder.mockReturnValue(qb);
+
+    await servicio.findPending({});
+
+    expect(qb.where).toHaveBeenCalledWith('p.estatus = :estatus', { estatus: 'pendiente_aprobacion' });
+    expect(qb.orderBy).toHaveBeenCalledWith('p.createdAt', 'ASC');
   });
 });
