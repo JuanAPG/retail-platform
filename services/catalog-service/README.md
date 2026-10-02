@@ -17,6 +17,19 @@ de negocio.
 | Zonas y municipios (M03) | `/v1/zones`, `/v1/municipalities` | migrado (sin auditoría, pendiente) |
 | Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, `/v1/product-categories`, `/v1/units`, `/v1/providers` | migrado (sin auditoría, pendiente) |
 
+## Caché en Redis
+
+Los cuatro catálogos planos se cachean 1 hora (prefijo `catalog:`): `catalog:categories`, `catalog:units`,
+`catalog:municipalities` y `catalog:postal-codes` (`src/common/cache/catalogos.ts`). Son de solo lectura en
+este servicio, así que no hay invalidación al escribir; lo mutable (zonas, tiendas, productos, segmentos)
+**no** se cachea. La caché va después del token, la sesión y el rol (no los salta) y, **si Redis falla, el
+servicio responde desde Postgres** (`src/common/cache/cache.service.ts`, el mismo de `pricing-service`).
+
+```bash
+docker exec retail_redis redis-cli --scan --pattern 'catalog:*'      # ver las llaves
+docker exec retail_redis redis-cli del catalog:categories            # refrescar tras un cambio manual en la base
+```
+
 ## Levantarlo solo
 
 Requiere Postgres con `db/schema.sql` aplicado y Redis (ver `infra/docker-compose.yml`).
