@@ -6,6 +6,7 @@ import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 import { SegmentsModule } from './segments/segments.module';
+import { StoresModule } from './stores/stores.module';
 import { ZonesModule } from './zones/zones.module';
 
 /**
@@ -23,6 +24,7 @@ import { ZonesModule } from './zones/zones.module';
     JwtModule.register({}),
     SegmentsModule,
     ZonesModule,
+    StoresModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
