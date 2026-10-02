@@ -2,11 +2,13 @@
   "name": "pricing-service",
   "version": "1.0.0",
   "private": true,
-  "description": "Plantilla transversal de microservicio NestJS (Sprint 2+3). Copiar a services/<nuevo>, no publicar.",
+  "description": "Precios: histórico versionado por presentación y tienda, comparación entre zonas (M08).",
   "scripts": {
     "build": "nest build -p tsconfig.build.json",
     "start": "nest start",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "test": "jest --testPathIgnorePatterns=test/",
+    "test:integracion": "jest --config ./test/jest.integracion.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",
@@ -15,17 +17,37 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/platform-express": "^10.4.4",
     "@nestjs/swagger": "^7.4.2",
+    "@nestjs/typeorm": "^10.0.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "fast-xml-parser": "^4.5.0",
     "ioredis": "^5.4.1",
+    "pg": "^8.13.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.20"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.14.9",
+    "@types/pg": "^8.23.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.5.4"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node"
   }
 }
