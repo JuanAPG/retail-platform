@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { CacheService } from '../common/cache/cache.service';
 import { PriceHistory } from '../entities/price-history.entity';
 import { PricesService } from './prices.service';
 
@@ -46,12 +47,20 @@ function crearServicio() {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
   const audit = { reportar: jest.fn().mockResolvedValue(undefined) };
+  // Caché "transparente" por omisión: siempre MISS (ejecuta la carga). Los tests de caché
+  // sobreescriben `obtener` / `version` para simular HIT o una versión distinta.
+  const cache = {
+    version: jest.fn().mockResolvedValue(0),
+    obtener: jest.fn((_clave: string, _ttl: number, cargar: () => Promise<unknown>) => cargar()),
+    invalidarGrupo: jest.fn().mockResolvedValue(undefined),
+  };
   const servicio = new PricesService(
     repo as unknown as Repository<PriceHistory>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
+    cache as unknown as CacheService,
   );
-  return { repo, manager, dataSource, audit, servicio };
+  return { repo, manager, dataSource, audit, cache, servicio };
 }
 
 /** Existen presentación y tienda; luego la consulta de detalle devuelve `detalle`. */
@@ -320,5 +329,77 @@ describe('PricesService.compareAcrossZones', () => {
     dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([]);
 
     expect(await servicio.compareAcrossZones('prod-1')).toEqual({ productId: 'prod-1', zones: [] });
+  });
+});
+
+describe('PricesService — caché', () => {
+  it('el historial cachea con una llave que incluye producto, versión, presentación, página y límite', async () => {
+    const { cache, servicio } = crearServicio();
+    cache.version.mockResolvedValue(3);
+    cache.obtener.mockResolvedValue({ data: [], total: 0, page: 2, limit: 10 });
+
+    await servicio.findHistory({ productId: 'prod-1', presentationId: 'pres-1', page: 2, limit: 10 });
+
+    expect(cache.version).toHaveBeenCalledWith('pricing:v:prod-1');
+    expect(cache.obtener).toHaveBeenCalledWith('pricing:history:prod-1:v3:pres-1:p2:l10', 300, expect.any(Function));
+  });
+
+  it('la llave usa los valores por omisión y recorta el límite igual que la paginación', async () => {
+    const { cache, servicio } = crearServicio();
+    cache.obtener.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 });
+
+    await servicio.findHistory({ productId: 'prod-1' });
+    await servicio.findHistory({ productId: 'prod-1', limit: 5000 });
+
+    expect(cache.obtener.mock.calls[0][0]).toBe('pricing:history:prod-1:v0:all:p1:l20');
+    expect(cache.obtener.mock.calls[1][0]).toBe('pricing:history:prod-1:v0:all:p1:l100');
+  });
+
+  it('en un HIT del historial no toca la base (ni siquiera para verificar el producto)', async () => {
+    const { cache, dataSource, repo, servicio } = crearServicio();
+    cache.obtener.mockResolvedValue({ data: [{ id: 'a' }], total: 1, page: 1, limit: 20 });
+
+    const pagina = await servicio.findHistory({ productId: 'prod-1' });
+
+    expect(pagina.total).toBe(1);
+    expect(dataSource.query).not.toHaveBeenCalled();
+    expect(repo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('la comparación por zonas se cachea por producto y versión', async () => {
+    const { cache, servicio } = crearServicio();
+    cache.version.mockResolvedValue(5);
+    cache.obtener.mockResolvedValue({ productId: 'prod-1', zones: [] });
+
+    await servicio.compareAcrossZones('prod-1');
+
+    expect(cache.obtener).toHaveBeenCalledWith('pricing:compare:prod-1:v5', 300, expect.any(Function));
+  });
+
+  it('un 404 (producto inexistente) sale de la carga y por tanto no se cachea', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([]);
+
+    await expect(servicio.compareAcrossZones('x')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('un alta exitosa invalida la caché del producto de la presentación (no de otro)', async () => {
+    const { dataSource, manager, cache, servicio } = crearServicio();
+    existenYDetalle(dataSource, [filaDetalle('nuevo-id', { producto_id: 'prod-77' })]);
+    manager.findOne.mockResolvedValue(null);
+
+    await servicio.create(dto, usuario);
+
+    expect(cache.invalidarGrupo).toHaveBeenCalledTimes(1);
+    expect(cache.invalidarGrupo).toHaveBeenCalledWith('pricing:v:prod-77');
+  });
+
+  it('un alta rechazada no invalida nada', async () => {
+    const { dataSource, manager, cache, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
+
+    await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
+    expect(cache.invalidarGrupo).not.toHaveBeenCalled();
   });
 });

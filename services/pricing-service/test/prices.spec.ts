@@ -106,17 +106,24 @@ describe('/v1/prices (integración, requiere stack)', () => {
     auditor = await sesion('it-pr-auditor', 'Auditor');
     proveedor = await sesion('it-pr-prov', 'Proveedor');
 
-    // Una pareja presentación+tienda sin ningún precio en el seed.
+    // Una presentación SIN ningún precio en el seed (en ninguna tienda): así el historial
+    // filtrado por esa presentación contiene solo lo que crea la prueba. ORDER BY para que
+    // la elección sea siempre la misma (sin él, cambia con el orden físico de la tabla).
     const libre = await db.query(`
       SELECT pres.id AS presentacion_id, pres.producto_id, t.id AS tienda_id, t.zona_id
       FROM producto_presentaciones pres CROSS JOIN tiendas t
-      WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id AND p.tienda_id = t.id)
+      WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
+      ORDER BY pres.id, t.id
       LIMIT 1`);
     ({ presentacion_id: presentationId, producto_id: productId, tienda_id: storeId, zona_id: zoneId } = libre.rows[0]);
   });
 
   afterAll(async () => {
     await limpiar();
+    // Los precios de la prueba ya no existen, pero la caché del producto seguiría
+    // mostrándolos hasta 5 min: se invalida subiendo la versión, como hace el servicio.
+    await redis.incr(`pricing:v:${productId}`);
+    await redis.expire(`pricing:v:${productId}`, 86400);
     await db.end();
     await redis.quit();
   });
@@ -292,5 +299,65 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(
       (await http('GET', '/v1/prices/compare-zones?productId=00000000-0000-4000-8000-000000000000', precios)).estado,
     ).toBe(404);
+  });
+
+  describe('caché en Redis', () => {
+    const llavesDe = (patron: string) => redis.keys(patron);
+
+    it('las lecturas quedan en Redis con TTL de 5 min como máximo y la segunda sale igual', async () => {
+      const ruta = `/v1/prices/history?productId=${productId}&presentationId=${presentationId}&limit=2`;
+      const primera = await http('GET', ruta, planeador);
+      const segunda = await http('GET', ruta, planeador);
+      expect(segunda.cuerpo).toEqual(primera.cuerpo);
+
+      const [llave] = await llavesDe(`pricing:history:${productId}:v*:${presentationId}:p1:l2`);
+      expect(llave).toBeDefined();
+      const ttl = await redis.ttl(llave);
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(300);
+
+      await http('GET', `/v1/prices/compare-zones?productId=${productId}`, planeador);
+      expect((await llavesDe(`pricing:compare:${productId}:v*`)).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('un 404 o un 400 no se cachean', async () => {
+      const fantasma = '00000000-0000-4000-8000-000000000000';
+      await http('GET', `/v1/prices/compare-zones?productId=${fantasma}`, planeador);
+      await http('GET', `/v1/prices/history?productId=${fantasma}`, planeador);
+      await http('GET', '/v1/prices/history?productId=abc', planeador);
+
+      expect(await llavesDe(`pricing:*${fantasma}*`)).toEqual([]);
+    });
+
+    it('un precio nuevo invalida la caché: la comparación y el historial NO sirven datos viejos', async () => {
+      const rutaHistorial = `/v1/prices/history?productId=${productId}&presentationId=${presentationId}&limit=1`;
+      const rutaComparacion = `/v1/prices/compare-zones?productId=${productId}`;
+      // Calienta la caché con el estado actual.
+      const antes = await http('GET', rutaHistorial, planeador);
+      await http('GET', rutaComparacion, planeador);
+      const versionAntes = Number((await redis.get(`pricing:v:${productId}`)) ?? 0);
+
+      const nuevo = await http('POST', '/v1/prices', precios, alta(999, '2026-06-01'));
+      expect(nuevo.estado).toBe(201);
+
+      expect(Number(await redis.get(`pricing:v:${productId}`))).toBe(versionAntes + 1);
+
+      const despues = await http('GET', rutaHistorial, planeador);
+      expect(despues.cuerpo.data[0]).toMatchObject({ price: '999.00', effectiveDate: '2026-06-01' });
+      expect(despues.cuerpo.data[0].id).not.toBe(antes.cuerpo.data[0].id);
+
+      const zona = (await http('GET', rutaComparacion, planeador)).cuerpo.zones.find(
+        (z: { zoneId: string }) => z.zoneId === zoneId,
+      );
+      expect(zona.maxPrice).toBe(999);
+    });
+
+    it('si Redis no tiene las llaves, el servicio responde igual desde la base', async () => {
+      for (const llave of await llavesDe(`pricing:*:${productId}:*`)) await redis.del(llave);
+
+      const r = await http('GET', `/v1/prices/compare-zones?productId=${productId}`, planeador);
+      expect(r.estado).toBe(200);
+      expect(r.cuerpo.zones.find((z: { zoneId: string }) => z.zoneId === zoneId).maxPrice).toBe(999);
+    });
   });
 });
