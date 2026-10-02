@@ -16,10 +16,12 @@ import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { PERFILES_INTERNOS, ROL } from '../common/roles';
+import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL } from '../common/roles';
+import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
+import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 
@@ -75,6 +77,17 @@ export class ProductsController {
     return this.productsService.findAll(usuario, filtros);
   }
 
+  /**
+   * Declarada ANTES que 'products/:id', para que 'pending' no se
+   * interprete como un id de producto.
+   */
+  @Get('products/pending')
+  @Roles(...APRUEBAN_PRODUCTOS)
+  @ApiOperation({ summary: 'Bandeja de propuestas por revisar.' })
+  findPending(@Query() filtros: ProductFilterDto) {
+    return this.productsService.findPending(filtros);
+  }
+
   @Get('products/:id')
   @Roles(...PERFILES_INTERNOS)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
@@ -93,6 +106,15 @@ export class ProductsController {
     return this.productsService.create(dto);
   }
 
+  @Post('products/proposals')
+  @Roles(ROL.PROVEEDOR)
+  @ApiOperation({
+    summary: 'Un Proveedor propone un alta. Nace pendiente y ligada a su propia empresa.',
+  })
+  createProposal(@Body() dto: CrearPropuestaProductoDto, @CurrentUser() usuario: SesionUsuario) {
+    return this.productsService.createProposal(dto, usuario);
+  }
+
   @Patch('products/:id')
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
@@ -104,6 +126,22 @@ export class ProductsController {
   @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.remove(id);
+  }
+
+  @Patch('products/:id/approve')
+  @Roles(...APRUEBAN_PRODUCTOS)
+  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() usuario: SesionUsuario) {
+    return this.productsService.approve(id, usuario);
+  }
+
+  @Patch('products/:id/reject')
+  @Roles(...APRUEBAN_PRODUCTOS)
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RechazarProductoDto,
+    @CurrentUser() usuario: SesionUsuario,
+  ) {
+    return this.productsService.reject(id, dto, usuario);
   }
 
   // -------------------------------------------------------------------

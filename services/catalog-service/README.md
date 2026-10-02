@@ -15,7 +15,7 @@ de negocio.
 | Segmentos (M05) | `/v1/segments` | migrado (sin auditoría, pendiente) |
 | Tiendas (M02) | `/v1/stores` | migrado (sin auditoría, pendiente) |
 | Zonas y municipios (M03) | `/v1/zones`, `/v1/municipalities` | migrado (sin auditoría, pendiente) |
-| Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, … | pendiente |
+| Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, `/v1/product-categories`, `/v1/units`, `/v1/providers` | migrado (sin auditoría, pendiente) |
 
 ## Levantarlo solo
 

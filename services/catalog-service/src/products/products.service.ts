@@ -14,11 +14,14 @@ import { ROL } from '../common/roles';
 import { CategoriaProductoEntity } from '../entities/categoria-producto.entity';
 import { ProductoEntity } from '../entities/producto.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
+import { ProductoRevisionEntity } from '../entities/producto-revision.entity';
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
+import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
+import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 /** Valores del ENUM `estatus_producto` del esquema. */
@@ -95,6 +98,54 @@ export class ProductsService {
       qb.where('p.proveedorId = :proveedorId', { proveedorId: proveedor.id });
     }
     return paginar(qb, filtros);
+  }
+
+  /** Bandeja de revisión del Gerente de categoría: una cola, la más antigua primero. */
+  findPending(filtros: ProductFilterDto): Promise<Pagina<ProductoEntity>> {
+    const qb = this.consultaProductos()
+      .where('p.estatus = :estatus', { estatus: ESTATUS_PRODUCTO.PENDIENTE })
+      .orderBy('p.createdAt', 'ASC')
+      .addOrderBy('p.id', 'ASC');
+    return paginar(qb, filtros);
+  }
+
+  /**
+   * Alta propuesta por un Proveedor. Nace en 'pendiente_aprobacion' y
+   * queda amarrada a la empresa del token: el proveedor no elige de
+   * quién es el producto que da de alta, ni si es canasta básica (RN-04).
+   */
+  async createProposal(dto: CrearPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+    const proveedor = await this.proveedorDe(solicitante);
+    if (!proveedor.activo) {
+      throw new ForbiddenException(
+        'Tu empresa proveedora está inactiva: un Administrador debe aprobarla antes de que puedas proponer productos.',
+      );
+    }
+
+    await this.exigirCategoria(dto.categoriaId);
+    await this.rechazarSkuRepetido(dto.sku);
+    const unidad = await this.exigirUnidad(dto.unidadMedida);
+
+    return this.crearConPresentacion(
+      {
+        sku: dto.sku,
+        nombre: dto.nombre,
+        descripcion: dto.descripcion ?? null,
+        categoriaId: dto.categoriaId,
+        esCanastaBasica: false,
+        estatus: ESTATUS_PRODUCTO.PENDIENTE,
+        proveedorId: proveedor.id,
+      },
+      { nombre: dto.presentacion, contenido: dto.contenido, unidadMedidaId: unidad.id },
+    );
+  }
+
+  approve(id: string, solicitante: SesionUsuario): Promise<ProductoEntity> {
+    return this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
+  }
+
+  reject(id: string, dto: RechazarProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+    return this.resolver(id, ESTATUS_PRODUCTO.RECHAZADO, dto.motivoRechazo, solicitante);
   }
 
   async findOne(id: string): Promise<ProductoEntity> {
@@ -233,6 +284,53 @@ export class ProductsService {
   // -------------------------------------------------------------------
 
   /**
+   * Cambia el estatus del producto Y deja constancia de la decisión.
+   * Las dos cosas van en la misma transacción: un producto aprobado sin
+   * registro de quién lo aprobó rompe la trazabilidad que exige RF-12.
+   */
+  private async resolver(
+    id: string,
+    estatus: string,
+    motivo: string | null,
+    solicitante: SesionUsuario,
+  ): Promise<ProductoEntity> {
+    const producto = await this.productosRepo.findOne({ where: { id } });
+    if (!producto) {
+      throw new NotFoundException('El producto no existe.');
+    }
+    // Evita que dos revisores resuelvan la misma propuesta: el segundo
+    // recibe un 409 en lugar de sobrescribir la decisión del primero.
+    if (producto.estatus !== ESTATUS_PRODUCTO.PENDIENTE) {
+      throw new ConflictException(`Esta propuesta ya fue resuelta (estatus actual: ${producto.estatus}).`);
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      // La condición `estatus = pendiente` va en el propio UPDATE: si otro
+      // revisor ganó entre la lectura de arriba y aquí, no afecta ninguna fila.
+      const resultado = await manager.update(
+        ProductoEntity,
+        { id, estatus: ESTATUS_PRODUCTO.PENDIENTE },
+        { estatus },
+      );
+      if (!resultado.affected) {
+        throw new ConflictException('Esta propuesta ya fue resuelta por otro revisor.');
+      }
+
+      await manager.save(
+        manager.create(ProductoRevisionEntity, {
+          productoId: id,
+          estatusResultante: estatus,
+          revisadoPor: solicitante.id,
+          motivo,
+          revisadoEn: new Date(),
+        }),
+      );
+
+      return manager.findOneOrFail(ProductoEntity, { where: { id }, relations: { presentaciones: true } });
+    });
+  }
+
+  /**
    * Con QueryBuilder las relaciones `eager` NO se cargan solas: se unen
    * una por una para devolver la misma forma que `findOne`.
    */
@@ -279,7 +377,7 @@ export class ProductsService {
    * (así quedó el esquema), y tanto `usuarios.email` como
    * `proveedores.email` son UNIQUE, así que la correspondencia es 1 a 1.
    */
-  protected async proveedorDe(solicitante: SesionUsuario) {
+  private async proveedorDe(solicitante: SesionUsuario) {
     const proveedor = await this.proveedoresRepo.findOne({ where: { email: solicitante.email } });
     if (!proveedor) {
       throw new ForbiddenException(
