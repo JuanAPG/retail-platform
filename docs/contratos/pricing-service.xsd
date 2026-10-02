@@ -123,6 +123,148 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- ===== /v1/price-proposals (RN-14) ===== -->
+
+  <xs:simpleType name="proposalStatus">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pendiente"/>
+      <xs:enumeration value="aprobado"/>
+      <xs:enumeration value="rechazado"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="proposalProduct">
+    <xs:sequence>
+      <xs:element name="sku" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="proposalPresentation">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="productoId" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="contenido" type="xs:decimal"/>
+      <xs:element name="unidadMedida" type="xs:string"/>
+      <xs:element name="producto" type="pri:proposalProduct"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="proposalSupplier">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="razonSocial" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="priceProposal">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="supplierId" type="xs:string"/>
+      <xs:element name="proposedPrice" type="xs:decimal"/>
+      <xs:element name="purchaseUnit" type="xs:string" minOccurs="0"/>
+      <xs:element name="status" type="pri:proposalStatus"/>
+      <xs:element name="rejectionReason" type="xs:string" minOccurs="0"/>
+      <xs:element name="reviewedBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="reviewedAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="presentation" type="pri:proposalPresentation"/>
+      <xs:element name="supplier" type="pri:proposalSupplier"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/price-proposals -->
+  <xs:element name="priceProposalRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="proposedPrice">
+          <xs:simpleType>
+            <xs:restriction base="xs:decimal">
+              <xs:minExclusive value="0"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="purchaseUnit" minOccurs="0">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:maxLength value="30"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST (201) y PATCH reject (200) -->
+  <xs:element name="priceProposalResponse" type="pri:priceProposal"/>
+
+  <!-- GET /v1/price-proposals (paginado) -->
+  <xs:element name="priceProposalListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:priceProposal" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/price-proposals/:id/approve -->
+  <xs:element name="priceProposalApproveRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="storeIds">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="1" maxOccurs="50"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="effectiveDate" type="xs:date" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="priceProposalApproveResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="proposal" type="pri:priceProposal"/>
+        <xs:element name="prices">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:price" minOccurs="1" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/price-proposals/:id/reject -->
+  <xs:element name="priceProposalRejectRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="rejectionReason">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="10"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="error">
     <xs:complexType>
       <xs:sequence>
