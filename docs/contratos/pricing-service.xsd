@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de pricing-service (Fase A). Espacio de nombres fijo `pricing/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="pricing/v1"
+           xmlns:pri="pricing/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="priceOrigin">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="interno"/>
+      <xs:enumeration value="propuesta_proveedor_aprobada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="presentationSummary">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="productoId" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="contenido" type="xs:decimal"/>
+      <xs:element name="unidadMedida" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="zoneSummary">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="storeSummary">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="zonaId" type="xs:string"/>
+      <xs:element name="zona" type="pri:zoneSummary"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="price">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="price" type="xs:decimal"/>
+      <xs:element name="effectiveDate" type="xs:date"/>
+      <!-- Ausente o vacío = precio vigente -->
+      <xs:element name="effectiveUntil" type="xs:date" minOccurs="0"/>
+      <xs:element name="vigente" type="xs:boolean"/>
+      <xs:element name="origen" type="pri:priceOrigin"/>
+      <xs:element name="createdBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="presentation" type="pri:presentationSummary"/>
+      <xs:element name="store" type="pri:storeSummary"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/prices -->
+  <xs:element name="priceRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="storeId" type="xs:string"/>
+        <xs:element name="price">
+          <xs:simpleType>
+            <xs:restriction base="xs:decimal">
+              <xs:minExclusive value="0"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="effectiveDate" type="xs:date" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/prices (201) -->
+  <xs:element name="priceResponse" type="pri:price"/>
+
+  <!-- GET /v1/prices/history (paginado, ver paginacion.md) -->
+  <xs:element name="priceListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:price" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/prices/compare-zones (agregado, sin paginar) -->
+  <xs:complexType name="zonePriceComparison">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="averagePrice" type="xs:decimal"/>
+      <xs:element name="minPrice" type="xs:decimal"/>
+      <xs:element name="maxPrice" type="xs:decimal"/>
+      <xs:element name="storeCount" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="priceComparisonResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="zones">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:zonePriceComparison" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
