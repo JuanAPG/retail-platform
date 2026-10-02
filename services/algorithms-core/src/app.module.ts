@@ -1,16 +1,25 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 
 /**
- * Módulo raíz de la plantilla. Cada microservicio parte de aquí y agrega
- * sus módulos de negocio; lo transversal (filtros, interceptores, guard)
- * ya viene resuelto y NO se modifica por servicio.
+ * algorithms-core: Apriori (M10), elasticidad y sustitución (M11). Lo
+ * transversal (filtros, interceptores, SessionGuard) viene de la plantilla
+ * y no se modifica; aquí solo se agregan módulos de negocio.
  */
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({})],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [databaseConfig] }),
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => config.getOrThrow('database'),
+    }),
+    JwtModule.register({}),
+  ],
   controllers: [HealthController],
   providers: [SessionGuard],
   exports: [SessionGuard],
