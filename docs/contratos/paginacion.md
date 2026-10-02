@@ -32,6 +32,10 @@ Misma envoltura bajo `<response>`:
 </response>
 ```
 
+Todo arreglo se envuelve en `<item>` por elemento (nunca se repite la
+etiqueta padre); arreglo vacío → `<data/>` autocerrada. El interceptor Nest
+y el `_llenar` de FastAPI producen exactamente la misma forma.
+
 ## Excepciones declaradas (no se paginan)
 
 - Agregados para gráficas (Highcharts): se sirven agregados del servidor.
