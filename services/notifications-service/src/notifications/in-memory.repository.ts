@@ -33,6 +33,7 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
   async buscarReciente(
     eventType: string,
     relatedEntityId: string | null,
+    destinatario: { recipientUserId: string | null; recipientRole: string | null },
     desde: Date,
   ): Promise<NotificacionGuardada | null> {
     for (const fila of this.filas.values()) {
@@ -40,6 +41,8 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
         !fila.archived &&
         fila.eventType === eventType &&
         (fila.relatedEntityId ?? null) === (relatedEntityId ?? null) &&
+        (fila.recipientUserId ?? null) === (destinatario.recipientUserId ?? null) &&
+        (fila.recipientRole ?? null) === (destinatario.recipientRole ?? null) &&
         fila.createdAt >= desde
       ) {
         return fila;

@@ -17,11 +17,15 @@ export interface NotificacionGuardada {
   createdAt: Date;
 }
 
-export interface CrearNotificacion {
-  eventType: string;
-  sourceService: string | null;
+/** Destinatario: id directo o rol (uno de los dos siempre presente). */
+export interface Destinatario {
   recipientUserId: string | null;
   recipientRole: string | null;
+}
+
+export interface CrearNotificacion extends Destinatario {
+  eventType: string;
+  sourceService: string | null;
   title: string;
   message: string;
   relatedEntityType: string | null;
@@ -39,6 +43,7 @@ export interface NotificationsRepository {
   buscarReciente(
     eventType: string,
     relatedEntityId: string | null,
+    destinatario: Destinatario,
     desde: Date,
   ): Promise<NotificacionGuardada | null>;
   listar(filtros: {

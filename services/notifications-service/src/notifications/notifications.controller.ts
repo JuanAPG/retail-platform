@@ -1,5 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ROL } from '../common/roles';
@@ -20,18 +21,22 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Emite una notificación (con dedup de 5 minutos).' })
-  crear(
+  @ApiCreatedResponse({ description: 'Notificación creada (201).' })
+  @ApiOkResponse({ description: 'Duplicada en ventana: devuelve la existente (200).' })
+  async crear(
     @Body() dto: CreateNotificationDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.notificationsService.create(dto, {
+    const { data, creada } = await this.notificationsService.create(dto, {
       usuarioId: usuario.id,
       rolId: usuario.rolId,
       ip,
     });
+    res.status(creada ? HttpStatus.CREATED : HttpStatus.OK);
+    return data;
   }
 
   @Get()
