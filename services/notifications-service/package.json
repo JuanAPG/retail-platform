@@ -2,11 +2,13 @@
   "name": "notifications-service",
   "version": "1.0.0",
   "private": true,
-  "description": "Plantilla transversal de microservicio NestJS (Sprint 2+3). Copiar a services/<nuevo>, no publicar.",
+  "description": "Notificaciones internas (sin Mongo todav\u00eda: repositorio en memoria).",
   "scripts": {
     "build": "nest build -p tsconfig.build.json",
     "start": "nest start",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "test": "jest --testPathIgnorePatterns=test/",
+    "test:integracion": "jest --config ./test/jest.integracion.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",
@@ -20,12 +22,29 @@
     "fast-xml-parser": "^4.5.0",
     "ioredis": "^5.4.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@nestjs/schedule": "^4.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.9",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "@types/jest": "^29.5.14"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node"
   }
 }

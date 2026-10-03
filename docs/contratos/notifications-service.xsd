@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de notifications-service (Fase A). Espacio `notif/v1`. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="notif/v1"
+           xmlns:notif="notif/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="priority">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="info"/>
+      <xs:enumeration value="warning"/>
+      <xs:enumeration value="critical"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="notificacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="eventType" type="xs:string"/>
+        <xs:element name="relatedEntityType" type="xs:string" minOccurs="0"/>
+        <xs:element name="relatedEntityId" type="xs:string" minOccurs="0"/>
+        <xs:element name="recipientUserId" type="xs:string" minOccurs="0"/>
+        <xs:element name="recipientRole" type="xs:string" minOccurs="0"/>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="priority" type="notif:priority"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="notificacion">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="id" type="xs:string"/>
+        <xs:element name="eventType" type="xs:string"/>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="priority" type="notif:priority"/>
+        <xs:element name="archived" type="xs:boolean"/>
+        <xs:element name="createdAt" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
