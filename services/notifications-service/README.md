@@ -1,36 +1,36 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# notifications-service — notificaciones internas (Sprint 2+3)
 
-Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
-modifica por servicio**, solo se agregan módulos de negocio.
+Emite, lista, marca como leídas y cuenta notificaciones por usuario o rol.
+Parte de la plantilla transversal (health, error estándar, logging, XML,
+`SessionGuard`).
 
-## Qué trae resuelto
+## Endpoints (`/v1/`, JSON y XML, SessionGuard)
 
-- `GET /v1/health` sin auth (`src/health/`)
-- Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
-- `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
-  (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/v1/notifications` | Emite (dedup 5 min: responde la existente) |
+| `GET` | `/v1/notifications` | Solo las del token (id o rol); `?userId` solo Admin/Auditor |
+| `PATCH` | `/v1/notifications/:id/read` | Lectura por usuario en `readBy`, nunca global |
+| `GET` | `/v1/notifications/unread-count` | `{unread}` por agregación |
 
-## Cómo copiarme a un servicio nuevo (5 pasos)
+Contrato: `docs/contratos/notifications-service.md` + `.xsd`. Matriz de
+eventos (`priority/title/entidad` por tipo) en
+`src/notifications/notification.types.ts`.
 
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
+## Estado Mongo (pendiente explícito)
 
-## Probarla sola
+Sin Mongo todavía: persiste en `InMemoryNotificationsRepository` tras el
+puerto `NOTIFICATIONS_REPOSITORY`. Cuando `documents-service` fije el
+patrón: agregar `mongoose/@nestjs/mongoose`, `MONGO_URL` al compose,
+adaptador Mongoose con sus índices y cablearlo en `app.module` — el
+servicio y el controller no cambian. El job diario archiva a 90 días y
+jamás elimina.
+
+## Correr y probar
 
 ```bash
 npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
+PORT=3109 SERVICE_NAME=notifications-service npm run start:dev
+npm test                                   # unitarias (sin infra)
+npm run test:integracion                   # requiere Mongo + stack (VM, skip hasta entonces)
 ```
