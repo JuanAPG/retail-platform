@@ -30,8 +30,10 @@ Request JSON:
 ```
 
 `priority` solo admite `info | warning | critical`. Si ya existe una no
-archivada con mismo `eventType` + `relatedEntityId` creada en los últimos
-5 minutos, NO se duplica: responde `200` con la existente.
+archivada con mismo `eventType` + `relatedEntityId` + **destinatario**
+(`recipientUserId` o `recipientRole`) creada en los últimos 5 minutos, NO
+se duplica: responde `200` con la existente. Distinto destinatario siempre
+crea una nueva (201), aunque coincidan evento y entidad.
 
 Response `201` (o `200` si fue dedup): la notificación con `id`,
 `readBy: []`, `archived: false`, `createdAt`.

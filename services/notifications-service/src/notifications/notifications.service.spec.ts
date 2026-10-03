@@ -33,11 +33,28 @@ describe('NotificationsService (sin Mongo)', () => {
       { ...BASE, relatedEntityId: 'p1', recipientUserId: 'u1' },
       { servicio: 'pricing-service' },
     );
+    expect(primera.creada).toBe(true);
     const segunda = await servicio.create(
       { ...BASE, relatedEntityId: 'p1', recipientUserId: 'u1' },
       { servicio: 'pricing-service' },
     );
-    expect(segunda.id).toBe(primera.id);
+    expect(segunda.creada).toBe(false);
+    expect(segunda.data.id).toBe(primera.data.id);
+  });
+
+  it('mismo evento para OTRO destinatario sí crea (no pierde avisos)', async () => {
+    const { servicio } = servicioFresco();
+    const paraU1 = await servicio.create(
+      { ...BASE, relatedEntityId: 'p1x', recipientUserId: 'u1' },
+      { servicio: 'pricing-service' },
+    );
+    const paraU2 = await servicio.create(
+      { ...BASE, relatedEntityId: 'p1x', recipientUserId: 'u2' },
+      { servicio: 'pricing-service' },
+    );
+    expect(paraU2.creada).toBe(true);
+    expect(paraU2.data.id).not.toBe(paraU1.data.id);
+    expect(await servicio.countUnread('u2')).toEqual({ unread: 1 });
   });
 
   it('rechaza evento no soportado y sin destinatario', async () => {
@@ -50,7 +67,7 @@ describe('NotificationsService (sin Mongo)', () => {
 
   it('lectura por usuario en readBy, nunca global', async () => {
     const { servicio } = servicioFresco();
-    const creada = await servicio.create(
+    const { data: creada } = await servicio.create(
       { ...BASE, relatedEntityId: 'p3', recipientUserId: 'u1' },
       {},
     );

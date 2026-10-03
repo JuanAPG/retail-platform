@@ -34,7 +34,7 @@ export class NotificationsService {
   async create(
     dto: CreateNotificationDto,
     emisor?: { servicio?: string; usuarioId?: string; rolId?: number; ip?: string },
-  ): Promise<Notification> {
+  ): Promise<{ data: Notification; creada: boolean }> {
     if (!esEventoSoportado(dto.eventType)) {
       throw new BadRequestException(`El eventType ${dto.eventType} no está soportado.`);
     }
@@ -43,14 +43,16 @@ export class NotificationsService {
     }
     const base = atributosDe(dto.eventType);
 
-    // Ventana anti-duplicados: idempotencia para emisores con reintentos.
+    // Ventana anti-duplicados (mismo evento + entidad + DESTINATARIO):
+    // idempotencia para emisores con reintentos, sin perder avisos ajenos.
     const ventana = new Date(Date.now() - VENTANA_DEDUP_MINUTOS * 60000);
     const existente = await this.repo.buscarReciente(
       dto.eventType,
       dto.relatedEntityId ?? null,
+      { recipientUserId: dto.recipientUserId ?? null, recipientRole: dto.recipientRole ?? null },
       ventana,
     );
-    if (existente) return this.aPublica(existente);
+    if (existente) return { data: this.aPublica(existente), creada: false };
 
     const guardada = await this.repo.crear({
       eventType: dto.eventType,
@@ -75,7 +77,7 @@ export class NotificationsService {
       cambios: [{ campo: 'evento', posterior: dto.eventType }],
     });
 
-    return this.aPublica(guardada);
+    return { data: this.aPublica(guardada), creada: true };
   }
 
   async findAllForUser(
