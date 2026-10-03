@@ -1,18 +1,30 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { AnalyticsController } from './analytics/analytics.controller';
+import { AnalyticsService } from './analytics/analytics.service';
+import { Basket } from './entities/basket.entity';
 
 /**
- * Módulo raíz de la plantilla. Cada microservicio parte de aquí y agrega
- * sus módulos de negocio; lo transversal (filtros, interceptores, guard)
- * ya viene resuelto y NO se modifica por servicio.
+ * core-process-service: proceso principal (transacciones + canastas) más
+ * M09 analítica descriptiva, que agrega sobre esos mismos datos.
  */
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({})],
-  controllers: [HealthController],
-  providers: [SessionGuard],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [databaseConfig] }),
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => config.getOrThrow('database'),
+    }),
+    TypeOrmModule.forFeature([Basket]),
+    JwtModule.register({}),
+  ],
+  controllers: [HealthController, AnalyticsController],
+  providers: [AnalyticsService, SessionGuard],
   exports: [SessionGuard],
 })
 export class AppModule {}

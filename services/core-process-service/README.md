@@ -1,4 +1,23 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# core-process-service — proceso principal + M09 (Sprint 2+3)
+
+Proceso principal (transacciones + canastas) más M09 analítica descriptiva,
+que agrega sobre esos mismos datos. Parte de la plantilla transversal.
+
+## Endpoints M09 (`/v1/analytics`, JSON y XML, SessionGuard)
+
+`average-ticket`, `products-per-basket`, `purchase-frequency`,
+`units-per-transaction`, `spend-by-category` — con filtros `storeId`,
+`zoneId`, `segmentId`, `dateFrom`, `dateTo`. Contrato:
+`docs/contratos/core-process-analytics.md`.
+
+## Correr y probar
+
+```bash
+npm install
+PORT=3104 SERVICE_NAME=core-process-service npm run start:dev
+npm test                                   # unitarias (sin infra)
+npm run test:integracion                   # requiere stack con seed + CSV (VM)
+```
 
 Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
 modifica por servicio**, solo se agregan módulos de negocio.
@@ -12,25 +31,3 @@ modifica por servicio**, solo se agregan módulos de negocio.
 - XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
 - `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
   (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
-
-## Cómo copiarme a un servicio nuevo (5 pasos)
-
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
-
-## Probarla sola
-
-```bash
-npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
-```
