@@ -1,7 +1,6 @@
-# Verificación mínima en cada PR: que las dos piezas compilen.
-#
-# No corre pruebas todavía porque el proyecto aún no tiene infraestructura
-# de tests (jest no está instalado). Cuando se agregue, este es el lugar.
+# Verificación en cada PR: que todo lo compilable compile y las
+# unitarias pasen. Los `test:integracion` (requieren Postgres/Redis/Mongo
+# vivos) NO corren aquí: son VM-only, como los corre el QA en la VM.
 name: CI
 
 on:
@@ -11,6 +10,7 @@ on:
     branches: [main]
 
 jobs:
+  # Monolito + web (job original, no se toca su comportamiento).
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -33,3 +33,63 @@ jobs:
       - name: Compilar
         working-directory: ${{ matrix.proyecto }}
         run: npm run build
+
+  # Los 9 microservicios NestJS: compilan y corren sus unitarias.
+  # `npm test --if-present` cubre a los que aún no tienen tests sin
+  # fallar (core-process, decision, documents los agregan en su rama).
+  services:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        servicio:
+          - auth-service
+          - catalog-service
+          - pricing-service
+          - core-process-service
+          - algorithms-core
+          - decision-service
+          - documents-service
+          - notifications-service
+          - audit-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: services/${{ matrix.servicio }}/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: services/${{ matrix.servicio }}
+        run: npm ci
+
+      - name: Compilar
+        working-directory: services/${{ matrix.servicio }}
+        run: npm run build
+
+      - name: Pruebas unitarias
+        working-directory: services/${{ matrix.servicio }}
+        run: npm test --if-present
+
+  # analytics-stats (Python/FastAPI): dependencias, compilación y,
+  # cuando tenga tests, pytest.
+  analytics-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/analytics-stats/requirements.txt
+
+      - name: Instalar dependencias
+        working-directory: services/analytics-stats
+        run: pip install -r requirements.txt
+
+      - name: Compilar
+        working-directory: services/analytics-stats
+        run: python -m py_compile $(find app -name '*.py')
