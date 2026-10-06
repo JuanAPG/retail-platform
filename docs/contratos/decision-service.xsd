@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de decision-service (Fase A). Espacio `decision/v1`. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="decision/v1"
+           xmlns:dec="decision/v1"
+           elementFormDefault="qualified">
+
+  <xs:element name="indiceAccesibilidad">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="segmentId" type="xs:integer"/>
+        <xs:element name="basicBasketCost" type="xs:decimal"/>
+        <xs:element name="estimatedIncome" type="xs:decimal" minOccurs="0"/>
+        <xs:element name="indexValue" type="xs:decimal"/>
+        <xs:element name="calculatedAt" type="xs:dateTime" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="simulacionPrecioRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="newPrice" type="xs:decimal"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="simulacionPresentacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="presentationIdA" type="xs:string"/>
+        <xs:element name="presentationIdB" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="resultadoItem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="indicatorKey" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="baseValue" type="xs:decimal"/>
+        <xs:element name="simulatedValue" type="xs:decimal"/>
+        <xs:element name="variacionPct" type="xs:decimal" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="recomendacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="recomendacion">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="recommendationId" type="xs:string" minOccurs="0"/>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="whatRecommends" type="xs:string"/>
+        <xs:element name="why" type="xs:string"/>
+        <xs:element name="estimatedImpact" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
