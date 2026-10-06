@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AssociationModule } from './association/association.module';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
@@ -19,6 +20,7 @@ import { SessionGuard } from './common/auth/session.guard';
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    AssociationModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],

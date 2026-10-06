@@ -14,7 +14,7 @@ de negocio.
 | Módulo | Rutas | Estado |
 |---|---|---|
 | Base del servicio | `/v1/health` | listo: Postgres, roles (`RolesGuard`, `@Roles`, `@CurrentUser`) y jest |
-| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/runs`, `/v1/association/runs/:id` | pendiente (Fase B) |
+| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/runs`, `/v1/association/runs/:id` | migrado: Apriori trasladado sin cambios, corrida completa guardada, `/runs` paginado, JSON y XML, Swagger con ejemplos |
 | Elasticidad (M11) | `/v1/elasticity/calculate`, `/v1/elasticity/chart`, `/v1/elasticity/current` | pendiente (Fase B) |
 | Sustitución (M11) | `/v1/substitution/patterns` | pendiente (Fase B) |
 
@@ -32,8 +32,17 @@ curl -H 'Accept: application/xml' localhost:3105/v1/health
 
 ## Swagger
 
-`http://localhost:3105/docs` (JSON crudo en `/docs-json`). Para probar rutas protegidas:
-**Authorize** con el `accessToken` de `POST http://localhost:3101/v1/auth/login`.
+`http://localhost:3105/docs` (JSON crudo en `/docs-json`). Cada ruta lleva ejemplo de
+respuesta en **JSON y XML** y sus errores estándar. El XML de ejemplo se genera desde el
+ejemplo JSON con la misma lógica del `XmlInterceptor` (`src/common/swagger/ejemplos.ts`);
+los datos de ejemplo viven en `src/common/swagger/muestras.ts`.
+
+Una ruta nueva se documenta con `@ApiOperation`, `@ApiRespuesta(status, descripcion, ejemplo)`
+y `@ApiErrores(...)`; la prueba `test/swagger.spec.ts` falla si falta alguna.
+
+Para probar rutas protegidas: **Authorize** con el `accessToken` de
+`POST http://localhost:3101/v1/auth/login` (correr Apriori: Administrador o Analista
+comercial; consultar: cualquier perfil interno).
 
 ## Docker
 
@@ -43,6 +52,9 @@ curl -H 'Accept: application/xml' localhost:3105/v1/health
   ```bash
   docker compose -f infra/docker-compose.yml up -d postgres redis algorithms-core
   ```
+  En Windows el contenedor **no recarga solo** al editar el código (los cambios de la carpeta
+  montada no le llegan): después de cambiar algo, `docker restart retail_algorithms_core`
+  antes de probar.
 - **Producción** (GCP, Parcial 3): el `Dockerfile` de esta carpeta, multi-etapa; arranca con
   `node dist/main.js` y solo dependencias de producción. El `.dockerignore` evita enviar
   `node_modules` al contexto de build.
@@ -57,9 +69,15 @@ curl -H 'Accept: application/xml' localhost:3105/v1/health
 ## Pruebas
 
 ```bash
-npm test                 # unitarias (*.spec.ts dentro de src/)
-npm run test:integracion # integración (Fase D): requiere el servicio, auth, Postgres y Redis arriba
+npm test                 # unitarias (*.spec.ts dentro de src/): RolesGuard y Apriori; las corre el CI
+npm run test:integracion # integración (test/): requiere el servicio arriba; NO las corre el CI
+# contra otro host/puerto (p. ej. la imagen de producción):
+ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
 ```
+
+- `src/association/apriori.spec.ts`: ejemplo de libro calculado a mano, antecedente como
+  conjunto, corrida reproducible y validación de soporte.
+- `test/swagger.spec.ts`: cada ruta publica ejemplo JSON y XML y sus errores estándar.
 
 ## Datos
 
@@ -69,6 +87,12 @@ servicio solo escribe sus tablas: `analisis_corridas` y sus hijas
 `reglas_asociacion`, `regla_asociacion_items`, `reglas_exclusion_asociacion` y
 `elasticidades`.
 
+`analisis_corridas` también la escribe decision-service (corridas de accesibilidad), así
+que toda consulta de este servicio filtra por `tipo`. Las entidades no tienen relaciones
+TypeORM con tablas de otros servicios (`usuarios`, `productos`): solo guardan el id, y la
+llave foránea sigue en Postgres.
+
 Lo que lee de otros servicios (canastas de core-process, precios de pricing, catálogo de
-catalog) está en la sección *Lo que consume algorithms-core* del contrato: en Fase B por
-SQL de solo lectura, en Fase C por HTTP.
+catalog, nombres de auth) pasa **solo** por `src/fuente-datos/` (`FuenteDatos`): en Fase B
+por SQL de solo lectura, en Fase C por HTTP con las mismas firmas. Detalle en la sección
+*Lo que consume algorithms-core* del contrato.
