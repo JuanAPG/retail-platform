@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SessionGuard } from '../common/auth/session.guard';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
 import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
@@ -8,6 +10,7 @@ import { AssociationExclusion } from '../entities/association-exclusion.entity';
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { FuenteDatosModule } from '../fuente-datos/fuente-datos.module';
+import { AssociationController } from './association.controller';
 import { AssociationService } from './association.service';
 
 /**
@@ -21,6 +24,9 @@ import { AssociationService } from './association.service';
  * `autoLoadEntities` TypeORM solo conoce las entidades listadas en algún
  * `forFeature`, y las relaciones de AnalysisRun y AssociationRule
  * necesitan a sus hijas registradas.
+ *
+ * JwtModule y SessionGuard van aquí (como en catalog-service): el guard
+ * necesita JwtService y cada módulo solo ve lo que importa.
  */
 @Module({
   imports: [
@@ -34,8 +40,10 @@ import { AssociationService } from './association.service';
       AssociationExclusion,
     ]),
     FuenteDatosModule,
+    JwtModule.register({}),
   ],
-  providers: [AssociationService],
+  controllers: [AssociationController],
+  providers: [AssociationService, SessionGuard],
   exports: [AssociationService],
 })
 export class AssociationModule {}
