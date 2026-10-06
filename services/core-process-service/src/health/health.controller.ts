@@ -16,7 +16,7 @@ export class HealthController {
     schema: {
       example: {
         status: 'ok',
-        service: 'auth-service',
+        service: 'core-process-service',
         version: '1.0.0',
         timestamp: '2026-10-03T12:00:00.000Z',
       },
