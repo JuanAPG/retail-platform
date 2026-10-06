@@ -1,14 +1,22 @@
 # core-process-service — proceso principal + M09 (Sprint 2+3)
 
-Proceso principal (transacciones + canastas) más M09 analítica descriptiva,
-que agrega sobre esos mismos datos. Parte de la plantilla transversal.
+Proceso principal (M06 transacciones + importación CSV, M07 canastas) más
+M09 analítica descriptiva sobre esos mismos datos. Parte de la plantilla
+transversal.
 
-## Endpoints M09 (`/v1/analytics`, JSON y XML, SessionGuard)
+## Endpoints (`/v1/`, JSON y XML, SessionGuard)
 
-`average-ticket`, `products-per-basket`, `purchase-frequency`,
-`units-per-transaction`, `spend-by-category` — con filtros `storeId`,
-`zoneId`, `segmentId`, `dateFrom`, `dateTo`. Contrato:
-`docs/contratos/core-process-analytics.md`.
+- M06: `POST /v1/transactions` (manual), `POST /v1/transactions/import/preview|confirm`,
+  `GET /v1/transactions/import/pending`, `GET /v1/transactions[?filtros]`, `GET /v1/transactions/:id`.
+  Escritura Admin/Analista. Valida contra catalog-service por HTTP (caído → 503, sin insertar);
+  reporta a audit-service best-effort.
+- M07: `GET /v1/baskets[?filtros]`, `GET /v1/baskets/:id`. 1:1 con transacción, zona y segmento
+  congelados; segmento por lectura de `zona_clasificaciones` (RN-02).
+- M09: `average-ticket`, `products-per-basket`, `purchase-frequency`,
+  `units-per-transaction`, `spend-by-category` con filtros.
+
+Contratos: `docs/contratos/core-process-transactions.md`,
+`docs/contratos/core-process-analytics.md` (+ XSD).
 
 ## Correr y probar
 
