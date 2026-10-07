@@ -57,12 +57,27 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Una línea de venta: apunta a la PRESENTACIÓN (RF-35), no al producto. -->
+  <!-- Referencia mínima a una entidad de catalog-service: solo id y
+       nombre. Este servicio no es dueño de esas tablas, así que no expone
+       sus demás columnas (así una columna nueva en el catálogo no rompe
+       este contrato). -->
+  <xs:complexType name="referenciaCatalogo">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Una línea de venta: apunta a la PRESENTACIÓN (RF-35), no al producto.
+       `productId` se expone plano aunque la tabla NO lo guarde: el producto
+       sale por join desde la presentación. -->
   <xs:complexType name="transactionDetail">
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
-      <xs:element name="transactionId" type="xs:string"/>
       <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="productId" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
+      <xs:element name="productSku" type="xs:string"/>
       <xs:element name="quantity" type="importe"/>
       <xs:element name="unitPrice" type="importe"/>
       <xs:element name="subtotal" type="importe"/>
@@ -75,13 +90,14 @@
       <xs:element name="id" type="xs:string"/>
       <xs:element name="folio" type="xs:string"/>
       <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="store" type="referenciaCatalogo" minOccurs="1"/>
       <xs:element name="fecha" type="xs:dateTime"/>
       <xs:element name="total" type="importe"/>
       <xs:element name="canal" type="canalTransaccion"/>
-      <xs:element name="importacionId" type="xs:string" minOccurs="0"/>
-      <xs:element name="capturadaPor" type="xs:string" minOccurs="0"/>
-      <xs:element name="createdAt" type="xs:dateTime" minOccurs="0"/>
-      <xs:element name="details" minOccurs="0">
+      <xs:element name="importacionId" type="xs:string"/>
+      <xs:element name="capturadaPor" type="xs:string"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="details">
         <xs:complexType>
           <xs:sequence>
             <xs:element name="item" type="transactionDetail" minOccurs="0" maxOccurs="unbounded"/>
@@ -104,22 +120,19 @@
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
       <xs:element name="transactionId" type="xs:string"/>
+      <xs:element name="storeId" type="xs:string"/>
       <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zone" type="referenciaCatalogo"/>
       <xs:element name="segmentId" type="enteroNulable"/>
       <xs:element name="date" type="xs:dateTime"/>
       <xs:element name="totalValue" type="importe"/>
       <xs:element name="productCount" type="xs:integer"/>
       <xs:element name="unitsTotal" type="importe"/>
+      <!-- `productos_basicos <= numero_productos` por CHECK en la base:
+           ambos se cuentan en productos DISTINTOS, no en líneas. -->
       <xs:element name="basicProductsCount" type="xs:integer"/>
-      <xs:element name="builtAt" type="xs:dateTime" minOccurs="0"/>
-      <xs:element name="zone" minOccurs="0">
-        <xs:complexType>
-          <xs:sequence>
-            <xs:element name="id" type="xs:string"/>
-            <xs:element name="nombre" type="xs:string" minOccurs="0"/>
-          </xs:sequence>
-        </xs:complexType>
-      </xs:element>
+      <xs:element name="hasBasicProducts" type="xs:boolean"/>
+      <xs:element name="builtAt" type="xs:dateTime"/>
     </xs:sequence>
   </xs:complexType>
 

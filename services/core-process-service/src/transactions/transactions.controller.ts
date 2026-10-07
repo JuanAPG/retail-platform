@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Ip,
   Param,
   ParseUUIDPipe,
@@ -104,6 +107,10 @@ export class TransactionsController {
   }
 
   @Post('import/confirm')
+  // 200 y no el 201 que Nest pone por defecto en POST: no crea un recurso
+  // nuevo, aplica una importación que ya existe. Es lo que documenta el
+  // contrato de Fase A.
+  @HttpCode(HttpStatus.OK)
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary: 'Paso 2 de la importación: confirma e inserta solo las filas válidas.',
@@ -120,6 +127,25 @@ export class TransactionsController {
     @Ip() ip: string,
   ) {
     return this.transactionsService.confirmCsvImport(dto.previewId, usuario, ip);
+  }
+
+  @Delete('import/:id')
+  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @ApiOperation({
+    summary: 'Descarta una importación no confirmada y libera su archivo.',
+    description:
+      'Marca la importación como `descartado`, que es el único estado que libera el hash del ' +
+      'archivo: sin esto un preview equivocado dejaba ese CSV rechazado con 409 para siempre. ' +
+      'Una importación ya confirmada no se puede descartar (sus transacciones ya están en la base).',
+  })
+  @ApiRespuesta(200, 'Importación descartada.', muestras.importacionDescartada)
+  @ApiErrores(400, 401, 403, 404, 409)
+  discardCsvImport(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() usuario: SesionUsuario,
+    @Ip() ip: string,
+  ) {
+    return this.transactionsService.discardCsvImport(id, usuario, ip);
   }
 
   @Get('import/pending')

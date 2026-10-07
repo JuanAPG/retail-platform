@@ -18,6 +18,56 @@ const CSV_100 = join(__dirname, '..', '..', '..', 'db', 'datos_prueba_100_canast
 
 const auth = { Authorization: `Bearer ${TOKEN}` };
 
+/** Identificador de esta corrida, para no chocar con lo ya importado. */
+const CORRIDA = `IT${Date.now().toString(36).toUpperCase()}`;
+
+/**
+ * El CSV real de 100 canastas, con los folios prefijados por esta corrida.
+ *
+ * Una VM de QA nunca tiene la base limpia: el archivo original ya está
+ * importado, así que su hash da 409 y sus folios darían FOLIO_DUPLICADO.
+ * Prefijar los folios conserva los datos reales —tiendas, SKU y
+ * presentaciones del seed, 154 filas, 100 transacciones— y hace la prueba
+ * repetible tantas veces como se corra.
+ */
+function csvDeLaCorrida(): Buffer {
+  const lineas = readFileSync(CSV_100, 'utf-8').trim().split(/\r?\n/);
+  const encabezado = lineas[0];
+  const columnaFolio = encabezado
+    .split(',')
+    .findIndex((c) => c.trim().toLowerCase() === 'folio');
+  if (columnaFolio < 0) throw new Error('El CSV de prueba no trae columna folio.');
+
+  const cuerpo = lineas.slice(1).map((linea) => {
+    const celdas = linea.split(',');
+    celdas[columnaFolio] = `${CORRIDA}-${celdas[columnaFolio].trim()}`;
+    return celdas.join(',');
+  });
+  return Buffer.from([encabezado, ...cuerpo].join('\n') + '\n', 'utf-8');
+}
+
+async function subirCsv(contenido: Buffer, nombre: string) {
+  const forma = new FormData();
+  // `new Uint8Array(...)` y no el Buffer directo: TS no acepta
+  // `Buffer<ArrayBufferLike>` como `BlobPart`.
+  forma.append('file', new Blob([new Uint8Array(contenido)], { type: 'text/csv' }), nombre);
+  const respuesta = await fetch(`${BASE}/v1/transactions/import/preview`, {
+    method: 'POST',
+    headers: auth,
+    body: forma,
+  });
+  return { estado: respuesta.status, cuerpo: await respuesta.json() };
+}
+
+async function confirmar(importacionId: string) {
+  const respuesta = await fetch(`${BASE}/v1/transactions/import/confirm`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ previewId: importacionId }),
+  });
+  return { estado: respuesta.status, cuerpo: await respuesta.json() };
+}
+
 async function get(ruta: string, xml = false) {
   const respuesta = await fetch(`${BASE}${ruta}`, {
     headers: { ...auth, ...(xml ? { Accept: 'application/xml' } : {}) },
@@ -62,33 +112,23 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
   });
 
   it('CSV 100: preview 154/0, confirm 100/100 y canastas visibles', async () => {
-    const forma = new FormData();
-    forma.append('file', new Blob([readFileSync(CSV_100)], { type: 'text/csv' }), 'datos.csv');
-    const preview = await (
-      await fetch(`${BASE}/v1/transactions/import/preview`, {
-        method: 'POST',
-        headers: auth,
-        body: forma,
-      })
-    ).json();
+    const preview = await subirCsv(csvDeLaCorrida(), `${CORRIDA}.csv`);
+    expect(preview.estado).toBe(201);
+    expect(preview.cuerpo.filasTotales).toBe(154);
+    expect(preview.cuerpo.filasConError).toBe(0);
+    expect(preview.cuerpo.transaccionesDetectadas).toBe(100);
 
-    expect(preview.filasTotales).toBe(154);
-    expect(preview.filasConError).toBe(0);
-    expect(preview.transaccionesDetectadas).toBe(100);
-
-    const confirm = await (
-      await fetch(`${BASE}/v1/transactions/import/confirm`, {
-        method: 'POST',
-        headers: { ...auth, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ previewId: preview.importacionId }),
-      })
-    ).json();
+    const confirm = await confirmar(preview.cuerpo.importacionId);
+    expect(confirm.estado).toBe(200);
 
     // El resumen cuadra exactamente con lo insertado.
-    expect(confirm.transaccionesCreadas).toBe(100);
-    expect(confirm.canastasCreadas).toBe(100);
-    expect(confirm.lineasInsertadas).toBe(154);
-    expect(confirm.omitidos).toEqual([]);
+    expect(confirm.cuerpo.transaccionesCreadas).toBe(100);
+    expect(confirm.cuerpo.canastasCreadas).toBe(100);
+    expect(confirm.cuerpo.lineasInsertadas).toBe(154);
+    expect(confirm.cuerpo.filasPendientes).toBe(0);
+    expect(confirm.cuerpo.completa).toBe(true);
+    expect(confirm.cuerpo.estado).toBe('confirmado');
+    expect(confirm.cuerpo.omitidos).toEqual([]);
 
     const canastas = await get('/v1/baskets?limit=5');
     expect(canastas.estado).toBe(200);
@@ -97,11 +137,44 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     expect(canastas.cuerpo.data[0].zoneId).toBeDefined();
   }, 180000);
 
-  it('re-confirmar la misma importación da 409 y no duplica', async () => {
+  it('el mismo archivo otra vez da 409, y descartarlo lo libera', async () => {
+    const contenido = Buffer.from(`folio,fecha,tienda,sku,presentacion,cantidad,precio\n${
+      csvDeLaCorrida().toString('utf-8').split('\n')[1]
+    }\n`);
+
+    const primera = await subirCsv(contenido, `${CORRIDA}-dup.csv`);
+    expect(primera.estado).toBe(201);
+
+    // Mismo contenido => mismo hash => 409 con el id de la previa.
+    const repetida = await subirCsv(contenido, `${CORRIDA}-dup.csv`);
+    expect(repetida.estado).toBe(409);
+    expect(repetida.cuerpo.code).toBe('CONFLICT');
+
+    // Descartarla libera el archivo: sin este endpoint, un preview
+    // equivocado dejaba ese CSV rechazado para siempre.
+    const descarte = await fetch(
+      `${BASE}/v1/transactions/import/${primera.cuerpo.importacionId}`,
+      { method: 'DELETE', headers: auth },
+    );
+    expect(descarte.status).toBe(200);
+    expect(await descarte.json()).toMatchObject({ estado: 'descartado' });
+
+    const tercera = await subirCsv(contenido, `${CORRIDA}-dup.csv`);
+    expect(tercera.estado).toBe(201);
+
+    // Y ya descartada no se puede confirmar ni volver a descartar.
+    const confirmar409 = await confirmar(primera.cuerpo.importacionId);
+    expect(confirmar409.estado).toBe(409);
+  }, 60000);
+
+  it('una importación confirmada no se puede descartar', async () => {
     const pendientes = await get('/v1/transactions/import/pending');
     expect(pendientes.estado).toBe(200);
-    // Tras el caso anterior no debe quedar nada pendiente de ese archivo.
     expect(Array.isArray(pendientes.cuerpo)).toBe(true);
+    // `filasPendientes` distingue "sin confirmar" de "aplicada a medias".
+    for (const i of pendientes.cuerpo) {
+      expect(typeof i.filasPendientes).toBe('number');
+    }
   });
 
   it('cada transacción tiene su canasta: total == valor_total de la canasta', async () => {
@@ -220,6 +293,80 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     const cuerpo = await r.json();
     expect(JSON.stringify(cuerpo.details)).toMatch(/futura/i);
   });
+
+  it('reclassify no reescribe las canastas que ya tienen segmento (RN-02)', async () => {
+    // Las canastas del seed ya están clasificadas: la operación debe
+    // reportar que no hay nada que rellenar y no tocar su segmento.
+    const antes = await get('/v1/baskets?limit=20');
+    const conSegmento = antes.cuerpo.data.filter(
+      (k: { segmentId: number | null }) => k.segmentId != null,
+    );
+    expect(conSegmento.length).toBeGreaterThan(0);
+
+    const r = await fetch(`${BASE}/v1/baskets/reclassify`, { method: 'POST', headers: auth });
+    expect(r.status).toBe(200);
+    const cuerpo = await r.json();
+    expect(typeof cuerpo.canastasSinSegmento).toBe('number');
+    expect(typeof cuerpo.canastasClasificadas).toBe('number');
+    expect(Array.isArray(cuerpo.zonasSinClasificacion)).toBe(true);
+    // Nunca clasifica más de las que estaban sin segmento.
+    expect(cuerpo.canastasClasificadas).toBeLessThanOrEqual(cuerpo.canastasSinSegmento);
+
+    const despues = await get('/v1/baskets?limit=20');
+    for (const k of conSegmento) {
+      const igual = despues.cuerpo.data.find((d: { id: string }) => d.id === k.id);
+      expect(igual.segmentId).toBe(k.segmentId);
+    }
+  }, 60000);
+
+  it('la respuesta no filtra columnas de las tablas de catalog-service', async () => {
+    // La forma de la respuesta es el contrato: devolver la entidad cruda
+    // arrastraba store.direccion.codigoPostal.municipio, zone.municipioId,
+    // activo, updatedAt… y el XML dejaba de validar contra el XSD.
+    const canastas = await get('/v1/baskets?limit=3');
+    const transacciones = await get('/v1/transactions?limit=3');
+    const plano = JSON.stringify(canastas.cuerpo) + JSON.stringify(transacciones.cuerpo);
+    for (const fuga of [
+      'municipioId',
+      'municipio',
+      'direccion',
+      'codigoPostal',
+      'proveedor',
+      'updatedAt',
+      'esCanastaBasica',
+      'categoriaId',
+    ]) {
+      expect(plano).not.toContain(fuga);
+    }
+
+    // Y lo que sí debe estar, está.
+    const canasta = canastas.cuerpo.data[0];
+    expect(Object.keys(canasta).sort()).toEqual(
+      [
+        'basicProductsCount',
+        'builtAt',
+        'date',
+        'hasBasicProducts',
+        'id',
+        'productCount',
+        'segmentId',
+        'storeId',
+        'totalValue',
+        'transactionId',
+        'unitsTotal',
+        'zone',
+        'zoneId',
+      ].sort(),
+    );
+    expect(canasta.zone).toEqual({ id: expect.any(String), nombre: expect.any(String) });
+    expect(transacciones.cuerpo.data[0].details[0]).toHaveProperty('productId');
+  }, 30000);
+
+  it('findAll y findOne devuelven la misma forma', async () => {
+    const lista = await get('/v1/baskets?limit=1');
+    const uno = await get(`/v1/baskets/${lista.cuerpo.data[0].id}`);
+    expect(Object.keys(uno.cuerpo).sort()).toEqual(Object.keys(lista.cuerpo.data[0]).sort());
+  }, 30000);
 
   it('un parámetro de paginación inválido da 400, no 500', async () => {
     const r = await get('/v1/baskets?segmentId=abc');

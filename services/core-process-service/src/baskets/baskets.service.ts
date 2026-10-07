@@ -1,11 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Basket } from '../entities/basket.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { aCanastaRespuesta, CanastaRespuesta } from '../common/respuestas';
 import { BasketFilterDto } from './dto/basket-filter.dto';
+
+export interface ReclasificacionResultado {
+  /** Canastas que estaban sin segmento antes de la operación. */
+  canastasSinSegmento: number;
+  /** Cuántas quedaron clasificadas. */
+  canastasClasificadas: number;
+  /** Zonas que siguen sin clasificación vigente (falta correr el clustering). */
+  zonasSinClasificacion: string[];
+}
 
 @Injectable()
 export class BasketsService {
@@ -41,14 +51,25 @@ export class BasketsService {
     const lines = transaction.details ?? [];
     const totalValue = lines.reduce((sum, l) => sum + Number(l.subtotal), 0);
     const unitsTotal = lines.reduce((sum, l) => sum + Number(l.quantity), 0);
-    const basicProductsCount = lines.filter((l) => l.presentation?.producto?.esCanastaBasica).length;
 
-    // `numero_productos` es "productos DISTINTOS", no líneas de detalle:
-    // 500 ml y 1 L del mismo producto son dos presentaciones pero un solo
-    // producto, y así lo documentan el Swagger y el catálogo de indicadores.
-    const productCount = new Set(
-      lines.map((l) => l.presentation?.productoId ?? l.presentationId),
-    ).size;
+    // Ambos conteos se miden en la MISMA unidad: productos distintos, no
+    // líneas de detalle. 500 ml y 1 L del mismo producto son dos
+    // presentaciones pero un solo producto, y así lo documentan el Swagger
+    // y el catálogo de indicadores.
+    //
+    // Mezclar las unidades viola `chk_canasta_basicos`
+    // (productos_basicos <= numero_productos) en cuanto una venta trae dos
+    // presentaciones del mismo producto básico: la canasta ya no cabe en la
+    // tabla y la venta entera se revierte con un 500.
+    const productos = new Set<string>();
+    const basicos = new Set<string>();
+    for (const linea of lines) {
+      const productoId = linea.presentation?.productoId ?? linea.presentationId;
+      productos.add(productoId);
+      if (linea.presentation?.producto?.esCanastaBasica) basicos.add(productoId);
+    }
+    const productCount = productos.size;
+    const basicProductsCount = basicos.size;
 
     const basket = em.create(Basket, {
       transactionId: transaction.id,
@@ -66,14 +87,64 @@ export class BasketsService {
   }
 
   /**
-   * Reclasifica una canasta ya construida contra la clasificación vigente
-   * de su zona. Se usa cuando la zona se clasificó después de la venta
-   * (la canasta nació con `segmentId` nulo).
+   * Rellena el segmento de las canastas que nacieron SIN él, usando la
+   * clasificación vigente de su zona.
+   *
+   * Hace falta porque la corrida de clustering (RF-16) clasifica las zonas
+   * DESPUÉS de que ya hay ventas: una canasta construida antes nacía con
+   * `segmentId` nulo y, sin esta operación, se quedaba así para siempre,
+   * invisible para todo el análisis por nivel de ingreso.
+   *
+   * NO toca las canastas que ya tienen segmento. El esquema congela la
+   * clasificación a propósito ("reclasificar una zona hoy no debe
+   * reescribir el análisis de meses pasados", db/schema.sql), así que esto
+   * solo llena huecos, nunca reescribe historia.
    */
-  async classifyByZoneAndSegment(basketId: string): Promise<Basket> {
-    const basket = await this.findOne(basketId);
+  async classifyPending(filtros: { zoneId?: string } = {}): Promise<ReclasificacionResultado> {
+    const qb = this.basketsRepo
+      .createQueryBuilder('basket')
+      .select('basket.id', 'id')
+      .addSelect('basket.zona_id', 'zoneId')
+      .where('basket.segmentId IS NULL');
+    if (filtros.zoneId) qb.andWhere('basket.zoneId = :zoneId', { zoneId: filtros.zoneId });
+
+    const sinSegmento = await qb.getRawMany<{ id: string; zoneId: string }>();
+    if (sinSegmento.length === 0) {
+      return { canastasSinSegmento: 0, canastasClasificadas: 0, zonasSinClasificacion: [] };
+    }
+
+    // Un solo lookup por zona, no uno por canasta.
+    const zonas = [...new Set(sinSegmento.map((k) => k.zoneId))];
+    const segmentoPorZona = new Map<string, number | null>();
+    for (const zoneId of zonas) {
+      segmentoPorZona.set(zoneId, await this.findSegmentId(zoneId));
+    }
+
+    let clasificadas = 0;
+    for (const [zoneId, segmentId] of segmentoPorZona) {
+      if (segmentId == null) continue;
+      const ids = sinSegmento.filter((k) => k.zoneId === zoneId).map((k) => k.id);
+      await this.basketsRepo.update({ id: In(ids) }, { segmentId });
+      clasificadas += ids.length;
+    }
+
+    return {
+      canastasSinSegmento: sinSegmento.length,
+      canastasClasificadas: clasificadas,
+      // Zonas que siguen sin clasificación: hay que correr el clustering
+      // o asignarlas a mano en catalog-service.
+      zonasSinClasificacion: zonas.filter((z) => segmentoPorZona.get(z) == null),
+    };
+  }
+
+  /**
+   * Reclasifica UNA canasta ya construida contra la clasificación vigente
+   * de su zona. Se usa cuando la zona se clasificó después de la venta.
+   */
+  async classifyByZoneAndSegment(basketId: string): Promise<CanastaRespuesta> {
+    const basket = await this.buscar(basketId);
     basket.segmentId = await this.findSegmentId(basket.zoneId);
-    return this.basketsRepo.save(basket);
+    return aCanastaRespuesta(await this.basketsRepo.save(basket));
   }
 
   /**
@@ -100,13 +171,20 @@ export class BasketsService {
    * Canastas con filtros combinables (intersección: todo es AND) y
    * paginación estándar `?page&limit`.
    */
-  async findAll(filters: BasketFilterDto): Promise<Pagina<Basket>> {
+  async findAll(filters: BasketFilterDto): Promise<Pagina<CanastaRespuesta>> {
     const qb = this.basketsRepo
       .createQueryBuilder('basket')
-      .leftJoinAndSelect('basket.zone', 'zone');
+      .leftJoinAndSelect('basket.zone', 'zone')
+      // Siempre, no solo al filtrar por tienda: `storeId` es parte de la
+      // respuesta y findAll/findOne deben devolver la MISMA forma.
+      .leftJoinAndSelect('basket.transaction', 'transaction');
 
     this.aplicarFiltros(qb, filters);
-    return paginar(qb.orderBy('basket.date', 'DESC').addOrderBy('basket.id', 'DESC'), filters);
+    const pagina = await paginar(
+      qb.orderBy('basket.date', 'DESC').addOrderBy('basket.id', 'DESC'),
+      filters,
+    );
+    return { ...pagina, data: pagina.data.map(aCanastaRespuesta) };
   }
 
   private aplicarFiltros(qb: SelectQueryBuilder<Basket>, filters: BasketFilterDto): void {
@@ -121,12 +199,10 @@ export class BasketsService {
     if (filters.dateTo) {
       qb.andWhere('basket.date < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
     }
-    // La tienda no está en `canastas`: se llega por su transacción.
+    // La tienda no está en `canastas`: se llega por su transacción, que
+    // `findAll` ya trae unida para poder devolver `storeId`.
     if (filters.storeId) {
-      qb.innerJoin('basket.transaction', 'transaction').andWhere(
-        'transaction.storeId = :storeId',
-        { storeId: filters.storeId },
-      );
+      qb.andWhere('transaction.storeId = :storeId', { storeId: filters.storeId });
     }
     if (filters.minTotalValue != null) {
       qb.andWhere('basket.totalValue >= :minTotalValue', { minTotalValue: filters.minTotalValue });
@@ -166,7 +242,12 @@ export class BasketsService {
     }
   }
 
-  async findOne(id: string): Promise<Basket> {
+  async findOne(id: string): Promise<CanastaRespuesta> {
+    return aCanastaRespuesta(await this.buscar(id));
+  }
+
+  /** La entidad cruda, para uso interno (clasificación). */
+  private async buscar(id: string): Promise<Basket> {
     const basket = await this.basketsRepo.findOne({
       where: { id },
       relations: ['zone', 'transaction'],

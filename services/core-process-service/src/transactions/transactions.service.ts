@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
 import { EstadoImportacion, Importacion } from '../entities/importacion.entity';
@@ -22,6 +22,7 @@ import { CatalogClient, ProductoCatalogo } from '../common/catalog/catalog-clien
 import { BasketsService } from '../baskets/baskets.service';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { aTransaccionRespuesta, TransaccionRespuesta } from '../common/respuestas';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { MapaColumnas, parsearCsv } from './csv.util';
@@ -78,11 +79,28 @@ export interface CsvImportResult {
   filasTotales: number;
   filasValidas: number;
   filasConError: number;
+  /** Líneas insertadas en ESTA llamada. */
   lineasInsertadas: number;
+  /** Transacciones creadas en ESTA llamada. */
   transaccionesCreadas: number;
   canastasCreadas: number;
+  /** Acumulado de todas las llamadas (lo que hay en la base). */
+  transaccionesTotales: number;
+  /**
+   * Filas válidas que todavía no se insertaron. Si es > 0 la importación
+   * NO se marca confirmada y se puede reintentar para terminarla.
+   */
+  filasPendientes: number;
+  completa: boolean;
   omitidos: CsvImportOmitido[];
   errores: CsvPreviewError[];
+}
+
+export interface ImportacionDescartada {
+  importacionId: string;
+  fileName: string;
+  estado: string;
+  estadoPrevio: string;
 }
 
 export interface ImportacionPendiente {
@@ -92,6 +110,12 @@ export interface ImportacionPendiente {
   filasTotales: number;
   filasValidas: number;
   filasConError: number;
+  /**
+   * Filas válidas que aún no se insertaron. Si es menor que `filasValidas`,
+   * esta importación quedó aplicada a medias y confirmarla de nuevo
+   * retoma solo lo que falta.
+   */
+  filasPendientes: number;
   cargadoEn: string;
 }
 
@@ -144,7 +168,7 @@ export class TransactionsService {
 
   // --- Lectura -----------------------------------------------------
 
-  findAll(filters: TransactionFilterDto): Promise<Pagina<Transaction>> {
+  async findAll(filters: TransactionFilterDto): Promise<Pagina<TransaccionRespuesta>> {
     const qb = this.transactionsRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.store', 'store')
@@ -157,10 +181,19 @@ export class TransactionsService {
     // Día completo: `fecha` es timestamptz (mismo criterio que M07 y M09).
     if (filters.dateTo) qb.andWhere('t.fecha < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
 
-    return paginar(qb.orderBy('t.fecha', 'DESC').addOrderBy('t.id', 'DESC'), filters);
+    const pagina = await paginar(
+      qb.orderBy('t.fecha', 'DESC').addOrderBy('t.id', 'DESC'),
+      filters,
+    );
+    return { ...pagina, data: pagina.data.map(aTransaccionRespuesta) };
   }
 
-  async findOne(id: string): Promise<Transaction> {
+  async findOne(id: string): Promise<TransaccionRespuesta> {
+    return aTransaccionRespuesta(await this.buscar(id));
+  }
+
+  /** La entidad cruda, para uso interno. */
+  private async buscar(id: string): Promise<Transaction> {
     const transaction = await this.transactionsRepo.findOne({
       where: { id },
       relations: ['store', 'details', 'details.presentation', 'details.presentation.producto'],
@@ -178,7 +211,7 @@ export class TransactionsService {
     usuario: SesionUsuario,
     token?: string,
     ip?: string,
-  ): Promise<Transaction> {
+  ): Promise<TransaccionRespuesta> {
     const [tiendas, productos] = await Promise.all([
       this.catalogos.listarTiendas(token),
       this.catalogos.listarProductos(token),
@@ -421,7 +454,21 @@ export class TransactionsService {
       throw new NotFoundException(`No existe la importación ${previewId}.`);
     }
     if (importacion.estado === 'confirmado') {
-      throw new ConflictException('Esta importación ya fue confirmada.');
+      // Una importación marcada `confirmado` que todavía tiene filas
+      // válidas sin insertar quedó inconsistente (confirmación
+      // interrumpida bajo una versión anterior, que cerraba el estado
+      // aunque faltaran filas). Negarse con 409 dejaría esas filas sin
+      // ninguna vía de recuperación, así que se permite terminarla.
+      const faltantes = await this.filasRepo.count({
+        where: { importacionId: previewId, valida: true, transactionId: IsNull() },
+      });
+      if (faltantes === 0) {
+        throw new ConflictException('Esta importación ya fue confirmada.');
+      }
+      this.logger.warn(
+        `La importación ${previewId} está marcada confirmada pero tiene ${faltantes} ` +
+          'filas válidas sin insertar: se retoma para completarla.',
+      );
     }
     if (importacion.estado === 'descartado') {
       throw new ConflictException('Esta importación fue descartada y no se puede confirmar.');
@@ -430,11 +477,29 @@ export class TransactionsService {
       throw new ConflictException('Esta importación aún no está validada.');
     }
 
+    // Solo las filas que FALTAN. Una confirmación que se cayó a medias
+    // (p. ej. la base se fue) deja insertadas unas y no otras; las ya
+    // insertadas tienen `transaccion_id`, así que reintentar retoma donde
+    // se quedó en vez de duplicarlas o de abandonarlas.
     const filas = await this.filasRepo.find({
-      where: { importacionId: previewId, valida: true },
+      where: { importacionId: previewId, valida: true, transactionId: IsNull() },
       order: { rowNumber: 'ASC' },
     });
     if (filas.length === 0) {
+      const yaInsertadas = await this.filasRepo.count({
+        where: { importacionId: previewId, valida: true },
+      });
+      if (yaInsertadas > 0) {
+        // Todas sus filas válidas ya están en la base: se cierra el estado
+        // en vez de dejarla pendiente para siempre.
+        return this.cerrarImportacion(importacion, usuario, ip, {
+          creadas: 0,
+          canastas: 0,
+          lineas: 0,
+          omitidos: [],
+          pendientes: 0,
+        });
+      }
       throw new BadRequestException('La importación no tiene filas válidas que confirmar.');
     }
 
@@ -462,6 +527,16 @@ export class TransactionsService {
         where: { storeId: tiendaId, folio },
       });
       if (existe) {
+        // La venta ya está en la base (otra importación, captura manual o
+        // una pasada anterior de esta misma). Se liga la fila del CSV a esa
+        // transacción: es la trazabilidad correcta —"esta línea del archivo
+        // corresponde a esa venta"— y además deja de contar como pendiente,
+        // para que la importación pueda cerrarse en vez de quedar abierta
+        // para siempre por un folio que nunca se va a insertar.
+        await this.filasRepo.update(
+          { id: In(grupo.map((f) => f.id)) },
+          { transactionId: existe.id },
+        );
         omitidos.push({
           folio,
           tienda,
@@ -520,14 +595,60 @@ export class TransactionsService {
       }
     }
 
-    importacion.estado = 'confirmado';
-    importacion.confirmedBy = usuario.id;
-    importacion.confirmedAt = new Date();
-    importacion.createdTransactions = creadas;
+    // Cuántas filas válidas siguen sin insertar DESPUÉS de esta pasada.
+    const pendientes = await this.filasRepo.count({
+      where: { importacionId: previewId, valida: true, transactionId: IsNull() },
+    });
+
+    return this.cerrarImportacion(importacion, usuario, ip, {
+      creadas,
+      canastas,
+      lineas,
+      omitidos,
+      pendientes,
+    });
+  }
+
+  /**
+   * Cierra (o deja abierta) la importación y arma el resumen.
+   *
+   * La marca `confirmado` SOLO si no quedó ninguna fila válida sin
+   * insertar. Si quedaron pendientes —porque la base se cayó a media
+   * confirmación o porque algún folio falló— el estado se conserva para
+   * que un reintento pueda terminarla: marcarla `confirmado` con filas
+   * varadas las dejaba sin ninguna vía de recuperación, porque el
+   * siguiente intento respondía 409.
+   */
+  private async cerrarImportacion(
+    importacion: Importacion,
+    usuario: SesionUsuario,
+    ip: string | undefined,
+    resumen: {
+      creadas: number;
+      canastas: number;
+      lineas: number;
+      omitidos: CsvImportOmitido[];
+      pendientes: number;
+    },
+  ): Promise<CsvImportResult> {
+    const { creadas, canastas, lineas, omitidos, pendientes } = resumen;
+    const completa = pendientes === 0;
+
+    // Se CUENTA en la base, no se acumula en memoria: si una pasada se
+    // interrumpió antes de guardar su contador, lo insertado en esa pasada
+    // se perdía de la cuenta (quedaba 350 cuando había 400 filas reales).
+    importacion.createdTransactions = await this.transactionsRepo.count({
+      where: { importacionId: importacion.id },
+    });
+    if (completa) {
+      importacion.estado = 'confirmado';
+      importacion.confirmedBy = usuario.id;
+      importacion.confirmedAt = new Date();
+    }
     await this.importacionesRepo.save(importacion);
 
     const errores = await this.erroresRepo.find({
-      where: { importacionId: previewId },
+      where: { importacionId: importacion.id },
       order: { rowNumber: 'ASC' },
       take: MAX_ERRORES_PREVIEW,
     });
@@ -541,16 +662,20 @@ export class TransactionsService {
       registroId: importacion.id,
       accion: 'importacion',
       descripcion:
-        `Importación CSV "${importacion.fileName}" confirmada: ` +
-        `${creadas} transacciones y ${canastas} canastas creadas` +
-        (omitidos.length > 0 ? `, ${omitidos.length} folios omitidos.` : '.'),
+        `Importación CSV "${importacion.fileName}" ` +
+        (completa ? 'confirmada' : 'confirmada PARCIALMENTE') +
+        `: ${creadas} transacciones y ${canastas} canastas creadas en esta pasada` +
+        (omitidos.length > 0 ? `, ${omitidos.length} folios omitidos` : '') +
+        (completa ? '.' : `, ${pendientes} filas válidas pendientes de reintentar.`),
       ip,
       cambios: [
         { campo: 'transacciones_creadas', posterior: String(creadas) },
         { campo: 'canastas_creadas', posterior: String(canastas) },
         { campo: 'lineas_insertadas', posterior: String(lineas) },
         { campo: 'filas_rechazadas', posterior: String(importacion.errorRows) },
+        { campo: 'filas_pendientes', posterior: String(pendientes) },
         { campo: 'folios_omitidos', posterior: String(omitidos.length) },
+        { campo: 'estado', posterior: importacion.estado },
       ],
     });
 
@@ -563,6 +688,9 @@ export class TransactionsService {
       lineasInsertadas: lineas,
       transaccionesCreadas: creadas,
       canastasCreadas: canastas,
+      transaccionesTotales: importacion.createdTransactions,
+      filasPendientes: pendientes,
+      completa,
       omitidos,
       errores: errores.map((e) => ({
         fila: e.rowNumber,
@@ -574,11 +702,81 @@ export class TransactionsService {
     };
   }
 
+  /**
+   * Descarta una importación no confirmada: libera su archivo para poder
+   * volver a subirlo.
+   *
+   * Sin esto, un preview equivocado dejaba el `file_hash` tomado y el
+   * archivo quedaba rechazado con 409 para siempre, porque `descartado`
+   * era el único estado que libera el hash y ningún endpoint lo escribía.
+   * Las filas y errores de staging se van por `ON DELETE CASCADE` cuando
+   * se purgue la importación; aquí basta con cambiar el estado.
+   */
+  async discardCsvImport(
+    previewId: string,
+    usuario: SesionUsuario,
+    ip?: string,
+  ): Promise<ImportacionDescartada> {
+    const importacion = await this.importacionesRepo.findOne({ where: { id: previewId } });
+    if (!importacion) {
+      throw new NotFoundException(`No existe la importación ${previewId}.`);
+    }
+    if (importacion.estado === 'confirmado') {
+      throw new ConflictException(
+        'Esta importación ya fue confirmada: sus transacciones están en la base y no se puede descartar.',
+      );
+    }
+    if (importacion.estado === 'descartado') {
+      throw new ConflictException('Esta importación ya estaba descartada.');
+    }
+
+    const estadoPrevio = importacion.estado;
+    importacion.estado = 'descartado';
+    await this.importacionesRepo.save(importacion);
+
+    await this.auditoria.reportar({
+      tabla: 'importaciones',
+      registroId: importacion.id,
+      accion: 'update',
+      descripcion: `Importación CSV "${importacion.fileName}" descartada sin confirmar.`,
+      usuarioId: usuario.id,
+      rolId: usuario.rolId,
+      ip,
+      cambios: [{ campo: 'estado', previo: estadoPrevio, posterior: 'descartado' }],
+    });
+
+    return {
+      importacionId: importacion.id,
+      fileName: importacion.fileName,
+      estado: importacion.estado,
+      estadoPrevio,
+    };
+  }
+
   async listPendingImports(): Promise<ImportacionPendiente[]> {
     const pendientes = await this.importacionesRepo.find({
       where: { estado: In(['validado', 'con_errores']) },
       order: { uploadedAt: 'DESC' },
     });
+    if (pendientes.length === 0) return [];
+
+    // Cuántas filas válidas faltan por insertar en cada una, de una sola
+    // consulta: una importación aplicada a medias tiene que distinguirse
+    // de una que no se ha confirmado nunca.
+    const faltantes = new Map<string, number>(
+      (
+        await this.filasRepo
+          .createQueryBuilder('f')
+          .select('f.importacionId', 'importacionId')
+          .addSelect('COUNT(*)', 'pendientes')
+          .where('f.importacionId IN (:...ids)', { ids: pendientes.map((i) => i.id) })
+          .andWhere('f.valida = true')
+          .andWhere('f.transactionId IS NULL')
+          .groupBy('f.importacionId')
+          .getRawMany<{ importacionId: string; pendientes: string }>()
+      ).map((f) => [f.importacionId, Number(f.pendientes)]),
+    );
+
     return pendientes.map((i) => ({
       importacionId: i.id,
       fileName: i.fileName,
@@ -586,6 +784,7 @@ export class TransactionsService {
       filasTotales: i.totalRows,
       filasValidas: i.validRows,
       filasConError: i.errorRows,
+      filasPendientes: faltantes.get(i.id) ?? 0,
       cargadoEn: i.uploadedAt.toISOString(),
     }));
   }

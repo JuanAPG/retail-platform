@@ -111,6 +111,76 @@ describe('BasketsService (M07)', () => {
     });
   });
 
+  it('basicProductsCount cuenta productos distintos, igual que productCount', async () => {
+    // Dos presentaciones del MISMO producto básico: 2 líneas, 1 producto.
+    // Contar líneas aquí y productos distintos allá violaba el CHECK
+    // `productos_basicos <= numero_productos` y reventaba la venta con 500.
+    const dosPresentacionesBasicas = {
+      ...TRANSACCION,
+      details: [
+        {
+          quantity: '1',
+          subtotal: '25.00',
+          presentationId: 'pr-1l',
+          presentation: { productoId: 'leche', producto: { esCanastaBasica: true } },
+        },
+        {
+          quantity: '2',
+          subtotal: '30.00',
+          presentationId: 'pr-500',
+          presentation: { productoId: 'leche', producto: { esCanastaBasica: true } },
+        },
+      ],
+    };
+    const { svc, guardadas } = servicio(dosPresentacionesBasicas, 2);
+    await svc.buildFromTransaction('t1');
+
+    expect(guardadas[0]).toMatchObject({ productCount: 1, basicProductsCount: 1 });
+    // El invariante de la tabla, comprobado explícitamente.
+    expect(guardadas[0].basicProductsCount as number).toBeLessThanOrEqual(
+      guardadas[0].productCount as number,
+    );
+  });
+
+  it('nunca produce basicProductsCount > productCount (invariante de la tabla)', async () => {
+    const casos = [
+      // Mezcla: 2 productos, ambos básicos, uno con dos presentaciones.
+      [
+        { p: 'leche', basico: true },
+        { p: 'leche', basico: true },
+        { p: 'pan', basico: true },
+      ],
+      // Ninguno básico.
+      [
+        { p: 'refresco', basico: false },
+        { p: 'refresco', basico: false },
+      ],
+      // Tres presentaciones del mismo producto básico.
+      [
+        { p: 'frijol', basico: true },
+        { p: 'frijol', basico: true },
+        { p: 'frijol', basico: true },
+      ],
+    ];
+    for (const lineas of casos) {
+      const transaccion = {
+        ...TRANSACCION,
+        details: lineas.map((l, i) => ({
+          quantity: '1',
+          subtotal: '10.00',
+          presentationId: `pr${i}`,
+          presentation: { productoId: l.p, producto: { esCanastaBasica: l.basico } },
+        })),
+      };
+      const { svc, guardadas } = servicio(transaccion, 2);
+      await svc.buildFromTransaction('t1');
+      const canasta = guardadas[0];
+      expect(canasta.basicProductsCount as number).toBeLessThanOrEqual(
+        canasta.productCount as number,
+      );
+    }
+  });
+
   it('usa el EntityManager que recibe, para correr dentro de la transacción de BD', async () => {
     const { svc, manager } = servicio(TRANSACCION, 2);
     const propio = managerFalso(TRANSACCION, 7);
@@ -218,5 +288,113 @@ describe('BasketsService.findAll (filtros y paginación)', () => {
       data: [],
       total: 0,
     });
+  });
+});
+
+describe('BasketsService.classifyPending (rellena segmentos faltantes)', () => {
+  function servicioConPendientes(
+    sinSegmento: { id: string; zoneId: string }[],
+    segmentoPorZona: Record<string, number | null>,
+  ) {
+    const actualizaciones: { ids: string[]; segmentId: number }[] = [];
+    const qb: Record<string, jest.Mock> = {};
+    for (const m of ['select', 'addSelect', 'where', 'andWhere']) qb[m] = jest.fn(() => qb);
+    qb.getRawMany = jest.fn(async () => sinSegmento);
+
+    const basketsRepo = {
+      createQueryBuilder: jest.fn(() => qb),
+      update: jest.fn(async (criterio: { id?: { _value?: string[] } }, cambios: { segmentId: number }) => {
+        actualizaciones.push({
+          ids: (criterio.id as { _value?: string[] })?._value ?? [],
+          segmentId: cambios.segmentId,
+        });
+      }),
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
+    const dataSource = {
+      manager: {
+        query: jest.fn(async (_sql: string, params: unknown[]) => {
+          const segmento = segmentoPorZona[params[0] as string];
+          return segmento == null ? [] : [{ segmentId: segmento }];
+        }),
+      },
+    };
+    const svc = new BasketsService(basketsRepo as never, { findOne: jest.fn() } as never, dataSource as never);
+    return { svc, actualizaciones, dataSource, qb };
+  }
+
+  it('rellena las canastas cuya zona ya tiene clasificación vigente', async () => {
+    const { svc, actualizaciones } = servicioConPendientes(
+      [
+        { id: 'k1', zoneId: 'z1' },
+        { id: 'k2', zoneId: 'z1' },
+        { id: 'k3', zoneId: 'z2' },
+      ],
+      { z1: 3, z2: 5 },
+    );
+
+    const r = await svc.classifyPending();
+
+    expect(r).toEqual({
+      canastasSinSegmento: 3,
+      canastasClasificadas: 3,
+      zonasSinClasificacion: [],
+    });
+    expect(actualizaciones).toEqual([
+      { ids: ['k1', 'k2'], segmentId: 3 },
+      { ids: ['k3'], segmentId: 5 },
+    ]);
+  });
+
+  it('deja pendientes las zonas que siguen sin clasificar, y las reporta', async () => {
+    const { svc, actualizaciones } = servicioConPendientes(
+      [
+        { id: 'k1', zoneId: 'z1' },
+        { id: 'k2', zoneId: 'sin-clasificar' },
+      ],
+      { z1: 3, 'sin-clasificar': null },
+    );
+
+    const r = await svc.classifyPending();
+
+    expect(r.canastasSinSegmento).toBe(2);
+    expect(r.canastasClasificadas).toBe(1);
+    expect(r.zonasSinClasificacion).toEqual(['sin-clasificar']);
+    // No se inventa un segmento para la zona sin clasificar.
+    expect(actualizaciones).toEqual([{ ids: ['k1'], segmentId: 3 }]);
+  });
+
+  it('consulta cada zona UNA vez, no una por canasta', async () => {
+    const { svc, dataSource } = servicioConPendientes(
+      Array.from({ length: 50 }, (_, i) => ({ id: `k${i}`, zoneId: i % 2 ? 'z1' : 'z2' })),
+      { z1: 1, z2: 2 },
+    );
+    await svc.classifyPending();
+    expect(dataSource.manager.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('sin canastas pendientes no toca la base', async () => {
+    const { svc, actualizaciones, dataSource } = servicioConPendientes([], {});
+    const r = await svc.classifyPending();
+    expect(r).toEqual({
+      canastasSinSegmento: 0,
+      canastasClasificadas: 0,
+      zonasSinClasificacion: [],
+    });
+    expect(actualizaciones).toEqual([]);
+    expect(dataSource.manager.query).not.toHaveBeenCalled();
+  });
+
+  it('filtra por zona cuando se le pide', async () => {
+    const { svc, qb } = servicioConPendientes([{ id: 'k1', zoneId: 'z1' }], { z1: 4 });
+    await svc.classifyPending({ zoneId: 'z1' });
+    expect(qb.andWhere).toHaveBeenCalledWith('basket.zoneId = :zoneId', { zoneId: 'z1' });
+  });
+
+  it('solo mira las que tienen segmento NULO: no reescribe historia (RN-02)', async () => {
+    const { svc, qb } = servicioConPendientes([], {});
+    await svc.classifyPending();
+    expect(qb.where).toHaveBeenCalledWith('basket.segmentId IS NULL');
   });
 });

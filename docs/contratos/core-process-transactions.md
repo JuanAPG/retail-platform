@@ -75,6 +75,19 @@ motivo nunca filtra el texto crudo del motor de base de datos. Audita el
 evento a `audit-service` (best-effort: si no responde, la importación
 igual queda y el fallo se registra en el log).
 
+**Reanudable.** Solo toma las filas válidas que todavía no se
+insertaron (las ya insertadas tienen `transaccion_id`), y la importación
+se marca `confirmado` **únicamente** si no quedó ninguna pendiente. Si la
+confirmación se interrumpe a medias —se cae la base, falla un folio— el
+estado se conserva y un segundo `confirm` termina lo que falta sin
+duplicar nada. Marcarla confirmada con filas pendientes las dejaba sin
+ninguna vía de recuperación, porque el reintento respondía 409.
+
+Un folio que ya existe en la base se omite, pero su fila de staging se
+liga a esa transacción: es la trazabilidad correcta y evita que la
+importación quede abierta para siempre por un folio que nunca se va a
+insertar.
+
 Response `200` con el resumen de lo realmente insertado
 (`xsd/core-process/csv-confirm.xsd`):
 
@@ -82,15 +95,42 @@ Response `200` con el resumen de lo realmente insertado
 { "importacionId": "uuid", "estado": "confirmado",
   "filasTotales": 154, "filasValidas": 154, "filasConError": 0,
   "lineasInsertadas": 154, "transaccionesCreadas": 100,
-  "canastasCreadas": 100, "omitidos": [], "errores": [] }
+  "canastasCreadas": 100, "transaccionesTotales": 100,
+  "filasPendientes": 0, "completa": true, "omitidos": [], "errores": [] }
 ```
 
-Ya confirmada / descartada / sin validar → 409. Sin filas válidas → 400.
+`transaccionesCreadas` es lo insertado en **esta** llamada;
+`transaccionesTotales` es el acumulado que hay en la base (se cuenta, no
+se acumula en memoria). `completa: false` con `filasPendientes > 0`
+significa que hay que reintentar.
+
+Descartada / sin validar → 409. Sin filas válidas → 400. Ya confirmada
+→ 409, **salvo** que tenga filas válidas sin insertar: entonces se retoma
+para completarla (auto-reparación de importaciones que quedaron
+inconsistentes).
+
+## DELETE /v1/transactions/import/:id (Admin, Analista)
+
+Descarta una importación no confirmada. `descartado` es el único estado
+que libera el hash del archivo: sin esto, un preview equivocado dejaba
+ese CSV rechazado con 409 para siempre.
+
+Response `200` (`xsd/core-process/csv-discard.xsd`):
+
+```json
+{ "importacionId": "uuid", "fileName": "ventas.csv",
+  "estado": "descartado", "estadoPrevio": "con_errores" }
+```
+
+Una importación ya confirmada **no** se puede descartar (sus
+transacciones ya están en la base) → 409.
 
 ## GET /v1/transactions/import/pending (Admin, Analista)
 
 Importaciones en `validado` o `con_errores` para retomar
-(`xsd/core-process/imports-pending.xsd`).
+(`xsd/core-process/imports-pending.xsd`). `filasPendientes` menor que
+`filasValidas` significa que esa importación quedó **aplicada a medias** y
+confirmarla de nuevo retoma solo lo que falta.
 
 ## GET /v1/transactions y GET /v1/transactions/:id
 
@@ -114,8 +154,46 @@ unión): `storeId`, `zoneId`, `segmentId`, `dateFrom`, `dateTo`
 `page` y `limit`. Sin resultados → `data: []`, no error.
 
 `segmentId` es nulo mientras la zona no tenga clasificación vigente: la
-canasta se construye igual y se puede reclasificar después
-(`BasketsService.classifyByZoneAndSegment`).
+canasta se construye igual (no se bloquea la venta) y se rellena después
+con `POST /v1/baskets/reclassify`.
+
+## POST /v1/baskets/reclassify[?zoneId] (Admin, Analista)
+
+Rellena el segmento de las canastas que nacieron sin él. Hace falta
+porque la corrida de clustering (RF-16) clasifica las zonas **después** de
+que ya hay ventas: sin esto, esas canastas quedaban sin segmento para
+siempre e invisibles para todo el análisis por nivel de ingreso.
+
+**Solo llena huecos.** No reescribe el segmento de las canastas que ya lo
+tienen: la clasificación se congela al construir la canasta a propósito
+(RN-02, «reclasificar una zona hoy no debe reescribir el análisis de
+meses pasados»).
+
+Response `200` (`xsd/core-process/reclassify.xsd`):
+
+```json
+{ "canastasSinSegmento": 12, "canastasClasificadas": 12,
+  "zonasSinClasificacion": [] }
+```
+
+`zonasSinClasificacion` lista las zonas que siguen sin clasificación
+vigente: falta correr el clustering o asignarlas a mano en
+catalog-service.
+
+## Forma de las respuestas
+
+Las respuestas **no** son las entidades crudas. `storeId`/`zoneId` vienen
+acompañados de una referencia mínima `{id, nombre}` al catálogo, y nada
+más de esas tablas viaja: este servicio no es dueño de ellas, y devolver
+la entidad arrastraba `store.direccion.codigoPostal.municipio`,
+`zone.municipioId`, `activo`, `updatedAt`… lo que rompía la validación
+XSD en cuanto catalog-service agregaba una columna. `findAll` y `findOne`
+devuelven exactamente la misma forma.
+
+El detalle de la transacción expone `productId` plano aunque la tabla
+**no** lo guarde (el producto sale por join desde la presentación, RF-35):
+guardar ambos permitiría contradicción, exponerlo le ahorra al cliente
+navegar el anidamiento.
 
 Respuesta paginada (`xsd/core-process/baskets-page.xsd`) y detalle
 (`xsd/core-process/basket.xsd`).

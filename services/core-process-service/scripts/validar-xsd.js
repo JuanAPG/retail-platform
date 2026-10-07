@@ -29,6 +29,119 @@ if (!fs.existsSync(path.join(DIST, 'common', 'interceptors', 'xml.interceptor.js
 
 const { serializarXml } = require(path.join(DIST, 'common', 'interceptors', 'xml.interceptor.js'));
 const { muestras } = require(path.join(DIST, 'common', 'swagger', 'muestras.js'));
+const { aTransaccionRespuesta, aCanastaRespuesta } = require(
+  path.join(DIST, 'common', 'respuestas.js'),
+);
+
+/**
+ * ENTIDADES como las devuelve TypeORM, con sus relaciones `eager` cargadas
+ * y todas las columnas de las tablas de catálogo.
+ *
+ * Esto es lo que importa validar: antes el script solo probaba los
+ * ejemplos de Swagger escritos a mano, así que daba 21/21 mientras la
+ * respuesta viva NO validaba (el serializador emitía `store`,
+ * `zone.municipioId`, `activo`, `updatedAt`… que ningún XSD declaraba).
+ * Pasar la entidad por el mapeador reproduce la salida real del endpoint.
+ */
+const zonaEntidad = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  nombre: 'Centro',
+  municipioId: 7,
+  descripcion: 'Zona centro',
+  activo: true,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-02-01T00:00:00Z'),
+  municipio: { id: 7, nombre: 'Monterrey', estado: 'Nuevo León' },
+};
+
+const tiendaEntidad = {
+  id: '22222222-2222-4222-8222-222222222222',
+  nombre: 'Super Valle Centro',
+  zonaId: zonaEntidad.id,
+  zona: zonaEntidad,
+  activo: true,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-02-01T00:00:00Z'),
+  direccion: {
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    calle: 'Morelos 100',
+    codigoPostal: { codigo: '64000', municipio: { id: 7, nombre: 'Monterrey' } },
+  },
+  proveedor: { id: 'pppppppp-pppp-4ppp-8ppp-pppppppppppp', nombre: 'Lácteos del Norte' },
+};
+
+const transaccionEntidad = {
+  id: '11111111-1111-4111-8111-111111111111',
+  folio: 'T-V-001',
+  storeId: tiendaEntidad.id,
+  store: tiendaEntidad,
+  fecha: new Date('2026-09-02T10:15:00Z'),
+  total: '142.50',
+  canal: 'punto_venta',
+  importacionId: null,
+  capturadaPor: '55555555-5555-4555-8555-555555555555',
+  createdAt: new Date('2026-09-02T10:16:03Z'),
+  details: [
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      transactionId: '11111111-1111-4111-8111-111111111111',
+      presentationId: '77777777-7777-4777-8777-777777777777',
+      quantity: '2.00',
+      unitPrice: '42.50',
+      subtotal: '85.00',
+      presentation: {
+        id: '77777777-7777-4777-8777-777777777777',
+        nombre: '1 kg',
+        productoId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        activo: true,
+        producto: {
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          sku: 'P-001-001',
+          nombre: 'Leche entera',
+          esCanastaBasica: true,
+          estatus: 'activo',
+          categoriaId: 2,
+        },
+      },
+    },
+    {
+      id: '88888888-8888-4888-8888-888888888888',
+      transactionId: '11111111-1111-4111-8111-111111111111',
+      presentationId: '99999999-9999-4999-8999-999999999999',
+      quantity: '1.00',
+      unitPrice: '57.50',
+      subtotal: '57.50',
+      presentation: {
+        id: '99999999-9999-4999-8999-999999999999',
+        nombre: '500 g',
+        productoId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        activo: true,
+        producto: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', sku: 'P-002-001', nombre: 'Pan' },
+      },
+    },
+  ],
+};
+
+const canastaEntidad = {
+  id: '44444444-4444-4444-8444-444444444444',
+  transactionId: transaccionEntidad.id,
+  transaction: transaccionEntidad,
+  zoneId: zonaEntidad.id,
+  zone: zonaEntidad,
+  segmentId: 2,
+  date: new Date('2026-09-02T10:15:00Z'),
+  totalValue: '142.50',
+  productCount: 2,
+  unitsTotal: '3.00',
+  basicProductsCount: 1,
+  builtAt: new Date('2026-09-02T10:16:03Z'),
+};
+
+const transaccionReal = aTransaccionRespuesta(transaccionEntidad);
+const canastaReal = aCanastaRespuesta(canastaEntidad);
+const canastaSinSegmento = aCanastaRespuesta({ ...canastaEntidad, segmentId: null });
+// Canasta leída sin su transacción unida: `storeId` queda nulo.
+const canastaSinTienda = aCanastaRespuesta({ ...canastaEntidad, transaction: undefined });
 
 const pagina = (data, total) => ({ data, total, page: 1, limit: 20 });
 const error = (statusCode, code, details = null) => ({
@@ -42,12 +155,17 @@ const error = (statusCode, code, details = null) => ({
 
 /** Cada caso: [xsd, descripción, cuerpo que devolvería el controlador]. */
 const CASOS = [
-  ['transaction', 'POST /v1/transactions y GET /v1/transactions/:id', muestras.transaccion],
-  ['transactions-page', 'GET /v1/transactions', pagina([muestras.transaccion], 100)],
+  // Salida REAL del mapeador sobre entidades con relaciones eager.
+  ['transaction', 'POST /v1/transactions (entidad real mapeada)', transaccionReal],
+  ['transactions-page', 'GET /v1/transactions (entidad real mapeada)', pagina([transaccionReal], 100)],
+  ['basket', 'GET /v1/baskets/:id (entidad real mapeada)', canastaReal],
+  ['basket', 'GET /v1/baskets/:id con segmento nulo', canastaSinSegmento],
+  ['basket', 'GET /v1/baskets/:id sin transacción unida', canastaSinTienda],
+  ['baskets-page', 'GET /v1/baskets (entidad real mapeada)', pagina([canastaReal], 100)],
+  // Y los ejemplos de Swagger, para que no se desincronicen del contrato.
+  ['transaction', 'ejemplo Swagger de transacción', muestras.transaccion],
+  ['basket', 'ejemplo Swagger de canasta', muestras.canasta],
   ['transactions-page', 'GET /v1/transactions sin resultados', pagina([], 0)],
-  ['basket', 'GET /v1/baskets/:id', muestras.canasta],
-  ['basket', 'GET /v1/baskets/:id con segmento nulo', { ...muestras.canasta, segmentId: null }],
-  ['baskets-page', 'GET /v1/baskets', pagina([muestras.canasta], 100)],
   ['baskets-page', 'GET /v1/baskets sin resultados', pagina([], 0)],
   ['csv-preview', 'POST /v1/transactions/import/preview', muestras.previewCsv],
   ['csv-confirm', 'POST /v1/transactions/import/confirm', muestras.confirmCsv],
@@ -61,6 +179,9 @@ const CASOS = [
       lineasInsertadas: 3,
       transaccionesCreadas: 2,
       canastasCreadas: 2,
+      transaccionesTotales: 2,
+      filasPendientes: 0,
+      completa: true,
       omitidos: [
         {
           folio: 'T-9',
@@ -79,6 +200,27 @@ const CASOS = [
         },
       ],
     },
+  ],
+  [
+    'csv-confirm',
+    'confirmación parcial reanudable (quedaron filas pendientes)',
+    {
+      ...muestras.confirmCsv,
+      estado: 'validado',
+      lineasInsertadas: 1,
+      transaccionesCreadas: 1,
+      canastasCreadas: 1,
+      transaccionesTotales: 1,
+      filasPendientes: 99,
+      completa: false,
+    },
+  ],
+  ['csv-discard', 'DELETE /v1/transactions/import/:id', muestras.importacionDescartada],
+  ['reclassify', 'POST /v1/baskets/reclassify', muestras.reclasificacion],
+  [
+    'reclassify',
+    'reclassify con zonas todavía sin clasificar',
+    { canastasSinSegmento: 5, canastasClasificadas: 0, zonasSinClasificacion: ['z1', 'z2'] },
   ],
   ['imports-pending', 'GET /v1/transactions/import/pending', [muestras.importacionPendiente]],
   ['imports-pending', 'pending vacío', []],

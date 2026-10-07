@@ -14,6 +14,9 @@
               <xs:element name="filasTotales" type="xs:integer"/>
               <xs:element name="filasValidas" type="xs:integer"/>
               <xs:element name="filasConError" type="xs:integer"/>
+              <!-- Menor que filasValidas => quedó aplicada a medias y
+                   confirmarla de nuevo retoma solo lo que falta. -->
+              <xs:element name="filasPendientes" type="xs:integer"/>
               <xs:element name="cargadoEn" type="xs:dateTime"/>
             </xs:sequence>
           </xs:complexType>

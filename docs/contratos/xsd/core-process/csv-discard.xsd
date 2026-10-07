@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M06: DELETE /v1/transactions/import/:id (200).
+     Descarta una importación no confirmada. `descartado` es el único
+     estado que libera el hash del archivo para poder volver a subirlo. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="importacionId" type="xs:string"/>
+        <xs:element name="fileName" type="xs:string"/>
+        <xs:element name="estado" fixed="descartado" type="xs:string"/>
+        <xs:element name="estadoPrevio" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

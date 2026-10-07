@@ -38,10 +38,12 @@ interface Opciones {
   transaccionExistente?: object | null;
   /** Hace fallar la construcción de la canasta. */
   canastaFalla?: boolean;
+  /** Transacciones que ya están en la base de una pasada anterior. */
+  insertadasPrevias?: Record<string, unknown>[];
 }
 
 function servicio(opciones: Opciones = {}) {
-  const insertadas: Record<string, unknown>[] = [];
+  const insertadas: Record<string, unknown>[] = [...(opciones.insertadasPrevias ?? [])];
   const detallesPorTransaccion = new Map<string, { quantity: string; unitPrice: string }[]>();
   const guardados: Record<string, object[]> = { imp: [], filas: [], errores: [] };
   const commits: string[] = [];
@@ -57,6 +59,10 @@ function servicio(opciones: Opciones = {}) {
       return opciones.transaccionExistente ?? null;
     }),
     createQueryBuilder: jest.fn(),
+    // El contador de la importación se deriva contando en la base.
+    count: jest.fn(async (opts?: { where?: { importacionId?: string } }) =>
+      insertadas.filter((t) => t.importacionId === opts?.where?.importacionId).length,
+    ),
   };
   const importacionesRepo = {
     findOne: jest.fn().mockResolvedValue(opciones.importacion ?? null),
@@ -65,11 +71,33 @@ function servicio(opciones: Opciones = {}) {
       return { id: 'imp1', ...f };
     }),
   };
+  // Staging con estado: las filas insertadas quedan con `transactionId`,
+  // así que `find` solo entrega las pendientes y `count` sabe cuántas
+  // faltan. Sin esto no se puede probar la reanudación.
+  const staging: Record<string, unknown>[] = (opciones.filas ?? []).map((f) => ({
+    transactionId: null,
+    ...(f as object),
+  }));
   const filasRepo = {
     create: jest.fn((f: object) => f),
     save: jest.fn(async (f: object) => f),
-    find: jest.fn().mockResolvedValue(opciones.filas ?? []),
-    update: jest.fn(),
+    find: jest.fn(async (opts?: { where?: { transactionId?: unknown } }) => {
+      const soloPendientes = opts?.where && 'transactionId' in opts.where;
+      return soloPendientes ? staging.filter((f) => f.transactionId == null) : staging;
+    }),
+    count: jest.fn(async (opts?: { where?: { transactionId?: unknown } }) => {
+      const soloPendientes = opts?.where && 'transactionId' in opts.where;
+      return soloPendientes ? staging.filter((f) => f.transactionId == null).length : staging.length;
+    }),
+    createQueryBuilder: jest.fn(),
+    // Igual que el del manager: refleja el UPDATE en el staging falso, si no
+    // `filasPendientes` nunca bajaría y la prueba no probaría nada.
+    update: jest.fn(async (criterio: { id?: { _value?: string[] } }, cambios: { transactionId?: string }) => {
+      const ids: string[] = (criterio?.id as { _value?: string[] })?._value ?? [];
+      for (const fila of staging) {
+        if (ids.includes(fila.id as string)) fila.transactionId = cambios.transactionId;
+      }
+    }),
   };
   const erroresRepo = {
     create: jest.fn((f: object) => f),
@@ -96,7 +124,13 @@ function servicio(opciones: Opciones = {}) {
       else guardados.imp.push(guardada);
       return guardada;
     }),
-    update: jest.fn(),
+    update: jest.fn(async (_e: unknown, criterio: { id?: { _value?: string[] } }, cambios: { transactionId?: string }) => {
+      // Refleja en el staging falso lo que hace el UPDATE real.
+      const ids: string[] = (criterio?.id as { _value?: string[] })?._value ?? [];
+      for (const fila of staging) {
+        if (ids.includes(fila.id as string)) fila.transactionId = cambios.transactionId;
+      }
+    }),
     createQueryBuilder: jest.fn(() => {
       const qb: Record<string, jest.Mock> = {};
       let transactionId = '';
@@ -115,10 +149,22 @@ function servicio(opciones: Opciones = {}) {
 
   const dataSource = {
     manager,
+    // El doble REVIERTE si el callback lanza, igual que una transacción
+    // real: sin eso `insertadas` contaría intentos de save y no filas
+    // committeadas, y una prueba de atomicidad no probaría nada.
     transaction: jest.fn(async (fn: (m: typeof manager) => Promise<unknown>) => {
-      const resultado = await fn(manager);
-      commits.push('commit');
-      return resultado;
+      const insertadasAntes = insertadas.length;
+      const stagingAntes = staging.map((f) => f.transactionId);
+      try {
+        const resultado = await fn(manager);
+        commits.push('commit');
+        return resultado;
+      } catch (error) {
+        insertadas.length = insertadasAntes;
+        staging.forEach((f, i) => (f.transactionId = stagingAntes[i]));
+        commits.push('rollback');
+        throw error;
+      }
     }),
   };
 
@@ -187,6 +233,9 @@ const IMPORTACION_VALIDADA = {
   totalRows: 1,
   validRows: 1,
   errorRows: 0,
+  createdTransactions: 0,
+  confirmedBy: null,
+  confirmedAt: null,
 };
 
 // --- Preview ---------------------------------------------------------
@@ -493,6 +542,143 @@ describe('TransactionsService — confirmación CSV', () => {
       /no tiene filas válidas/,
     );
   });
+
+  // --- Reanudación tras una confirmación interrumpida ------------------
+
+  it('si quedan filas pendientes NO se marca confirmada: se puede reintentar', async () => {
+    // Dos folios; el segundo falla al construir su canasta.
+    const importacion = { ...IMPORTACION_VALIDADA, totalRows: 2, validRows: 2 };
+    const { svc, insertadas, baskets } = servicio({
+      importacion,
+      filas: [
+        FILA_VALIDA,
+        { ...FILA_VALIDA, id: 'f2', folioOrigen: 'T-2' },
+      ],
+    });
+    (baskets.buildFromTransaction as jest.Mock)
+      .mockImplementationOnce(async () => ({}))
+      .mockImplementationOnce(async () => {
+        throw new Error('se cayó la base');
+      });
+
+    const r = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    expect(r.transaccionesCreadas).toBe(1);
+    expect(r.filasPendientes).toBe(1);
+    expect(r.completa).toBe(false);
+    // Lo crítico: NO queda 'confirmado', así que el reintento no da 409 y
+    // la fila varada se puede recuperar.
+    expect(r.estado).toBe('validado');
+    expect(importacion.estado).toBe('validado');
+    expect(insertadas).toHaveLength(1);
+  });
+
+  it('el reintento retoma solo lo que falta y entonces sí cierra', async () => {
+    const importacion = { ...IMPORTACION_VALIDADA, totalRows: 2, validRows: 2 };
+    const { svc, insertadas, baskets } = servicio({
+      importacion,
+      filas: [FILA_VALIDA, { ...FILA_VALIDA, id: 'f2', folioOrigen: 'T-2' }],
+    });
+    (baskets.buildFromTransaction as jest.Mock)
+      .mockImplementationOnce(async () => ({}))
+      .mockImplementationOnce(async () => {
+        throw new Error('se cayó la base');
+      });
+
+    const primera = await svc.confirmCsvImport('imp1', USUARIO as never);
+    expect(primera.completa).toBe(false);
+
+    // Segundo intento, ya sin el fallo: solo debe insertar la que faltaba.
+    const segunda = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    expect(segunda.transaccionesCreadas).toBe(1); // solo la pendiente
+    expect(segunda.transaccionesTotales).toBe(2); // acumulado real
+    expect(segunda.filasPendientes).toBe(0);
+    expect(segunda.completa).toBe(true);
+    expect(segunda.estado).toBe('confirmado');
+    // Y no duplicó la que ya estaba.
+    expect(insertadas).toHaveLength(2);
+    expect(insertadas.map((t) => t.folio).sort()).toEqual(['T-1', 'T-2']);
+  });
+
+  it('una marcada confirmada pero con filas varadas se puede terminar (auto-reparación)', async () => {
+    // Estado que dejó la versión anterior: `confirmado` con filas válidas
+    // sin insertar. Negarlo con 409 las condenaba a no recuperarse nunca.
+    const importacion = { ...IMPORTACION_VALIDADA, estado: 'confirmado', createdTransactions: 0 };
+    const { svc, insertadas } = servicio({ importacion, filas: [FILA_VALIDA] });
+
+    const r = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    expect(r.transaccionesCreadas).toBe(1);
+    expect(r.filasPendientes).toBe(0);
+    expect(r.completa).toBe(true);
+    expect(insertadas).toHaveLength(1);
+  });
+
+  it('una confirmada y sin nada pendiente sigue dando 409', async () => {
+    const { svc } = servicio({
+      importacion: { ...IMPORTACION_VALIDADA, estado: 'confirmado' },
+      filas: [{ ...FILA_VALIDA, transactionId: 'tx-previa' }],
+    });
+    await expect(svc.confirmCsvImport('imp1', USUARIO as never)).rejects.toThrow(
+      /ya fue confirmada/,
+    );
+  });
+
+  it('un folio que ya existe liga su fila a esa transacción y deja de estar pendiente', async () => {
+    const { svc, r } = servicio({
+      importacion: { ...IMPORTACION_VALIDADA },
+      filas: [FILA_VALIDA],
+      transaccionExistente: { id: 'tx-previa', folio: 'T-1' },
+    });
+
+    const resultado = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    // Se omite, pero la importación puede CERRARSE: si la fila siguiera
+    // pendiente, la importación quedaría abierta por un folio que nunca se
+    // va a insertar.
+    expect(resultado.omitidos).toHaveLength(1);
+    expect(resultado.filasPendientes).toBe(0);
+    expect(resultado.completa).toBe(true);
+    expect(r.filasRepo.update).toHaveBeenCalledWith(expect.anything(), {
+      transactionId: 'tx-previa',
+    });
+  });
+
+  it('una importación cuyas filas ya están todas insertadas se cierra sin duplicar', async () => {
+    const importacion = { ...IMPORTACION_VALIDADA, createdTransactions: 1 };
+    const { svc, insertadas } = servicio({
+      importacion,
+      // Fila ya ligada a una transacción de una pasada anterior.
+      filas: [{ ...FILA_VALIDA, transactionId: 'tx-previa' }],
+      insertadasPrevias: [{ id: 'tx-previa', folio: 'T-1', importacionId: 'imp1' }],
+    });
+
+    const r = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    expect(r.completa).toBe(true);
+    expect(r.estado).toBe('confirmado');
+    expect(r.transaccionesCreadas).toBe(0);
+    // El acumulado se cuenta en la base, así que refleja la pasada previa.
+    expect(r.transaccionesTotales).toBe(1);
+    expect(insertadas).toHaveLength(1);
+  });
+
+  it('el acumulado se cuenta en la base, no se pierde si una pasada no alcanzó a guardarlo', async () => {
+    const importacion = { ...IMPORTACION_VALIDADA, totalRows: 2, validRows: 2, createdTransactions: 0 };
+    const { svc } = servicio({
+      importacion,
+      filas: [{ ...FILA_VALIDA, transactionId: 'tx-previa' }, { ...FILA_VALIDA, id: 'f2', folioOrigen: 'T-2' }],
+      // La pasada anterior insertó esta y se cayó antes de guardar el contador.
+      insertadasPrevias: [{ id: 'tx-previa', folio: 'T-1', importacionId: 'imp1' }],
+    });
+
+    const r = await svc.confirmCsvImport('imp1', USUARIO as never);
+
+    expect(r.transaccionesCreadas).toBe(1); // la que faltaba
+    expect(r.transaccionesTotales).toBe(2); // 1 previa + 1 nueva, contadas en la base
+    expect(r.completa).toBe(true);
+  });
 });
 
 // --- Alta manual -----------------------------------------------------
@@ -663,5 +849,65 @@ describe('TransactionsService — findAll', () => {
       // Día completo, igual que M07 y M09.
       't.fecha < CAST(:dateTo AS date) + 1',
     ]);
+  });
+});
+
+// --- Descarte de importaciones ----------------------------------------
+
+describe('TransactionsService — descartar importación', () => {
+  it('descarta una no confirmada y libera el archivo', async () => {
+    const importacion = { ...IMPORTACION_VALIDADA, estado: 'con_errores' };
+    const { svc, auditoria } = servicio({ importacion });
+
+    const r = await svc.discardCsvImport('imp1', USUARIO as never, '1.2.3.4');
+
+    expect(r).toMatchObject({ estado: 'descartado', estadoPrevio: 'con_errores' });
+    // `descartado` es el único estado que libera el hash: sin él, un
+    // preview equivocado dejaba ese CSV rechazado con 409 para siempre.
+    expect(importacion.estado).toBe('descartado');
+    expect(auditoria.reportar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accion: 'update',
+        cambios: [{ campo: 'estado', previo: 'con_errores', posterior: 'descartado' }],
+      }),
+    );
+  });
+
+  it('una ya confirmada NO se puede descartar: sus ventas están en la base', async () => {
+    const { svc } = servicio({
+      importacion: { ...IMPORTACION_VALIDADA, estado: 'confirmado' },
+    });
+    await expect(svc.discardCsvImport('imp1', USUARIO as never)).rejects.toThrow(
+      /ya fue confirmada/,
+    );
+  });
+
+  it('una ya descartada da 409', async () => {
+    const { svc } = servicio({
+      importacion: { ...IMPORTACION_VALIDADA, estado: 'descartado' },
+    });
+    await expect(svc.discardCsvImport('imp1', USUARIO as never)).rejects.toThrow(
+      /ya estaba descartada/,
+    );
+  });
+
+  it('una importación inexistente da 404', async () => {
+    const { svc } = servicio({ importacion: null });
+    await expect(svc.discardCsvImport('nope', USUARIO as never)).rejects.toThrow(
+      /No existe la importación/,
+    );
+  });
+
+  it('descartar permite volver a subir el mismo archivo', async () => {
+    // El preview rechaza por hash salvo que la previa esté descartada.
+    const { svc } = servicio({
+      importacion: { ...IMPORTACION_VALIDADA, estado: 'descartado' },
+    });
+    await expect(
+      svc.previewCsvImport(
+        archivo(['T1,2026-09-01,Super Valle Centro,P-001-001,1 kg,2,42.5']),
+        USUARIO as never,
+      ),
+    ).resolves.toMatchObject({ filasValidas: 1 });
   });
 });

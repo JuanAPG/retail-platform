@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SessionGuard } from './session.guard';
 import * as cliente from './redis.client';
@@ -112,11 +113,17 @@ describe('SessionGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(/Token inválido o expirado/);
   });
 
-  it('Redis caído NO abre la puerta (fail-closed)', async () => {
+  it('Redis caído NO abre la puerta, y responde 503 (no 500 genérico)', async () => {
     jest.spyOn(cliente, 'getRedis').mockReturnValue(redisFalso({}, true) as never);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const { ctx, request } = contexto(`Bearer ${firmar()}`);
 
-    await expect(guard.canActivate(ctx)).rejects.toThrow();
+    // Fail-closed con el código correcto: el cliente debe poder distinguir
+    // "tu sesión no vale" (401) de "no pude verificarla" (503).
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      status: 503,
+      message: expect.stringMatching(/no se pudo verificar la sesión/i),
+    });
     expect(request.user).toBeUndefined();
   });
 
