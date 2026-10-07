@@ -4,23 +4,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +34,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.udem.retaildecision.data.remote.dto.PriceHistoryDto
 import com.udem.retaildecision.data.remote.dto.ZoneComparisonDto
+import com.udem.retaildecision.ui.components.AppTopBar
+import com.udem.retaildecision.ui.components.EmptyState
+import com.udem.retaildecision.ui.components.ErrorBanner
+import com.udem.retaildecision.ui.components.InfoBanner
+import com.udem.retaildecision.ui.components.LabeledValue
+import com.udem.retaildecision.ui.components.LoadingBox
+import com.udem.retaildecision.ui.components.Pill
+import com.udem.retaildecision.ui.components.RetailCard
+import com.udem.retaildecision.ui.components.SectionTitle
+import com.udem.retaildecision.ui.components.StatusPill
 import java.util.Locale
 
 private fun dinero(valor: Double) = "$" + String.format(Locale.US, "%.2f", valor)
@@ -39,7 +51,6 @@ private fun dinero(valor: Double) = "$" + String.format(Locale.US, "%.2f", valor
 /** El servidor manda el precio como texto ("24.00"); se muestra con "$" delante. */
 private fun dinero(texto: String) = texto.toDoubleOrNull()?.let { dinero(it) } ?: texto
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PricingScreen(
     viewModel: PricingViewModel,
@@ -49,23 +60,31 @@ fun PricingScreen(
     var menuAbierto by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Precios") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Volver") } },
+            AppTopBar(
+                title = "Precios",
+                subtitle = state.seleccionado?.nombre,
+                onBack = onBack,
             )
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
 
             // Selector de producto.
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                 OutlinedButton(
                     onClick = { menuAbierto = true },
                     enabled = state.productos.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                 ) {
-                    Text(state.seleccionado?.nombre ?: "Elige un producto")
+                    Text(
+                        state.seleccionado?.nombre ?: "Elige un producto",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
                 }
                 DropdownMenu(expanded = menuAbierto, onDismissRequest = { menuAbierto = false }) {
                     state.productos.forEach { producto ->
@@ -82,43 +101,43 @@ fun PricingScreen(
 
             val precios = state.precios
             when {
-                state.cargandoProductos || state.cargandoPrecios ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.cargandoProductos || state.cargandoPrecios -> LoadingBox(label = "Cargando precios…")
 
                 state.error != null -> Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(state.error ?: "", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = viewModel::reintentar) { Text("Reintentar") }
+                    ErrorBanner(state.error ?: "")
+                    Button(onClick = viewModel::reintentar, shape = MaterialTheme.shapes.medium) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Reintentar")
+                    }
                 }
 
-                precios == null ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Elige un producto.") }
+                precios == null -> EmptyState(
+                    icon = Icons.Rounded.Sell,
+                    title = "Elige un producto",
+                    message = "Selecciona un producto para ver su comparación por zonas y su historial de precios.",
+                )
 
-                precios.historial.isEmpty() && precios.zonas.isEmpty() ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Este producto no tiene precios registrados.")
-                    }
+                precios.historial.isEmpty() && precios.zonas.isEmpty() -> EmptyState(
+                    icon = Icons.Rounded.Sell,
+                    title = "Sin precios",
+                    message = "Este producto no tiene precios registrados.",
+                )
 
                 else -> LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    item { Text("Comparación por zonas", style = MaterialTheme.typography.titleMedium) }
+                    item { SectionTitle("Comparación por zonas") }
                     if (precios.zonas.isEmpty()) {
-                        item { Text("Sin datos por zona.", style = MaterialTheme.typography.bodySmall) }
+                        item { InfoBanner("Sin datos por zona para este producto.") }
                     }
                     items(precios.zonas, key = { it.zoneId }) { ZonaPrecioCard(it) }
 
-                    item {
-                        Text(
-                            "Historial de precios",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
+                    item { SectionTitle("Historial de precios", modifier = Modifier.padding(top = 8.dp)) }
                     items(precios.historial, key = { it.id }) { HistorialCard(it) }
                 }
             }
@@ -128,36 +147,64 @@ fun PricingScreen(
 
 @Composable
 private fun ZonaPrecioCard(z: ZoneComparisonDto) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(z.zoneName, style = MaterialTheme.typography.titleMedium)
-            Text("Promedio ${dinero(z.averagePrice)}", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Mínimo ${dinero(z.minPrice)} · Máximo ${dinero(z.maxPrice)} · " +
-                        "${z.storeCount} ${if (z.storeCount == 1) "tienda" else "tiendas"}",
-                style = MaterialTheme.typography.bodySmall,
-            )
+    RetailCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(z.zoneName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Pill(text = "${z.storeCount} ${if (z.storeCount == 1) "tienda" else "tiendas"}")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column {
+                    Text("Promedio", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        dinero(z.averagePrice),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                LabeledValue(label = "Mínimo", value = dinero(z.minPrice))
+                LabeledValue(label = "Máximo", value = dinero(z.maxPrice))
+            }
         }
     }
 }
 
 @Composable
 private fun HistorialCard(p: PriceHistoryDto) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                "${p.presentation?.nombre ?: "Presentación"} · ${dinero(p.price)}",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            val tienda = p.store?.nombre ?: "Tienda desconocida"
-            val zona = p.store?.zona?.nombre
-            Text(if (zona != null) "$tienda ($zona)" else tienda, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                if (p.vigente) "Vigente desde ${p.effectiveDate}"
-                else "Del ${p.effectiveDate} al ${p.effectiveUntil ?: "—"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (p.vigente) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    RetailCard {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(p.presentation?.nombre ?: "Presentación", style = MaterialTheme.typography.titleMedium)
+                val tienda = p.store?.nombre ?: "Tienda desconocida"
+                val zona = p.store?.zona?.nombre
+                Text(
+                    if (zona != null) "$tienda ($zona)" else tienda,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (p.vigente) "Vigente desde ${p.effectiveDate}"
+                    else "Del ${p.effectiveDate} al ${p.effectiveUntil ?: "—"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (p.vigente) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(dinero(p.price), style = MaterialTheme.typography.titleLarge)
+                StatusPill(text = if (p.vigente) "Vigente" else "Histórico", positive = p.vigente)
+            }
         }
     }
 }

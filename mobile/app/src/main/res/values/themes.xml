@@ -1,3 +1,7 @@
 <resources>
-    <style name="Theme.RetailDecision" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Fondo igual al de la app para que no haya destello blanco al abrir -->
+    <style name="Theme.RetailDecision" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F4F5F7</item>
+        <item name="android:statusBarColor">#1F4E79</item>
+    </style>
 </resources>

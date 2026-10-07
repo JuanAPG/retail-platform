@@ -33,6 +33,7 @@ import com.udem.retaildecision.ui.login.LoginViewModelFactory
 import com.udem.retaildecision.ui.pricing.PricingScreen
 import com.udem.retaildecision.ui.pricing.PricingViewModel
 import com.udem.retaildecision.ui.pricing.PricingViewModelFactory
+import com.udem.retaildecision.ui.theme.RetailTheme
 
 /** Ruta del login. `expirada=true` hace que el login muestre "Tu sesión expiró". */
 private const val LOGIN_ROUTE = "login?expirada={expirada}"
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
         val connectivityObserver = ConnectivityObserver(applicationContext)
 
         setContent {
-            MaterialTheme {
+            RetailTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RetailDecisionNavHost(
                         authRepository = authRepository,
