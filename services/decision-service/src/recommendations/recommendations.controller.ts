@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { RecommendationsService } from './recommendations.service';
 import { RecommendationContextDto } from './dto/recommendation-context.dto';
@@ -35,6 +36,7 @@ export class RecommendationsController {
   }
 
   @Get(':id/explain')
+  @XmlRoot('recomendacion')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Explica una recomendación ya generada: qué recomienda, por qué y con qué evidencia.' })
   @ApiOkResponse({ type: RecommendationExplanation })

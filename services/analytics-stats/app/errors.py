@@ -11,6 +11,12 @@ CODE_POR_STATUS = {
     403: "FORBIDDEN",
     404: "NOT_FOUND",
     409: "CONFLICT",
+    413: "VALIDATION_ERROR",
+    415: "VALIDATION_ERROR",
+    # FastAPI devuelve 422 para el mismo caso que Nest reporta como 400:
+    # un cuerpo que no paso la validacion.
+    422: "VALIDATION_ERROR",
+    503: "SERVICE_UNAVAILABLE",
 }
 
 

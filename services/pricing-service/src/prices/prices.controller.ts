@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
@@ -36,6 +37,7 @@ export class PricesController {
   }
 
   @Get('history')
+  @XmlRoot('priceListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({
     summary: 'Histórico de precios de un producto (o de una presentación), paginado, lo más reciente primero.',
@@ -47,6 +49,7 @@ export class PricesController {
   }
 
   @Get('compare-zones')
+  @XmlRoot('priceComparisonResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({
     summary: 'Compara el precio vigente de un producto entre zonas (agregado para gráficas, sin paginar).',

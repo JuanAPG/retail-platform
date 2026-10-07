@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { APRUEBAN_PRECIOS, ROL, VEN_PROPUESTAS_PRECIO } from '../common/roles';
 import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
@@ -43,6 +44,7 @@ export class PriceProposalsController {
   }
 
   @Get()
+  @XmlRoot('priceProposalListResponse')
   @Roles(...VEN_PROPUESTAS_PRECIO)
   @ApiOperation({
     summary:

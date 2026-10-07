@@ -1,0 +1,11 @@
+# Lo que NO debe viajar al contexto de `docker build`: se regenera dentro
+# de la imagen (node_modules con npm install, dist con nest build).
+node_modules
+dist
+*.tsbuildinfo
+.env
+*.log
+coverage
+# Las pruebas no entran a la imagen de producción.
+test
+**/*.spec.ts

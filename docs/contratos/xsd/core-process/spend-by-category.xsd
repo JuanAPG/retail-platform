@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M09: GET /v1/analytics/spend-by-category.
+     Lista ordenada de mayor a menor gasto. Las listas se envuelven como
+     <response><item>…</item></response>; `share` es el porcentaje sobre el
+     total del ámbito filtrado. Las categorías sin ventas no aparecen. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:include schemaLocation="_comun.xsd"/>
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <!-- Vacío cuando el producto no tiene categoría: esas
+                   ventas se agrupan como "Sin categoría" en vez de
+                   desaparecer del total. -->
+              <xs:element name="categoryId" type="xs:integer" minOccurs="0"/>
+              <xs:element name="categoryName" type="xs:string"/>
+              <xs:element name="totalSpend" type="xs:decimal"/>
+              <xs:element name="units" type="xs:decimal"/>
+              <xs:element name="basketCount" type="xs:integer"/>
+              <xs:element name="share" type="xs:decimal"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

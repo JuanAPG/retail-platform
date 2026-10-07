@@ -76,6 +76,17 @@
         <xs:element name="statusCode" type="xs:integer"/>
         <xs:element name="message" type="xs:string"/>
         <xs:element name="code" type="xs:string"/>
+        <!-- Detalle por campo de los 400 del ValidationPipe. Opcional: los
+             demas errores lo omiten. Se agrego para que el XML lleve el
+             MISMO cuerpo que el JSON (`details` incluido), porque un 400
+             sin detalle no es accionable para el cliente XML-exclusivo. -->
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
         <xs:element name="path" type="xs:string"/>
         <xs:element name="timestamp" type="xs:dateTime"/>
       </xs:sequence>

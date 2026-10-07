@@ -8,9 +8,11 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Validate,
   ValidateNested,
 } from 'class-validator';
 import { CreateTransactionDetailDto } from './create-transaction-detail.dto';
+import { NoEsFechaFutura } from './no-es-fecha-futura.validator';
 
 /**
  * M06 — Registro manual de una transacción.
@@ -29,9 +31,13 @@ export class CreateTransactionDto {
   @MaxLength(40, { message: 'folio admite máximo 40 caracteres.' })
   folio: string;
 
-  @ApiProperty({ example: '2026-09-18', description: 'Fecha de la venta (ISO).' })
+  @ApiProperty({
+    example: '2026-09-18',
+    description: 'Fecha de la venta (ISO). No puede ser futura, igual que en la importación CSV.',
+  })
   @IsDateString({}, { message: 'fecha debe ser una fecha ISO válida.' })
   @IsNotEmpty({ message: 'fecha es obligatoria.' })
+  @Validate(NoEsFechaFutura)
   fecha: string;
 
   @ApiProperty({ type: [CreateTransactionDetailDto] })

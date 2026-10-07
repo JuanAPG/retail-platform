@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M07: POST /v1/baskets/reclassify[?zoneId] (200).
+     Rellena el segmento de las canastas que nacieron sin él. Solo llena
+     huecos: no reescribe las que ya tienen segmento (RN-02, la
+     clasificación se congela al construir la canasta). -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="canastasSinSegmento" type="xs:integer"/>
+        <xs:element name="canastasClasificadas" type="xs:integer"/>
+        <!-- Zonas que siguen sin clasificación vigente: falta correr el
+             clustering o asignarlas a mano en catalog-service. -->
+        <xs:element name="zonasSinClasificacion">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

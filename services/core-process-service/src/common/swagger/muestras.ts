@@ -1,6 +1,10 @@
 /**
  * Muestras reales para los ejemplos Swagger de M06/M07/M09. Números
  * coherentes con el seed + CSV de 100 canastas (ticket ~100 MXN).
+ *
+ * Los ejemplos reproducen la forma COMPLETA de la respuesta, anidamiento
+ * incluido: de aquí sale también el ejemplo XML (misma serialización que
+ * el `XmlInterceptor`), y el cliente de escritorio programa contra él.
  */
 export const muestras = {
   ticketPromedio: 128.4,
@@ -21,8 +25,35 @@ export const muestras = {
     id: '11111111-1111-4111-8111-111111111111',
     folio: 'T-V-001',
     storeId: '22222222-2222-4222-8222-222222222222',
+    store: { id: '22222222-2222-4222-8222-222222222222', nombre: 'Super Valle Centro' },
     fecha: '2026-09-02T10:15:00.000Z',
     total: '142.50',
+    canal: 'punto_venta',
+    importacionId: null,
+    capturadaPor: '55555555-5555-4555-8555-555555555555',
+    createdAt: '2026-09-02T10:16:03.000Z',
+    details: [
+      {
+        id: '66666666-6666-4666-8666-666666666666',
+        presentationId: '77777777-7777-4777-8777-777777777777',
+        productId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        presentationName: '1 kg',
+        productSku: 'P-001-001',
+        quantity: '2.00',
+        unitPrice: '42.50',
+        subtotal: '85.00',
+      },
+      {
+        id: '88888888-8888-4888-8888-888888888888',
+        presentationId: '99999999-9999-4999-8999-999999999999',
+        productId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        presentationName: '500 g',
+        productSku: 'P-002-001',
+        quantity: '1.00',
+        unitPrice: '57.50',
+        subtotal: '57.50',
+      },
+    ],
   },
   previewCsv: {
     importacionId: '33333333-3333-4333-8333-333333333333',
@@ -32,17 +63,67 @@ export const muestras = {
     filasValidas: 154,
     filasConError: 0,
     transaccionesDetectadas: 100,
+    grupos: [
+      {
+        folio: 'T-V-001',
+        tienda: 'Super Valle Centro',
+        tiendaId: '22222222-2222-4222-8222-222222222222',
+        fecha: '2026-08-02',
+        lineas: 2,
+        totalEstimado: 142.5,
+      },
+    ],
+    errores: [],
   },
   confirmCsv: {
     importacionId: '33333333-3333-4333-8333-333333333333',
     estado: 'confirmado',
+    filasTotales: 154,
+    filasValidas: 154,
+    filasConError: 0,
+    lineasInsertadas: 154,
     transaccionesCreadas: 100,
     canastasCreadas: 100,
+    transaccionesTotales: 100,
+    filasPendientes: 0,
+    completa: true,
     omitidos: [],
+    errores: [],
+  },
+  importacionPendiente: {
+    importacionId: '33333333-3333-4333-8333-333333333333',
+    fileName: 'datos_prueba_100_canastas.csv',
+    estado: 'validado',
+    filasTotales: 154,
+    filasValidas: 154,
+    filasConError: 0,
+    filasPendientes: 154,
+    cargadoEn: '2026-10-06T18:20:11.000Z',
+  },
+  importacionDescartada: {
+    importacionId: '33333333-3333-4333-8333-333333333333',
+    fileName: 'datos_prueba_100_canastas.csv',
+    estado: 'descartado',
+    estadoPrevio: 'con_errores',
+  },
+  reclasificacion: {
+    canastasSinSegmento: 12,
+    canastasClasificadas: 12,
+    zonasSinClasificacion: [],
   },
   canasta: {
     id: '44444444-4444-4444-8444-444444444444',
-    transaccionId: '11111111-1111-4111-8111-111111111111',
-    valor_total: '142.50',
+    transactionId: '11111111-1111-4111-8111-111111111111',
+    storeId: '22222222-2222-4222-8222-222222222222',
+    zoneId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    zone: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', nombre: 'Centro' },
+    segmentId: 2,
+    date: '2026-09-02T10:15:00.000Z',
+    totalValue: '142.50',
+    productCount: 2,
+    unitsTotal: '3.00',
+    basicProductsCount: 1,
+    hasBasicProducts: true,
+    builtAt: '2026-09-02T10:16:03.000Z',
   },
 };

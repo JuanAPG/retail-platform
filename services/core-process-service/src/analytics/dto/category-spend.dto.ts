@@ -5,8 +5,14 @@ import { ApiProperty } from '@nestjs/swagger';
  * que Swagger pueda documentar la respuesta del endpoint.
  */
 export class CategorySpend {
-  @ApiProperty({ example: 3 })
-  categoryId: number;
+  @ApiProperty({
+    example: 3,
+    nullable: true,
+    description:
+      '`null` cuando el producto no tiene categoría asignada; esas ventas se agrupan bajo ' +
+      '"Sin categoría" en vez de desaparecer del total.',
+  })
+  categoryId: number | null;
 
   @ApiProperty({ example: 'Lácteos' })
   categoryName: string;

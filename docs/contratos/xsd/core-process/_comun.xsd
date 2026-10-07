@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tipos compartidos de los XSD de core-process-service.
+     SIN targetNamespace a propósito: el XmlInterceptor transversal emite
+     `<response>` sin namespace, así que declararlo haría que ninguna
+     respuesta real validara. Importar con xs:include. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+
+  <!-- Cuerpo de error estándar de los 10 microservicios.
+       `details` solo trae contenido en los 400 del ValidationPipe. -->
+  <xs:complexType name="errorBody">
+    <xs:sequence>
+      <xs:element name="statusCode" type="xs:integer"/>
+      <xs:element name="message" type="xs:string"/>
+      <xs:element name="code" type="codigoError"/>
+      <!-- Opcional: solo los 400 del ValidationPipe traen detalle por
+           campo; los demas errores lo omiten. -->
+      <xs:element name="details" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="path" type="xs:string"/>
+      <xs:element name="timestamp" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Catálogo cerrado de services/snippets/error-codes.md -->
+  <xs:simpleType name="codigoError">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Nulos: el XmlInterceptor los OMITE, no emite el elemento vacio (un
+       elemento vacio no es un xs:integer ni un xs:dateTime valido). Por eso
+       todo campo que puede venir nulo se declara `minOccurs="0"`.
+       `enteroNulable` se conserva solo para los XSD que aun lo referencian. -->
+  <xs:simpleType name="vacio">
+    <xs:restriction base="xs:string">
+      <xs:length value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="enteroNulable">
+    <xs:union memberTypes="xs:integer vacio"/>
+  </xs:simpleType>
+
+  <!-- Importe NUMERIC(_,2): se serializa como texto con 2 decimales. -->
+  <xs:simpleType name="importe">
+    <xs:restriction base="xs:decimal">
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Referencia mínima a una entidad de catalog-service: solo id y
+       nombre. Este servicio no es dueño de esas tablas, así que no expone
+       sus demás columnas (así una columna nueva en el catálogo no rompe
+       este contrato). -->
+  <xs:complexType name="referenciaCatalogo">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <!-- Nulo si solo se tenia el id, sin la entidad cargada. -->
+      <xs:element name="nombre" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Una línea de venta: apunta a la PRESENTACIÓN (RF-35), no al producto.
+       `productId` se expone plano aunque la tabla NO lo guarde: el producto
+       sale por join desde la presentación. -->
+  <xs:complexType name="transactionDetail">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <!-- Nulos si la consulta no cargo la presentacion o su producto. -->
+      <xs:element name="productId" type="xs:string" minOccurs="0"/>
+      <xs:element name="presentationName" type="xs:string" minOccurs="0"/>
+      <xs:element name="productSku" type="xs:string" minOccurs="0"/>
+      <xs:element name="quantity" type="importe"/>
+      <xs:element name="unitPrice" type="importe"/>
+      <xs:element name="subtotal" type="importe"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- `total` == suma de los `subtotal` de sus detalles (verificado al insertar). -->
+  <xs:complexType name="transaction">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="folio" type="xs:string"/>
+      <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="store" type="referenciaCatalogo" minOccurs="1"/>
+      <xs:element name="fecha" type="xs:dateTime"/>
+      <xs:element name="total" type="importe"/>
+      <xs:element name="canal" type="canalTransaccion"/>
+      <!-- Nulo en el alta manual: la venta no vino de una importacion. -->
+      <xs:element name="importacionId" type="xs:string" minOccurs="0"/>
+      <xs:element name="capturadaPor" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="details">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="transactionDetail" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="canalTransaccion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="punto_venta"/>
+      <xs:enumeration value="importacion_csv"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Canasta: 1:1 con la transacción (RN-03). `segmentId` es nulo cuando la
+       zona todavía no tiene clasificación vigente. -->
+  <xs:complexType name="basket">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="transactionId" type="xs:string"/>
+      <!-- Nulo si la consulta no unio la transaccion de la canasta. -->
+      <xs:element name="storeId" type="xs:string" minOccurs="0"/>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zone" type="referenciaCatalogo"/>
+      <!-- Nulo mientras la zona no tenga clasificacion vigente (RN-02):
+           la canasta se construye igual y se rellena con reclassify. -->
+      <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="totalValue" type="importe"/>
+      <xs:element name="productCount" type="xs:integer"/>
+      <xs:element name="unitsTotal" type="importe"/>
+      <!-- `productos_basicos <= numero_productos` por CHECK en la base:
+           ambos se cuentan en productos DISTINTOS, no en líneas. -->
+      <xs:element name="basicProductsCount" type="xs:integer"/>
+      <xs:element name="hasBasicProducts" type="xs:boolean"/>
+      <xs:element name="builtAt" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Error por fila del CSV, con fila y columna exactas. -->
+  <xs:complexType name="importError">
+    <xs:sequence>
+      <xs:element name="fila" type="xs:integer" minOccurs="0"/>
+      <xs:element name="columna" type="xs:string" minOccurs="0"/>
+      <xs:element name="codigo" type="xs:string"/>
+      <xs:element name="mensaje" type="xs:string"/>
+      <xs:element name="valorRecibido" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
@@ -37,6 +38,7 @@ export class AssociationController {
   }
 
   @Get('runs')
+  @XmlRoot('runListResponse', { siemprePresentes: ['transactionsConsidered', 'basketsConsidered', 'errorMessage'] })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Historial de corridas de Apriori, de la más reciente a la más antigua (paginado).' })
   @ApiRespuesta(200, 'Página de corridas con sus parámetros, sin reglas.', pagina([muestras.corrida], 5))
@@ -46,6 +48,7 @@ export class AssociationController {
   }
 
   @Get('runs/:id')
+  @XmlRoot('runResponse', { siemprePresentes: ['transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'] })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Una corrida completa: parámetros, supuestos, filtros y reglas.' })
   @ApiRespuesta(200, 'La corrida con sus supuestos, filtros y reglas en `results`.', muestras.corridaCompleta)

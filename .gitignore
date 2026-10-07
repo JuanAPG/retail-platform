@@ -8,3 +8,6 @@ __pycache__/
 
 # Artefactos de build de TypeScript
 *.tsbuildinfo
+
+# Reportes de cobertura de pruebas (se regeneran con npm run test:cov)
+coverage/

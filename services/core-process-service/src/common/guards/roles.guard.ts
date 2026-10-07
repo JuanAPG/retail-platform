@@ -3,14 +3,15 @@ import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 /**
- * Debe usarse SIEMPRE después de JwtAuthGuard (necesita request.user
- * ya poblado por JwtStrategy.validate()).
+ * Debe usarse SIEMPRE después de `SessionGuard`, que es quien puebla
+ * `request.user` con la sesión verificada contra Redis.
  *
- * Este guard cubre el nivel "¿puede entrar a esta ruta?" (RBAC simple
- * por rol). El nivel más fino de la matriz de permisos (Total/Lectura/
- * Propone/Aprueba por módulo) se valida en cada microservicio de
- * negocio consultando `rol_modulo_permiso`, no aquí — este servicio
- * solo emite y valida identidad/rol, no la matriz completa.
+ * Cubre el nivel "¿puede entrar a esta ruta?" (RBAC simple por nombre de
+ * rol, declarado con `@Roles(...)`). El nivel más fino de la matriz
+ * (Total/Lectura/Propone/Aprueba por módulo, tabla `rol_modulo_permiso`)
+ * NO se valida todavía en ningún servicio: la tabla existe en el esquema
+ * pero no tiene seed. Pendiente de equipo; hoy el control efectivo es el
+ * de este guard.
  */
 @Injectable()
 export class RolesGuard implements CanActivate {

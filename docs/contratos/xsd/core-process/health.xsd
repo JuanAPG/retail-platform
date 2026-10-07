@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GET /v1/health (sin autenticación). Siempre 200 si el proceso responde;
+     `status` es `degraded` cuando una dependencia falla. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="status">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="ok"/>
+              <xs:enumeration value="degraded"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="service" type="xs:string"/>
+        <xs:element name="version" type="xs:string"/>
+        <xs:element name="checks">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="postgres" type="xs:string"/>
+              <xs:element name="redis" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

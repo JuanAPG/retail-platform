@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M06: GET /v1/transactions/import/pending (200).
+     Importaciones ya validadas que todavía no se confirman. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="importacionId" type="xs:string"/>
+              <xs:element name="fileName" type="xs:string"/>
+              <xs:element name="estado" type="xs:string"/>
+              <xs:element name="filasTotales" type="xs:integer"/>
+              <xs:element name="filasValidas" type="xs:integer"/>
+              <xs:element name="filasConError" type="xs:integer"/>
+              <!-- Menor que filasValidas => quedó aplicada a medias y
+                   confirmarla de nuevo retoma solo lo que falta. -->
+              <xs:element name="filasPendientes" type="xs:integer"/>
+              <xs:element name="cargadoEn" type="xs:dateTime"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

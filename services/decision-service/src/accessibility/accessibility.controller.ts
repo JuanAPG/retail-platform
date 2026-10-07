@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestj
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { AccessibilityService } from './accessibility.service';
 
@@ -19,6 +20,7 @@ export class AccessibilityController {
   constructor(private readonly accessibilityService: AccessibilityService) {}
 
   @Get('index')
+  @XmlRoot('indiceAccesibilidad')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({ summary: 'Calcula el índice de accesibilidad de una zona (crea una corrida nueva cada vez)' })
   @ApiQuery({ name: 'zoneId', type: String, description: 'UUID de la zona' })
@@ -28,6 +30,7 @@ export class AccessibilityController {
   }
 
   @Get('by-zone/:zoneId')
+  @XmlRoot('indiceAccesibilidad')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Historial de corridas de accesibilidad de una zona' })
   @ApiParam({ name: 'zoneId', type: String, description: 'UUID de la zona' })
