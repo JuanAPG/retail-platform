@@ -12,7 +12,9 @@
       <xs:element name="statusCode" type="xs:integer"/>
       <xs:element name="message" type="xs:string"/>
       <xs:element name="code" type="codigoError"/>
-      <xs:element name="details">
+      <!-- Opcional: solo los 400 del ValidationPipe traen detalle por
+           campo; los demas errores lo omiten. -->
+      <xs:element name="details" minOccurs="0">
         <xs:complexType>
           <xs:sequence>
             <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
@@ -37,9 +39,10 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Nulos: el XmlInterceptor emite el elemento vacío (<segmentId/>), no
-       `xsi:nil="true"`. Los enteros nulables necesitan admitir la cadena
-       vacía; los strings ya la admiten de por sí. -->
+  <!-- Nulos: el XmlInterceptor los OMITE, no emite el elemento vacio (un
+       elemento vacio no es un xs:integer ni un xs:dateTime valido). Por eso
+       todo campo que puede venir nulo se declara `minOccurs="0"`.
+       `enteroNulable` se conserva solo para los XSD que aun lo referencian. -->
   <xs:simpleType name="vacio">
     <xs:restriction base="xs:string">
       <xs:length value="0"/>
@@ -64,7 +67,8 @@
   <xs:complexType name="referenciaCatalogo">
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
-      <xs:element name="nombre" type="xs:string"/>
+      <!-- Nulo si solo se tenia el id, sin la entidad cargada. -->
+      <xs:element name="nombre" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -75,9 +79,10 @@
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
       <xs:element name="presentationId" type="xs:string"/>
-      <xs:element name="productId" type="xs:string"/>
-      <xs:element name="presentationName" type="xs:string"/>
-      <xs:element name="productSku" type="xs:string"/>
+      <!-- Nulos si la consulta no cargo la presentacion o su producto. -->
+      <xs:element name="productId" type="xs:string" minOccurs="0"/>
+      <xs:element name="presentationName" type="xs:string" minOccurs="0"/>
+      <xs:element name="productSku" type="xs:string" minOccurs="0"/>
       <xs:element name="quantity" type="importe"/>
       <xs:element name="unitPrice" type="importe"/>
       <xs:element name="subtotal" type="importe"/>
@@ -94,8 +99,9 @@
       <xs:element name="fecha" type="xs:dateTime"/>
       <xs:element name="total" type="importe"/>
       <xs:element name="canal" type="canalTransaccion"/>
-      <xs:element name="importacionId" type="xs:string"/>
-      <xs:element name="capturadaPor" type="xs:string"/>
+      <!-- Nulo en el alta manual: la venta no vino de una importacion. -->
+      <xs:element name="importacionId" type="xs:string" minOccurs="0"/>
+      <xs:element name="capturadaPor" type="xs:string" minOccurs="0"/>
       <xs:element name="createdAt" type="xs:dateTime"/>
       <xs:element name="details">
         <xs:complexType>
@@ -120,10 +126,13 @@
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
       <xs:element name="transactionId" type="xs:string"/>
-      <xs:element name="storeId" type="xs:string"/>
+      <!-- Nulo si la consulta no unio la transaccion de la canasta. -->
+      <xs:element name="storeId" type="xs:string" minOccurs="0"/>
       <xs:element name="zoneId" type="xs:string"/>
       <xs:element name="zone" type="referenciaCatalogo"/>
-      <xs:element name="segmentId" type="enteroNulable"/>
+      <!-- Nulo mientras la zona no tenga clasificacion vigente (RN-02):
+           la canasta se construye igual y se rellena con reclassify. -->
+      <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
       <xs:element name="date" type="xs:dateTime"/>
       <xs:element name="totalValue" type="importe"/>
       <xs:element name="productCount" type="xs:integer"/>
@@ -139,11 +148,11 @@
   <!-- Error por fila del CSV, con fila y columna exactas. -->
   <xs:complexType name="importError">
     <xs:sequence>
-      <xs:element name="fila" type="enteroNulable"/>
-      <xs:element name="columna" type="xs:string"/>
+      <xs:element name="fila" type="xs:integer" minOccurs="0"/>
+      <xs:element name="columna" type="xs:string" minOccurs="0"/>
       <xs:element name="codigo" type="xs:string"/>
       <xs:element name="mensaje" type="xs:string"/>
-      <xs:element name="valorRecibido" type="xs:string"/>
+      <xs:element name="valorRecibido" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 

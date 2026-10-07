@@ -16,6 +16,28 @@ import {
 /** Raíz del XML de error: la que declaran los XSD de `docs/contratos/`. */
 export const RAIZ_ERROR = 'error';
 
+/** Cuerpo de error estándar, el mismo en JSON y en XML. */
+export interface CuerpoError {
+  statusCode: number;
+  message: string;
+  code: string;
+  details: string[] | null;
+  path: string;
+  timestamp: string;
+}
+
+/**
+ * Serializa el cuerpo de error a XML — ÚNICA forma de hacerlo.
+ *
+ * Exportada a propósito: el script que valida contra los XSD tiene que
+ * serializar por aquí, no reconstruir el cuerpo a mano. Cuando el script
+ * armaba su propia versión, pasaba en verde mientras el servicio emitía
+ * algo distinto (otra raíz, sin `details`), y el gate no servía de nada.
+ */
+export function serializarErrorXml(cuerpo: CuerpoError): string {
+  return serializarXml(cuerpo, { raiz: RAIZ_ERROR });
+}
+
 /**
  * Filtro global de errores — NO CAMBIAR su forma de respuesta.
  * Es el estándar transversal de los 10 microservicios (Fase A):
@@ -31,12 +53,10 @@ export const RAIZ_ERROR = 'error';
  * interceptores, así que si no se hiciera aquí un error pedido en XML
  * saldría en JSON (y el cliente de escritorio es XML-exclusivo).
  *
- * En XML se OMITE `details`: seis de los siete XSD declaran `error` como
- * `sequence(statusCode, message, code, path, timestamp)` sin `details`, así
- * que incluirlo rompería la validación. El detalle de validación sigue
- * completo en el JSON y, resumido, dentro de `message`. Está anotado en el
- * PR para que los dueños agreguen `details minOccurs="0"` y las dos
- * representaciones queden idénticas.
+ * El XML lleva EL MISMO cuerpo que el JSON, `details` incluido: un 400 sin
+ * el detalle por campo no es accionable para un cliente XML-exclusivo. Los
+ * XSD declaran `details` como opcional, así que un error sin detalle
+ * simplemente lo omite.
  */
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
@@ -98,12 +118,7 @@ export class HttpErrorFilter implements ExceptionFilter {
     };
 
     if (quiereXml(request.headers['accept'])) {
-      // Sin `details` y con el orden de la `xs:sequence` del XSD.
-      const { details: _omitido, ...paraXml } = cuerpo;
-      response
-        .status(status)
-        .type(CONTENT_TYPE_XML)
-        .send(serializarXml(paraXml, { raiz: RAIZ_ERROR }));
+      response.status(status).type(CONTENT_TYPE_XML).send(serializarErrorXml(cuerpo));
       return;
     }
     response.status(status).json(cuerpo);

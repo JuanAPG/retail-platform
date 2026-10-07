@@ -5,5 +5,8 @@
      415/500/503 en XML, con esta misma forma. -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
   <xs:include schemaLocation="_comun.xsd"/>
-  <xs:element name="response" type="errorBody"/>
+  <!-- Raiz `error`, la misma que declaran los XSD de los otros 9
+       servicios: el cuerpo de error es contrato compartido y tiene que
+       verse igual en todo el repo. -->
+  <xs:element name="error" type="errorBody"/>
 </xs:schema>

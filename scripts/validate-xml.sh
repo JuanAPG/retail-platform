@@ -37,6 +37,21 @@ if [[ -z "${CORE_TOKEN:-}" ]]; then
   exit 2
 fi
 
+# Chequeo previo: un token vencido o una sesion cerrada en Redis convierten
+# el reporte en 20 lineas de "HTTP 401", que no dice nada util. Mejor
+# abortar con el motivo.
+PREVIO="$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+  -H "Authorization: Bearer $CORE_TOKEN" "http://$HOST:3102/v1/zones?limit=1")"
+case "$PREVIO" in
+  200) ;;
+  401) echo "CORE_TOKEN rechazado (401): esta vencido o su sesion no esta en Redis." >&2
+       echo "Pide uno nuevo a auth-service y reintenta." >&2; exit 2 ;;
+  403) echo "CORE_TOKEN valido pero su rol no puede leer el catalogo (403)." >&2
+       echo "Usa un perfil interno (Analista o Administrador)." >&2; exit 2 ;;
+  000) echo "catalog-service no responde en $HOST:3102. Esta el stack arriba?" >&2; exit 2 ;;
+  *)   echo "catalog-service respondio $PREVIO al chequeo previo." >&2; exit 2 ;;
+esac
+
 # Ids reales del seed, para los endpoints que exigen parametros. Se
 # resuelven al vuelo: sin ellos la peticion da 400 y no se llega a validar
 # el XML, que es lo que este script mide.

@@ -86,8 +86,15 @@ npm run test:integracion  # requiere stack con seed + CSV (VM con Docker)
 `npm run xsd` necesita `xmllint` (macOS lo trae; en Debian/Ubuntu:
 `sudo apt-get install -y libxml2-utils`). No valida ejemplos escritos a
 mano: pasa **entidades con sus relaciones eager** por los mapeadores
-reales, que es lo que emite el endpoint. Validar solo las muestras daba
-verde mientras la respuesta viva no validaba.
+reales y los cuerpos de error por `serializarErrorXml`, que es la misma
+función que usa el filtro. Reconstruir el cuerpo a mano hacía que el gate
+pasara en verde mientras el servicio emitía otra cosa.
+
+Si `npm run build` falla con `EACCES` sobre `dist/`: el contenedor monta
+este directorio y compila como `root`, así que `dist/` queda del usuario
+equivocado en el host. Se arregla con
+`sudo chown -R $USER dist` o corriendo dentro del contenedor
+(`docker exec retail_core_process_service sh -c 'cd /app && npm run xsd'`).
 
 Las pruebas de integración (`test/`) requieren el stack arriba y
 `CORE_TOKEN` con un JWT de Analista o Administrador; si falta alguno de los

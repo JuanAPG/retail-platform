@@ -14,7 +14,7 @@
               <!-- Vacío cuando el producto no tiene categoría: esas
                    ventas se agrupan como "Sin categoría" en vez de
                    desaparecer del total. -->
-              <xs:element name="categoryId" type="enteroNulable"/>
+              <xs:element name="categoryId" type="xs:integer" minOccurs="0"/>
               <xs:element name="categoryName" type="xs:string"/>
               <xs:element name="totalSpend" type="xs:decimal"/>
               <xs:element name="units" type="xs:decimal"/>

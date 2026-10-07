@@ -28,6 +28,10 @@ if (!fs.existsSync(path.join(DIST, 'common', 'interceptors', 'xml.interceptor.js
 }
 
 const { serializarXml } = require(path.join(DIST, 'common', 'interceptors', 'xml.interceptor.js'));
+// El serializador REAL del filtro, no una reconstruccion: cuando el script
+// armaba su propia version del cuerpo de error, pasaba en verde mientras el
+// servicio emitia otra raiz y sin `details`.
+const { serializarErrorXml } = require(path.join(DIST, 'common', 'filters', 'http-error.filter.js'));
 const { muestras } = require(path.join(DIST, 'common', 'swagger', 'muestras.js'));
 const { aTransaccionRespuesta, aCanastaRespuesta } = require(
   path.join(DIST, 'common', 'respuestas.js'),
@@ -153,6 +157,9 @@ const error = (statusCode, code, details = null) => ({
   timestamp: '2026-10-06T12:00:00.000Z',
 });
 
+/** Los casos de error se serializan por el camino del filtro. */
+const SERIALIZADOR_ERROR = 'error';
+
 /** Cada caso: [xsd, descripción, cuerpo que devolvería el controlador]. */
 const CASOS = [
   // Salida REAL del mapeador sobre entidades con relaciones eager.
@@ -260,7 +267,11 @@ let fallos = 0;
 
 for (const [esquema, descripcion, cuerpo] of CASOS) {
   const archivo = path.join(tmp, `${esquema}-${fallos}-${Math.random().toString(36).slice(2)}.xml`);
-  fs.writeFileSync(archivo, serializarXml(cuerpo));
+  // Los errores pasan por el serializador del filtro; el resto, por el del
+  // interceptor. Es exactamente lo que ejecuta el servicio en cada caso.
+  const xml =
+    esquema === SERIALIZADOR_ERROR ? serializarErrorXml(cuerpo) : serializarXml(cuerpo);
+  fs.writeFileSync(archivo, xml);
   try {
     execFileSync('xmllint', ['--noout', '--schema', path.join(XSD, `${esquema}.xsd`), archivo], {
       stdio: ['ignore', 'ignore', 'pipe'],
