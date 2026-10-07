@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
-import { Priority } from '../notification.types';
+import { Priority, SERVICIOS_EMISORES, SourceService } from '../notification.types';
 
 const PRIORIDADES: Priority[] = ['info', 'warning', 'critical'];
 
@@ -10,6 +10,21 @@ export class CreateNotificationDto {
   @IsString()
   @MaxLength(60)
   eventType: string;
+
+  /**
+   * Qué servicio origina el evento. OBLIGATORIO y de lista cerrada: antes
+   * se aceptaba sin él y quedaba siempre `null`, así que no había forma de
+   * saber de dónde venía una notificación ni de auditarla.
+   */
+  @ApiProperty({
+    enum: SERVICIOS_EMISORES,
+    example: 'pricing-service',
+    description: 'Servicio que origina el evento. Lista cerrada.',
+  })
+  @IsIn(SERVICIOS_EMISORES as readonly string[], {
+    message: `sourceService debe ser uno de: ${SERVICIOS_EMISORES.join(', ')}.`,
+  })
+  sourceService: SourceService;
 
   @ApiPropertyOptional({ example: 'presentacion' })
   @IsOptional()

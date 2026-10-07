@@ -47,3 +47,7 @@ describe.skip('notificaciones de punta a punta (requiere Mongo + stack)', () => 
     expect(conteo.cuerpo.unread).toBeGreaterThanOrEqual(1);
   });
 });
+
+// Marca el archivo como módulo: si no, sus `const` de nivel superior
+// caen en el ámbito global y chocan con los del otro spec.
+export {};
