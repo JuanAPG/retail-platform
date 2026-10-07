@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
@@ -50,6 +51,7 @@ export class ProductsController {
   // Única lectura abierta a todo usuario autenticado: el Proveedor
   // necesita el catálogo de categorías para elegir una al proponer.
   @Get('product-categories')
+  @XmlRoot('categoryListResponse')
   @ApiOperation({ summary: 'Catálogo de categorías (arreglo plano, sin paginar). Abierto a todo usuario autenticado.' })
   @ApiRespuesta(200, 'Categorías ordenadas por nombre.', [muestras.categoria])
   @ApiErrores(401)
@@ -60,6 +62,7 @@ export class ProductsController {
   // También abierta: el Proveedor la necesita para elegir unidad al
   // registrar la presentación de su propuesta.
   @Get('units')
+  @XmlRoot('unitListResponse')
   @ApiOperation({ summary: 'Catálogo de unidades de medida (arreglo plano, sin paginar). Abierto a todo usuario autenticado.' })
   @ApiRespuesta(200, 'Unidades ordenadas por clave.', [muestras.unidad])
   @ApiErrores(401)
@@ -68,6 +71,7 @@ export class ProductsController {
   }
 
   @Get('providers')
+  @XmlRoot('supplierListResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.GERENTE_CATEGORIA, ROL.AUDITOR)
   @ApiOperation({ summary: 'Padrón de empresas proveedoras, paginado por razón social (solo lectura).' })
   @ApiRespuesta(200, 'Página de proveedores.', pagina([muestras.proveedor]))
@@ -81,6 +85,7 @@ export class ProductsController {
    * todos: el Proveedor recibe solo los productos de su empresa.
    */
   @Get('products')
+  @XmlRoot('productListResponse')
   @ApiOperation({
     summary: 'Catálogo de productos, paginado por nombre. Un Proveedor recibe únicamente los suyos.',
   })
@@ -95,6 +100,7 @@ export class ProductsController {
    * interprete como un id de producto.
    */
   @Get('products/pending')
+  @XmlRoot('productListResponse')
   @Roles(...APRUEBAN_PRODUCTOS)
   @ApiOperation({ summary: 'Bandeja de propuestas por revisar, las más antiguas primero.' })
   @ApiRespuesta(200, 'Página de propuestas pendientes.', pagina([muestras.productoPendiente]))
@@ -104,6 +110,7 @@ export class ProductsController {
   }
 
   @Get('products/:id')
+  @XmlRoot('productResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Detalle de un producto con sus presentaciones.' })
   @ApiRespuesta(200, 'El producto.', muestras.producto)
@@ -183,6 +190,7 @@ export class ProductsController {
   // -------------------------------------------------------------------
 
   @Get('products/:id/presentations')
+  @XmlRoot('presentationListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Presentaciones de un producto (arreglo plano, sin paginar).' })
   @ApiRespuesta(200, 'Presentaciones ordenadas por nombre.', [muestras.presentacion])

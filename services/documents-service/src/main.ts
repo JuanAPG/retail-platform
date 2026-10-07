@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -18,7 +18,12 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalFilters(new HttpErrorFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor(), new XmlInterceptor());
+  // El XmlInterceptor necesita el Reflector para leer `@XmlRoot` y poner la
+  // raíz que declara el XSD del endpoint.
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new XmlInterceptor(app.get(Reflector)),
+  );
 
   const serviceName = process.env.SERVICE_NAME ?? 'unknown-service';
   const document = SwaggerModule.createDocument(

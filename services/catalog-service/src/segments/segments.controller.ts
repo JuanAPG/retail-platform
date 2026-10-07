@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
@@ -41,6 +42,7 @@ export class SegmentsController {
   }
 
   @Get()
+  @XmlRoot('segmentListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Lista paginada de segmentos, de menor a mayor ingreso mínimo.' })
   @ApiRespuesta(200, 'Página de segmentos.', pagina([muestras.segmento]))
@@ -50,6 +52,7 @@ export class SegmentsController {
   }
 
   @Get(':id')
+  @XmlRoot('segmentResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Detalle de un segmento.' })
   @ApiRespuesta(200, 'El segmento.', muestras.segmento)

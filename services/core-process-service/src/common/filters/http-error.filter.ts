@@ -7,7 +7,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { CONTENT_TYPE_XML, quiereXml, serializarXml } from '../interceptors/xml.interceptor';
+import {
+  CONTENT_TYPE_XML,
+  quiereXml,
+  serializarXml,
+} from '../interceptors/xml.interceptor';
+
+/** Raíz del XML de error: la que declaran los XSD de `docs/contratos/`. */
+export const RAIZ_ERROR = 'error';
 
 /**
  * Filtro global de errores — NO CAMBIAR su forma de respuesta.
@@ -19,10 +26,17 @@ import { CONTENT_TYPE_XML, quiereXml, serializarXml } from '../interceptors/xml.
  * del `ValidationPipe` viaja en `details` (arreglo), para que el cliente
  * tipado no tenga que soportar dos formas del mismo campo.
  *
- * Responde en XML si el cliente lo pidió en `Accept`, con el mismo
- * serializador del `XmlInterceptor`: los filtros corren fuera de los
+ * Responde en XML si el cliente lo pidió en `Accept`, con raíz `<error>` y
+ * el namespace del servicio: los filtros corren fuera de los
  * interceptores, así que si no se hiciera aquí un error pedido en XML
- * saldría en JSON.
+ * saldría en JSON (y el cliente de escritorio es XML-exclusivo).
+ *
+ * En XML se OMITE `details`: seis de los siete XSD declaran `error` como
+ * `sequence(statusCode, message, code, path, timestamp)` sin `details`, así
+ * que incluirlo rompería la validación. El detalle de validación sigue
+ * completo en el JSON y, resumido, dentro de `message`. Está anotado en el
+ * PR para que los dueños agreguen `details minOccurs="0"` y las dos
+ * representaciones queden idénticas.
  */
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
@@ -84,7 +98,12 @@ export class HttpErrorFilter implements ExceptionFilter {
     };
 
     if (quiereXml(request.headers['accept'])) {
-      response.status(status).type(CONTENT_TYPE_XML).send(serializarXml(cuerpo));
+      // Sin `details` y con el orden de la `xs:sequence` del XSD.
+      const { details: _omitido, ...paraXml } = cuerpo;
+      response
+        .status(status)
+        .type(CONTENT_TYPE_XML)
+        .send(serializarXml(paraXml, { raiz: RAIZ_ERROR }));
       return;
     }
     response.status(status).json(cuerpo);
@@ -96,6 +115,9 @@ function codeForStatus(status: number): string {
     case HttpStatus.BAD_REQUEST:
     case HttpStatus.PAYLOAD_TOO_LARGE:
     case HttpStatus.UNSUPPORTED_MEDIA_TYPE:
+    // FastAPI y los pipes de validación devuelven 422 para el mismo caso
+    // que Nest reporta como 400: un cuerpo que no pasó la validación.
+    case HttpStatus.UNPROCESSABLE_ENTITY:
       return 'VALIDATION_ERROR';
     case HttpStatus.UNAUTHORIZED:
       return 'UNAUTHORIZED';

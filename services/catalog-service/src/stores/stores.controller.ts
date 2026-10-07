@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
@@ -32,6 +33,7 @@ export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
   @Get()
+  @XmlRoot('storeListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Lista paginada de tiendas, por nombre, con dirección, zona y proveedor.' })
   @ApiRespuesta(200, 'Página de tiendas.', pagina([muestras.tienda]))
@@ -43,6 +45,7 @@ export class StoresController {
   // Declarada ANTES que ':id', para que 'catalog' no se interprete
   // como un id de tienda.
   @Get('catalog/postal-codes')
+  @XmlRoot('postalCodeListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Códigos postales válidos para el alta de tiendas (arreglo plano, sin paginar).' })
   @ApiRespuesta(200, 'Códigos postales con su municipio.', [muestras.codigoPostal])
@@ -52,6 +55,7 @@ export class StoresController {
   }
 
   @Get(':id')
+  @XmlRoot('storeResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Detalle de una tienda.' })
   @ApiRespuesta(200, 'La tienda.', muestras.tienda)

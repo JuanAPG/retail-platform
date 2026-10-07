@@ -6,8 +6,8 @@
 #   2. Levantar un entorno reproducible con un solo comando.
 #
 # Estado actual: `postgres` y `redis` los usan todos los microservicios
-# (Redis lo consulta el SessionGuard en cada petición protegida). `mongodb`
-# y sus consolas quedan declarados para documents/notifications.
+# (Redis lo consulta el SessionGuard en cada petición protegida) y `mongodb`
+# lo usan documents-service y notifications-service vía `MONGO_URL`.
 # Un servicio arrastra sus dependencias duras con `depends_on`, así que
 # basta nombrarlo:
 #   docker compose -f infra/docker-compose.yml up -d core-process-service
@@ -147,6 +147,9 @@ services:
       PORT: 3101
       SERVICE_NAME: auth-service
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: auth/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_SECRET: dev_refresh_secret_solo_para_local
@@ -165,8 +168,18 @@ services:
       - "3101:3101"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3101/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -181,6 +194,9 @@ services:
       PORT: 3102
       SERVICE_NAME: catalog-service
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: catalog/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -194,8 +210,18 @@ services:
       - "3102:3102"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3102/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -210,6 +236,9 @@ services:
       PORT: 3103
       SERVICE_NAME: pricing-service
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: pricing/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -224,8 +253,18 @@ services:
       - "3103:3103"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3103/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -285,6 +324,9 @@ services:
       PORT: 3105
       SERVICE_NAME: algorithms-core
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: algorithms/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -298,8 +340,18 @@ services:
       - "3105:3105"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3105/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -326,8 +378,16 @@ services:
       - "3106:3106"
     command: sh -c "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 3106 --reload"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3106/v1/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -342,6 +402,9 @@ services:
       PORT: 3107
       SERVICE_NAME: decision-service
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: decision/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -355,8 +418,18 @@ services:
       - "3107:3107"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3107/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -371,6 +444,10 @@ services:
       PORT: 3108
       SERVICE_NAME: documents-service
       SERVICE_VERSION: 1.0.0
+      # Mongo con operacion real: historial de reportes
+      # (documents-service) y notificaciones (notifications-service).
+      # `authSource=admin` porque el usuario se crea en la base admin.
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -384,8 +461,18 @@ services:
       - "3108:3108"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      mongodb:
+        condition: service_started
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3108/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -400,6 +487,13 @@ services:
       PORT: 3109
       SERVICE_NAME: notifications-service
       SERVICE_VERSION: 1.0.0
+      # Mongo con operacion real: historial de reportes
+      # (documents-service) y notificaciones (notifications-service).
+      # `authSource=admin` porque el usuario se crea en la base admin.
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: notif/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -414,8 +508,18 @@ services:
       - "3109:3109"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      mongodb:
+        condition: service_started
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3109/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 
@@ -430,6 +534,9 @@ services:
       PORT: 3110
       SERVICE_NAME: audit-service
       SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: audit/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -443,8 +550,18 @@ services:
       - "3110:3110"
     command: sh -c "npm install && npm run start:dev"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3110/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 

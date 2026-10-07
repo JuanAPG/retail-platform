@@ -17,6 +17,7 @@ import { isUUID } from 'class-validator';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
@@ -38,6 +39,7 @@ export class ZonesController {
   constructor(private readonly zonesService: ZonesService) {}
 
   @Get('zones')
+  @XmlRoot('zoneListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Lista paginada de zonas, por nombre.' })
   @ApiRespuesta(200, 'Página de zonas.', pagina([muestras.zona]))
@@ -47,6 +49,7 @@ export class ZonesController {
   }
 
   @Get('municipalities')
+  @XmlRoot('municipalityListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Catálogo de municipios (arreglo plano, sin paginar).' })
   @ApiRespuesta(200, 'Municipios ordenados por nombre.', [muestras.municipio])
@@ -58,6 +61,7 @@ export class ZonesController {
   // Declarada ANTES que 'zones/:id', para que 'compare' no se
   // interprete como un id de zona.
   @Get('zones/compare')
+  @XmlRoot('zoneCompareResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Compara zonas por clasificación vigente e indicadores (solo lectura, sin paginar).' })
   @ApiQuery({ name: 'ids', required: true, description: 'Ids de zona (UUID) separados por coma.' })
@@ -81,6 +85,7 @@ export class ZonesController {
   }
 
   @Get('zones/:id')
+  @XmlRoot('zoneResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Detalle de una zona.' })
   @ApiRespuesta(200, 'La zona.', muestras.zona)
