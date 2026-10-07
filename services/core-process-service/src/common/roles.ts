@@ -27,8 +27,17 @@ export const PERFILES_INTERNOS = [
   ROL.AUDITOR,
 ] as const;
 
-/** Perfiles que solo consultan: no deben tener rutas de escritura. */
-export const PERFILES_DE_CONSULTA = [ROL.AUDITOR, ROL.ANALISTA, ROL.PLANEADOR] as const;
+/**
+ * Perfiles sin ninguna ruta de escritura en este servicio.
+ *
+ * El Analista NO está aquí: el contrato de Fase A
+ * (`docs/contratos/core-process-transactions.md`) le da escritura sobre
+ * transacciones e importación CSV, y así está implementado. El comentario
+ * anterior lo listaba como solo-consulta y contradecía al contrato — hay
+ * que confirmarlo contra `docs/matriz-perfiles-permisos.docx`, que es la
+ * autoridad, y avisar al equipo si la matriz dice otra cosa.
+ */
+export const PERFILES_DE_CONSULTA = [ROL.AUDITOR, ROL.PLANEADOR] as const;
 
 /** Quién resuelve las propuestas de alta de producto (RF-12). */
 export const APRUEBAN_PRODUCTOS = [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA] as const;

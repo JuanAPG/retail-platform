@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M09, los cuatro indicadores escalares:
+       GET /v1/analytics/average-ticket
+       GET /v1/analytics/products-per-basket
+       GET /v1/analytics/purchase-frequency
+       GET /v1/analytics/units-per-transaction
+     Devuelven un número desnudo (0 cuando no hay canastas en el ámbito de
+     los filtros), no un objeto con clave y valor. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:element name="response">
+    <xs:simpleType>
+      <xs:restriction base="xs:decimal">
+        <xs:minInclusive value="0"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+</xs:schema>

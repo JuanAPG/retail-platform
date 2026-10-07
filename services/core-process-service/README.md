@@ -2,40 +2,93 @@
 
 Proceso principal (M06 transacciones + importación CSV, M07 canastas) más
 M09 analítica descriptiva sobre esos mismos datos. Parte de la plantilla
-transversal.
+transversal `services/template-nest`.
 
 ## Endpoints (`/v1/`, JSON y XML, SessionGuard)
 
-- M06: `POST /v1/transactions` (manual), `POST /v1/transactions/import/preview|confirm`,
-  `GET /v1/transactions/import/pending`, `GET /v1/transactions[?filtros]`, `GET /v1/transactions/:id`.
-  Escritura Admin/Analista. Valida contra catalog-service por HTTP (caído → 503, sin insertar);
-  reporta a audit-service best-effort.
-- M07: `GET /v1/baskets[?filtros]`, `GET /v1/baskets/:id`. 1:1 con transacción, zona y segmento
-  congelados; segmento por lectura de `zona_clasificaciones` (RN-02).
-- M09: `average-ticket`, `products-per-basket`, `purchase-frequency`,
-  `units-per-transaction`, `spend-by-category` con filtros.
+- **M06**: `POST /v1/transactions` (manual),
+  `POST /v1/transactions/import/preview|confirm`,
+  `GET /v1/transactions/import/pending`,
+  `GET /v1/transactions[?storeId&dateFrom&dateTo&page&limit]`,
+  `GET /v1/transactions/:id`.
+  Escritura Admin/Analista. Valida contra catalog-service por HTTP
+  (caído → 503, sin insertar); reporta a audit-service best-effort.
+- **M07**: `GET /v1/baskets[?filtros&page&limit]`, `GET /v1/baskets/:id`.
+  1:1 con transacción, zona y segmento congelados; segmento por lectura de
+  `v_zona_segmento` (RN-02). Nueve filtros combinables con AND.
+- **M09**: `average-ticket`, `products-per-basket`, `purchase-frequency`,
+  `units-per-transaction`, `spend-by-category`, con los cinco filtros
+  aplicados en los cinco indicadores.
 
-Contratos: `docs/contratos/core-process-transactions.md`,
-`docs/contratos/core-process-analytics.md` (+ XSD).
+Contratos: `docs/contratos/core-process-transactions.md` y
+`docs/contratos/core-process-analytics.md`.
+XSD por endpoint: `docs/contratos/xsd/core-process/` (incluye `error.xsd`,
+porque los errores también salen en XML cuando se piden así).
+
+## Invariantes que el servicio garantiza
+
+- **`total` == Σ `subtotal`.** El total se calcula replicando el redondeo
+  por línea de Postgres (`src/transactions/money.util.ts`) y se verifica
+  contra la suma real **dentro** de la transacción de base de datos antes
+  de confirmar: una transacción incoherente nunca llega a committearse.
+  Por eso `quantity` y `unitPrice` admiten máximo 2 decimales.
+- **Una transacción = una canasta (RN-03), atómico.** `buildFromTransaction`
+  recibe el `EntityManager` de quien la llama y corre en la misma
+  transacción de base de datos: nunca queda una venta sin canasta ni una
+  canasta sin venta.
+- **El preview no bloquea el archivo si falla.** La validación contra el
+  catálogo corre antes de persistir la cabecera, así que un 503 transitorio
+  no deja el hash tomado.
+- **El resumen de la confirmación es lo realmente insertado**, con las
+  filas rechazadas y los folios omitidos con su motivo.
+- **Fail-closed en todo**: sin sesión en Redis, sin catálogo o sin secreto
+  JWT no se pasa ni se inserta.
 
 ## Correr y probar
 
 ```bash
 npm install
 PORT=3104 SERVICE_NAME=core-process-service npm run start:dev
-npm test                                   # unitarias (sin infra)
-npm run test:integracion                   # requiere stack con seed + CSV (VM)
+
+npm test                  # 107 unitarias, sin infraestructura
+npm run test:cov          # con cobertura (umbral 85 % statements)
+npm run build && npm run xsd   # valida el XML real contra los XSD del contrato
+npm run test:integracion  # requiere stack con seed + CSV (VM con Docker)
 ```
+
+`npm run xsd` necesita `xmllint` (macOS lo trae; en Debian/Ubuntu:
+`sudo apt-get install -y libxml2-utils`).
+
+Las pruebas de integración (`test/`) requieren el stack arriba y
+`CORE_TOKEN` con un JWT de Analista o Administrador; si falta alguno de los
+dos, fallan con un mensaje que lo dice en vez de un `fetch failed` opaco:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d core-process-service
+CORE_TOKEN=<jwt> npm run test:integracion
+```
+
+`core-process-service` arrastra `postgres` y `redis` sanos vía
+`depends_on`; `catalog-service` y `audit-service` hay que levantarlos
+aparte si se quieren probar las validaciones y la auditoría de verdad.
+
+## Qué trae resuelto la plantilla
 
 Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
 modifica por servicio**, solo se agregan módulos de negocio.
 
-## Qué trae resuelto
-
-- `GET /v1/health` sin auth (`src/health/`)
+- `GET /v1/health` sin auth, con `checks` de Postgres y Redis; siempre 200
+  (`status: degraded` si una dependencia falla), para que el healthcheck de
+  Docker pueda distinguir "proceso muerto" de "base caída".
 - Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
+  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`).
+  `message` es siempre string, el detalle de validación va en `details`, y
+  un 500 inesperado no filtra texto del motor de base de datos al cliente
+  pero sí deja su stack en el log.
+- Logging JSON por operación con el status real y `x-request-id` de ida y
+  de vuelta (`src/common/interceptors/logging.interceptor.ts`).
+- XML si `Accept` lo pide — `application/xml`, `text/xml` o `*+xml`,
+  respetando q-values —, con prólogo, listas como `<item>` y fechas en ISO
+  (`xml.interceptor.ts`). También en los errores.
 - `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
   (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.

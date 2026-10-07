@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M06: POST /v1/transactions (201) y GET /v1/transactions/:id (200).
+     Una sola transacción con su detalle de líneas. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:include schemaLocation="_comun.xsd"/>
+  <xs:element name="response" type="transaction"/>
+</xs:schema>

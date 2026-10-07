@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M06 paso 1: POST /v1/transactions/import/preview (multipart, 201).
+     NADA se inserta en transacciones: las filas quedan en staging con su
+     resultado de validación. `grupos` son las transacciones que se
+     formarían; `errores` viene recortado a 200 entradas. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:include schemaLocation="_comun.xsd"/>
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="importacionId" type="xs:string"/>
+        <xs:element name="fileName" type="xs:string"/>
+        <xs:element name="estado">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="validado"/>
+              <xs:enumeration value="con_errores"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="filasTotales" type="xs:integer"/>
+        <xs:element name="filasValidas" type="xs:integer"/>
+        <xs:element name="filasConError" type="xs:integer"/>
+        <xs:element name="transaccionesDetectadas" type="xs:integer"/>
+        <xs:element name="grupos">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="folio" type="xs:string"/>
+                    <xs:element name="tienda" type="xs:string"/>
+                    <xs:element name="tiendaId" type="xs:string"/>
+                    <xs:element name="fecha" type="xs:date"/>
+                    <xs:element name="lineas" type="xs:integer"/>
+                    <xs:element name="totalEstimado" type="xs:decimal"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="errores">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="importError" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

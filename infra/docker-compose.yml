@@ -5,11 +5,12 @@
 #   1. Documentar la estructura del sistema: qué piezas lo componen.
 #   2. Levantar un entorno reproducible con un solo comando.
 #
-# Estado actual: solo `postgres`, `api` y `web` tienen código que los use.
-# `mongodb`, `redis` y sus consolas quedan declarados porque forman parte
-# del stack del proyecto, pero todavía NO hay código que los consulte.
-# Si solo quieres lo que está en uso:
-#   docker compose -f infra/docker-compose.yml up -d postgres pgadmin api web
+# Estado actual: `postgres` y `redis` los usan todos los microservicios
+# (Redis lo consulta el SessionGuard en cada petición protegida). `mongodb`
+# y sus consolas quedan declarados para documents/notifications.
+# Un servicio arrastra sus dependencias duras con `depends_on`, así que
+# basta nombrarlo:
+#   docker compose -f infra/docker-compose.yml up -d core-process-service
 
 name: retail-platform
 
@@ -130,7 +131,8 @@ services:
   # Arrancan de la plantilla (solo /v1/health) hasta que cada frente
   # implemente su servicio en su rama. Puertos 3101-3110: el 3001 sigue
   # siendo del monolito `api` hasta que la migración lo jubile.
-  # Levantarlos: docker compose -f infra/docker-compose.yml up -d redis <servicio>
+  # Levantarlos: docker compose -f infra/docker-compose.yml up -d <servicio>
+  # (cada uno arrastra postgres y redis sanos vía depends_on)
   # ---------------------------------------------------------------
   auth-service:
     image: node:20
@@ -252,9 +254,23 @@ services:
     ports:
       - "3104:3104"
     command: sh -c "npm install && npm run start:dev"
+    # Postgres es dependencia DURA: TypeORM conecta en el arranque, así que
+    # sin la base el proceso muere al boot. catalog y audit son llamadas en
+    # caliente (catálogo caído -> 503 controlado; auditoría -> best-effort),
+    # por eso no se declaran aquí.
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3104/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
     networks:
       - retail_net
 

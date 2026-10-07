@@ -8,7 +8,9 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "test": "jest --testPathIgnorePatterns=test/",
-    "test:integracion": "jest --config ./test/jest.integracion.json"
+    "test:integracion": "jest --config ./test/jest.integracion.json --runInBand",
+    "test:cov": "jest --testPathIgnorePatterns=test/ --coverage",
+    "xsd": "node scripts/validar-xsd.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",
@@ -47,6 +49,29 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "**/*.ts",
+      "!**/*.spec.ts",
+      "!**/*.d.ts",
+      "!main.ts",
+      "!app.module.ts",
+      "!**/entities/**",
+      "!**/dto/**",
+      "!**/swagger/**",
+      "!**/config/**",
+      "!**/decorators/**",
+      "!**/*.controller.ts",
+      "!common/roles.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 85,
+        "branches": 70,
+        "functions": 80,
+        "lines": 85
+      }
+    },
+    "coverageDirectory": "../coverage"
   }
 }
