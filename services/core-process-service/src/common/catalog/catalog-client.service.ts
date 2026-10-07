@@ -7,6 +7,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+/**
+ * `activo` es opcional porque el campo lo agregó catalog-service después:
+ * si no viene, se asume activo para no romper contra una versión vieja del
+ * catálogo. Usar siempre `estaActivo()`, nunca `!activo` (un `undefined`
+ * daría "inactivo" por accidente).
+ */
 export interface TiendaCatalogo {
   id: string;
   nombre: string;
@@ -17,6 +23,11 @@ export interface PresentacionCatalogo {
   id: string;
   nombre: string;
   activo?: boolean;
+}
+
+/** Una entidad del catálogo sin `activo` explícito cuenta como activa. */
+export function estaActivo(entidad: { activo?: boolean }): boolean {
+  return entidad.activo !== false;
 }
 
 export interface ProductoCatalogo {

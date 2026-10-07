@@ -1,7 +1,13 @@
 import { TransactionsService } from './transactions.service';
 import { BasketsService } from '../baskets/baskets.service';
 
-const TIENDAS = [{ id: 't1', nombre: 'Super Valle Centro' }];
+const TIENDAS = [
+  { id: 't1', nombre: 'Super Valle Centro' },
+  // Baja lógica en el catálogo: existe pero no debe originar ventas.
+  { id: 't-baja', nombre: 'Tienda Cerrada', activo: false },
+  // Sin el campo: catálogo viejo => se asume activa.
+  { id: 't-sin-campo', nombre: 'Tienda Antigua' },
+];
 const PRODUCTOS = [
   {
     id: 'p1',
@@ -10,6 +16,7 @@ const PRODUCTOS = [
     presentaciones: [
       { id: 'pr1', nombre: '1 kg' },
       { id: 'pr2', nombre: '500 g' },
+      { id: 'pr-baja', nombre: '250 ml', activo: false },
     ],
   },
   {
@@ -357,6 +364,25 @@ describe('TransactionsService — preview CSV', () => {
     );
     expect(r.filasValidas).toBe(1);
     expect(r.errores.map((e) => e.codigo)).toContain('PRESENTACION_DUPLICADA');
+  });
+
+  it('marca TIENDA_INACTIVA y PRESENTACION_INACTIVA por fila', async () => {
+    const { svc } = servicio();
+    const r = await svc.previewCsvImport(
+      archivo([
+        'T1,2026-09-01,Super Valle Centro,P-001-001,1 kg,2,42.5',
+        'T2,2026-09-01,Tienda Cerrada,P-001-001,1 kg,2,42.5',
+        'T3,2026-09-01,Super Valle Centro,P-001-001,250 ml,1,15',
+      ]),
+      USUARIO as never,
+    );
+    expect(r.filasValidas).toBe(1);
+    expect(r.filasConError).toBe(2);
+    const codigos = r.errores.map((e) => e.codigo);
+    expect(codigos).toContain('TIENDA_INACTIVA');
+    expect(codigos).toContain('PRESENTACION_INACTIVA');
+    // Una fila mala no arrastra a las buenas.
+    expect(r.transaccionesDetectadas).toBe(1);
   });
 
   it('CSV vacío o solo con encabezado da 400 claro, no 500', async () => {
@@ -792,6 +818,39 @@ describe('TransactionsService — alta manual', () => {
         cambios: expect.arrayContaining([{ campo: 'total', posterior: '85.00' }]),
       }),
     );
+  });
+
+  it('una tienda dada de baja no origina ventas', async () => {
+    const { svc, insertadas } = servicio();
+    await expect(
+      svc.createManual(
+        alta([{ presentationId: 'pr1', quantity: 1, unitPrice: 10 }], { storeId: 't-baja' }),
+        USUARIO as never,
+      ),
+    ).rejects.toThrow(/Tienda Cerrada está dada de baja/);
+    expect(insertadas).toHaveLength(0);
+  });
+
+  it('una presentación dada de baja no se puede vender', async () => {
+    const { svc, insertadas } = servicio();
+    await expect(
+      svc.createManual(
+        alta([{ presentationId: 'pr-baja', quantity: 1, unitPrice: 10 }]),
+        USUARIO as never,
+      ),
+    ).rejects.toThrow(/250 ml de P-001-001 está dada de baja/);
+    expect(insertadas).toHaveLength(0);
+  });
+
+  it('una tienda sin el campo `activo` cuenta como activa (catálogo viejo)', async () => {
+    // `activo === undefined` no debe interpretarse como inactiva: eso
+    // rompería contra una versión del catálogo que todavía no lo expone.
+    const { svc, insertadas } = servicio();
+    await svc.createManual(
+      alta([{ presentationId: 'pr1', quantity: 1, unitPrice: 10 }], { storeId: 't-sin-campo' }),
+      USUARIO as never,
+    );
+    expect(insertadas).toHaveLength(1);
   });
 
   it('si catalog-service cae, no se inserta nada', async () => {

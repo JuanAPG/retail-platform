@@ -166,6 +166,114 @@ describe('Estándar transversal (integración, requiere stack)', () => {
     }
   }, 30000);
 
+  // --- Resiliencia: dependencias caídas (QA-CP-08 c y d) --------------
+  //
+  // Requieren poder parar y arrancar contenedores, así que solo corren si
+  // se exporta QA_DOCKER=1. Sin eso se omiten en vez de fallar.
+
+  const docker = process.env.QA_DOCKER === '1';
+  const compose = async (accion: 'stop' | 'start', servicio: string) => {
+    const { execFileSync } = await import('child_process');
+    execFileSync('docker', [accion, servicio], { stdio: 'ignore' });
+  };
+
+  /**
+   * Espera a que un servicio vuelva a responder, en vez de dormir un
+   * tiempo fijo: con un `sleep` las pruebas se pisaban entre sí cuando el
+   * contenedor tardaba más de lo previsto en arrancar.
+   */
+  const esperarSano = async (url: string, intentos = 60) => {
+    for (let i = 0; i < intentos; i++) {
+      try {
+        if ((await fetch(`${url}/v1/health`)).ok) return;
+      } catch {
+        // todavía no levanta
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    throw new Error(`${url} no volvió a responder tras ${intentos}s.`);
+  };
+
+  const CATALOGO = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
+  const AUDITORIA = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
+
+  (docker ? it : it.skip)(
+    'catalog-service caído: 503 claro y NADA se inserta',
+    async () => {
+      const antes = (await fetch(`${BASE}/v1/transactions?limit=1`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      }).then((r) => r.json())) as { total: number };
+
+      await compose('stop', 'retail_catalog_service');
+      try {
+        const inicio = Date.now();
+        const r = await fetch(`${BASE}/v1/transactions`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storeId: '00000000-0000-4000-8000-000000000000',
+            folio: `CAT-DOWN-${Date.now()}`,
+            fecha: '2026-09-15',
+            details: [
+              { presentationId: '00000000-0000-4000-8000-000000000000', quantity: 1, unitPrice: 10 },
+            ],
+          }),
+        });
+        const transcurrido = Date.now() - inicio;
+
+        expect(r.status).toBe(503);
+        const cuerpo = await r.json();
+        expect(cuerpo.code).toBe('SERVICE_UNAVAILABLE');
+        expect(cuerpo.message).toMatch(/catálogo no disponible/i);
+        // Hay timeout: no se cuelga esperando al catálogo.
+        expect(transcurrido).toBeLessThan(15000);
+
+        const despues = (await fetch(`${BASE}/v1/transactions?limit=1`, {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        }).then((x) => x.json())) as { total: number };
+        expect(despues.total).toBe(antes.total);
+      } finally {
+        await compose('start', 'retail_catalog_service');
+        await esperarSano(CATALOGO);
+      }
+    },
+    180000,
+  );
+
+  (docker ? it : it.skip)(
+    'audit-service caído: la importación se completa igual (best-effort)',
+    async () => {
+      await compose('stop', 'retail_audit_service');
+      try {
+        const transacciones = await fetch(`${BASE}/v1/transactions?limit=1`, {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        }).then((r) => r.json());
+        const t = transacciones.data[0];
+        const d = t.details[0];
+
+        const r = await fetch(`${BASE}/v1/transactions`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storeId: t.storeId,
+            folio: `AUDIT-DOWN-${Date.now()}`,
+            fecha: '2026-09-15',
+            details: [{ presentationId: d.presentationId, quantity: 1, unitPrice: 10 }],
+          }),
+        });
+
+        // La venta entra aunque la auditoría no se pueda reportar.
+        expect(r.status).toBe(201);
+        const creada = await r.json();
+        expect(creada.total).toBe('10.00');
+      } finally {
+        await compose('start', 'retail_audit_service');
+        await esperarSano(AUDITORIA);
+      }
+    },
+    180000,
+  );
+
   it('el requestId viaja de vuelta en la respuesta', async () => {
     const r = await fetch(`${BASE}/v1/health`, { headers: { 'x-request-id': 'qa-123' } });
     expect(r.headers.get('x-request-id')).toBe('qa-123');

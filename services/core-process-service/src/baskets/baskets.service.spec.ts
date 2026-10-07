@@ -398,3 +398,98 @@ describe('BasketsService.classifyPending (rellena segmentos faltantes)', () => {
     expect(qb.where).toHaveBeenCalledWith('basket.segmentId IS NULL');
   });
 });
+
+describe('BasketsService.classifyByZoneAndSegment (reclasificar UNA canasta)', () => {
+  function servicioUno(
+    canasta: Record<string, unknown>,
+    transaccion: object | null,
+    segmentoPorZona: Record<string, number | null>,
+  ) {
+    const guardadas: Record<string, unknown>[] = [];
+    let actual = { ...canasta };
+    const basketsRepo = {
+      findOne: jest.fn(async () => ({ ...actual })),
+      save: jest.fn(async (f: Record<string, unknown>) => {
+        actual = { ...actual, ...f };
+        guardadas.push({ ...f });
+        return { ...f };
+      }),
+      createQueryBuilder: jest.fn(),
+      update: jest.fn(),
+    };
+    const transactionsRepo = { findOne: jest.fn(async () => transaccion) };
+    const dataSource = {
+      manager: {
+        query: jest.fn(async (_sql: string, params: unknown[]) => {
+          const s = segmentoPorZona[params[0] as string];
+          return s == null ? [] : [{ segmentId: s }];
+        }),
+      },
+    };
+    const svc = new BasketsService(basketsRepo as never, transactionsRepo as never, dataSource as never);
+    return { svc, guardadas, transactionsRepo };
+  }
+
+  const CANASTA = { id: 'k1', transactionId: 't1', zoneId: 'z-congelada', segmentId: null };
+
+  it('por defecto refresca el segmento y NO toca la zona congelada (RN-02)', async () => {
+    const { svc, guardadas, transactionsRepo } = servicioUno(
+      CANASTA,
+      { id: 't1', storeId: 's1', store: { zonaId: 'z-nueva' } },
+      { 'z-congelada': 4, 'z-nueva': 9 },
+    );
+
+    const r = await svc.classifyByZoneAndSegment('k1');
+
+    // La zona sigue siendo la del momento de la venta, aunque la tienda ya
+    // esté en otra: re-derivarla reescribiría el análisis de meses pasados.
+    expect(guardadas[0]).toMatchObject({ zoneId: 'z-congelada', segmentId: 4 });
+    expect(r.zoneId).toBe('z-congelada');
+    // Ni siquiera consulta la transacción si no hace falta.
+    expect(transactionsRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('con resyncZone deriva la zona DESDE LA TIENDA de su transacción', async () => {
+    const { svc, guardadas } = servicioUno(
+      CANASTA,
+      { id: 't1', storeId: 's1', store: { zonaId: 'z-nueva' } },
+      { 'z-congelada': 4, 'z-nueva': 9 },
+    );
+
+    const r = await svc.classifyByZoneAndSegment('k1', { resyncZone: true });
+
+    expect(guardadas[0]).toMatchObject({ zoneId: 'z-nueva', segmentId: 9 });
+    expect(r.zoneId).toBe('z-nueva');
+  });
+
+  it('con resyncZone y tienda sin zona: 409, no guarda una canasta sin zona', async () => {
+    const { svc, guardadas } = servicioUno(
+      CANASTA,
+      { id: 't1', storeId: 's1', store: { zonaId: null } },
+      { 'z-congelada': 4 },
+    );
+
+    await expect(svc.classifyByZoneAndSegment('k1', { resyncZone: true })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(guardadas).toHaveLength(0);
+  });
+
+  it('con resyncZone y transacción inexistente: 404', async () => {
+    const { svc } = servicioUno(CANASTA, null, { 'z-congelada': 4 });
+    await expect(svc.classifyByZoneAndSegment('k1', { resyncZone: true })).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('si la zona sigue sin clasificación vigente, deja el segmento nulo sin fallar', async () => {
+    const { svc, guardadas } = servicioUno(
+      CANASTA,
+      { id: 't1', storeId: 's1', store: { zonaId: 'z-congelada' } },
+      { 'z-congelada': null },
+    );
+    const r = await svc.classifyByZoneAndSegment('k1');
+    expect(guardadas[0]).toMatchObject({ segmentId: null });
+    expect(r.segmentId).toBeNull();
+  });
+});

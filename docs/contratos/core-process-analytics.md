@@ -36,3 +36,10 @@ los filtros (nunca `null` ni error).
 Gasto por categoría directa del producto (no suma hacia `categoria_padre_id`),
 de mayor a menor; `share` en 0–100. Las categorías sin ventas no aparecen.
 Lista vacía si no hay canastas en el ámbito filtrado.
+
+Un producto **sin categoría** se agrupa como `"Sin categoría"` con
+`categoryId: null`, no se descarta. El join a categoría es LEFT por eso:
+con INNER, ese gasto desaparecía del resultado y los `share` seguían
+sumando 100 % sobre un total incompleto — se perdía dinero sin que nada lo
+delatara. Hoy `productos.categoria_id` es `NOT NULL` y el caso es
+inalcanzable, pero el error sería invisible si eso cambia.

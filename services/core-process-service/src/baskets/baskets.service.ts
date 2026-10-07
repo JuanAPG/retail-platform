@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Basket } from '../entities/basket.entity';
@@ -138,13 +138,51 @@ export class BasketsService {
   }
 
   /**
-   * Reclasifica UNA canasta ya construida contra la clasificación vigente
-   * de su zona. Se usa cuando la zona se clasificó después de la venta.
+   * Reclasifica UNA canasta ya construida (M07, 2.2).
+   *
+   * Por defecto solo refresca el `segmentId` contra la clasificación
+   * vigente de su zona, porque la zona se congela al construir la canasta
+   * a propósito: `db/schema.sql` la documenta como "clasificación vigente
+   * AL MOMENTO de construir la canasta", y re-derivarla reescribiría el
+   * análisis de meses pasados si la tienda cambió de zona desde entonces.
+   *
+   * Con `resyncZone` se vuelve a derivar la zona DESDE LA TIENDA de su
+   * transacción, que es la misma regla que aplica `buildFromTransaction`.
+   * Es para corregir una canasta cuya zona quedó mal (p. ej. la tienda se
+   * dio de alta en la zona equivocada y se corrigió después), no para uso
+   * rutinario: de ahí que sea explícito y no el default.
+   *
+   * `tiendas.zona_id` es NOT NULL, así que una tienda nunca llega aquí sin
+   * zona. Si llegara, se rechaza en vez de guardar una canasta sin zona.
    */
-  async classifyByZoneAndSegment(basketId: string): Promise<CanastaRespuesta> {
+  async classifyByZoneAndSegment(
+    basketId: string,
+    opciones: { resyncZone?: boolean } = {},
+  ): Promise<CanastaRespuesta> {
     const basket = await this.buscar(basketId);
+
+    if (opciones.resyncZone) {
+      const transaction = await this.transactionsRepo.findOne({
+        where: { id: basket.transactionId },
+        relations: ['store'],
+      });
+      if (!transaction) {
+        throw new NotFoundException(`No existe la transacción ${basket.transactionId}.`);
+      }
+      const zonaDeLaTienda = transaction.store?.zonaId;
+      if (!zonaDeLaTienda) {
+        throw new ConflictException(
+          `La tienda ${transaction.storeId} no tiene zona asignada en el catálogo: ` +
+            'no se puede clasificar la canasta.',
+        );
+      }
+      basket.zoneId = zonaDeLaTienda;
+    }
+
     basket.segmentId = await this.findSegmentId(basket.zoneId);
-    return aCanastaRespuesta(await this.basketsRepo.save(basket));
+    const guardada = await this.basketsRepo.save(basket);
+    // Se relee para devolver la zona con su nombre, igual que findOne.
+    return aCanastaRespuesta(await this.buscar(guardada.id));
   }
 
   /**

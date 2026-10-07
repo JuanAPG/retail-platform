@@ -15,6 +15,9 @@ import { CategorySpend } from './dto/category-spend.dto';
  * Las fórmulas son las mismas que documenta el catálogo `indicadores`
  * (ver db/data_retail.sql).
  */
+/** Etiqueta de las ventas cuyo producto no tiene categoría asignada. */
+export const SIN_CATEGORIA = 'Sin categoría';
+
 @Injectable()
 export class AnalyticsService {
   constructor(
@@ -79,6 +82,13 @@ export class AnalyticsService {
    *
    * Agrupa por la categoría directa del producto (no suma hacia
    * `categoria_padre_id`). Las categorías sin ventas no aparecen.
+   *
+   * El join a categoría es LEFT, no INNER: con INNER, un producto sin
+   * categoría desaparecería del resultado y los `share` seguirían sumando
+   * 100 % sobre un total incompleto, es decir, el gasto se perdería SIN
+   * que nada lo delatara. Hoy `productos.categoria_id` es NOT NULL y el
+   * caso es inalcanzable, pero el error sería invisible si eso cambia, así
+   * que esas ventas se agrupan como "Sin categoría" (`categoryId: null`).
    */
   async getSpendByCategory(filters: AnalyticsFilterDto): Promise<CategorySpend[]> {
     const rows = await this.filteredBaskets(filters)
@@ -87,9 +97,9 @@ export class AnalyticsService {
       .innerJoin(TransactionDetail, 'detail', 'detail.transactionId = basket.transactionId')
       .innerJoin('detail.presentation', 'presentation')
       .innerJoin('presentation.producto', 'product')
-      .innerJoin('product.categoria', 'category')
+      .leftJoin('product.categoria', 'category')
       .select('category.id', 'categoryId')
-      .addSelect('category.nombre', 'categoryName')
+      .addSelect(`COALESCE(category.nombre, '${SIN_CATEGORIA}')`, 'categoryName')
       .addSelect('SUM(detail.subtotal)', 'totalSpend')
       .addSelect('SUM(detail.quantity)', 'units')
       .addSelect('COUNT(DISTINCT basket.id)', 'basketCount')
@@ -101,7 +111,7 @@ export class AnalyticsService {
       .orderBy('SUM(detail.subtotal)', 'DESC')
       .addOrderBy('category.nombre', 'ASC')
       .getRawMany<{
-        categoryId: number;
+        categoryId: number | null;
         categoryName: string;
         totalSpend: string;
         units: string;
@@ -111,7 +121,9 @@ export class AnalyticsService {
 
     // Postgres devuelve NUMERIC y COUNT como texto.
     return rows.map((row) => ({
-      categoryId: Number(row.categoryId),
+      // `null` cuando el producto no tiene categoría: no se fuerza a 0,
+      // que sería un id de categoría inexistente.
+      categoryId: row.categoryId == null ? null : Number(row.categoryId),
       categoryName: row.categoryName,
       totalSpend: round2(Number(row.totalSpend)),
       units: round2(Number(row.units)),

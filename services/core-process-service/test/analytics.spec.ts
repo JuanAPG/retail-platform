@@ -120,6 +120,44 @@ describe('M09 de punta a punta (integración, requiere stack)', () => {
     expect(gastoVacio).toEqual([]);
   }, 60000);
 
+  it('purchase-frequency cuadra EXACTO con la fórmula sobre un mes cerrado', async () => {
+    // Un mes calendario completo: dateFrom y dateTo+1 caen en día 1, así
+    // que el denominador es 1 mes exacto y la frecuencia debe ser igual al
+    // número de canastas del mes. Sin aproximaciones ni rangos.
+    const mes = { desde: '2026-08-01', hasta: '2026-08-31' };
+
+    let canastasDelMes = 0;
+    for (let page = 1; ; page++) {
+      const r = await get(
+        `/v1/baskets?dateFrom=${mes.desde}&dateTo=${mes.hasta}&limit=100&page=${page}`,
+      );
+      expect(r.estado).toBe(200);
+      canastasDelMes = r.cuerpo.total;
+      if (page * 100 >= r.cuerpo.total) break;
+      if (page > 50) break;
+    }
+    expect(canastasDelMes).toBeGreaterThan(0);
+
+    const frecuencia = (
+      await get(`/v1/analytics/purchase-frequency?dateFrom=${mes.desde}&dateTo=${mes.hasta}`)
+    ).cuerpo as number;
+
+    // canastas / 1 mes = canastas.
+    expect(frecuencia).toBe(canastasDelMes);
+  }, 60000);
+
+  it('purchase-frequency sobre dos meses cerrados divide entre 2', async () => {
+    const r = await get('/v1/baskets?dateFrom=2026-08-01&dateTo=2026-09-30&limit=1');
+    const canastas = r.cuerpo.total as number;
+    expect(canastas).toBeGreaterThan(0);
+
+    const frecuencia = (
+      await get('/v1/analytics/purchase-frequency?dateFrom=2026-08-01&dateTo=2026-09-30')
+    ).cuerpo as number;
+
+    expect(frecuencia).toBe(Math.round((canastas / 2) * 100) / 100);
+  }, 30000);
+
   it('un filtro mal formado da 400, no 500', async () => {
     const r = await get('/v1/analytics/average-ticket?segmentId=abc');
     expect(r.estado).toBe(400);

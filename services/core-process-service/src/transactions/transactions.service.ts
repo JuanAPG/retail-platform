@@ -18,7 +18,12 @@ import { ImportacionFila } from '../entities/importacion-fila.entity';
 import { ImportacionError } from '../entities/importacion-error.entity';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
-import { CatalogClient, ProductoCatalogo } from '../common/catalog/catalog-client.service';
+import {
+  CatalogClient,
+  estaActivo,
+  PresentacionCatalogo,
+  ProductoCatalogo,
+} from '../common/catalog/catalog-client.service';
 import { BasketsService } from '../baskets/baskets.service';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
@@ -220,12 +225,23 @@ export class TransactionsService {
     if (!tienda) {
       throw new NotFoundException(`No existe la tienda ${dto.storeId}.`);
     }
+    // Una tienda dada de baja no origina ventas: `activo: false` en el
+    // catálogo es una baja lógica, no un borrado, así que la tienda sigue
+    // existiendo y hay que rechazarla aquí.
+    if (!estaActivo(tienda)) {
+      throw new BadRequestException(
+        `La tienda ${tienda.nombre} está dada de baja: no puede originar ventas.`,
+      );
+    }
 
-    // presentacionId → producto dueño, para poder validar su estatus.
+    // presentacionId → producto dueño y la presentación misma, para poder
+    // validar el estatus del producto y la baja de la presentación.
     const productoPorPresentacion = new Map<string, ProductoCatalogo>();
+    const presentacionPorId = new Map<string, PresentacionCatalogo>();
     for (const p of productos) {
       for (const pr of p.presentaciones ?? []) {
         productoPorPresentacion.set(pr.id, p);
+        presentacionPorId.set(pr.id, pr);
       }
     }
 
@@ -249,6 +265,12 @@ export class TransactionsService {
       if (producto.estatus !== 'activo') {
         throw new BadRequestException(
           `El producto ${producto.sku} no está activo (estatus: ${producto.estatus}).`,
+        );
+      }
+      const presentacion = presentacionPorId.get(d.presentationId);
+      if (presentacion && !estaActivo(presentacion)) {
+        throw new BadRequestException(
+          `La presentación ${presentacion.nombre} de ${producto.sku} está dada de baja: no se puede vender.`,
         );
       }
     }
@@ -879,10 +901,12 @@ export class TransactionsService {
     const tiendaPorNombre = new Map(tiendas.map((t) => [t.nombre.trim().toLowerCase(), t]));
 
     const productoPorSku = new Map(productos.map((p) => [p.sku.trim().toLowerCase(), p]));
-    const presentacionPorClave = new Map<string, string>();
+    // Se guarda la presentación completa, no solo su id: hace falta su
+    // `activo` para rechazar las que están dadas de baja.
+    const presentacionPorClave = new Map<string, PresentacionCatalogo>();
     for (const p of productos) {
       for (const pr of p.presentaciones ?? []) {
-        presentacionPorClave.set(`${p.id}||${pr.nombre.trim().toLowerCase()}`, pr.id);
+        presentacionPorClave.set(`${p.id}||${pr.nombre.trim().toLowerCase()}`, pr);
       }
     }
 
@@ -936,6 +960,14 @@ export class TransactionsService {
         const tienda = tiendaPorNombre.get(tiendaTxt.toLowerCase());
         if (!tienda) {
           error('tienda', 'TIENDA_NO_EXISTE', `No existe la tienda "${tiendaTxt}".`, tiendaTxt);
+        } else if (!estaActivo(tienda)) {
+          // Baja lógica en el catálogo: la tienda existe pero no vende.
+          error(
+            'tienda',
+            'TIENDA_INACTIVA',
+            `La tienda "${tiendaTxt}" está dada de baja: no puede originar ventas.`,
+            tiendaTxt,
+          );
         } else {
           v.tiendaId = tienda.id;
           v.tiendaNombre = tienda.nombre;
@@ -960,18 +992,25 @@ export class TransactionsService {
         } else if (!presTxt) {
           error('presentacion', 'PRESENTACION_VACIA', 'La presentación es obligatoria.');
         } else {
-          const presentacionId = presentacionPorClave.get(
+          const presentacion = presentacionPorClave.get(
             `${producto.id}||${presTxt.toLowerCase()}`,
           );
-          if (!presentacionId) {
+          if (!presentacion) {
             error(
               'presentacion',
               'PRESENTACION_NO_EXISTE',
               `El producto "${skuTxt}" no tiene presentación "${presTxt}".`,
               presTxt,
             );
+          } else if (!estaActivo(presentacion)) {
+            error(
+              'presentacion',
+              'PRESENTACION_INACTIVA',
+              `La presentación "${presTxt}" de "${skuTxt}" está dada de baja: no se puede vender.`,
+              presTxt,
+            );
           } else {
-            v.presentacionId = presentacionId;
+            v.presentacionId = presentacion.id;
           }
         }
       }

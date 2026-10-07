@@ -30,6 +30,15 @@ total). `fecha` no puede ser futura. La misma presentación repetida en
 `details` → 400 (suma las cantidades en una línea). Presentación de un
 producto que no esté `activo` → 400, igual que en el CSV.
 
+**Bajas lógicas del catálogo.** `activo: false` en catalog-service es una
+baja lógica, no un borrado: la tienda o la presentación siguen
+existiendo, así que hay que rechazarlas aquí. Una tienda dada de baja no
+origina ventas (400) y una presentación dada de baja no se puede vender
+(400); en el CSV son `TIENDA_INACTIVA` y `PRESENTACION_INACTIVA` por
+fila. Si el catálogo **no** manda el campo `activo` (versión anterior), la
+entidad cuenta como activa: interpretar `undefined` como inactivo
+bloquearía todas las ventas contra un catálogo viejo.
+
 Response `201`: la transacción con tienda, detalle y presentaciones
 (`xsd/core-process/transaction.xsd`).
 
@@ -47,7 +56,7 @@ staging con su resultado por fila. Campo `file`, solo `.csv`, máximo
 `TIENDA_VACIA`, `TIENDA_NO_EXISTE`, `SKU_VACIO`, `SKU_NO_EXISTE`,
 `PRODUCTO_INACTIVO`, `PRESENTACION_VACIA`, `PRESENTACION_NO_EXISTE`,
 `PRESENTACION_DUPLICADA`, `CANTIDAD_INVALIDA`, `PRECIO_INVALIDO`,
-`VALOR_DEMASIADO_LARGO`.
+`VALOR_DEMASIADO_LARGO`, `TIENDA_INACTIVA`, `PRESENTACION_INACTIVA`.
 
 Una fila mala **no aborta el archivo**. `cantidad` y `precio` deben ser
 decimales planos de hasta 2 decimales (`1e3`, `0x10` y `0.001` se
@@ -156,6 +165,24 @@ unión): `storeId`, `zoneId`, `segmentId`, `dateFrom`, `dateTo`
 `segmentId` es nulo mientras la zona no tenga clasificación vigente: la
 canasta se construye igual (no se bloquea la venta) y se rellena después
 con `POST /v1/baskets/reclassify`.
+
+## POST /v1/baskets/:id/reclassify[?resyncZone] (Admin, Analista)
+
+Reclasifica UNA canasta contra la clasificación vigente de su zona.
+
+Por defecto solo refresca el `segmentId`. Con `?resyncZone=true` vuelve a
+derivar **la zona desde la tienda** de su transacción, que es la misma
+regla que aplica la construcción de la canasta. No es el default porque
+la zona se congela al construirla a propósito (RN-02: la clasificación
+vigente *al momento* de la venta), y re-derivarla reescribiría el análisis
+de meses pasados si la tienda cambió de zona desde entonces. Es para
+corregir una canasta cuya zona quedó mal, no para uso rutinario.
+
+Si la tienda no tuviera zona asignada responde **409** en vez de guardar
+una canasta sin zona. Hoy es inalcanzable: `tiendas.zona_id` es `NOT
+NULL`, así que una tienda nunca existe sin zona.
+
+Response `200`: la canasta reclasificada (`xsd/core-process/basket.xsd`).
 
 ## POST /v1/baskets/reclassify[?zoneId] (Admin, Analista)
 

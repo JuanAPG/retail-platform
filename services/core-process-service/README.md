@@ -15,7 +15,8 @@ transversal `services/template-nest`.
   Escritura Admin/Analista. Valida contra catalog-service por HTTP
   (caído → 503, sin insertar); reporta a audit-service best-effort.
 - **M07**: `GET /v1/baskets[?filtros&page&limit]`, `GET /v1/baskets/:id`,
-  `POST /v1/baskets/reclassify[?zoneId]`.
+  `POST /v1/baskets/reclassify[?zoneId]` (masivo, llena huecos),
+  `POST /v1/baskets/:id/reclassify[?resyncZone]` (una canasta).
   1:1 con transacción, zona y segmento congelados; segmento por lectura de
   `v_zona_segmento` (RN-02). Nueve filtros combinables con AND.
 - **M09**: `average-ticket`, `products-per-basket`, `purchase-frequency`,
@@ -56,6 +57,17 @@ porque los errores también salen en XML cuando se piden así).
   no deja el hash tomado.
 - **El resumen de la confirmación es lo realmente insertado**, con las
   filas rechazadas y los folios omitidos con su motivo.
+- **Las bajas lógicas del catálogo se respetan.** Una tienda o una
+  presentación con `activo: false` no origina ventas, ni por alta manual
+  ni por CSV. Un `activo` ausente cuenta como activo, para no bloquearse
+  contra una versión del catálogo que todavía no expone el campo.
+- **La zona de la canasta se congela** al construirla (RN-02). Re-derivarla
+  desde la tienda es posible pero explícito
+  (`POST /v1/baskets/:id/reclassify?resyncZone=true`), porque hacerlo por
+  default reescribiría el análisis de meses pasados.
+- **Ningún gasto desaparece de `spend-by-category`.** El join a categoría
+  es LEFT: un producto sin categoría se agrupa como "Sin categoría" en vez
+  de salirse del total con los `share` sumando 100 % sobre menos dinero.
 - **Fail-closed en todo**: sin sesión en Redis, sin catálogo o sin secreto
   JWT no se pasa ni se inserta.
 
@@ -65,7 +77,7 @@ porque los errores también salen en XML cuando se piden así).
 npm install
 PORT=3104 SERVICE_NAME=core-process-service npm run start:dev
 
-npm test                  # 139 unitarias, sin infraestructura
+npm test                  # 158 unitarias, sin infraestructura
 npm run test:cov          # con cobertura (umbral 85 % statements)
 npm run build && npm run xsd   # valida el XML real contra los XSD del contrato
 npm run test:integracion  # requiere stack con seed + CSV (VM con Docker)
@@ -84,7 +96,15 @@ dos, fallan con un mensaje que lo dice en vez de un `fetch failed` opaco:
 ```bash
 docker compose -f infra/docker-compose.yml up -d core-process-service
 CORE_TOKEN=<jwt> npm run test:integracion
+
+# Con las pruebas de resiliencia, que apagan catalog y audit de verdad:
+CORE_TOKEN=<jwt-analista> CORE_TOKEN_ADMIN=<jwt-admin> QA_DOCKER=1 \
+  npm run test:integracion
 ```
+
+Sin `QA_DOCKER=1` las dos pruebas que paran contenedores se omiten en vez
+de fallar. `CORE_TOKEN_ADMIN` hace falta para la que da de baja una tienda
+en catalog-service (y la restaura al terminar).
 
 `core-process-service` arrastra `postgres` y `redis` sanos vía
 `depends_on`; `catalog-service` y `audit-service` hay que levantarlos

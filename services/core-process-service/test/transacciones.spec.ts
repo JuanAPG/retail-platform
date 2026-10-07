@@ -17,6 +17,10 @@ const TOKEN = process.env.CORE_TOKEN ?? '';
 const CSV_100 = join(__dirname, '..', '..', '..', 'db', 'datos_prueba_100_canastas.csv');
 
 const auth = { Authorization: `Bearer ${TOKEN}` };
+/** catalog-service, para las pruebas que necesitan dar de baja una tienda. */
+const BASE_CATALOGO = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
+/** Token de Administrador, si se exporta: hace falta para editar el catálogo. */
+const authAdmin = { Authorization: `Bearer ${process.env.CORE_TOKEN_ADMIN ?? TOKEN}` };
 
 /** Identificador de esta corrida, para no chocar con lo ya importado. */
 const CORRIDA = `IT${Date.now().toString(36).toUpperCase()}`;
@@ -367,6 +371,187 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     const uno = await get(`/v1/baskets/${lista.cuerpo.data[0].id}`);
     expect(Object.keys(uno.cuerpo).sort()).toEqual(Object.keys(lista.cuerpo.data[0]).sort());
   }, 30000);
+
+  // --- Huecos que QA señaló sin prueba automatizada (QA-CP-08) --------
+
+  it('CSV mixto: el resumen concilia exactamente con lo insertado', async () => {
+    const tienda = (await get('/v1/baskets?limit=1')).cuerpo.data[0];
+    const nombreTienda = (await get(`/v1/transactions?storeId=${tienda.storeId}&limit=1`)).cuerpo
+      .data[0].store.nombre;
+    const detalle = (await get(`/v1/transactions?storeId=${tienda.storeId}&limit=1`)).cuerpo.data[0]
+      .details[0];
+
+    // 3 válidas (2 de un folio + 1 de otro), 2 con SKU inexistente y 1 con
+    // cantidad negativa, todas en el mismo archivo.
+    const filas = [
+      'folio,fecha,tienda,sku,presentacion,cantidad,precio',
+      `${CORRIDA}-MX1,2026-09-10,${nombreTienda},${detalle.productSku},${detalle.presentationName},2,25.00`,
+      `${CORRIDA}-MX2,2026-09-10,${nombreTienda},${detalle.productSku},${detalle.presentationName},1,25.00`,
+      `${CORRIDA}-MX3,2026-09-10,${nombreTienda},${detalle.productSku},${detalle.presentationName},3,25.00`,
+      `${CORRIDA}-MX4,2026-09-10,${nombreTienda},SKU-FANTASMA-1,${detalle.presentationName},1,10.00`,
+      `${CORRIDA}-MX5,2026-09-10,${nombreTienda},SKU-FANTASMA-2,${detalle.presentationName},1,10.00`,
+      `${CORRIDA}-MX6,2026-09-10,${nombreTienda},${detalle.productSku},${detalle.presentationName},-2,25.00`,
+    ];
+    const preview = await subirCsv(Buffer.from(filas.join('\n') + '\n'), `${CORRIDA}-mix.csv`);
+
+    expect(preview.estado).toBe(201);
+    expect(preview.cuerpo.filasTotales).toBe(6);
+    expect(preview.cuerpo.filasValidas).toBe(3);
+    expect(preview.cuerpo.filasConError).toBe(3);
+    expect(preview.cuerpo.transaccionesDetectadas).toBe(3);
+    const codigos = preview.cuerpo.errores.map((e: { codigo: string }) => e.codigo);
+    expect(codigos.filter((c: string) => c === 'SKU_NO_EXISTE')).toHaveLength(2);
+    expect(codigos).toContain('CANTIDAD_INVALIDA');
+
+    const confirm = await confirmar(preview.cuerpo.importacionId);
+    // El resumen cuadra: solo las válidas, y las rechazadas siguen ahí.
+    expect(confirm.cuerpo.transaccionesCreadas).toBe(3);
+    expect(confirm.cuerpo.canastasCreadas).toBe(3);
+    expect(confirm.cuerpo.lineasInsertadas).toBe(3);
+    expect(confirm.cuerpo.filasConError).toBe(3);
+    expect(confirm.cuerpo.filasPendientes).toBe(0);
+    expect(confirm.cuerpo.completa).toBe(true);
+    expect(confirm.cuerpo.errores.length).toBe(3);
+
+    // Y en la base están exactamente esas 3, cada una con su canasta.
+    const insertadas = await get(`/v1/transactions?limit=100&dateFrom=2026-09-10&dateTo=2026-09-10`);
+    const mias = insertadas.cuerpo.data.filter((t: { folio: string }) =>
+      t.folio.startsWith(`${CORRIDA}-MX`),
+    );
+    expect(mias).toHaveLength(3);
+  }, 120000);
+
+  it('CSV vacío y encabezados reordenados, de punta a punta', async () => {
+    const soloEncabezado = Buffer.from('folio,fecha,tienda,sku,presentacion,cantidad,precio\n');
+    const vacio = await subirCsv(soloEncabezado, `${CORRIDA}-vacio.csv`);
+    expect(vacio.estado).toBe(400);
+    expect(vacio.cuerpo.code).toBe('VALIDATION_ERROR');
+
+    const sinNada = await subirCsv(Buffer.from(''), `${CORRIDA}-nada.csv`);
+    expect(sinNada.estado).toBe(400);
+
+    // Encabezados en otro orden y con punto y coma: debe mapear por nombre.
+    const tienda = (await get('/v1/transactions?limit=1')).cuerpo.data[0];
+    const d = tienda.details[0];
+    const reordenado = Buffer.from(
+      [
+        'precio;cantidad;presentacion;sku;tienda;fecha;folio',
+        `25.00;2;${d.presentationName};${d.productSku};${tienda.store.nombre};2026-09-11;${CORRIDA}-RE1`,
+      ].join('\n') + '\n',
+    );
+    const r = await subirCsv(reordenado, `${CORRIDA}-reord.csv`);
+    expect(r.estado).toBe(201);
+    expect(r.cuerpo.filasValidas).toBe(1);
+    expect(r.cuerpo.filasConError).toBe(0);
+  }, 60000);
+
+  it('una tienda dada de baja no origina ventas (manual y CSV)', async () => {
+    // Se da de baja una tienda en catalog-service y se restaura al final.
+    const tiendas = await fetch(`${BASE_CATALOGO}/v1/stores?limit=100`, { headers: auth });
+    if (!tiendas.ok) {
+      throw new Error(`No se pudo consultar el catálogo en ${BASE_CATALOGO}.`);
+    }
+    const lista = (await tiendas.json()).data as { id: string; nombre: string; activo: boolean }[];
+    // La que menos ventas tenga, para no estorbar a las demás pruebas.
+    const objetivo = lista.find((t) => t.activo);
+    expect(objetivo).toBeDefined();
+
+    const desactivar = async (activo: boolean) =>
+      fetch(`${BASE_CATALOGO}/v1/stores/${objetivo!.id}`, {
+        method: 'PATCH',
+        headers: { ...authAdmin, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo }),
+      });
+
+    const baja = await desactivar(false);
+    if (!baja.ok) {
+      // Sin token de Administrador no se puede dar de baja: se omite en vez
+      // de dar un falso negativo.
+      console.warn(`No se pudo desactivar la tienda (${baja.status}); prueba omitida.`);
+      return;
+    }
+
+    try {
+      const d = (await get('/v1/transactions?limit=1')).cuerpo.data[0].details[0];
+      const manual = await fetch(`${BASE}/v1/transactions`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: objetivo!.id,
+          folio: `${CORRIDA}-BAJA`,
+          fecha: '2026-09-12',
+          details: [{ presentationId: d.presentationId, quantity: 1, unitPrice: 10 }],
+        }),
+      });
+      expect(manual.status).toBe(400);
+      expect((await manual.json()).message).toMatch(/dada de baja/i);
+
+      const csv = Buffer.from(
+        [
+          'folio,fecha,tienda,sku,presentacion,cantidad,precio',
+          `${CORRIDA}-BAJA2,2026-09-12,${objetivo!.nombre},${d.productSku},${d.presentationName},1,10.00`,
+        ].join('\n') + '\n',
+      );
+      const preview = await subirCsv(csv, `${CORRIDA}-baja.csv`);
+      expect(preview.estado).toBe(201);
+      expect(preview.cuerpo.filasValidas).toBe(0);
+      expect(preview.cuerpo.errores.map((e: { codigo: string }) => e.codigo)).toContain(
+        'TIENDA_INACTIVA',
+      );
+    } finally {
+      await desactivar(true);
+    }
+  }, 90000);
+
+  it('spend-by-category no pierde gasto: los share suman 100', async () => {
+    const gasto = (await get('/v1/analytics/spend-by-category')).cuerpo as {
+      categoryId: number | null;
+      categoryName: string;
+      totalSpend: number;
+      share: number;
+    }[];
+    expect(gasto.length).toBeGreaterThan(0);
+
+    const sumaShares = gasto.reduce((s, c) => s + c.share, 0);
+    expect(Math.abs(sumaShares - 100)).toBeLessThanOrEqual(0.5);
+
+    // Si algún producto no tuviera categoría, aparecería agrupado en vez de
+    // desaparecer del total (hoy categoria_id es NOT NULL, así que no sale).
+    const sinCategoria = gasto.find((c) => c.categoryId == null);
+    if (sinCategoria) {
+      expect(sinCategoria.categoryName).toBe('Sin categoría');
+      expect(sinCategoria.totalSpend).toBeGreaterThan(0);
+    }
+  }, 30000);
+
+  it('reclassify de UNA canasta: refresca segmento y respeta la zona congelada', async () => {
+    const canasta = (await get('/v1/baskets?limit=1')).cuerpo.data[0];
+
+    const sinResync = await fetch(`${BASE}/v1/baskets/${canasta.id}/reclassify`, {
+      method: 'POST',
+      headers: auth,
+    });
+    expect(sinResync.status).toBe(200);
+    const r = await sinResync.json();
+    // La zona NO cambia por defecto: se congela al construir la canasta.
+    expect(r.zoneId).toBe(canasta.zoneId);
+    expect(r.id).toBe(canasta.id);
+
+    // Con resyncZone la zona se deriva de la tienda; con los datos del seed
+    // la tienda sigue en la misma zona, así que debe coincidir.
+    const conResync = await fetch(`${BASE}/v1/baskets/${canasta.id}/reclassify?resyncZone=true`, {
+      method: 'POST',
+      headers: auth,
+    });
+    expect(conResync.status).toBe(200);
+    expect((await conResync.json()).zoneId).toBe(canasta.zoneId);
+
+    const malParametro = await fetch(
+      `${BASE}/v1/baskets/${canasta.id}/reclassify?resyncZone=quizas`,
+      { method: 'POST', headers: auth },
+    );
+    expect(malParametro.status).toBe(400);
+  }, 60000);
 
   it('un parámetro de paginación inválido da 400, no 500', async () => {
     const r = await get('/v1/baskets?segmentId=abc');
