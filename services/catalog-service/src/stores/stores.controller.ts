@@ -10,6 +10,7 @@ import {
   Query,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -24,11 +25,13 @@ import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { StoreFilterDto } from './dto/store-filter.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
+import { Auditar, AuditarInterceptor } from '../common/audit/auditar.interceptor';
 
 /** M02 — Tiendas. Contrato: docs/contratos/catalog-service.md */
 @ApiTags('M02 Stores')
 @ApiBearerAuth()
 @UseGuards(SessionGuard, RolesGuard)
+@UseInterceptors(AuditarInterceptor)
 @Controller('stores')
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
@@ -37,7 +40,7 @@ export class StoresController {
   @XmlRoot('storeListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Lista paginada de tiendas, por nombre, con dirección, zona y proveedor.' })
-  @ApiRespuesta(200, 'Página de tiendas.', pagina([muestras.tienda]))
+  @ApiRespuesta(200, 'Página de tiendas.', pagina([muestras.tienda]), 'storeListResponse')
   @ApiErrores(400, 401, 403)
   findAll(@Query() filtros: StoreFilterDto) {
     return this.storesService.findAll(filtros);
@@ -49,7 +52,7 @@ export class StoresController {
   @XmlRoot('postalCodeListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Códigos postales válidos para el alta de tiendas (arreglo plano, sin paginar).' })
-  @ApiRespuesta(200, 'Códigos postales con su municipio.', [muestras.codigoPostal])
+  @ApiRespuesta(200, 'Códigos postales con su municipio.', [muestras.codigoPostal], 'postalCodeListResponse')
   @ApiErrores(401, 403)
   findPostalCodes() {
     return this.storesService.findPostalCodes();
@@ -59,25 +62,29 @@ export class StoresController {
   @XmlRoot('storeResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Detalle de una tienda.' })
-  @ApiRespuesta(200, 'La tienda.', muestras.tienda)
+  @ApiRespuesta(200, 'La tienda.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403, 404)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.storesService.findOne(id);
   }
 
   @Post()
+  @XmlRoot('storeResponse')
   @Roles(ROL.ADMINISTRADOR)
+  @Auditar('tiendas', 'insert')
   @ApiOperation({ summary: 'Crea una tienda junto con su dirección (solo Administrador).' })
-  @ApiRespuesta(201, 'Tienda creada, activa.', muestras.tienda)
+  @ApiRespuesta(201, 'Tienda creada, activa.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403)
   create(@Body() dto: CreateStoreDto) {
     return this.storesService.create(dto);
   }
 
   @Patch(':id')
+  @XmlRoot('storeResponse')
   @Roles(ROL.ADMINISTRADOR)
+  @Auditar('tiendas', 'update')
   @ApiOperation({ summary: 'Edita la tienda y/o su dirección; `activo: false` la desactiva sin borrarla.' })
-  @ApiRespuesta(200, 'Tienda actualizada.', muestras.tienda)
+  @ApiRespuesta(200, 'Tienda actualizada.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403, 404)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStoreDto) {
     return this.storesService.update(id, dto);
@@ -86,6 +93,7 @@ export class StoresController {
   @Delete(':id')
   @XmlRoot('storeResponse')
   @Roles(ROL.ADMINISTRADOR)
+  @Auditar('tiendas', 'delete')
   @ApiOperation({
     summary:
       'Elimina la tienda y su dirección (204). Si tiene historial (precios, inventario, ventas) NO se borra: queda inactiva y responde 200 con la tienda.',

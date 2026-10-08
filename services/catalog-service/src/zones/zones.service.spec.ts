@@ -14,7 +14,11 @@ function crearServicio() {
     createQueryBuilder: jest.fn(),
   };
   const municipios = { findOne: jest.fn(), find: jest.fn() };
-  const dataSource = { query: jest.fn() };
+  const manager = { query: jest.fn(async (_sql: string, _params?: unknown[]): Promise<any> => []) };
+  const dataSource = {
+    query: jest.fn(),
+    transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
+  };
   // Caché "transparente" por omisión: siempre MISS (ejecuta la carga). Los tests de caché
   // sobreescriben `obtener` para simular un HIT.
   const cache = {
@@ -26,7 +30,7 @@ function crearServicio() {
     dataSource as unknown as DataSource,
     cache as unknown as CacheService,
   );
-  return { zonas, municipios, dataSource, cache, servicio };
+  return { zonas, municipios, dataSource, manager, cache, servicio };
 }
 
 describe('ZonesService', () => {
@@ -98,9 +102,11 @@ describe('ZonesService', () => {
     await expect(servicio.remove('z-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('compareZones exige al menos un id', async () => {
+  it('compareZones exige al menos DOS ids distintos (CAT-12): vacío, uno solo o repetido dan 400', async () => {
     const { servicio } = crearServicio();
     await expect(servicio.compareZones([])).rejects.toBeInstanceOf(BadRequestException);
+    await expect(servicio.compareZones(['a'])).rejects.toBeInstanceOf(BadRequestException);
+    await expect(servicio.compareZones(['a', 'a'])).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('compareZones devuelve null en los indicadores que Analítica no calculó', async () => {
@@ -118,11 +124,84 @@ describe('ZonesService', () => {
     expect(filas[1]).toMatchObject({ classification: 'Ingreso medio', population: 1200, availability: null });
   });
 
-  it('compareZones lanza 404 si ninguna zona existe', async () => {
+  it('compareZones responde 404 y LISTA las zonas que no existen, aunque otras sí existan', async () => {
     const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ zoneId: 'a', zoneName: 'A', municipality: 'M', classification: null }]);
+
+    const error = await servicio.compareZones(['a', 'fantasma']).catch((e) => e);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(error.message).toContain('fantasma');
+    expect(error.message).not.toContain(' a,');
+  });
+});
+
+describe('ZonesService — CAT-13: indicadores y clasificación de una zona', () => {
+  const dto = { ingresoEstimado: 18500, poblacion: 42000, disponibilidad: 0.85, periodoInicio: '2026-01-01', periodoFin: '2026-09-30', fuente: 'INEGI' };
+
+  it('setIndicators guarda una corrida de carga manual y un valor por indicador, TODO en una transacción', async () => {
+    const { zonas, manager, dataSource, servicio } = crearServicio();
+    zonas.findOne.mockResolvedValue({ id: 'z1' });
+    manager.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('INSERT INTO analisis_corridas')) return [{ id: 'corrida-1' }];
+      if (sql.includes('INSERT INTO indicador_valores')) return [{ id: 'iv' }];
+      return [];
+    });
+
+    const r = await servicio.setIndicators('z1', dto, 'u-admin');
+
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ zoneId: 'z1', estimatedIncome: 18500, population: 42000, availability: 0.85, runId: 'corrida-1', source: 'INEGI' });
+    const sqls = manager.query.mock.calls.map(([sql]) => sql as string);
+    expect(sqls.filter((q) => q.includes('INSERT INTO indicador_valores'))).toHaveLength(3);
+    const claves = manager.query.mock.calls.filter(([sql]) => (sql as string).includes('INSERT INTO indicador_valores')).map(([, p]) => (p as unknown[])[0]);
+    expect(claves).toEqual(['ingreso_estimado', 'poblacion', 'disponibilidad']);
+    const corrida = manager.query.mock.calls.find(([sql]) => (sql as string).includes('INSERT INTO analisis_corridas'))!;
+    expect(corrida[1]).toEqual(['u-admin', '2026-01-01', '2026-09-30']);
+    const params = manager.query.mock.calls.filter(([sql]) => (sql as string).includes('analisis_corrida_parametros')).map(([, p]) => (p as unknown[]).slice(1));
+    expect(params).toEqual([['origen', 'carga_manual'], ['fuente', 'INEGI'], ['zona_id', 'z1']]);
+  });
+
+  it('setIndicators rechaza una zona inexistente (404), un periodo invertido (400) y un indicador que falta en el catálogo (400)', async () => {
+    const { zonas, manager, servicio } = crearServicio();
+    zonas.findOne.mockResolvedValueOnce(null);
+    await expect(servicio.setIndicators('x', dto, 'u')).rejects.toBeInstanceOf(NotFoundException);
+
+    zonas.findOne.mockResolvedValue({ id: 'z1' });
+    await expect(servicio.setIndicators('z1', { ...dto, periodoInicio: '2026-10-01', periodoFin: '2026-01-01' }, 'u')).rejects.toBeInstanceOf(BadRequestException);
+
+    manager.query.mockImplementation(async (sql: string) => (sql.includes('INSERT INTO analisis_corridas') ? [{ id: 'c' }] : []));
+    await expect(servicio.setIndicators('z1', dto, 'u')).rejects.toThrow(/no existe en el catálogo/);
+  });
+
+  it('setClassification cierra la vigente, crea la nueva con quién la asignó y devuelve la anterior', async () => {
+    const { zonas, dataSource, manager, servicio } = crearServicio();
+    zonas.findOne.mockResolvedValue({ id: 'z1' });
+    dataSource.query.mockResolvedValueOnce([{ id: 2, codigo: 'ING_2', nombre: 'Ingreso medio' }]);
+    manager.query.mockImplementation(async (sql: string) => {
+      if (sql.startsWith('SELECT segmento_manual_id')) return [{ segmento_manual_id: 1 }];
+      if (sql.includes('INSERT INTO zona_clasificaciones')) return [{ id: 'zc', desde: '2026-10-08' }];
+      return [];
+    });
+
+    const r = await servicio.setClassification('z1', { segmentId: 2 }, 'u-admin');
+
+    expect(r).toEqual({ zoneId: 'z1', segmentId: 2, segmentCode: 'ING_2', segmentName: 'Ingreso medio', since: '2026-10-08', previousSegmentId: 1 });
+    const sqls = manager.query.mock.calls.map(([sql]) => sql as string);
+    const cierre = sqls.findIndex((q) => q.includes('UPDATE zona_clasificaciones SET vigente_hasta'));
+    const alta = sqls.findIndex((q) => q.includes('INSERT INTO zona_clasificaciones'));
+    expect(cierre).toBeGreaterThanOrEqual(0);
+    expect(cierre).toBeLessThan(alta); // primero se cierra la vigente, luego se crea la nueva
+    expect(manager.query.mock.calls[alta][1]).toEqual(['z1', 2, 'u-admin']);
+  });
+
+  it('setClassification rechaza un segmento inexistente con 400 sin tocar nada', async () => {
+    const { zonas, dataSource, dataSource: ds, servicio } = crearServicio();
+    zonas.findOne.mockResolvedValue({ id: 'z1' });
     dataSource.query.mockResolvedValueOnce([]);
 
-    await expect(servicio.compareZones(['a'])).rejects.toBeInstanceOf(NotFoundException);
+    await expect(servicio.setClassification('z1', { segmentId: 99 }, 'u')).rejects.toBeInstanceOf(BadRequestException);
+    expect(ds.transaction).not.toHaveBeenCalled();
   });
 });
 

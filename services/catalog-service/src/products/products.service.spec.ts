@@ -45,7 +45,7 @@ function crearServicio() {
     save: jest.fn(async (x) => ({ id: 'pres-1', ...x })),
     findOne: jest.fn(),
     findOneOrFail: jest.fn(async () => ({ id: 'pres-1' })),
-    find: jest.fn(),
+    find: jest.fn(async (): Promise<unknown[]> => []),
     remove: jest.fn(),
   };
   const unidades = { findOne: jest.fn(), find: jest.fn() };
@@ -173,6 +173,46 @@ describe('ProductsService — productos y presentaciones', () => {
     expect(manager.remove).not.toHaveBeenCalled();
   });
 
+  it('CAT-11: rechaza una presentación con el mismo contenido físico aunque cambie el nombre o la unidad (500 g = Medio kilo = 0.5 kg)', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'kg', tipo: 'masa', factorBase: '1' });
+    presentaciones.find.mockResolvedValue([
+      { nombre: '500 g', contenido: '500', unidadMedida: { clave: 'g', tipo: 'masa', factorBase: '0.001' } },
+    ]);
+
+    await expect(
+      servicio.addPresentation('p-1', { nombre: 'Medio kilo', contenido: 0.5, unidadMedida: 'kg' }),
+    ).rejects.toThrow(/mismo contenido: "500 g"/);
+    expect(presentaciones.save).not.toHaveBeenCalled();
+  });
+
+  it('CAT-11: una presentación de OTRO tipo de unidad con el mismo número no es duplicada (500 ml vs 500 g)', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 3, clave: 'ml', tipo: 'volumen', factorBase: '0.001' });
+    presentaciones.find.mockResolvedValue([
+      { nombre: '500 g', contenido: '500', unidadMedida: { clave: 'g', tipo: 'masa', factorBase: '0.001' } },
+    ]);
+
+    await expect(
+      servicio.addPresentation('p-1', { nombre: '500 ml', contenido: 500, unidadMedida: 'ml' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('CAT-11: el 409 del índice único dice el motivo real: nombre repetido o código de barras repetido', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'kg', tipo: 'masa', factorBase: '1' });
+    const con = (constraint: string) => Object.assign(errorSql('23505'), { constraint });
+
+    presentaciones.save.mockRejectedValueOnce(con('producto_presentaciones_producto_id_nombre_key'));
+    await expect(servicio.addPresentation('p-1', { nombre: '2 kg', contenido: 2, unidadMedida: 'kg' })).rejects.toThrow(/llamada "2 kg"/);
+
+    presentaciones.save.mockRejectedValueOnce(con('producto_presentaciones_codigo_barras_key'));
+    await expect(servicio.addPresentation('p-1', { nombre: '3 kg', contenido: 3, unidadMedida: 'kg', codigoBarras: '123' })).rejects.toThrow(/código de barras/);
+  });
+
   it('addPresentation convierte la segunda predeterminada (23505) en 409', async () => {
     const { productos, unidades, presentaciones, servicio } = crearServicio();
     productos.findOne.mockResolvedValue({ id: 'p-1' });
@@ -207,6 +247,71 @@ describe('ProductsService — productos y presentaciones', () => {
     });
     expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { activo: false });
     expect(manager.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductsService — editar la propuesta (CAT-14, D-11)', () => {
+  const prov: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
+  const propia = (extra: Record<string, unknown> = {}) => ({
+    id: 'p-1',
+    proveedorId: 'prov-1',
+    estatus: 'pendiente_aprobacion',
+    presentaciones: [{ id: 'pres-1', esPredeterminada: true }],
+    ...extra,
+  });
+
+  it('edita producto y presentación en una transacción, con el UPDATE condicionado a que siga pendiente', async () => {
+    const { proveedores, productos, unidades, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'g' });
+
+    await servicio.editProposal('p-1', { nombre: 'Nuevo', presentacion: '450 g', contenido: 450, unidadMedida: 'g' }, prov);
+
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, { nombre: 'Nuevo' });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { nombre: '450 g', contenido: '450', unidadMedidaId: 2 });
+  });
+
+  it('la propuesta de otro proveedor o inexistente es 404, no 403', async () => {
+    const { proveedores, productos, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+
+    productos.findOne.mockResolvedValueOnce(propia({ proveedorId: 'otro' }));
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(NotFoundException);
+    productos.findOne.mockResolvedValueOnce(null);
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('una propuesta ya resuelta no se edita (409) y el mensaje dice que haga una nueva', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+
+    for (const estatus of ['rechazado', 'activo']) {
+      productos.findOne.mockResolvedValueOnce(propia({ estatus }));
+      const error = await servicio.editProposal('p-1', { nombre: 'x' }, prov).catch((e) => e);
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(error.message).toContain('propuesta nueva');
+    }
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('si el Gerente la resuelve justo entre la lectura y el UPDATE, no se pisa (409)', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    manager.update.mockResolvedValueOnce({ affected: 0 } as never);
+
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('un Proveedor ve el detalle de SU producto (aun pendiente) y el de otro es 404', async () => {
+    const { proveedores, productos, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    expect(await servicio.findOneVisible('p-1', prov)).toMatchObject({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+
+    productos.findOne.mockResolvedValue(propia({ proveedorId: 'otro' }));
+    await expect(servicio.findOneVisible('p-1', prov)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { IncomeSegment } from '../entities/income-segment.entity';
@@ -8,8 +8,6 @@ import { CreateSegmentDto } from './dto/create-segment.dto';
 import { SegmentFilterDto } from './dto/segment-filter.dto';
 import { UpdateSegmentDto } from './dto/update-segment.dto';
 
-// TODO(audit): reportar insert/update/delete a auditoría cuando se acuerde
-// con audit-service (pendiente en el contrato).
 @Injectable()
 export class SegmentsService {
   constructor(
@@ -19,6 +17,7 @@ export class SegmentsService {
 
   async create(dto: CreateSegmentDto): Promise<IncomeSegment> {
     await this.rechazarDuplicado(dto.code, dto.name);
+    await this.validarRango(dto.incomeRangeMin, dto.incomeRangeMax ?? null);
 
     const segment = this.segmentsRepo.create({
       code: dto.code,
@@ -57,6 +56,12 @@ export class SegmentsService {
     if (dto.code || dto.name) {
       await this.rechazarDuplicado(dto.code, dto.name, id);
     }
+    // El rango resultante (lo editado sobre lo que ya había) debe seguir siendo válido y no encimarse.
+    if (dto.incomeRangeMin !== undefined || dto.incomeRangeMax !== undefined) {
+      const min = dto.incomeRangeMin != null ? dto.incomeRangeMin : Number(segment.incomeRangeMin);
+      const max = dto.incomeRangeMax !== undefined ? (dto.incomeRangeMax ?? null) : segment.incomeRangeMax != null ? Number(segment.incomeRangeMax) : null;
+      await this.validarRango(min, max, id);
+    }
 
     Object.assign(segment, {
       ...dto,
@@ -86,6 +91,29 @@ export class SegmentsService {
         );
       }
       throw err;
+    }
+  }
+
+  /**
+   * D-10: los rangos de ingreso no pueden encimarse. `max` nulo = sin tope. Dos rangos se cruzan si
+   * `a.min <= b.max AND b.min <= a.max`. Sin esto, un rango con mínimo mayor al máximo llegaba a
+   * Postgres y salía como 500 con el nombre del constraint.
+   */
+  private async validarRango(min: number, max: number | null, excludeId?: number) {
+    if (max !== null && min >= max) {
+      throw new BadRequestException('incomeRangeMin debe ser menor que incomeRangeMax.');
+    }
+    const existentes = await this.segmentsRepo.find();
+    const choque = existentes.find((o) => {
+      if (o.id === excludeId) return false;
+      const oMin = Number(o.incomeRangeMin);
+      const oMax = o.incomeRangeMax != null ? Number(o.incomeRangeMax) : Infinity;
+      return min <= oMax && oMin <= (max ?? Infinity);
+    });
+    if (choque) {
+      throw new ConflictException(
+        `El rango se encima con el segmento ${choque.code} (${choque.incomeRangeMin} a ${choque.incomeRangeMax ?? 'sin tope'}). Los rangos no pueden encimarse.`,
+      );
     }
   }
 

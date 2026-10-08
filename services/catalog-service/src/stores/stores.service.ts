@@ -14,8 +14,6 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { StoreFilterDto } from './dto/store-filter.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 
-// TODO(audit): reportar insert/update/delete a auditoría cuando se acuerde
-// con audit-service (pendiente en el contrato).
 @Injectable()
 export class StoresService {
   constructor(

@@ -22,6 +22,7 @@ import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
 import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
+import { EditarPropuestaProductoDto } from './dto/editar-propuesta-producto.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
@@ -39,8 +40,6 @@ function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
 }
 
-// TODO(audit): reportar altas, cambios, borrados y resoluciones a auditoría
-// cuando se acuerde con audit-service (pendiente en el contrato).
 @Injectable()
 export class ProductsService {
   constructor(
@@ -152,6 +151,48 @@ export class ProductsService {
     );
   }
 
+  /**
+   * CAT-14 / D-11: el Proveedor corrige SU propuesta mientras está pendiente. Una propuesta ya resuelta
+   * no se edita: si se rechazó, hace una nueva. La de otro proveedor es un 404 (no se confirma que exista).
+   */
+  async editProposal(id: string, dto: EditarPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+    const proveedor = await this.proveedorDe(solicitante);
+    const producto = await this.productosRepo.findOne({ where: { id }, relations: { presentaciones: true } });
+    if (!producto || producto.proveedorId !== proveedor.id) {
+      throw new NotFoundException('La propuesta no existe.');
+    }
+    if (producto.estatus !== ESTATUS_PRODUCTO.PENDIENTE) {
+      throw new ConflictException(
+        `Solo se puede editar una propuesta pendiente (estatus actual: ${producto.estatus}). Si fue rechazada, haz una propuesta nueva.`,
+      );
+    }
+    if (dto.categoriaId !== undefined) await this.exigirCategoria(dto.categoriaId);
+    const unidad = dto.unidadMedida !== undefined ? await this.exigirUnidad(dto.unidadMedida) : null;
+
+    await this.dataSource.transaction(async (manager) => {
+      // La condición `estatus = pendiente` va en el propio UPDATE: si el Gerente la resolvió justo ahora, no se pisa.
+      const cambios = {
+        ...(dto.nombre !== undefined && { nombre: dto.nombre }),
+        ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
+        ...(dto.categoriaId !== undefined && { categoriaId: dto.categoriaId }),
+      };
+      if (Object.keys(cambios).length > 0) {
+        const r = await manager.update(ProductoEntity, { id, estatus: ESTATUS_PRODUCTO.PENDIENTE }, cambios);
+        if (!r.affected) throw new ConflictException('Esta propuesta ya fue resuelta; no se puede editar.');
+      }
+      const predeterminada = producto.presentaciones.find((p) => p.esPredeterminada) ?? producto.presentaciones[0];
+      const presentacion = {
+        ...(dto.presentacion !== undefined && { nombre: dto.presentacion }),
+        ...(dto.contenido !== undefined && { contenido: String(dto.contenido) }),
+        ...(unidad && { unidadMedidaId: unidad.id }),
+      };
+      if (predeterminada && Object.keys(presentacion).length > 0) {
+        await manager.update(ProductoPresentacionEntity, { id: predeterminada.id }, presentacion);
+      }
+    });
+    return this.findOne(id);
+  }
+
   approve(id: string, solicitante: SesionUsuario): Promise<ProductoEntity> {
     return this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
   }
@@ -169,7 +210,11 @@ export class ProductsService {
   async findOneVisible(id: string, solicitante: SesionUsuario) {
     const producto = await this.findOne(id);
     const veNoActivos = (VEN_NO_ACTIVOS as readonly string[]).includes(solicitante.rol);
-    if (producto.estatus !== ESTATUS_PRODUCTO.ACTIVO && !veNoActivos) {
+    if (solicitante.rol === ROL.PROVEEDOR) {
+      // CAT-14: un Proveedor ve el detalle de SUS productos (cualquier estatus); el de otro, 404.
+      const proveedor = await this.proveedorDe(solicitante);
+      if (producto.proveedorId !== proveedor.id) throw new NotFoundException('El producto no existe.');
+    } else if (producto.estatus !== ESTATUS_PRODUCTO.ACTIVO && !veNoActivos) {
       throw new NotFoundException('El producto no existe.');
     }
     return {
@@ -285,6 +330,7 @@ export class ProductsService {
   async addPresentation(productId: string, dto: CreatePresentationDto): Promise<ProductoPresentacionEntity> {
     await this.findOne(productId);
     const unidad = await this.exigirUnidad(dto.unidadMedida);
+    await this.rechazarPresentacionDuplicada(productId, dto.contenido, unidad);
 
     const presentacion = this.presentacionesRepo.create({
       productoId: productId,
@@ -302,13 +348,40 @@ export class ProductsService {
       // 23505 = unique_violation. `uq_presentacion_predeterminada` permite
       // una sola presentación predeterminada por producto.
       if (codigoSql(err) === '23505') {
-        throw new ConflictException(
-          dto.esPredeterminada
-            ? 'Este producto ya tiene una presentación predeterminada.'
-            : 'Ya existe una presentación con esos datos (código de barras repetido).',
-        );
+        // Cada índice único dice cosa distinta: no todo 23505 es un código de barras repetido.
+        const constraint = (err as unknown as { constraint?: string }).constraint ?? '';
+        if (constraint.includes('predeterminada') || (dto.esPredeterminada && !constraint)) {
+          throw new ConflictException('Este producto ya tiene una presentación predeterminada.');
+        }
+        if (constraint.includes('codigo_barras')) {
+          throw new ConflictException('Ya existe una presentación con ese código de barras.');
+        }
+        if (constraint.includes('nombre')) {
+          throw new ConflictException(`Este producto ya tiene una presentación llamada "${dto.nombre}".`);
+        }
+        throw new ConflictException('Ya existe una presentación con esos datos.');
       }
       throw err;
+    }
+  }
+
+  /**
+   * Una presentación es la misma si tiene el MISMO contenido físico: `contenido x factor_base` y el
+   * mismo tipo de unidad. Así 1 kg y 1000 g (o "Medio kilo" y "500 g") cuentan como duplicado aunque
+   * el nombre sea distinto.
+   */
+  private async rechazarPresentacionDuplicada(productId: string, contenido: number, unidad: UnidadMedidaEntity) {
+    const nueva = Number(contenido) * Number(unidad.factorBase);
+    const existentes = await this.presentacionesRepo.find({ where: { productoId: productId, activo: true } });
+    const igual = existentes.find(
+      (p) =>
+        p.unidadMedida?.tipo === unidad.tipo &&
+        Math.abs(Number(p.contenido) * Number(p.unidadMedida.factorBase) - nueva) < 1e-6,
+    );
+    if (igual) {
+      throw new ConflictException(
+        `Este producto ya tiene una presentación con el mismo contenido: "${igual.nombre}" (${igual.contenido} ${igual.unidadMedida.clave}).`,
+      );
     }
   }
 
