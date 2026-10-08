@@ -298,6 +298,13 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     // Bitácora: la resolución de la propuesta y cada precio creado.
     const resolucion = await bitacora(auditor, 'precios_propuestos_proveedor', id);
     expect(resolucion.data.map((e) => e.accion).sort()).toEqual(['insert', 'update']);
+    // PRI-14: la bitácora dice quién propuso y quién aprobó (en `precios`, `creado_por` es solo quien aprueba).
+    const proponente = await usuarioPorCorreo(EMAIL_PROVEEDOR);
+    const evResolucion = resolucion.data.find((e) => e.accion === 'update')!;
+    expect(evResolucion.cambios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ campo: 'propuesto_por', valorPosterior: proponente }),
+      expect.objectContaining({ campo: 'aprobado_por', valorPosterior: preciosId }),
+    ]));
     const eventoPrecio = await bitacora(auditor, 'precios', aprobada.cuerpo.prices[0].id);
     expect(eventoPrecio.total).toBe(1);
     expect(eventoPrecio.data[0]).toMatchObject({ accion: 'insert', usuarioId: preciosId });
