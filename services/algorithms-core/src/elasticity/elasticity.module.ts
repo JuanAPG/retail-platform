@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SessionGuard } from '../common/auth/session.guard';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
 import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
@@ -8,6 +10,7 @@ import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { Elasticity } from '../entities/elasticity.entity';
 import { FuenteDatosModule } from '../fuente-datos/fuente-datos.module';
+import { ElasticityController } from './elasticity.controller';
 import { ElasticityService } from './elasticity.service';
 
 /**
@@ -19,6 +22,9 @@ import { ElasticityService } from './elasticity.service';
  * `elasticidades` directo. Se registran también las entidades que
  * AnalysisRun necesita para sus relaciones (`autoLoadEntities` solo conoce
  * las listadas en algún `forFeature`).
+ *
+ * JwtModule y SessionGuard van aquí (como en association): el guard
+ * necesita JwtService y cada módulo solo ve lo que importa.
  */
 @Module({
   imports: [
@@ -32,8 +38,10 @@ import { ElasticityService } from './elasticity.service';
       AssociationRuleItem,
     ]),
     FuenteDatosModule,
+    JwtModule.register({}),
   ],
-  providers: [ElasticityService],
+  controllers: [ElasticityController],
+  providers: [ElasticityService, SessionGuard],
   exports: [ElasticityService],
 })
 export class ElasticityModule {}

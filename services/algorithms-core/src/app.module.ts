@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssociationModule } from './association/association.module';
 import databaseConfig from './config/database.config';
+import { ElasticityModule } from './elasticity/elasticity.module';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 
@@ -21,6 +22,7 @@ import { SessionGuard } from './common/auth/session.guard';
     }),
     JwtModule.register({}),
     AssociationModule,
+    ElasticityModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],
