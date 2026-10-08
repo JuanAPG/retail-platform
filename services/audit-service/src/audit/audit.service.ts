@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AccionAuditoria, Auditoria } from '../entities/auditoria.entity';
@@ -155,5 +155,25 @@ export class AuditService {
 
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
+  }
+
+  /**
+   * Detalle de un evento. 404 si no existe — incluido un id no numérico:
+   * el id es `bigint` en Postgres, así que compararlo contra un string no
+   * numérico daría un 500 (`invalid input syntax for type bigint`) en vez
+   * de un 404 honesto si se dejara pasar tal cual al repositorio.
+   */
+  async findOne(id: string): Promise<Auditoria> {
+    if (!/^\d+$/.test(id)) {
+      throw new NotFoundException('El evento no existe.');
+    }
+    const evento = await this.auditoriaRepo.findOne({
+      where: { id },
+      relations: { cambios: true },
+    });
+    if (!evento) {
+      throw new NotFoundException('El evento no existe.');
+    }
+    return evento;
   }
 }

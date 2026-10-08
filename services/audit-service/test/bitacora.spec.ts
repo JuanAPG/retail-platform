@@ -11,7 +11,16 @@
  * No corre en CI sin infraestructura; se ejecuta a mano:
  *
  *   npm run test:integracion
+ *
+ * El XML de la lista y del detalle se valida contra
+ * `docs/contratos/audit-service.xsd` con `xmllint` (requiere tenerlo
+ * instalado: Debian/Ubuntu `apt-get install -y libxml2-utils`).
  */
+import { execFileSync } from 'child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 const BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
 const TOKEN = process.env.AUDIT_TOKEN ?? '';
 const TOKEN_PROVEEDOR = process.env.AUDIT_TOKEN_PROVEEDOR;
@@ -33,6 +42,27 @@ async function getBitacora(params: string, token = TOKEN) {
     headers: { Authorization: `Bearer ${token}` },
   });
   return { estado: respuesta.status, cuerpo: await respuesta.json() };
+}
+
+async function getXml(ruta: string, token = TOKEN) {
+  const respuesta = await fetch(`${BASE}${ruta}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/xml' },
+  });
+  return { estado: respuesta.status, texto: await respuesta.text() };
+}
+
+const XSD = join(__dirname, '..', '..', '..', 'docs', 'contratos', 'audit-service.xsd');
+
+/** Valida un documento XML contra `audit-service.xsd` con `xmllint`. Lanza si no valida. */
+function validarContraXsd(xml: string) {
+  const dir = mkdtempSync(join(tmpdir(), 'audit-xsd-'));
+  const archivo = join(dir, 'respuesta.xml');
+  writeFileSync(archivo, xml);
+  try {
+    execFileSync('xmllint', ['--noout', '--schema', XSD, archivo], { stdio: 'pipe' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 describe('bitácora de punta a punta (integración, requiere stack)', () => {
@@ -114,5 +144,34 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
   it('sin token el GET es 401', async () => {
     const respuesta = await fetch(`${BASE}/v1/auditoria`);
     expect(respuesta.status).toBe(401);
+  });
+
+  it('XML: la lista y el detalle validan contra audit-service.xsd', async () => {
+    const marca = `integracion-xml-${Date.now()}`;
+    const creado = await postEvento(
+      {
+        tabla: 'xsd-check',
+        registroId: marca,
+        servicio: 'audit-service-test',
+        accion: 'update',
+        cambios: [{ campo: 'estado', previo: 'activo', posterior: 'inactivo' }],
+      },
+      TOKEN,
+    );
+    expect(creado.estado).toBe(201);
+
+    const lista = await getXml(`/v1/auditoria?tabla=xsd-check&registroId=${marca}`);
+    expect(lista.estado).toBe(200);
+    expect(() => validarContraXsd(lista.texto)).not.toThrow();
+
+    const detalle = await getXml(`/v1/auditoria/${creado.cuerpo.id}`);
+    expect(detalle.estado).toBe(200);
+    expect(() => validarContraXsd(detalle.texto)).not.toThrow();
+  });
+
+  it('un id inexistente da 404 en XML válido', async () => {
+    const respuesta = await getXml('/v1/auditoria/999999999999');
+    expect(respuesta.estado).toBe(404);
+    expect(() => validarContraXsd(respuesta.texto)).not.toThrow();
   });
 });

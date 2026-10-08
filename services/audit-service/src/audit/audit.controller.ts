@@ -1,10 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ROL } from '../common/roles';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
+import { ApiErrores, ApiRespuesta } from '../common/swagger/ejemplos';
+import * as muestras from '../common/swagger/muestras';
 import { AuditService } from './audit.service';
 import { AuditFilterDto } from './dto/audit-filter.dto';
 import { RegistrarEventoDto } from './dto/registrar-evento.dto';
@@ -28,8 +31,10 @@ export class AuditController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(SessionGuard)
+  @XmlRoot('auditCreateResponse')
   @ApiOperation({ summary: 'Registra un evento reportado por otro microservicio, a nombre del usuario del token.' })
-  @ApiOkResponse({ description: 'Id numérico del evento guardado.' })
+  @ApiRespuesta(201, 'Id numérico del evento guardado.', { id: '123' }, 'auditCreateResponse')
+  @ApiErrores(400, 401, 500)
   async registrar(@Body() dto: RegistrarEventoDto, @CurrentUser() usuario: SesionUsuario) {
     const id = await this.auditService.registrar({
       ...dto,
@@ -43,9 +48,23 @@ export class AuditController {
   @ApiBearerAuth()
   @UseGuards(SessionGuard, RolesGuard)
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
+  @XmlRoot('auditListResponse')
   @ApiOperation({ summary: 'Bitácora paginada, de la más reciente a la más antigua.' })
-  @ApiOkResponse({ description: 'Eventos con sus campos modificados en `cambios`.' })
+  @ApiRespuesta(200, 'Eventos con sus campos modificados en `cambios`.', muestras.pagina, 'auditListResponse')
+  @ApiErrores(400, 401, 403)
   findAll(@Query() filters: AuditFilterDto) {
     return this.auditService.find(filters);
+  }
+
+  @Get(':id')
+  @ApiBearerAuth()
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
+  @XmlRoot('auditEventResponse')
+  @ApiOperation({ summary: 'Detalle de un evento, con sus campos modificados en `cambios`.' })
+  @ApiRespuesta(200, 'Evento de bitácora.', muestras.evento, 'auditEventResponse')
+  @ApiErrores(401, 403, 404)
+  findOne(@Param('id') id: string) {
+    return this.auditService.findOne(id);
   }
 }
