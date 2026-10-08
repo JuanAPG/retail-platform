@@ -36,9 +36,10 @@ function crear(readyState = 1) {
   };
   const indicadores = { reunir: jest.fn().mockResolvedValue([{ clave: 'x', nombre: 'X', servicio: 's', disponible: false, valor: null, motivo: 'caído' }]) };
   const pdf = { generar: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.3')) };
+  const excel = { generar: jest.fn().mockResolvedValue(Buffer.from('PK-xlsx')) };
   const audit = { reportar: jest.fn().mockResolvedValue(undefined) };
-  const servicio = new ReportsService(modelo as never, { readyState } as never, indicadores as never, pdf as never, audit as never);
-  return { modelo, consulta, indicadores, pdf, audit, servicio };
+  const servicio = new ReportsService(modelo as never, { readyState } as never, indicadores as never, pdf as never, excel as never, audit as never);
+  return { modelo, consulta, indicadores, pdf, excel, audit, servicio };
 }
 
 describe('ReportsService', () => {
@@ -120,13 +121,27 @@ describe('ReportsService', () => {
     const d = doc();
     modelo.findById.mockResolvedValue(d);
 
-    const { buffer, nombre } = await servicio.exportarPdf(idValido, gerente, 'Bearer t');
+    const { buffer, nombre } = await servicio.exportar(idValido, 'pdf', gerente, 'Bearer t');
 
     expect(pdf.generar).toHaveBeenCalledWith(expect.objectContaining({ id: idValido }));
     expect(buffer.toString()).toContain('%PDF');
     expect(nombre).toBe('reporte-ejecutivo-2026-10-08.pdf');
     expect(d.estado).toBe('exportado');
     expect(audit.reportar).toHaveBeenCalledWith(expect.objectContaining({ accion: 'exportar' }), 'Bearer t');
+  });
+
+  it('exportar a xlsx usa el servicio de Excel, nombra el archivo .xlsx y marca exportado', async () => {
+    const { servicio, modelo, excel, pdf, audit } = crear();
+    const d = doc();
+    modelo.findById.mockResolvedValue(d);
+
+    const r = await servicio.exportar(idValido, 'xlsx', gerente, 'Bearer t');
+
+    expect(excel.generar).toHaveBeenCalledWith(expect.objectContaining({ id: idValido }));
+    expect(pdf.generar).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ nombre: 'reporte-ejecutivo-2026-10-08.xlsx', formato: 'xlsx' });
+    expect(d.estado).toBe('exportado');
+    expect(audit.reportar).toHaveBeenCalledWith(expect.objectContaining({ accion: 'exportar', descripcion: expect.stringContaining('Excel') }), 'Bearer t');
   });
 
   it('las estadísticas agrupan por usuario y mes; un Proveedor solo cuenta lo suyo', async () => {

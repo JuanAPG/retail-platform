@@ -75,7 +75,7 @@ export class ActualizarReporteDto {
 
 /** Query de `GET /v1/reports/:id/export`. */
 export class ExportarReporteDto {
-  // D-19: el PDF es obligatorio; Excel (xlsx) queda para después si da tiempo.
-  @IsIn(['pdf'], { message: 'format debe ser pdf (xlsx aún no está disponible)' })
-  format!: string;
+  // D-19: el PDF es obligatorio; el Excel (xlsx) es opcional y también se ofrece.
+  @IsIn(['pdf', 'xlsx'], { message: 'format debe ser pdf o xlsx' })
+  format!: 'pdf' | 'xlsx';
 }

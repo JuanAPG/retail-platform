@@ -12,6 +12,7 @@ import { SesionUsuario } from '../common/auth/session.guard';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { ROL } from '../common/roles';
 import { ActualizarReporteDto, GenerarReporteEjecutivoDto, ListarReportesDto } from './dto/reports.dto';
+import { ExcelService } from './excel.service';
 import { IndicatorsService } from './indicators.service';
 import { PdfService } from './pdf.service';
 import { ESTADO_REPORTE, Indicador, ParametrosReporte, Reporte, ReporteDocument } from './schemas/report.schema';
@@ -45,6 +46,7 @@ export class ReportsService {
     @InjectConnection() private readonly conexion: Connection,
     private readonly indicadores: IndicatorsService,
     private readonly pdf: PdfService,
+    private readonly excel: ExcelService,
     private readonly audit: AuditReporter,
   ) {}
 
@@ -145,22 +147,25 @@ export class ReportsService {
     return filas.map((f) => ({ usuarioId: f._id.usuarioId, mes: f._id.mes, reportes: f.reportes }));
   }
 
-  /** PDF a partir del documento guardado (idéntico al JSON). Marca el reporte como exportado. */
-  async exportarPdf(id: string, usuario: SesionUsuario, authorization: string | undefined, ip?: string) {
+  /**
+   * PDF o Excel a partir del documento guardado (idéntico al JSON). Marca el reporte como exportado.
+   * El PDF es obligatorio (D-19); el Excel es opcional y lleva las cifras como celdas numéricas.
+   */
+  async exportar(id: string, formato: 'pdf' | 'xlsx', usuario: SesionUsuario, authorization: string | undefined, ip?: string) {
     const doc = await this.buscar(id, usuario);
     const dto = this.aDto(doc);
-    const buffer = await this.pdf.generar(dto);
+    const buffer = formato === 'xlsx' ? await this.excel.generar(dto) : await this.pdf.generar(dto);
 
     if (doc.estado !== ESTADO_REPORTE.EXPORTADO) {
       doc.estado = ESTADO_REPORTE.EXPORTADO;
       await doc.save();
     }
     await this.audit.reportar(
-      { tabla: 'reportes', registroId: dto.id, accion: 'exportar', descripcion: 'Reporte ejecutivo exportado a PDF.', ip: ip ?? null },
+      { tabla: 'reportes', registroId: dto.id, accion: 'exportar', descripcion: `Reporte ejecutivo exportado a ${formato === 'xlsx' ? 'Excel' : 'PDF'}.`, ip: ip ?? null },
       authorization,
     );
     const fecha = dto.creadoEn.toISOString().slice(0, 10);
-    return { buffer, nombre: `reporte-ejecutivo-${fecha}.pdf` };
+    return { buffer, nombre: `reporte-ejecutivo-${fecha}.${formato}`, formato };
   }
 
   /**

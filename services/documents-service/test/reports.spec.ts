@@ -12,6 +12,7 @@ import { sign } from 'jsonwebtoken';
 import mongoose from 'mongoose';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pdfParse = require('pdf-parse');
+import * as ExcelJS from 'exceljs';
 
 const BASE = process.env.DOCUMENTS_BASE_URL ?? 'http://localhost:3108';
 const CATALOG = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
@@ -187,8 +188,36 @@ describe('/v1/reports (integración, requiere stack + MongoDB)', () => {
 
     // El export marca el reporte como exportado.
     expect((await http('GET', `/v1/reports/${reporteId}`, gerente)).cuerpo.estado).toBe('exportado');
-    expect((await http('GET', `/v1/reports/${reporteId}/export?format=xlsx`, gerente)).estado).toBe(400);
+    expect((await http('GET', `/v1/reports/${reporteId}/export?format=docx`, gerente)).estado).toBe(400);
     expect((await http('GET', `/v1/reports/${reporteId}/export`, gerente)).estado).toBe(400);
+  });
+
+  it('D-19: exporta a Excel con las cifras como celdas NUMÉRICAS, iguales al JSON; los no disponibles sin valor', async () => {
+    const r = await fetch(`${BASE}/v1/reports/${reporteId}/export?format=xlsx`, { headers: { Authorization: `Bearer ${auditor}` } });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toContain('spreadsheetml.sheet');
+    expect(r.headers.get('content-disposition')).toMatch(/^attachment; filename="reporte-ejecutivo-\d{4}-\d{2}-\d{2}\.xlsx"$/);
+
+    const libro = new ExcelJS.Workbook();
+    await libro.xlsx.load(Buffer.from(await r.arrayBuffer()) as unknown as ExcelJS.Buffer);
+    const hoja = libro.getWorksheet('Indicadores')!;
+    const filas: Array<{ indicador: string; valor: unknown; estado: string }> = [];
+    hoja.eachRow((fila, n) => {
+      if (n > 1) filas.push({ indicador: String(fila.getCell(2).value), valor: fila.getCell(3).value, estado: String(fila.getCell(4).value) });
+    });
+
+    for (const s of reporte.secciones.filter((x: any) => x.disponible && typeof x.valor === 'number')) {
+      const fila = filas.find((f) => f.indicador === s.nombre)!;
+      expect(typeof fila.valor).toBe('number'); // celda numérica, no texto
+      expect(fila.valor).toBe(s.valor);
+    }
+    for (const s of reporte.secciones.filter((x: any) => !x.disponible)) {
+      const fila = filas.find((f) => f.indicador === s.nombre)!;
+      expect(fila.estado).toBe('No disponible');
+      expect(fila.valor).toBeNull(); // nunca 0
+    }
+    // Un Proveedor no exporta el de otro.
+    expect((await http('GET', `/v1/reports/${reporteId}/export?format=xlsx`, provA)).estado).toBe(404);
   });
 
   it('DOC-03: la agregación por usuario y mes cuenta lo guardado', async () => {

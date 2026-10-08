@@ -64,5 +64,6 @@ describe('Swagger (integración, requiere stack)', () => {
   it('la exportación documenta el PDF', async () => {
     const { paths } = await documentacion();
     expect(paths['/v1/reports/{id}/export'].get.summary).toContain('PDF');
+    expect(paths['/v1/reports/{id}/export'].get.summary).toContain('Excel');
   });
 });

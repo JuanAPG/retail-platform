@@ -81,19 +81,22 @@ export class ReportsController {
 
   @Get(':id/export')
   @Roles(...LEEN_REPORTES)
-  @ApiOperation({ summary: 'Exporta el reporte guardado a PDF (format=pdf). Mismos números que el JSON.' })
-  @ApiSinCuerpo(200, 'Archivo PDF (application/pdf) con Content-Disposition: attachment.')
+  @ApiOperation({ summary: 'Exporta el reporte guardado a PDF (format=pdf) o Excel (format=xlsx, cifras como celdas numéricas). Mismos números que el JSON.' })
+  @ApiSinCuerpo(200, 'Archivo PDF (application/pdf) o Excel (.xlsx) con Content-Disposition: attachment.')
   @ApiErrores(400, 401, 403, 404)
   async exportar(
     @Param('id') id: string,
-    @Query() _query: ExportarReporteDto,
+    @Query() query: ExportarReporteDto,
     @CurrentUser() usuario: SesionUsuario,
     @Headers('authorization') authorization: string | undefined,
     @Ip() ip: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { buffer, nombre } = await this.reportes.exportarPdf(id, usuario, authorization, ip);
-    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${nombre}"` });
+    const { buffer, nombre, formato } = await this.reportes.exportar(id, query.format, usuario, authorization, ip);
+    res.set({
+      'Content-Type': formato === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf',
+      'Content-Disposition': `attachment; filename="${nombre}"`,
+    });
     return new StreamableFile(buffer);
   }
 }
