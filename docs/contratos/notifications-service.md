@@ -20,8 +20,8 @@ ese rol se valida contra la tabla de `notification.types.ts`:
 | Evento | Puede originarlo | Le llega a |
 |---|---|---|
 | `producto.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
-| `precio.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
-| `propuesta.resuelta` | Administrador, Gerente de categoría | el usuario que propuso |
+| `precio.propuesto` | Proveedor | rol Responsable de precios (fijo) |
+| `propuesta.resuelta` | Administrador, Gerente de categoría, Responsable de precios | el usuario que propuso |
 | `precio.umbral` | Administrador, Responsable de precios | rol Responsable de precios (fijo) |
 | `escenario.generado` | Administrador, Analista comercial | el usuario que lo generó |
 | `recomendacion.generada` | Administrador, Analista comercial | rol Planeador (fijo) |

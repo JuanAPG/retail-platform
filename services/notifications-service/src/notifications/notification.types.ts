@@ -185,20 +185,20 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
   },
 
   // pricing: POST /v1/price-proposals -> @Roles(PROVEEDOR);
-  // lo resuelve APRUEBAN_PRECIOS = [Administrador, Gerente de categoría].
+  // lo resuelve APRUEBAN_PRECIOS = [Responsable de precios] (decisión D1).
   'precio.propuesto': {
     origenes: [ROL.PROVEEDOR],
-    destino: { tipo: 'rol', rol: ROL.GERENTE_CATEGORIA },
-    fundamento: 'pricing POST price-proposals es solo del Proveedor; lo aprueba APRUEBAN_PRECIOS, cuya bandeja es el Gerente de categoría.',
+    destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    fundamento: 'pricing POST price-proposals es solo del Proveedor; la aprueba ÚNICAMENTE el Responsable de precios (D1), así que su bandeja es la de ese rol y no la del Gerente de categoría.',
   },
 
-  // catalog: PATCH products/:id/approve|reject y pricing: PATCH
-  // price-proposals/:id/approve|reject -> @Roles(Administrador, Gerente).
+  // catalog: PATCH products/:id/approve|reject -> @Roles(Gerente de categoría) y pricing: PATCH
+  // price-proposals/:id/approve|reject -> @Roles(Responsable de precios).
   // Le llega al proveedor que propuso: solo el emisor sabe quién es.
   'propuesta.resuelta': {
-    origenes: [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA],
+    origenes: [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
-    fundamento: 'Quien aprueba o rechaza una propuesta es Administrador o Gerente; el aviso va al proveedor que la hizo.',
+    fundamento: 'Quien aprueba o rechaza una propuesta de producto es el Gerente de categoría y una de precio, el Responsable de precios (D1); el aviso va al proveedor que la hizo.',
   },
 
   // pricing: POST /v1/prices -> @Roles(Administrador, Responsable de precios).

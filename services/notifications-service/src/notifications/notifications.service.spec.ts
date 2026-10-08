@@ -80,6 +80,17 @@ describe('Tabla de permisos por evento', () => {
     expect(permisoDe('recomendacion.resuelta').origenes).toEqual([ROL.GERENTE_CATEGORIA]);
   });
 
+  it('las propuestas de precio las resuelve el Responsable de precios (D1): su aviso le llega a él y él puede originar la resolución', () => {
+    expect(permisoDe('precio.propuesto')).toMatchObject({
+      origenes: [ROL.PROVEEDOR],
+      destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    });
+    expect(permisoDe('propuesta.resuelta').origenes).toEqual(
+      expect.arrayContaining([ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS]),
+    );
+    expect(permisoDe('propuesta.resuelta').destino).toEqual({ tipo: 'usuario' });
+  });
+
   it('los eventos sin flujo implementado no tienen origen: nadie los emite', () => {
     // No existe endpoint de solicitud de proveedor en ningún servicio, así
     // que no hay de dónde sacar el origen. Mejor que falle a que cualquiera
