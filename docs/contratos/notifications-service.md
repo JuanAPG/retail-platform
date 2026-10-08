@@ -22,22 +22,24 @@ ese rol se valida contra la tabla de `notification.types.ts`:
 | `producto.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
 | `precio.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
 | `propuesta.resuelta` | Administrador, Gerente de categoría | el usuario que propuso |
-| `precio.umbral` | Administrador, Responsable de precios | **destino pendiente** |
-| `escenario.generado` | Administrador, Analista comercial | **destino pendiente** |
-| `recomendacion.generada` | Administrador, Analista comercial | **destino pendiente** |
-| `recomendacion.resuelta` | Gerente de categoría | **destino pendiente** |
+| `precio.umbral` | Administrador, Responsable de precios | rol Responsable de precios (fijo) |
+| `escenario.generado` | Administrador, Analista comercial | el usuario que lo generó |
+| `recomendacion.generada` | Administrador, Analista comercial | rol Planeador (fijo) |
+| `recomendacion.resuelta` | Gerente de categoría | rol Analista comercial (fijo) |
 | `proveedor.solicitud` | **sin regla: nadie** | — |
 | `proveedor.resuelto` | **sin regla: nadie** | — |
+
+Destinos fijados por el equipo el 2026-10-08 (antes estaban "pendiente":
+el origen ya se validaba, pero el emisor todavía elegía el destinatario).
 
 - Rol fuera de la lista → **403**.
 - Evento con destino FIJO al que se le manda otro `recipientRole` o un
   `recipientUserId` → **400** (no se ignora en silencio: un emisor que
   cree estar avisando a alguien más tiene un bug).
 - Evento con destino de usuario sin `recipientUserId` → **400**.
-- «Destino pendiente» significa que el equipo todavía no fijó el rol
-  destinatario: se respeta el que mande el emisor, pero el **origen** sí
-  se valida. Los dos eventos «sin regla» no tienen flujo implementado en
-  ningún servicio, así que hoy no se pueden emitir.
+- Los dos eventos «sin regla» no tienen flujo implementado en ningún
+  servicio, así que hoy no se pueden emitir (403). En cuanto exista el
+  endpoint que los dispare, su `@Roles` da el origen y se agregan aquí.
 
 `sourceService` es **obligatorio** y de lista cerrada: `catalog-service`,
 `pricing-service`, `core-process-service`, `algorithms-core`,

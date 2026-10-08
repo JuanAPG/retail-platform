@@ -24,7 +24,7 @@ const emisorDe = (eventType: EventType) => ({
   rolId: 1,
 });
 
-/** Un `precio.umbral` listo para usar: su destino lo elige el emisor. */
+/** Un `precio.umbral` listo para usar: su destino es fijo (Responsable de precios). */
 const UMBRAL = {
   eventType: 'precio.umbral' as const,
   sourceService: 'pricing-service' as const,
@@ -214,11 +214,35 @@ describe('create: el destinatario lo fija la regla, no el emisor', () => {
     expect(data.recipientRole).toBeNull();
   });
 
-  it('destino pendiente: se respeta el del emisor, pero exige uno', async () => {
+  it('destino fijo a rol: no hace falta que el emisor mande destinatario', async () => {
     const { servicio } = servicioFresco();
+    const { data } = await servicio.create(
+      { ...UMBRAL, relatedEntityId: 'pr4' },
+      emisorDe('precio.umbral'),
+    );
+    expect(data.recipientRole).toBe(ROL.RESPONSABLE_PRECIOS);
+    expect(data.recipientUserId).toBeNull();
+  });
+
+  it('destino dinámico (escenario.generado): vuelve a quien lo generó', async () => {
+    const { servicio } = servicioFresco();
+    const ESCENARIO = {
+      eventType: 'escenario.generado' as const,
+      sourceService: 'decision-service' as const,
+      title: 'Nuevo escenario',
+      message: 'Escenario de precios generado.',
+    };
+
     await expect(
-      servicio.create({ ...UMBRAL, relatedEntityId: 'pr4' }, emisorDe('precio.umbral')),
+      servicio.create({ ...ESCENARIO, relatedEntityId: 'esc-0' }, emisorDe('escenario.generado')),
     ).rejects.toMatchObject({ status: 400 });
+
+    const { data } = await servicio.create(
+      { ...ESCENARIO, relatedEntityId: 'esc-1', recipientUserId: 'analista-7' },
+      emisorDe('escenario.generado'),
+    );
+    expect(data.recipientUserId).toBe('analista-7');
+    expect(data.recipientRole).toBeNull();
   });
 });
 
@@ -370,16 +394,26 @@ describe('markAsRead y lectura por id: solo el destinatario', () => {
 });
 
 describe('Reglas que ya estaban y siguen valiendo', () => {
+  // `escenario.generado` tiene destino dinámico (vuelve a quien lo lanzó):
+  // sirve de fixture para la mecánica genérica de dedup/lectura/archivado
+  // por `recipientUserId`, ya que `precio.umbral` ahora va a un rol fijo.
+  const ESCENARIO = {
+    eventType: 'escenario.generado' as const,
+    sourceService: 'decision-service' as const,
+    title: 'Nuevo escenario',
+    message: 'Escenario de precios generado.',
+  };
+
   it('no duplica en 5 minutos (responde la existente)', async () => {
     const { servicio } = servicioFresco();
     const primera = await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p1', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p1', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     expect(primera.creada).toBe(true);
     const segunda = await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p1', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p1', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     expect(segunda.creada).toBe(false);
     expect(segunda.data.id).toBe(primera.data.id);
@@ -388,12 +422,12 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
   it('mismo evento para OTRO destinatario sí crea (no pierde avisos)', async () => {
     const { servicio } = servicioFresco();
     const paraU1 = await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p1x', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p1x', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     const paraU2 = await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p1x', recipientUserId: 'u2' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p1x', recipientUserId: 'u2' },
+      emisorDe('escenario.generado'),
     );
     expect(paraU2.creada).toBe(true);
     expect(paraU2.data.id).not.toBe(paraU1.data.id);
@@ -403,12 +437,12 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
   it('lectura por usuario en readBy, nunca global', async () => {
     const { servicio } = servicioFresco();
     const { data: creada } = await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p3', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p3', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     expect(await servicio.countUnread('u2')).toEqual({ unread: 0 });
     expect(await servicio.countUnread('u1')).toEqual({ unread: 1 });
-    const leida = await servicio.markAsRead(creada.id, { id: 'u1', rol: ROL.RESPONSABLE_PRECIOS });
+    const leida = await servicio.markAsRead(creada.id, { id: 'u1', rol: ROL.ANALISTA });
     expect(leida.readBy).toMatchObject([{ userId: 'u1' }]);
     expect(await servicio.countUnread('u1')).toEqual({ unread: 0 });
   });
@@ -416,18 +450,18 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
   it('por rol: la ve quien tenga el rol y cuenta hasta leerla', async () => {
     const { servicio } = servicioFresco();
     await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p4', recipientRole: ROL.GERENTE_CATEGORIA },
+      { ...UMBRAL, relatedEntityId: 'p4', recipientRole: ROL.RESPONSABLE_PRECIOS },
       emisorDe('precio.umbral'),
     );
-    expect(await servicio.countUnread('u9', ROL.GERENTE_CATEGORIA)).toEqual({ unread: 1 });
+    expect(await servicio.countUnread('u9', ROL.RESPONSABLE_PRECIOS)).toEqual({ unread: 1 });
     expect(await servicio.countUnread('u9', ROL.AUDITOR)).toEqual({ unread: 0 });
   });
 
   it('archiva lo mayor a 90 días sin eliminar', async () => {
     const { servicio, repo } = servicioFresco();
     await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p5', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p5', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     const vieja = await repo.crear({
       eventType: 'precio.propuesto',
@@ -455,8 +489,8 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
   it('cada creación reporta a auditoría sin bloquear', async () => {
     const { servicio, audit } = servicioFresco();
     await servicio.create(
-      { ...UMBRAL, relatedEntityId: 'p7', recipientUserId: 'u1' },
-      emisorDe('precio.umbral'),
+      { ...ESCENARIO, relatedEntityId: 'p7', recipientUserId: 'u1' },
+      emisorDe('escenario.generado'),
     );
     expect(audit.reportar).toHaveBeenCalledWith(
       expect.objectContaining({ tabla: 'notificaciones', accion: 'insert' }),

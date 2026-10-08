@@ -202,30 +202,38 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
   },
 
   // pricing: POST /v1/prices -> @Roles(Administrador, Responsable de precios).
+  // Destino fijado por el equipo 2026-10-08: el Responsable de precios es
+  // la bandeja del área que actúa sobre el umbral, no el Gerente.
   'precio.umbral': {
     origenes: [ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS],
-    destino: { tipo: 'pendiente' },
-    fundamento: 'pricing POST prices es de Administrador y Responsable de precios. DESTINO PENDIENTE: no está decidido si el aviso va al Responsable de precios (bandeja del área) o al Gerente de categoría (quien decide comercialmente).',
+    destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    fundamento: 'pricing POST prices es de Administrador y Responsable de precios. Destino: Responsable de precios (bandeja del área), decidido por el equipo el 2026-10-08.',
   },
 
   // decision: POST /v1/simulation/price|presentation -> @Roles(Administrador, Analista).
+  // Destino fijado 2026-10-08: vuelve a quien lanzó la simulación (dinámico,
+  // no un rol fijo), porque un escenario es de quien lo pidió, no del área.
   'escenario.generado': {
     origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
-    destino: { tipo: 'pendiente' },
-    fundamento: 'decision POST simulation/* es de Administrador y Analista. DESTINO PENDIENTE: los escenarios los consumen todos los perfiles internos; no hay un rol único definido.',
+    destino: { tipo: 'usuario' },
+    fundamento: 'decision POST simulation/* es de Administrador y Analista. Destino: el usuario que lo generó (recipientUserId), decidido por el equipo el 2026-10-08.',
   },
 
   // decision: POST /v1/recommendations/generate -> @Roles(Administrador, Analista).
+  // Destino fijado 2026-10-08: Planeador, que es quien ejecuta la
+  // recomendación comercial.
   'recomendacion.generada': {
     origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
-    destino: { tipo: 'pendiente' },
-    fundamento: 'decision POST recommendations/generate es de Administrador y Analista. DESTINO PENDIENTE: falta decidir si la recomendación le llega al Gerente de categoría o al Planeador.',
+    destino: { tipo: 'rol', rol: ROL.PLANEADOR },
+    fundamento: 'decision POST recommendations/generate es de Administrador y Analista. Destino: Planeador, decidido por el equipo el 2026-10-08.',
   },
 
+  // Destino fijado 2026-10-08: Analista comercial, que es quien genera las
+  // recomendaciones y necesita saber cómo se resolvió la suya.
   'recomendacion.resuelta': {
     origenes: [ROL.GERENTE_CATEGORIA],
-    destino: { tipo: 'pendiente' },
-    fundamento: 'El Gerente de categoría resuelve la recomendación (decidido por el equipo). DESTINO PENDIENTE: falta decidir si el aviso vuelve a quien la generó (Analista) o al Planeador.',
+    destino: { tipo: 'rol', rol: ROL.ANALISTA },
+    fundamento: 'El Gerente de categoría resuelve la recomendación. Destino: Analista comercial, decidido por el equipo el 2026-10-08.',
   },
 
   // SIN flujo implementado en ningún servicio: no hay endpoint de alta ni
