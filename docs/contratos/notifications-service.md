@@ -101,3 +101,20 @@ completo.
 
 `{ "unread": 3 }`: no archivadas del solicitante (mismo criterio del
 listado) sin entrada propia en `readBy`. Agregación del lado servidor.
+
+## XML (XSD: `notifications-service.xsd`)
+
+Raíz por endpoint, declarada con `@XmlRoot` en el controller:
+
+| Endpoint | Raíz XML |
+|---|---|
+| `POST /v1/notifications` | `notificationResponse` |
+| `PATCH /v1/notifications/:id/read` | `notificationResponse` |
+| `GET /v1/notifications/:id` | `notificationDetailResponse` |
+| `GET /v1/notifications` | `notificationListResponse` |
+| `GET /v1/notifications/unread-count` | `unreadCountResponse` |
+
+`eventType` es un `xs:enumeration` cerrado con los 9 eventos de la tabla de
+permisos de arriba — el mismo catálogo, no uno nuevo. Un `eventType` fuera
+de él responde `400` (`VALIDATION_ERROR`), igual en JSON y en XML (raíz
+`error`).

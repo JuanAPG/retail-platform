@@ -92,6 +92,8 @@ ENDPOINTS=(
   "algorithms|3105|algorithms-core|/v1/association/runs?limit=2"
   "decision|3107|decision-service|/v1/accessibility/index"
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
+  "notifications|3109|notifications-service|/v1/notifications?limit=2"
+  "notifications|3109|notifications-service|/v1/notifications/unread-count"
 )
 
 # Errores: el mismo cuerpo tiene que validar contra el elemento `error`.
@@ -101,6 +103,7 @@ ERRORES=(
   "pricing|3103|pricing-service|/v1/prices/history?limit=abc|400"
   "decision|3107|decision-service|/v1/accessibility/index|401"
   "algorithms|3105|algorithms-core|/v1/association/runs|401"
+  "notifications|3109|notifications-service|/v1/notifications|401"
 )
 
 ok=0; fallo=0

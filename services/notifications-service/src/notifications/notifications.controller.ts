@@ -11,6 +11,7 @@ import {
 import { Response } from 'express';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { ROL } from '../common/roles';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
@@ -29,6 +30,7 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
+  @XmlRoot('notificationResponse')
   @ApiOperation({
     summary: 'Emite una notificación (con dedup de 5 minutos).',
     description:
@@ -59,6 +61,7 @@ export class NotificationsController {
   }
 
   @Get()
+  @XmlRoot('notificationListResponse')
   @ApiOperation({ summary: 'Notificaciones del solicitante (por id o por rol).' })
   @ApiOkResponse({ description: 'Página {data,total,page,limit}.' })
   listar(@Query() filtros: NotificationFilterDto, @CurrentUser() usuario: SesionUsuario) {
@@ -67,12 +70,14 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
+  @XmlRoot('unreadCountResponse')
   @ApiOperation({ summary: 'No leídas del solicitante (agregación).' })
   contar(@CurrentUser() usuario: SesionUsuario) {
     return this.notificationsService.countUnread(usuario.id, usuario.rol);
   }
 
   @Get(':id')
+  @XmlRoot('notificationDetailResponse')
   @ApiOperation({
     summary: 'Una notificación dirigida al solicitante.',
     description:
@@ -86,6 +91,7 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
+  @XmlRoot('notificationResponse')
   @ApiOperation({
     summary: 'Marca como leída para el usuario del token.',
     description:
