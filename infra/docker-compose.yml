@@ -244,6 +244,8 @@ services:
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
       AUDIT_SERVICE_URL: http://audit-service:3110
+      # Avisos de propuestas, resoluciones y alertas de cambio de precio (PRI-07): no bloqueantes.
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
