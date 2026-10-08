@@ -13,31 +13,101 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- Catálogo cerrado (notification.types.ts, PERMISOS): un eventType
+       fuera de esta lista no tiene regla de origen/destino y se rechaza
+       con 400 antes de llegar a serializarse. -->
+  <xs:simpleType name="eventType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="producto.propuesto"/>
+      <xs:enumeration value="precio.propuesto"/>
+      <xs:enumeration value="propuesta.resuelta"/>
+      <xs:enumeration value="proveedor.solicitud"/>
+      <xs:enumeration value="proveedor.resuelto"/>
+      <xs:enumeration value="precio.umbral"/>
+      <xs:enumeration value="escenario.generado"/>
+      <xs:enumeration value="recomendacion.generada"/>
+      <xs:enumeration value="recomendacion.resuelta"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:element name="notificacionRequest">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="eventType" type="xs:string"/>
+        <xs:element name="eventType" type="notif:eventType"/>
+        <xs:element name="sourceService" type="xs:string"/>
         <xs:element name="relatedEntityType" type="xs:string" minOccurs="0"/>
         <xs:element name="relatedEntityId" type="xs:string" minOccurs="0"/>
         <xs:element name="recipientUserId" type="xs:string" minOccurs="0"/>
         <xs:element name="recipientRole" type="xs:string" minOccurs="0"/>
         <xs:element name="title" type="xs:string"/>
         <xs:element name="message" type="xs:string"/>
-        <xs:element name="priority" type="notif:priority"/>
+        <xs:element name="priority" type="notif:priority" minOccurs="0"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="notificacion">
+  <!-- Notificación tal como la devuelve la API (POST/GET/PATCH). Mismo
+       orden que `Notification` en notification.types.ts. -->
+  <xs:complexType name="notification">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="eventType" type="notif:eventType"/>
+      <xs:element name="sourceService" type="xs:string" minOccurs="0"/>
+      <xs:element name="recipientUserId" type="xs:string" minOccurs="0"/>
+      <xs:element name="recipientRole" type="xs:string" minOccurs="0"/>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="message" type="xs:string"/>
+      <xs:element name="relatedEntityType" type="xs:string" minOccurs="0"/>
+      <xs:element name="relatedEntityId" type="xs:string" minOccurs="0"/>
+      <xs:element name="priority" type="notif:priority"/>
+      <xs:element name="readBy">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="userId" type="xs:string"/>
+                  <xs:element name="readAt" type="xs:dateTime"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="archived" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/notifications (201 o 200 si dedup) y PATCH /v1/notifications/:id/read -->
+  <xs:element name="notificationResponse" type="notif:notification"/>
+
+  <!-- GET /v1/notifications/:id -->
+  <xs:element name="notificationDetailResponse" type="notif:notification"/>
+
+  <!-- GET /v1/notifications (paginado, estándar {data,total,page,limit}) -->
+  <xs:element name="notificationListResponse">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="id" type="xs:string"/>
-        <xs:element name="eventType" type="xs:string"/>
-        <xs:element name="title" type="xs:string"/>
-        <xs:element name="message" type="xs:string"/>
-        <xs:element name="priority" type="notif:priority"/>
-        <xs:element name="archived" type="xs:boolean"/>
-        <xs:element name="createdAt" type="xs:dateTime"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="notif:notification" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/notifications/unread-count -->
+  <xs:element name="unreadCountResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="unread" type="xs:integer"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
