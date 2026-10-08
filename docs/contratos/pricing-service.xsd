@@ -101,9 +101,23 @@
     <xs:sequence>
       <xs:element name="zoneId" type="xs:string"/>
       <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
       <xs:element name="averagePrice" type="xs:decimal"/>
       <xs:element name="minPrice" type="xs:decimal"/>
       <xs:element name="maxPrice" type="xs:decimal"/>
+      <xs:element name="storeCount" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="zoneUnitPriceComparison">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string"/>
+      <xs:element name="baseUnit" type="xs:string"/>
+      <xs:element name="averagePricePerBaseUnit" type="xs:decimal"/>
+      <xs:element name="minPricePerBaseUnit" type="xs:decimal"/>
+      <xs:element name="maxPricePerBaseUnit" type="xs:decimal"/>
       <xs:element name="storeCount" type="xs:integer"/>
     </xs:sequence>
   </xs:complexType>
@@ -116,6 +130,13 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element name="item" type="pri:zonePriceComparison" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="perUnit">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:zoneUnitPriceComparison" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>

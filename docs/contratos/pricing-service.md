@@ -23,12 +23,15 @@ abre el nuevo. De ese historial se calcula elasticidad y variación de precios.
 
 | Método | Ruta | Roles |
 |---|---|---|
-| POST | `/v1/prices` | Administrador, Responsable de precios |
+| POST | `/v1/prices` | Responsable de precios |
 | GET | `/v1/prices/history` | Los 6 perfiles internos |
-| GET | `/v1/prices/compare-zones` | Los 6 perfiles internos |
+| GET | `/v1/prices/compare-zones` | Los 6 perfiles internos; Proveedor solo de productos suyos (`404` si es de otro) |
 
-El Proveedor no tiene acceso a estas tres rutas (`403`); solo propone precios por
-`/v1/price-proposals` (más abajo).
+El Proveedor solo puede leer `compare-zones` de productos suyos; no tiene acceso al historial
+ni al alta (`403`). Propone precios por `/v1/price-proposals` (más abajo).
+
+`POST /v1/prices` sobre una presentación de un producto que no está `activo` (pendiente o
+rechazado) → `409` (D-08).
 
 ### Objeto Price
 
@@ -125,7 +128,7 @@ agregado para gráficas: **no se pagina** (excepción declarada en `paginacion.m
 |---|---|
 | `productId` | **obligatorio**, UUID de un producto existente |
 
-Response `200`:
+Response `200` (D-06: dos vistas, **nunca se promedian presentaciones de distinto tamaño**):
 
 ```json
 {
@@ -133,19 +136,46 @@ Response `200`:
   "zones": [
     {
       "zoneId": "uuid",
-      "zoneName": "Zona Centro",
-      "averagePrice": 41.25,
-      "minPrice": 39.9,
-      "maxPrice": 42.5,
-      "storeCount": 2
+      "zoneName": "Zona Oriente",
+      "presentationId": "uuid",
+      "presentationName": "1 L",
+      "averagePrice": 29,
+      "minPrice": 29,
+      "maxPrice": 29,
+      "storeCount": 1
+    },
+    {
+      "zoneId": "uuid",
+      "zoneName": "Zona Oriente",
+      "presentationId": "uuid",
+      "presentationName": "250 ml",
+      "averagePrice": 99,
+      "minPrice": 99,
+      "maxPrice": 99,
+      "storeCount": 1
+    }
+  ],
+  "perUnit": [
+    {
+      "zoneId": "uuid",
+      "zoneName": "Zona Oriente",
+      "baseUnit": "l",
+      "averagePricePerBaseUnit": 212.5,
+      "minPricePerBaseUnit": 29,
+      "maxPricePerBaseUnit": 396,
+      "storeCount": 1
     }
   ]
 }
 ```
 
+- `zones`: una fila por **zona y presentación** (vista por presentación).
+- `perUnit`: precio normalizado por unidad base (`kg`, `l`, `pza`: `precio / (contenido x factor_base)`),
+  por zona y tipo de unidad (masa y volumen no se mezclan). Sirve para comparar tamaños distintos.
+
 Los importes de este agregado son **números** (promedio calculado), a diferencia de
-`price`. Orden: `zoneName` ascendente. Sin precios vigentes → `zones: []`.
-`productId` ausente o no UUID → `400`; producto inexistente → `404`.
+`price`. Orden: `zoneName` y luego `presentationName`. Sin precios vigentes → `zones: []` y
+`perUnit: []`. `productId` ausente o no UUID → `400`; producto inexistente → `404`.
 
 ### Códigos de error
 
@@ -196,8 +226,9 @@ Este servicio es dueño de `precios_propuestos_proveedor`.
 
 > **Decisiones pendientes de confirmar con el equipo** (el texto de RN-14 no está en el repo; lo
 > de abajo es la interpretación mínima y cada punto es fácil de cambiar):
-> 1. **Quién aprueba:** Administrador y Gerente de categoría (como en productos; coincide con la
->    pestaña "Aprobaciones de precio" del portal de categoría). Es la constante `APRUEBAN_PRECIOS`.
+> 1. **Quién aprueba:** ÚNICAMENTE el Responsable de precios (decisión D1 del equipo). El Gerente
+>    de categoría y el Administrador reciben `403`. Es la constante `APRUEBAN_PRECIOS`. Al aprobar
+>    también se exige que el producto siga `activo` (`409` si no).
 > 2. **A qué tiendas aplica:** el esquema guarda la propuesta por presentación, sin tienda. Por eso
 >    **quien aprueba elige las tiendas** (`storeIds`) y la fecha; nada se aplica en silencio.
 > 3. **Qué precio es:** se trata como **precio de venta** de la presentación (entra a `precios`). Si
@@ -209,8 +240,8 @@ Este servicio es dueño de `precios_propuestos_proveedor`.
 |---|---|---|
 | POST | `/v1/price-proposals` | Proveedor |
 | GET | `/v1/price-proposals` | Proveedor (solo las suyas), Administrador, Gerente de categoría, Responsable de precios, Auditor |
-| PATCH | `/v1/price-proposals/:id/approve` | Administrador, Gerente de categoría |
-| PATCH | `/v1/price-proposals/:id/reject` | Administrador, Gerente de categoría |
+| PATCH | `/v1/price-proposals/:id/approve` | Responsable de precios |
+| PATCH | `/v1/price-proposals/:id/reject` | Responsable de precios |
 
 ### Objeto PriceProposal
 
