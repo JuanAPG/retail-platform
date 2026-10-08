@@ -68,7 +68,12 @@ export class PriceProposalsService {
    * `pendiente`, amarrada a la empresa de su cuenta (el proveedor no elige a
    * nombre de quién propone).
    */
-  async create(dto: CreatePriceProposalDto, solicitante: SesionUsuario, ip?: string): Promise<PriceProposalDto> {
+  async create(
+    dto: CreatePriceProposalDto,
+    solicitante: SesionUsuario,
+    ip?: string,
+    token?: string,
+  ): Promise<PriceProposalDto> {
     const proveedor = await this.proveedorDe(solicitante);
     if (!proveedor.activo) {
       throw new ForbiddenException(
@@ -121,10 +126,8 @@ export class PriceProposalsService {
         { campo: 'precio_propuesto', previo: null, posterior: String(dto.proposedPrice) },
         { campo: 'estatus', previo: null, posterior: ESTATUS_PROPUESTA.PENDIENTE },
       ],
-      usuarioId: solicitante.id,
-      rolId: solicitante.rolId,
       ip: ip ?? null,
-    });
+    }, token);
 
     return (await this.detallar([guardada.id]))[0];
   }
@@ -159,6 +162,7 @@ export class PriceProposalsService {
     dto: ApprovePriceProposalDto,
     solicitante: SesionUsuario,
     ip?: string,
+    token?: string,
   ): Promise<ApprovalResult> {
     const propuesta = await this.buscarPendiente(id);
 
@@ -224,10 +228,8 @@ export class PriceProposalsService {
       accion: 'update',
       descripcion: `Propuesta de precio aprobada (${propuesta.proposedPrice}) para ${creados.length} tienda(s).`,
       cambios: [{ campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.APROBADO }],
-      usuarioId: solicitante.id,
-      rolId: solicitante.rolId,
       ip: ip ?? null,
-    });
+    }, token);
     for (const c of creados) {
       await this.audit.reportar({
         tabla: 'precios',
@@ -238,10 +240,8 @@ export class PriceProposalsService {
           { campo: 'precio_anterior', previo: c.precioPrevio, posterior: null },
           { campo: 'precio', previo: null, posterior: propuesta.proposedPrice },
         ],
-        usuarioId: solicitante.id,
-        rolId: solicitante.rolId,
         ip: ip ?? null,
-      });
+      }, token);
     }
 
     const [proposal] = await this.detallar([id]);
@@ -254,6 +254,7 @@ export class PriceProposalsService {
     dto: RejectPriceProposalDto,
     solicitante: SesionUsuario,
     ip?: string,
+    token?: string,
   ): Promise<PriceProposalDto> {
     await this.buscarPendiente(id);
 
@@ -280,10 +281,8 @@ export class PriceProposalsService {
         { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.RECHAZADO },
         { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
       ],
-      usuarioId: solicitante.id,
-      rolId: solicitante.rolId,
       ip: ip ?? null,
-    });
+    }, token);
 
     return (await this.detallar([id]))[0];
   }

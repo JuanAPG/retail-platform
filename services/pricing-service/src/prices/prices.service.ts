@@ -116,7 +116,7 @@ export class PricesService {
    * nueva vigencia) dentro de la misma transacción, porque el índice
    * único `uq_precios_vigente` no permite dos precios vigentes a la vez.
    */
-  async create(dto: CreatePriceDto, solicitante: SesionUsuario, ip?: string): Promise<PriceDto> {
+  async create(dto: CreatePriceDto, solicitante: SesionUsuario, ip?: string, token?: string): Promise<PriceDto> {
     // Presentaciones y tiendas son de catalog-service: solo se verifica que existan.
     await this.exigirExistencia('producto_presentaciones', dto.presentationId, 'La presentación indicada no existe.');
     await this.exigirExistencia('tiendas', dto.storeId, 'La tienda indicada no existe.');
@@ -148,10 +148,8 @@ export class PricesService {
           { campo: 'precio_anterior', previo: precioPrevio, posterior: null },
           { campo: 'precio', previo: null, posterior: String(dto.price) },
         ],
-        usuarioId: solicitante.id,
-        rolId: solicitante.rolId,
         ip: ip ?? null,
-      });
+      }, token);
 
       const [creado] = await this.detallar([id]);
       // El historial y la comparación cacheados de este producto ya no valen.

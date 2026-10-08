@@ -1353,6 +1353,16 @@ COMMENT ON TABLE recomendacion_evidencias IS 'Datos concretos que sustentan cada
 -- =====================================================================
 
 CREATE TYPE accion_auditoria AS ENUM ('insert','update','delete','login','importacion');
+-- Ampliado para que los microservicios de negocio registren sus propias
+-- acciones (antes solo las de CRUD/login/importación): ver
+-- docs/contratos/audit-service.md para qué acción usar en cada evento.
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'aprobar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'rechazar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'desactivar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'ejecutar_corrida';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'simular';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'generar_recomendacion';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'exportar';
 
 CREATE TABLE auditoria (
     id                  BIGSERIAL PRIMARY KEY,
@@ -1360,6 +1370,7 @@ CREATE TABLE auditoria (
     rol_id              SMALLINT REFERENCES roles(id),
     tabla_afectada      VARCHAR(80) NOT NULL,
     registro_id         TEXT,
+    servicio            VARCHAR(40) NOT NULL,
     accion              accion_auditoria NOT NULL,
     descripcion         TEXT,
     direccion_ip        INET,
@@ -1367,6 +1378,7 @@ CREATE TABLE auditoria (
 );
 COMMENT ON TABLE auditoria IS 'Evento auditable: quién, qué acción, sobre qué entidad y cuándo. Append-only: no se actualiza ni se borra.';
 COMMENT ON COLUMN auditoria.rol_id IS 'Rol con el que actuaba el usuario EN EL INSTANTE del evento. No es copia redundante de usuarios.rol_id (eso sería una dependencia transitiva): el rol del usuario puede cambiar después y la bitácora no debe cambiar con él.';
+COMMENT ON COLUMN auditoria.servicio IS 'Microservicio emisor del evento (p. ej. pricing-service), siempre lo manda quien reporta.';
 
 CREATE INDEX idx_auditoria_tabla_registro ON auditoria(tabla_afectada, registro_id);
 CREATE INDEX idx_auditoria_usuario ON auditoria(usuario_id);

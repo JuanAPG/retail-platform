@@ -5,11 +5,14 @@
            xmlns:audit="audit/v1"
            elementFormDefault="qualified">
 
+  <!-- `usuarioId`/`rolId` NO están aquí: el actor siempre sale del token
+       de `SessionGuard`, nunca del cuerpo. -->
   <xs:element name="eventoRequest">
     <xs:complexType>
       <xs:sequence>
         <xs:element name="tabla" type="xs:string"/>
         <xs:element name="registroId" type="xs:string" minOccurs="0"/>
+        <xs:element name="servicio" type="xs:string"/>
         <xs:element name="accion" type="audit:accion"/>
         <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
         <xs:element name="cambios" minOccurs="0">
@@ -19,8 +22,6 @@
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="usuarioId" type="xs:string" minOccurs="0"/>
-        <xs:element name="rolId" type="xs:integer" minOccurs="0"/>
         <xs:element name="ip" type="xs:string" minOccurs="0"/>
       </xs:sequence>
     </xs:complexType>
@@ -33,6 +34,13 @@
       <xs:enumeration value="delete"/>
       <xs:enumeration value="login"/>
       <xs:enumeration value="importacion"/>
+      <xs:enumeration value="aprobar"/>
+      <xs:enumeration value="rechazar"/>
+      <xs:enumeration value="desactivar"/>
+      <xs:enumeration value="ejecutar_corrida"/>
+      <xs:enumeration value="simular"/>
+      <xs:enumeration value="generar_recomendacion"/>
+      <xs:enumeration value="exportar"/>
     </xs:restriction>
   </xs:simpleType>
 

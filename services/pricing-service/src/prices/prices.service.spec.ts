@@ -191,7 +191,7 @@ describe('PricesService.create — auditoría', () => {
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
     manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-08-01' });
 
-    await servicio.create(dto, usuario, '172.18.0.9');
+    await servicio.create(dto, usuario, '172.18.0.9', 'Bearer t-1');
 
     expect(audit.reportar).toHaveBeenCalledTimes(1);
     expect(audit.reportar).toHaveBeenCalledWith(
@@ -199,15 +199,17 @@ describe('PricesService.create — auditoría', () => {
         tabla: 'precios',
         registroId: 'nuevo-id',
         accion: 'insert',
-        usuarioId: 'u-1',
-        rolId: 4,
         ip: '172.18.0.9',
         cambios: [
           { campo: 'precio_anterior', previo: '40.00', posterior: null },
           { campo: 'precio', previo: null, posterior: '42.5' },
         ],
       }),
+      'Bearer t-1',
     );
+    // El actor sale del token en audit-service, no del cuerpo.
+    expect(audit.reportar.mock.calls[0][0]).not.toHaveProperty('usuarioId');
+    expect(audit.reportar.mock.calls[0][0]).not.toHaveProperty('rolId');
     // Se reporta solo después de que la transacción terminó.
     expect(dataSource.transaction.mock.invocationCallOrder[0]).toBeLessThan(audit.reportar.mock.invocationCallOrder[0]);
   });

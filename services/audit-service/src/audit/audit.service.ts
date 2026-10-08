@@ -16,6 +16,7 @@ export interface AuditLogInput {
   rolId?: number | null;
   tabla: string;
   registroId?: string | null;
+  servicio: string;
   accion: AccionAuditoria;
   descripcion?: string | null;
   ip?: string | null;
@@ -54,6 +55,7 @@ export class AuditService {
           rolId: input.rolId ?? null,
           tablaAfectada: input.tabla,
           registroId: input.registroId ?? null,
+          servicio: input.servicio,
           accion: input.accion,
           descripcion: input.descripcion ?? null,
           direccionIp: input.ip ?? null,
@@ -93,6 +95,7 @@ export class AuditService {
         rolId: input.rolId ?? null,
         tablaAfectada: input.tabla,
         registroId: input.registroId ?? null,
+        servicio: input.servicio,
         accion: input.accion,
         descripcion: input.descripcion ?? null,
         direccionIp: input.ip ?? null,
@@ -130,6 +133,9 @@ export class AuditService {
 
     if (filters.tabla) {
       qb.andWhere('evento.tablaAfectada = :tabla', { tabla: filters.tabla });
+    }
+    if (filters.servicio) {
+      qb.andWhere('evento.servicio = :servicio', { servicio: filters.servicio });
     }
     if (filters.registroId) {
       qb.andWhere('evento.registroId = :registroId', { registroId: filters.registroId });
