@@ -3,6 +3,8 @@ import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { PriceProposal } from '../entities/price-proposal.entity';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
+import { PriceAlertsService } from '../price-alerts/price-alerts.service';
 import { PricesService } from '../prices/prices.service';
 import { PriceProposalsService } from './price-proposals.service';
 
@@ -58,13 +60,19 @@ function crearServicio() {
     invalidarProducto: jest.fn().mockResolvedValue(undefined),
     exigirProductoActivo: jest.fn().mockResolvedValue(undefined),
   };
+  const alertas = { evaluar: jest.fn().mockResolvedValue({ alerta: false, basePrecio: null, variacionPct: null }) };
+  const notificaciones = { emitir: jest.fn().mockResolvedValue(undefined) };
   const servicio = new PriceProposalsService(
     repo as unknown as Repository<PriceProposal>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
     prices as unknown as PricesService,
+    alertas as unknown as PriceAlertsService,
+    notificaciones as unknown as NotificationsReporter,
   );
-  return { repo, manager, dataSource, audit, prices, servicio };
+  // Quién propuso (usuario del proveedor): otra consulta a `proveedores`/`usuarios`, que estos tests no ordenan.
+  jest.spyOn(servicio as unknown as { usuarioDelProveedor: () => Promise<string | null> }, 'usuarioDelProveedor').mockResolvedValue('u-prov');
+  return { repo, manager, dataSource, audit, prices, alertas, notificaciones, servicio };
 }
 
 describe('PriceProposalsService.create', () => {
@@ -151,6 +159,20 @@ describe('PriceProposalsService.create', () => {
       'Bearer t-prov',
     );
     expect(resultado).toMatchObject({ id: 'prop-nueva', status: 'pendiente', supplier: { razonSocial: 'Lácteos del Norte' } });
+  });
+
+  it('PRI-07: al proponer emite precio.propuesto con el token del Proveedor y sin destinatario (lo fija el receptor)', async () => {
+    const ctx = crearServicio();
+    escenarioValido(ctx);
+    ctx.dataSource.query.mockResolvedValueOnce([filaPropuesta('prop-nueva')]);
+
+    await ctx.servicio.create(dto, proveedorUsuario, undefined, 'Bearer t-prov');
+
+    const [evento, token] = ctx.notificaciones.emitir.mock.calls[0];
+    expect(evento).toMatchObject({ eventType: 'precio.propuesto', relatedEntityType: 'propuesta_precio', relatedEntityId: 'prop-nueva' });
+    expect(evento.message).toContain('Lácteos del Norte');
+    expect(evento).not.toHaveProperty('recipientUserId');
+    expect(token).toBe('Bearer t-prov');
   });
 });
 
@@ -330,6 +352,44 @@ describe('PriceProposalsService.approve', () => {
     );
   });
 
+  it('PRI-14: la auditoría de la aprobación dice quién propuso y quién aprobó', async () => {
+    const ctx = crearServicio();
+    escenarioValido(ctx);
+
+    await ctx.servicio.approve('prop-1', dto, gerente, undefined, 'Bearer t');
+
+    const propuesta = ctx.audit.reportar.mock.calls.map((c) => c[0]).find((e) => e.tabla === 'precios_propuestos_proveedor')!;
+    expect(propuesta.cambios).toEqual(expect.arrayContaining([
+      { campo: 'propuesto_por', previo: null, posterior: 'u-prov' },
+      { campo: 'aprobado_por', previo: null, posterior: 'u-ger' },
+    ]));
+  });
+
+  it('PRI-07: avisa al usuario que propuso (propuesta.resuelta) y evalúa la alerta de cambio por CADA tienda', async () => {
+    const ctx = crearServicio();
+    escenarioValido(ctx);
+
+    await ctx.servicio.approve('prop-1', dto, gerente, undefined, 'Bearer t');
+
+    const [evento, token] = ctx.notificaciones.emitir.mock.calls[0];
+    expect(evento).toMatchObject({ eventType: 'propuesta.resuelta', recipientUserId: 'u-prov', priority: 'info' });
+    expect(evento.title).toContain('aprobada');
+    expect(token).toBe('Bearer t');
+    expect(ctx.alertas.evaluar).toHaveBeenCalledTimes(2);
+    expect(ctx.alertas.evaluar).toHaveBeenNthCalledWith(1, { presentationId: 'pres-1', storeId: 't1', nuevoPrecio: 38, effectiveDate: '2026-10-05' }, 'Bearer t');
+    expect(ctx.alertas.evaluar.mock.calls[1][0]).toMatchObject({ storeId: 't2' });
+  });
+
+  it('sin cuenta de usuario del proveedor no se manda aviso (pero la aprobación sigue)', async () => {
+    const ctx = crearServicio();
+    escenarioValido(ctx);
+    (ctx.servicio as unknown as { usuarioDelProveedor: jest.Mock }).usuarioDelProveedor.mockResolvedValue(null);
+
+    await ctx.servicio.approve('prop-1', dto, gerente);
+
+    expect(ctx.notificaciones.emitir).not.toHaveBeenCalled();
+  });
+
   it('sin fecha usa hoy y normaliza un ISO con hora', async () => {
     const ctx = crearServicio();
     escenarioValido(ctx);
@@ -372,6 +432,22 @@ describe('PriceProposalsService.reject', () => {
       undefined,
     );
     expect(resultado.status).toBe('rechazado');
+  });
+
+  it('PRI-14 / PRI-07: audita quién propuso y quién rechazó, y avisa al proponente con el motivo', async () => {
+    const { repo, dataSource, audit, notificaciones, servicio } = crearServicio();
+    repo.findOne.mockResolvedValue(pendiente);
+    dataSource.query.mockResolvedValueOnce([filaPropuesta('prop-1', { estatus: 'rechazado' })]);
+
+    await servicio.reject('prop-1', dto, gerente, undefined, 'Bearer t');
+
+    expect(audit.reportar.mock.calls[0][0].cambios).toEqual(expect.arrayContaining([
+      { campo: 'propuesto_por', previo: null, posterior: 'u-prov' },
+      { campo: 'rechazado_por', previo: null, posterior: 'u-ger' },
+    ]));
+    const [evento] = notificaciones.emitir.mock.calls[0];
+    expect(evento).toMatchObject({ eventType: 'propuesta.resuelta', recipientUserId: 'u-prov', priority: 'warning' });
+    expect(evento.message).toContain('Excede el límite de variación de la zona.');
   });
 
   it('si otro revisor ganó la carrera responde 409 y no audita', async () => {

@@ -44,12 +44,13 @@ export class PriceProposalsController {
   constructor(private readonly proposalsService: PriceProposalsService) {}
 
   @Post()
+  @XmlRoot('priceProposalResponse')
   @Roles(ROL.PROVEEDOR)
   @ApiOperation({
     summary:
       'Un Proveedor propone un precio para una presentación de su producto. Nace pendiente y ligada a su empresa (no acepta supplierId ni status).',
   })
-  @ApiRespuesta(201, 'Propuesta registrada, pendiente de aprobación.', muestras.propuesta)
+  @ApiRespuesta(201, 'Propuesta registrada, pendiente de aprobación.', muestras.propuesta, 'priceProposalResponse')
   @ApiErrores(400, 401, 403, 409)
   create(
     @Body() dto: CreatePriceProposalDto,
@@ -67,19 +68,20 @@ export class PriceProposalsController {
     summary:
       'Propuestas de precio, paginadas. Un Proveedor recibe únicamente las suyas. Con status=pendiente es la bandeja de revisión (la más antigua primero).',
   })
-  @ApiRespuesta(200, 'Página de propuestas.', pagina([muestras.propuesta]))
+  @ApiRespuesta(200, 'Página de propuestas.', pagina([muestras.propuesta]), 'priceProposalListResponse')
   @ApiErrores(400, 401, 403)
   findAll(@CurrentUser() usuario: SesionUsuario, @Query() filtros: PriceProposalQueryDto) {
     return this.proposalsService.findAll(usuario, filtros);
   }
 
   @Patch(':id/approve')
+  @XmlRoot('priceProposalApproveResponse')
   @Roles(...APRUEBAN_PRECIOS)
   @ApiOperation({
     summary:
       'Aprueba una propuesta pendiente y aplica su precio a las tiendas indicadas (cierra el vigente de cada una). Todo o nada.',
   })
-  @ApiRespuesta(200, 'Propuesta aprobada y los precios que se crearon.', muestras.aprobacion)
+  @ApiRespuesta(200, 'Propuesta aprobada y los precios que se crearon.', muestras.aprobacion, 'priceProposalApproveResponse')
   @ApiErrores(400, 401, 403, 404, 409)
   approve(
     @Param('id', ParseUUIDPipe) id: string,
@@ -92,9 +94,10 @@ export class PriceProposalsController {
   }
 
   @Patch(':id/reject')
+  @XmlRoot('priceProposalResponse')
   @Roles(...APRUEBAN_PRECIOS)
   @ApiOperation({ summary: 'Rechaza una propuesta pendiente; exige motivo de al menos 10 caracteres.' })
-  @ApiRespuesta(200, 'Propuesta rechazada, con su motivo.', muestras.propuestaRechazada)
+  @ApiRespuesta(200, 'Propuesta rechazada, con su motivo.', muestras.propuestaRechazada, 'priceProposalResponse')
   @ApiErrores(400, 401, 403, 404, 409)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
