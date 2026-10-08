@@ -7,6 +7,7 @@
  */
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
+import { Client } from 'pg';
 
 const BASE = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
 const SECRET = process.env.JWT_ACCESS_SECRET ?? 'dev_access_secret_solo_para_local';
@@ -21,6 +22,23 @@ async function sesion(userId: string, rol: string): Promise<string> {
   return sign({ sub: userId, email: `${userId}@test`, rol, rolId: 1, jti: `jti-${userId}` }, SECRET, {
     expiresIn: '10m',
   });
+}
+
+/** Conexión directa a Postgres para sembrar/limpiar lo que este servicio no expone por API. */
+async function conDb<T>(fn: (db: Client) => Promise<T>): Promise<T> {
+  const db = new Client({
+    host: process.env.DB_HOST ?? 'localhost',
+    port: parseInt(process.env.DB_PORT ?? '5432', 10),
+    user: process.env.DB_USER ?? 'retail_user',
+    password: process.env.DB_PASSWORD ?? 'retail_pass_2026',
+    database: process.env.DB_NAME ?? 'retaildb',
+  });
+  await db.connect();
+  try {
+    return await fn(db);
+  } finally {
+    await db.end();
+  }
 }
 
 async function http(metodo: string, ruta: string, token?: string, cuerpo?: object) {
@@ -122,8 +140,95 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
 
     expect((await http('GET', '/v1/zones/compare', auditor)).estado).toBe(400);
     expect((await http('GET', '/v1/zones/compare?ids=1,2', auditor)).estado).toBe(400);
-    expect(
-      (await http('GET', '/v1/zones/compare?ids=00000000-0000-4000-8000-000000000000', auditor)).estado,
-    ).toBe(404);
+  });
+
+  it('CAT-12: comparar exige 2+ ids distintos (400), deduplica repetidos y lista los inexistentes (404)', async () => {
+    const zonas = (await http('GET', '/v1/zones?limit=100', auditor)).cuerpo.data.map((z: { id: string }) => z.id);
+    const [a, b] = zonas;
+    const fantasma = '00000000-0000-4000-8000-000000000000';
+
+    expect((await http('GET', `/v1/zones/compare?ids=${a}`, auditor)).estado).toBe(400); // un solo id
+    expect((await http('GET', `/v1/zones/compare?ids=${a},${a}`, auditor)).estado).toBe(400); // se reduce a uno
+    const repetido = await http('GET', `/v1/zones/compare?ids=${a},${b},${a}`, auditor);
+    expect(repetido.estado).toBe(200);
+    expect(repetido.cuerpo).toHaveLength(2); // deduplicado
+
+    const faltante = await http('GET', `/v1/zones/compare?ids=${a},${fantasma}`, auditor);
+    expect(faltante.estado).toBe(404);
+    expect(faltante.cuerpo.message).toContain(fantasma);
+    expect(faltante.cuerpo.message).not.toContain(a);
+  });
+
+  it('CAT-13: el Administrador carga indicadores y clasificación, y /zones/compare los muestra', async () => {
+    const adminReal = await sesion(
+      await conDb(async (db) => (await db.query("SELECT u.id FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE r.nombre = 'Administrador' LIMIT 1")).rows[0].id),
+      'Administrador',
+    );
+    const zona = await http('POST', '/v1/zones', adminReal, { nombre: 'Zona Indicadores IT', municipioId });
+    expect(zona.estado).toBe(201);
+    const id = zona.cuerpo.id;
+    const otra = (await http('GET', '/v1/zones?limit=100', auditor)).cuerpo.data.find((z: { id: string }) => z.id !== id).id;
+    const carga = { ingresoEstimado: 18500, poblacion: 42000, disponibilidad: 0.85, periodoInicio: '2026-01-01', periodoFin: '2026-09-30', fuente: 'INEGI - Censo 2020' };
+
+    try {
+      // Antes de cargar, los indicadores son null.
+      const antes = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
+      expect(antes).toMatchObject({ estimatedIncome: null, population: null, availability: null });
+
+      // Solo el Administrador.
+      expect((await http('PUT', `/v1/zones/${id}/indicators`, auditor, carga)).estado).toBe(403);
+      expect((await http('PUT', `/v1/zones/${id}/indicators`, proveedor, carga)).estado).toBe(403);
+
+      const r = await http('PUT', `/v1/zones/${id}/indicators`, adminReal, carga);
+      expect(r.estado).toBe(200);
+      expect(r.cuerpo).toMatchObject({ zoneId: id, estimatedIncome: 18500, population: 42000, availability: 0.85, source: 'INEGI - Censo 2020' });
+      expect(r.cuerpo.runId).toBeTruthy();
+
+      const despues = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
+      expect(despues).toMatchObject({ estimatedIncome: 18500, population: 42000, availability: 0.85 });
+
+      // Una carga posterior del mismo periodo gana (la más reciente).
+      await http('PUT', `/v1/zones/${id}/indicators`, adminReal, { ...carga, disponibilidad: 0.5 });
+      const nueva = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
+      expect(nueva.availability).toBe(0.5);
+
+      // Validaciones.
+      for (const malo of [
+        { ...carga, ingresoEstimado: -1 },
+        { ...carga, poblacion: -5 },
+        { ...carga, disponibilidad: 1.5 },
+        { ...carga, disponibilidad: -0.1 },
+        { ...carga, periodoInicio: '2026-10-01', periodoFin: '2026-01-01' },
+        { ...carga, fuente: '' },
+        { ...carga, extra: 1 },
+      ]) {
+        expect((await http('PUT', `/v1/zones/${id}/indicators`, adminReal, malo)).estado).toBe(400);
+      }
+      expect((await http('PUT', '/v1/zones/00000000-0000-4000-8000-000000000000/indicators', adminReal, carga)).estado).toBe(404);
+
+      // Clasificación: cierra la vigente y crea la nueva.
+      const seg = (await http('GET', '/v1/segments?limit=100', auditor)).cuerpo.data;
+      expect((await http('PUT', `/v1/zones/${id}/classification`, auditor, { segmentId: seg[0].id })).estado).toBe(403);
+      expect((await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: 9999 })).estado).toBe(400);
+      const c1 = await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: seg[0].id });
+      expect(c1.estado).toBe(200);
+      expect(c1.cuerpo).toMatchObject({ zoneId: id, segmentId: seg[0].id, segmentCode: seg[0].code });
+      expect(c1.cuerpo.previousSegmentId).toBeNull(); // sin clasificación previa (en XML se omite)
+      const c2 = await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: seg[1].id });
+      expect(c2.cuerpo).toMatchObject({ segmentId: seg[1].id, previousSegmentId: seg[0].id });
+      const vigentes = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM zona_clasificaciones WHERE zona_id = $1 AND vigente', [id])).rows[0].n);
+      const total = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM zona_clasificaciones WHERE zona_id = $1', [id])).rows[0].n);
+      expect(vigentes).toBe(1);
+      expect(total).toBe(2); // el historial se conserva
+      const fila = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
+      expect(fila.classification).toBe(seg[1].name);
+    } finally {
+      await conDb(async (db) => {
+        await db.query('DELETE FROM indicador_valores WHERE zona_id = $1', [id]);
+        await db.query("DELETE FROM analisis_corridas WHERE id IN (SELECT corrida_id FROM analisis_corrida_parametros WHERE clave = 'zona_id' AND valor = $1)", [id]);
+        await db.query('DELETE FROM zona_clasificaciones WHERE zona_id = $1', [id]);
+      });
+      await http('DELETE', `/v1/zones/${id}`, adminReal);
+    }
   });
 });

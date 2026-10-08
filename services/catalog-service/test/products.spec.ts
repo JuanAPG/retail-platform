@@ -58,6 +58,7 @@ async function http(metodo: string, ruta: string, token?: string, cuerpo?: objec
 
 const SKU = 'IT-PROD-001';
 const SKU_HIST = 'IT-PROD-HIST';
+const SKU_DUP = 'IT-PROD-DUP';
 
 describe('productos y presentaciones (integración, requiere stack)', () => {
   let admin: string;
@@ -87,8 +88,8 @@ describe('productos y presentaciones (integración, requiere stack)', () => {
   afterAll(async () => {
     // Directo en la base: un producto con historial (inactivo) ya no sale en la lista (D-07).
     await conDb(async (db) => {
-      await db.query('DELETE FROM precios WHERE presentacion_id IN (SELECT pp.id FROM producto_presentaciones pp JOIN productos p ON p.id = pp.producto_id WHERE p.sku = ANY($1))', [[SKU, SKU_HIST]]);
-      await db.query('DELETE FROM productos WHERE sku = ANY($1)', [[SKU, SKU_HIST]]);
+      await db.query('DELETE FROM precios WHERE presentacion_id IN (SELECT pp.id FROM producto_presentaciones pp JOIN productos p ON p.id = pp.producto_id WHERE p.sku = ANY($1))', [[SKU, SKU_HIST, SKU_DUP]]);
+      await db.query('DELETE FROM productos WHERE sku = ANY($1)', [[SKU, SKU_HIST, SKU_DUP]]);
     });
     await redis.quit();
   });
@@ -126,8 +127,9 @@ describe('productos y presentaciones (integración, requiere stack)', () => {
   });
 
   it('el Proveedor no entra al detalle ni a rutas de escritura (403)', async () => {
-    const cualquiera = (await http('GET', '/v1/products?limit=1', admin)).cuerpo.data[0].id;
-    expect((await http('GET', `/v1/products/${cualquiera}`, proveedor)).estado).toBe(403);
+    const ajeno = (await http('GET', '/v1/products?limit=100', admin)).cuerpo.data.find((p: { proveedorId: string | null }) => p.proveedorId === null).id;
+    // CAT-14: el detalle ya es de lectura para el Proveedor, pero solo de lo suyo (404 si es de otro).
+    expect((await http('GET', `/v1/products/${ajeno}`, proveedor)).estado).toBe(404);
     expect((await http('POST', '/v1/products', proveedor, alta())).estado).toBe(403);
     expect((await http('POST', '/v1/products', auditor, alta())).estado).toBe(403);
   });
@@ -140,6 +142,28 @@ describe('productos y presentaciones (integración, requiere stack)', () => {
     expect((await http('POST', `/v1/products/${cualquiera.id}/presentations`, admin, { nombre: 'x', contenido: 1, unidadMedida: 'kg' })).estado).toBe(403);
     expect((await http('DELETE', `/v1/presentations/${cualquiera.presentaciones[0].id}`, admin)).estado).toBe(403);
     expect((await http('GET', `/v1/products/${cualquiera.id}`, admin)).estado).toBe(200);
+  });
+
+  it('CAT-11: una presentación con el mismo contenido físico es duplicada aunque cambie el nombre o la unidad', async () => {
+    const creado = await http('POST', '/v1/products', gerente, { ...alta(), sku: SKU_DUP }); // 1 kg predeterminada
+    expect(creado.estado).toBe(201);
+    const id = creado.cuerpo.id;
+    const nueva = (cuerpo: object) => http('POST', `/v1/products/${id}/presentations`, gerente, cuerpo);
+
+    const mil = await nueva({ nombre: 'Mil gramos', contenido: 1000, unidadMedida: 'g' });
+    expect(mil.estado).toBe(409);
+    expect(mil.cuerpo.message).toContain('mismo contenido');
+    expect((await nueva({ nombre: 'Kilo otra vez', contenido: 1, unidadMedida: 'kg' })).estado).toBe(409);
+
+    // Otro tamaño o otro tipo de unidad sí se acepta (500 g; 500 ml no es 500 g).
+    expect((await nueva({ nombre: '500 g', contenido: 500, unidadMedida: 'g' })).estado).toBe(201);
+    expect((await nueva({ nombre: 'Medio kilo', contenido: 0.5, unidadMedida: 'kg' })).estado).toBe(409); // = 500 g
+    expect((await nueva({ nombre: '500 ml', contenido: 500, unidadMedida: 'ml' })).estado).toBe(201);
+
+    // El 409 de un nombre repetido dice el motivo real (no "código de barras").
+    const mismoNombre = await nueva({ nombre: '500 ml', contenido: 700, unidadMedida: 'ml' });
+    expect(mismoNombre.estado).toBe(409);
+    expect(mismoNombre.cuerpo.message).toContain('llamada "500 ml"');
   });
 
   it('D-07: con historial de precios NO se borra, se desactiva (la presentación y luego el producto)', async () => {
