@@ -42,6 +42,9 @@ y el `_llenar` de FastAPI producen exactamente la misma forma.
 - Cálculos al vuelo con tope propio (p. ej. sustituciones, `limit` top-N).
 - Catálogos chicos e inmutables en la práctica (unidades de medida,
   municipios, roles): devuelven arreglo plano y lo declaran en su contrato.
+- Series completas para un cálculo, acotadas por el filtro obligatorio del endpoint (p. ej.
+  `GET /v1/prices/series?presentationId=…`): la elasticidad necesita el periodo completo y no
+  una página de 100.
 
 ## Plantilla
 

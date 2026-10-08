@@ -25,7 +25,11 @@ abre el nuevo. De ese historial se calcula elasticidad y variación de precios.
 |---|---|---|
 | POST | `/v1/prices` | Responsable de precios |
 | GET | `/v1/prices/history` | Los 6 perfiles internos |
+| GET | `/v1/prices/current` | Los 6 perfiles internos |
+| GET | `/v1/prices/series` | Los 6 perfiles internos |
 | GET | `/v1/prices/compare-zones` | Los 6 perfiles internos; Proveedor solo de productos suyos (`404` si es de otro) |
+| GET | `/v1/prices/alert-settings` | Responsable de precios, Administrador, Auditor |
+| PUT | `/v1/prices/alert-settings` | Responsable de precios |
 
 El Proveedor solo puede leer `compare-zones` de productos suyos; no tiene acceso al historial
 ni al alta (`403`). Propone precios por `/v1/price-proposals` (más abajo).
@@ -64,8 +68,12 @@ rechazado) → `409` (D-08).
 ```
 
 - `price` es **cadena decimal** (`numeric(12,2)`), para no perder precisión.
-- `effectiveDate` / `effectiveUntil` son fechas `YYYY-MM-DD`. `effectiveUntil: null` =
-  precio **vigente**; `vigente` lo calcula la base a partir de eso y nunca se escribe.
+- `effectiveDate` / `effectiveUntil` son fechas `YYYY-MM-DD`. `effectiveUntil: null` = precio **sin fecha de fin**.
+- **`vigente` se calcula por FECHA (D-05)**: `true` solo si `effectiveDate <= hoy` y (`effectiveUntil` es `null` o `>= hoy`).
+  Un precio **programado a futuro** se registra sin cambiar lo de hoy: el anterior se cierra con
+  `effectiveUntil = effectiveDate_nuevo - 1`, sigue siendo el actual hasta entonces (`vigente: true`) y el nuevo sale
+  `vigente: false` hasta su fecha, cuando pasa a `true` sin intervención. `compare-zones`, `current` y la alerta usan
+  esta misma definición; ya no hay que leer la columna `vigente` de la base (que solo dice "sin fecha de fin").
 - `origen`: `interno` | `propuesta_proveedor_aprobada` (esta última, solo cuando exista el
   flujo de propuestas).
 - `presentation` y `store` son un **resumen** (no el registro completo del catálogo): lo
@@ -118,6 +126,49 @@ descendente. Response `200`: `{ "data": [Price], "total": n, "page": 1, "limit":
 
 `productId` ausente o no UUID → `400`; producto inexistente → `404`. Un producto sin
 precios devuelve `data: []`.
+
+### GET /v1/prices/current
+
+El precio **actual** (por fecha, D-05) de una presentación, uno por tienda. Lo usan `decision-service` y
+`algorithms-core` en lugar de leer `precios` por SQL. Paginado (`paginacion.md`), orden por nombre de tienda.
+
+| Query | Regla |
+|---|---|
+| `presentationId` | **obligatorio**, UUID de una presentación existente (`400` si no) |
+| `zoneId`, `storeId` | opcionales, UUID |
+
+Response `200` (`priceListResponse`): `{ data: [Price], total, page, limit }`. Un precio programado a futuro no aparece hasta su fecha.
+
+### GET /v1/prices/series
+
+La **serie completa** de precios de una presentación (todas las tiendas, con zona y rango de vigencia), **sin
+paginar** (excepción declarada en `paginacion.md`): es lo que necesita la elasticidad para armar un periodo, y
+`history` topa en 100 por página. Orden: fecha de inicio, tienda.
+
+| Query | Regla |
+|---|---|
+| `presentationId` | **obligatorio**, UUID de una presentación existente |
+| `dateFrom`, `dateTo` | opcionales, `YYYY-MM-DD`; traen los precios cuya vigencia se **cruza** con el rango. `dateFrom > dateTo` → `400` |
+
+Response `200` (`priceSeriesResponse`): `{ data: [Price], total }`.
+
+### GET /v1/prices/alert-settings · PUT /v1/prices/alert-settings
+
+Configuración de la **alerta de cambio de precio (D-09)**. Por defecto **5 % en 30 días**.
+
+```json
+{ "umbralPct": 5, "ventanaDias": 30, "updatedBy": "uuid", "updatedAt": "2026-10-08T18:00:00.000Z" }
+```
+
+`PUT` (solo el Responsable de precios): `umbralPct` > 0 y ≤ 100 (hasta 2 decimales), `ventanaDias` entero de 1 a 365;
+fuera de rango o campos extra → `400`. Se audita con el valor anterior y el nuevo. Tabla propia: `config_alertas_precio`.
+
+**Cómo se alerta.** Al registrar un precio (alta directa, aprobación de propuesta o de observación), se compara con el
+precio que la misma presentación y tienda tenían **al inicio de la ventana** (`fecha efectiva - ventanaDias`), no con el
+inmediato anterior: así un 1 % diario durante un mes sí cruza el 10 % en vez de no avisar nunca. Si el historial es más
+corto que la ventana se usa el precio más antiguo disponible; sin historial no hay con qué comparar. Si
+`|nuevo - base| / base >= umbral` se emite `precio.umbral` a notifications-service (le llega al Responsable de precios;
+`critical` si pasa de 2x el umbral). 4.99 % no avisa; 5 % y 5.01 % sí (con umbral de 5 %). La alerta nunca rompe el alta.
 
 ### GET /v1/prices/compare-zones
 
@@ -349,6 +400,61 @@ motivo, revisor y fecha. Ya resuelta → `409`.
 | 404 | Propuesta inexistente |
 | 409 | Propuesta duplicada pendiente; producto no activo; propuesta ya resuelta; fecha no posterior al vigente |
 
-### Pendiente (no es parte de este contrato todavía)
+### Notificaciones (PRI-07)
 
-- Notificación de cambios de precio y de propuestas (`notifications-service`).
+Todas no bloqueantes (timeout de 1.5 s, un fallo solo deja una advertencia) y con el `Authorization` de quien originó la acción:
+
+| Cuándo | Evento | Le llega a |
+|---|---|---|
+| El Proveedor propone un precio | `precio.propuesto` | lo fija el receptor |
+| El Responsable de precios aprueba o rechaza | `propuesta.resuelta` | el usuario que propuso (con el motivo si se rechazó) |
+| Un precio cruza el umbral de la alerta | `precio.umbral` | rol Responsable de precios |
+
+> **Pendiente con notifications-service (Juan):** su tabla de permisos manda `precio.propuesto` al rol *Gerente de categoría*
+> (la decisión D1 dice que resuelve el Responsable de precios) y solo deja originar `propuesta.resuelta` al Administrador y al
+> Gerente (hoy resuelve el Responsable de precios, así que el receptor responde `403` y el aviso se pierde hasta que se
+> amplíe). Tampoco define un destino Auditor.
+
+### Auditoría de la resolución (PRI-14)
+
+La aprobación y el rechazo de una propuesta dejan en `cambios`, además del `estatus`, quién **propuso**
+(`propuesto_por`, el usuario del proveedor) y quién **resolvió** (`aprobado_por` / `rechazado_por`): en la fila de
+`precios` el `creado_por` es quien aprueba y el proponente solo se recupera por la propuesta.
+
+## /v1/price-observations — Precios observados en tienda (app móvil, PRI-09, D-16)
+
+Un precio **levantado en campo** no es un precio oficial hasta que el Responsable de precios lo aprueba: nace
+`pendiente`, queda de lado (no cambia el precio actual) y, al aprobarlo, entra al historial como un precio normal
+(`origen = interno`, sin diferencia en el sistema). La **bitácora sí lo distingue**: cada evento lleva
+`origen: observado_en_campo`, quién lo capturó y quién lo resolvió. Tabla propia: `precios_observados`.
+
+| Método | Ruta | Roles |
+|---|---|---|
+| POST | `/v1/price-observations` | Analista comercial, Responsable de precios *(por confirmar: la Matriz no tiene "Investigador")* |
+| GET | `/v1/price-observations` | Responsable de precios, Administrador, Auditor; Analista (solo las suyas) |
+| PATCH | `/v1/price-observations/:id/approve` | Responsable de precios |
+| PATCH | `/v1/price-observations/:id/reject` | Responsable de precios |
+
+### POST /v1/price-observations
+
+```json
+{ "presentationId": "uuid", "storeId": "uuid", "price": 27.5, "observedAt": "2026-10-08T15:30:00Z", "lat": 25.6866, "lng": -100.3161 }
+```
+
+`price` > 0 (máx. 2 decimales). `observedAt` opcional (por omisión, ahora; no puede ser futuro, con 5 min de margen por
+relojes de teléfono). `lat` y `lng` opcionales y **van juntas** (`-90..90`, `-180..180`). Presentación o tienda
+inexistente → `400`; producto no `activo` → `409` (D-08). El autor sale del token (no se acepta `capturedBy`, `status` ni `origin`).
+Response `201` (`priceObservationResponse`): la observación `pendiente`.
+
+### GET /v1/price-observations
+
+Query: `status` (`pendiente` | `aprobado` | `rechazado`), `page`, `limit`. Con `status=pendiente` es una cola: la más antigua
+primero; si no, la más reciente. Response `200` (`priceObservationListResponse`).
+
+### PATCH /v1/price-observations/:id/approve · /reject
+
+`approve` body opcional `{ "effectiveDate": "YYYY-MM-DD" }` (por omisión, hoy): registra el precio (cierra el vigente de
+esa presentación y tienda), guarda `priceId`, invalida la caché del producto y evalúa la alerta de cambio de precio.
+Todo o nada. `reject` body `{ "rejectionReason": "…" }` (mín. 10 caracteres). Ya resuelta → `409`; inexistente → `404`;
+fecha no posterior al precio vigente → `409`. Auditoría: `aprobar` / `rechazar` sobre `precios_observados`, y el `insert`
+del precio creado con `origen: observado_en_campo`.

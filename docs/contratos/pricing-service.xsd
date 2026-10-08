@@ -144,6 +144,102 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- GET /v1/prices/series (PRI-11): sin paginar, por eso no lleva page/limit -->
+  <xs:element name="priceSeriesResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:price" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET/PUT /v1/prices/alert-settings (PRI-07, D-09) -->
+  <xs:element name="priceAlertSettingsResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="umbralPct" type="xs:decimal"/>
+        <xs:element name="ventanaDias" type="xs:integer"/>
+        <xs:element name="updatedBy" type="xs:string" minOccurs="0"/>
+        <xs:element name="updatedAt" type="xs:dateTime" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== /v1/price-observations (PRI-09, D-16) ===== -->
+
+  <xs:complexType name="observationPresentation">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="productoId" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="producto">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="sku" type="xs:string"/>
+            <xs:element name="nombre" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="observationStore">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="zonaId" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Nulos se omiten en XML (lat, lng, rejectionReason, reviewedBy, reviewedAt, priceId). -->
+  <xs:complexType name="priceObservation">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="price" type="xs:decimal"/>
+      <xs:element name="observedAt" type="xs:dateTime"/>
+      <xs:element name="lat" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="lng" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="status" type="pri:proposalStatus"/>
+      <xs:element name="origin" type="xs:string"/>
+      <xs:element name="rejectionReason" type="xs:string" minOccurs="0"/>
+      <xs:element name="capturedBy" type="xs:string"/>
+      <xs:element name="reviewedBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="reviewedAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="priceId" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="presentation" type="pri:observationPresentation"/>
+      <xs:element name="store" type="pri:observationStore"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="priceObservationResponse" type="pri:priceObservation"/>
+
+  <xs:element name="priceObservationListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pri:priceObservation" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
   <!-- ===== /v1/price-proposals (RN-14) ===== -->
 
   <xs:simpleType name="proposalStatus">
