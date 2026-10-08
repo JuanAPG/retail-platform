@@ -11,8 +11,9 @@ import { SesionUsuario } from '../common/auth/session.guard';
 import { CacheService } from '../common/cache/cache.service';
 import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
+import { presentacionTieneHistorial, ResultadoBaja } from '../common/helpers/historial.helper';
 import { paginar } from '../common/helpers/pagination.helper';
-import { ROL } from '../common/roles';
+import { ROL, VEN_NO_ACTIVOS } from '../common/roles';
 import { CategoriaProductoEntity } from '../entities/categoria-producto.entity';
 import { ProductoEntity } from '../entities/producto.entity';
 import { ProductoPresentacionEntity } from '../entities/producto-presentacion.entity';
@@ -89,8 +90,8 @@ export class ProductsService {
   // -------------------------------------------------------------------
 
   /**
-   * Un perfil interno ve el catálogo completo. Un Proveedor ve
-   * ÚNICAMENTE los productos de su propia empresa.
+   * Un perfil interno ve los productos ACTIVOS (D-08). Un Proveedor ve
+   * ÚNICAMENTE los productos de su propia empresa, en cualquier estatus.
    *
    * El recorte se hace aquí, en la consulta, y no en el front: filtrar
    * en el navegador es cosmético — la respuesta HTTP seguiría trayendo
@@ -103,6 +104,10 @@ export class ProductsService {
     if (solicitante.rol === ROL.PROVEEDOR) {
       const proveedor = await this.proveedorDe(solicitante);
       qb.where('p.proveedorId = :proveedorId', { proveedorId: proveedor.id });
+    } else {
+      // D-08: para el resto del equipo un producto pendiente o rechazado no
+      // existe hasta aprobarse. Los pendientes solo viven en /products/pending.
+      qb.where('p.estatus = :activo', { activo: ESTATUS_PRODUCTO.ACTIVO });
     }
     return paginar(qb, filtros);
   }
@@ -153,6 +158,35 @@ export class ProductsService {
 
   reject(id: string, dto: RechazarProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
     return this.resolver(id, ESTATUS_PRODUCTO.RECHAZADO, dto.motivoRechazo, solicitante);
+  }
+
+  /**
+   * Lectura para la API: un producto no activo solo lo ve quien puede
+   * revisarlo (Gerente, Administrador, Auditor); para el resto es un 404
+   * (D-08), no un 403, para no confirmar que existe. Las llaves salen en
+   * el orden del XSD (`xs:sequence`), con `presentaciones` al final.
+   */
+  async findOneVisible(id: string, solicitante: SesionUsuario) {
+    const producto = await this.findOne(id);
+    const veNoActivos = (VEN_NO_ACTIVOS as readonly string[]).includes(solicitante.rol);
+    if (producto.estatus !== ESTATUS_PRODUCTO.ACTIVO && !veNoActivos) {
+      throw new NotFoundException('El producto no existe.');
+    }
+    return {
+      id: producto.id,
+      sku: producto.sku,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion,
+      categoriaId: producto.categoriaId,
+      esCanastaBasica: producto.esCanastaBasica,
+      estatus: producto.estatus,
+      proveedorId: producto.proveedorId,
+      createdAt: producto.createdAt,
+      updatedAt: producto.updatedAt,
+      categoria: producto.categoria,
+      proveedor: producto.proveedor,
+      presentaciones: producto.presentaciones,
+    };
   }
 
   async findOne(id: string): Promise<ProductoEntity> {
@@ -208,22 +242,30 @@ export class ProductsService {
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  /**
+   * D-07: si alguna presentación tiene historial (precios, inventario,
+   * ventas, propuestas) el producto NO se borra: pasa a 'inactivo', con
+   * sus presentaciones desactivadas. Solo se borra lo que no tiene nada.
+   */
+  async remove(id: string): Promise<ResultadoBaja<ProductoEntity>> {
     const producto = await this.findOne(id);
-    try {
-      await this.productosRepo.remove(producto);
-    } catch (err) {
-      // 23503 = foreign_key_violation. Borrar un producto borra en
-      // cascada sus presentaciones, pero `transacciones_detalle` NO
-      // tiene ON DELETE CASCADE a propósito: si alguna presentación ya
-      // tiene ventas reales registradas, el borrado se rechaza aquí.
-      if (codigoSql(err) === '23503') {
-        throw new ConflictException(
-          'No se puede eliminar: alguna de sus presentaciones tiene ventas u otros registros asociados.',
-        );
+    return this.dataSource.transaction(async (manager) => {
+      let conHistorial = false;
+      for (const presentacion of producto.presentaciones) {
+        if (await presentacionTieneHistorial(manager, presentacion.id)) {
+          conHistorial = true;
+          break;
+        }
       }
-      throw err;
-    }
+      if (conHistorial) {
+        await manager.update(ProductoEntity, { id }, { estatus: ESTATUS_PRODUCTO.INACTIVO });
+        await manager.update(ProductoPresentacionEntity, { productoId: id }, { activo: false });
+        const entidad = await manager.findOneOrFail(ProductoEntity, { where: { id }, relations: { presentaciones: true } });
+        return { eliminado: false as const, entidad };
+      }
+      await manager.remove(producto);
+      return { eliminado: true as const };
+    });
   }
 
   // -------------------------------------------------------------------
@@ -231,10 +273,11 @@ export class ProductsService {
   // nunca del producto directamente.
   // -------------------------------------------------------------------
 
-  async findPresentations(productId: string): Promise<ProductoPresentacionEntity[]> {
-    await this.findOne(productId);
+  async findPresentations(productId: string, solicitante: SesionUsuario): Promise<ProductoPresentacionEntity[]> {
+    await this.findOneVisible(productId, solicitante);
     return this.presentacionesRepo.find({
-      where: { productoId: productId },
+      // Las desactivadas (D-07) quedan fuera de la lista.
+      where: { productoId: productId, activo: true },
       order: { nombre: 'ASC' },
     });
   }
@@ -269,21 +312,21 @@ export class ProductsService {
     }
   }
 
-  async removePresentation(id: string): Promise<void> {
+  /** D-07: con historial se desactiva (`activo = false`); sin historial se borra. */
+  async removePresentation(id: string): Promise<ResultadoBaja<ProductoPresentacionEntity>> {
     const presentacion = await this.presentacionesRepo.findOne({ where: { id } });
     if (!presentacion) {
       throw new NotFoundException('La presentación no existe.');
     }
-    try {
-      await this.presentacionesRepo.remove(presentacion);
-    } catch (err) {
-      if (codigoSql(err) === '23503') {
-        throw new ConflictException(
-          'No se puede eliminar: esta presentación tiene ventas u otros registros asociados. Desactívala en vez de borrarla.',
-        );
+    return this.dataSource.transaction(async (manager) => {
+      if (await presentacionTieneHistorial(manager, id)) {
+        await manager.update(ProductoPresentacionEntity, { id }, { activo: false });
+        const entidad = await manager.findOneOrFail(ProductoPresentacionEntity, { where: { id } });
+        return { eliminado: false as const, entidad };
       }
-      throw err;
-    }
+      await manager.remove(presentacion);
+      return { eliminado: true as const };
+    });
   }
 
   // -------------------------------------------------------------------
@@ -346,7 +389,7 @@ export class ProductsService {
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.categoria', 'c')
       .leftJoinAndSelect('p.proveedor', 'prov')
-      .leftJoinAndSelect('p.presentaciones', 'pres')
+      .leftJoinAndSelect('p.presentaciones', 'pres', 'pres.activo = true')
       .leftJoinAndSelect('pres.unidadMedida', 'u');
   }
 

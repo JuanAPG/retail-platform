@@ -37,6 +37,23 @@ async function http(metodo: string, ruta: string, token?: string, cuerpo?: objec
   return { estado: respuesta.status, cuerpo: texto ? JSON.parse(texto) : null };
 }
 
+/** Conexión directa a Postgres para sembrar/limpiar historial (precios) que este servicio no escribe. */
+async function conDb<T>(fn: (db: Client) => Promise<T>): Promise<T> {
+  const db = new Client({
+    host: process.env.DB_HOST ?? 'localhost',
+    port: parseInt(process.env.DB_PORT ?? '5432', 10),
+    user: process.env.DB_USER ?? 'retail_user',
+    password: process.env.DB_PASSWORD ?? 'retail_pass_2026',
+    database: process.env.DB_NAME ?? 'retaildb',
+  });
+  await db.connect();
+  try {
+    return await fn(db);
+  } finally {
+    await db.end();
+  }
+}
+
 /** Id de un usuario real con el rol dado (para satisfacer la FK de revisiones). */
 async function usuarioReal(rol: string): Promise<string> {
   const db = new Client({
@@ -64,6 +81,7 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
   let gerente: string;
   let admin: string;
   let auditor: string;
+  let analista: string;
   let proveedor: string;
   let categoriaId: number;
 
@@ -80,15 +98,14 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
     gerente = await sesion(await usuarioReal('Gerente de categoría'), 'Gerente de categoría');
     admin = await sesion('it-a-admin', 'Administrador');
     auditor = await sesion('it-a-auditor', 'Auditor');
+    analista = await sesion('it-a-analista', 'Analista comercial');
     proveedor = await sesion('it-a-prov', 'Proveedor', 'ventas@lacteosdelnorte.mx');
     categoriaId = (await http('GET', '/v1/product-categories', auditor)).cuerpo[0].id;
   });
 
   afterAll(async () => {
-    const lista = await http('GET', '/v1/products?limit=100', admin);
-    for (const p of lista.cuerpo?.data ?? []) {
-      if (SKUS.includes(p.sku)) await http('DELETE', `/v1/products/${p.id}`, admin);
-    }
+    // Pendientes y rechazados ya no salen en /v1/products (D-08): se limpian directo en la base.
+    await conDb((db) => db.query('DELETE FROM productos WHERE sku = ANY($1)', [SKUS]));
     await redis.quit();
   });
 
@@ -121,8 +138,11 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
     const suyos = await http('GET', '/v1/products?limit=100', proveedor);
     expect(suyos.cuerpo.data.map((p: { sku: string }) => p.sku)).toContain(SKUS[0]);
 
+    // Bandeja: la resuelve el Gerente; Administrador y Auditor la leen; el resto no la ve.
     expect((await http('GET', '/v1/products/pending', proveedor)).estado).toBe(403);
-    expect((await http('GET', '/v1/products/pending', auditor)).estado).toBe(403);
+    expect((await http('GET', '/v1/products/pending', analista)).estado).toBe(403);
+    expect((await http('GET', '/v1/products/pending', auditor)).estado).toBe(200);
+    expect((await http('GET', '/v1/products/pending', admin)).estado).toBe(200);
 
     const bandeja = await http('GET', '/v1/products/pending?limit=100', gerente);
     expect(bandeja.estado).toBe(200);
@@ -134,6 +154,21 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
     expect(fechas).toEqual([...fechas].sort((a, b) => a - b));
   });
 
+  it('D-08: un producto pendiente NO existe para el resto: ni en el catálogo ni en el detalle', async () => {
+    const id = (await http('GET', '/v1/products/pending?limit=100', gerente)).cuerpo.data.find(
+      (p: { sku: string }) => p.sku === SKUS[0],
+    ).id;
+
+    const catalogo = await http('GET', '/v1/products?limit=100', analista);
+    expect(catalogo.cuerpo.data.map((p: { sku: string }) => p.sku)).not.toContain(SKUS[0]);
+    expect((await http('GET', `/v1/products/${id}`, analista)).estado).toBe(404);
+    expect((await http('GET', `/v1/products/${id}/presentations`, analista)).estado).toBe(404);
+
+    // Quien revisa sí lo ve.
+    expect((await http('GET', `/v1/products/${id}`, gerente)).estado).toBe(200);
+    expect((await http('GET', `/v1/products/${id}`, auditor)).estado).toBe(200);
+  });
+
   it('aprobar: solo quien aprueba, pasa a activo y no se puede resolver dos veces', async () => {
     const id = (await http('GET', '/v1/products/pending?limit=100', gerente)).cuerpo.data.find(
       (p: { sku: string }) => p.sku === SKUS[0],
@@ -141,6 +176,9 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
 
     expect((await http('PATCH', `/v1/products/${id}/approve`, proveedor)).estado).toBe(403);
     expect((await http('PATCH', `/v1/products/${id}/approve`, auditor)).estado).toBe(403);
+    // CAT-05: el Administrador no aprueba ni rechaza.
+    expect((await http('PATCH', `/v1/products/${id}/approve`, admin)).estado).toBe(403);
+    expect((await http('PATCH', `/v1/products/${id}/reject`, admin, { motivoRechazo: 'No me corresponde decidir.' })).estado).toBe(403);
 
     const aprobada = await http('PATCH', `/v1/products/${id}/approve`, gerente);
     expect(aprobada.estado).toBe(200);
@@ -154,6 +192,10 @@ describe('propuesta y revisión de productos (integración, requiere stack)', ()
 
     const bandeja = await http('GET', '/v1/products/pending?limit=100', gerente);
     expect(bandeja.cuerpo.data.map((p: { sku: string }) => p.sku)).not.toContain(SKUS[0]);
+
+    // Ya aprobado, aparece en el catálogo general.
+    const catalogo = await http('GET', '/v1/products?limit=100', analista);
+    expect(catalogo.cuerpo.data.map((p: { sku: string }) => p.sku)).toContain(SKUS[0]);
   });
 
   it('rechazar: exige motivo de 10+ caracteres y deja el producto rechazado', async () => {

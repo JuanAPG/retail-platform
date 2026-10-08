@@ -53,7 +53,10 @@ function crearServicio() {
     create: jest.fn((_entidad, valores) => ({ ...valores })),
     save: jest.fn(async (x) => ({ id: 'nuevo-id', ...x })),
     update: jest.fn(async () => ({ affected: 1 })),
-    findOneOrFail: jest.fn(async () => ({ id: 'nuevo-id' })),
+    remove: jest.fn(),
+    // Por omisión la presentación NO tiene historial (ninguna tabla dependiente devuelve filas).
+    query: jest.fn(async (_sql: string, _params?: unknown[]) => [] as unknown[]),
+    findOneOrFail: jest.fn(async (): Promise<Record<string, unknown>> => ({ id: 'nuevo-id' })),
   };
   const dataSource = {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
@@ -147,12 +150,27 @@ describe('ProductsService — productos y presentaciones', () => {
     expect(productos.update).not.toHaveBeenCalled();
   });
 
-  it('remove convierte la violación de llave foránea en 409', async () => {
-    const { productos, servicio } = crearServicio();
-    productos.findOne.mockResolvedValue({ id: 'p-1' });
-    productos.remove.mockRejectedValue(errorSql('23503'));
+  it('remove borra el producto cuando ninguna presentación tiene historial', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    const producto = { id: 'p-1', presentaciones: [{ id: 'pres-1' }] };
+    productos.findOne.mockResolvedValue(producto);
 
-    await expect(servicio.remove('p-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(await servicio.remove('p-1')).toEqual({ eliminado: true });
+    expect(manager.remove).toHaveBeenCalledWith(producto);
+  });
+
+  it('remove NO borra un producto con historial (D-07): queda inactivo, con presentaciones desactivadas', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', presentaciones: [{ id: 'pres-1' }] });
+    manager.query.mockResolvedValueOnce([{ '?column?': 1 }]); // hay precios
+    manager.findOneOrFail.mockResolvedValueOnce({ id: 'p-1', estatus: 'inactivo' });
+
+    const resultado = await servicio.remove('p-1');
+
+    expect(resultado).toEqual({ eliminado: false, entidad: { id: 'p-1', estatus: 'inactivo' } });
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1' }, { estatus: 'inactivo' });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { productoId: 'p-1' }, { activo: false });
+    expect(manager.remove).not.toHaveBeenCalled();
   });
 
   it('addPresentation convierte la segunda predeterminada (23505) en 409', async () => {
@@ -166,14 +184,29 @@ describe('ProductsService — productos y presentaciones', () => {
     ).rejects.toThrow(/predeterminada/);
   });
 
-  it('removePresentation lanza 404 si no existe y 409 si tiene ventas', async () => {
+  it('removePresentation lanza 404 si no existe', async () => {
     const { presentaciones, servicio } = crearServicio();
     presentaciones.findOne.mockResolvedValueOnce(null);
     await expect(servicio.removePresentation('x')).rejects.toBeInstanceOf(NotFoundException);
+  });
 
-    presentaciones.findOne.mockResolvedValueOnce({ id: 'pres-1' });
-    presentaciones.remove.mockRejectedValue(errorSql('23503'));
-    await expect(servicio.removePresentation('pres-1')).rejects.toBeInstanceOf(ConflictException);
+  it('removePresentation borra la que no tiene historial y desactiva la que sí (D-07)', async () => {
+    const { presentaciones, manager, servicio } = crearServicio();
+    const pres = { id: 'pres-1' };
+    presentaciones.findOne.mockResolvedValue(pres);
+
+    expect(await servicio.removePresentation('pres-1')).toEqual({ eliminado: true });
+    expect(manager.remove).toHaveBeenCalledWith(pres);
+
+    manager.remove.mockClear();
+    manager.query.mockResolvedValueOnce([{ '?column?': 1 }]);
+    manager.findOneOrFail.mockResolvedValueOnce({ id: 'pres-1', activo: false });
+    expect(await servicio.removePresentation('pres-1')).toEqual({
+      eliminado: false,
+      entidad: { id: 'pres-1', activo: false },
+    });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { activo: false });
+    expect(manager.remove).not.toHaveBeenCalled();
   });
 });
 
@@ -181,14 +214,41 @@ describe('ProductsService — lectura según el perfil', () => {
   const interno: SesionUsuario = { id: 'u1', email: 'admin@retail.mx', rol: 'Administrador', rolId: 1 };
   const proveedor: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
 
-  it('un perfil interno ve el catálogo completo (sin filtro por proveedor)', async () => {
+  it('un perfil interno solo ve productos ACTIVOS (D-08), sin filtro por proveedor', async () => {
     const { productos, servicio } = crearServicio();
     const qb = crearQb();
     productos.createQueryBuilder.mockReturnValue(qb);
 
     await servicio.findAll(interno, {});
 
-    expect(qb.where).not.toHaveBeenCalled();
+    expect(qb.where).toHaveBeenCalledTimes(1);
+    expect(qb.where).toHaveBeenCalledWith('p.estatus = :activo', { activo: 'activo' });
+  });
+
+  it('el detalle de un producto pendiente es 404 para un Analista y visible para el Gerente', async () => {
+    const { productos, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'pendiente_aprobacion', presentaciones: [] });
+    const analista: SesionUsuario = { id: 'u3', email: 'a@retail.mx', rol: 'Analista comercial', rolId: 2 };
+    const gerente: SesionUsuario = { id: 'u4', email: 'g@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+
+    await expect(servicio.findOneVisible('p-1', analista)).rejects.toBeInstanceOf(NotFoundException);
+    expect(await servicio.findOneVisible('p-1', gerente)).toMatchObject({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+  });
+
+  it('el detalle sale con las llaves en el orden del XSD (presentaciones al final)', async () => {
+    const { productos, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({
+      id: 'p-1',
+      presentaciones: [],
+      categoria: { id: 1 },
+      estatus: 'activo',
+    });
+
+    const llaves = Object.keys(await servicio.findOneVisible('p-1', interno));
+
+    expect(llaves.indexOf('categoria')).toBeLessThan(llaves.indexOf('presentaciones'));
+    expect(llaves.indexOf('updatedAt')).toBeLessThan(llaves.indexOf('categoria'));
+    expect(llaves[llaves.length - 1]).toBe('presentaciones');
   });
 
   it('un Proveedor solo recibe los productos de su empresa, filtrado en la consulta', async () => {
