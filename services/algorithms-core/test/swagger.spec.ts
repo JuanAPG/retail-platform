@@ -20,9 +20,9 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 3 de association; elasticity y substitution suman las suyas al migrarse.
+    // 3 de association + 3 de elasticity; substitution suma la suya al migrarse.
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(3);
+    expect(operaciones).toBe(6);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
@@ -37,7 +37,9 @@ describe('Swagger (integración, requiere stack)', () => {
           const contenido = respuesta.content ?? {};
           if (contenido['application/json']?.example === undefined) fallas.push(`${etiqueta} ${estado}: sin ejemplo JSON`);
           const xml = contenido['application/xml']?.example;
-          if (typeof xml !== 'string' || !xml.includes('<response>')) fallas.push(`${etiqueta} ${estado}: sin ejemplo XML`);
+          // Debe ser el XML real: prólogo y la raíz del contrato (`@XmlRoot`), nunca `<response>` genérico.
+          if (typeof xml !== 'string' || !xml.startsWith('<?xml')) fallas.push(`${etiqueta} ${estado}: sin ejemplo XML`);
+          else if (xml.includes('<response')) fallas.push(`${etiqueta} ${estado}: ejemplo XML sin la raíz del contrato`);
         }
       }
     }
@@ -57,7 +59,7 @@ describe('Swagger (integración, requiere stack)', () => {
     const ejemplo = paths['/v1/association/runs'].get.responses?.['200']?.content?.['application/xml']?.example as string;
 
     // Misma estructura que `GET /v1/association/runs` con Accept: application/xml.
-    for (const etiqueta of ['<response>', '<data>', '<item>', '<total>', '<page>', '<limit>']) {
+    for (const etiqueta of ['<runListResponse', '<data>', '<item>', '<total>', '<page>', '<limit>']) {
       expect(ejemplo).toContain(etiqueta);
     }
     expect(ejemplo.match(/<data>/g)).toHaveLength(1);
