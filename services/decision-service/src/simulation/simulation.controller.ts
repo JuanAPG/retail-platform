@@ -4,13 +4,17 @@ import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { SimulationService } from './simulation.service';
 import { PriceSimulationDto } from './dto/price-simulation.dto';
 import { PresentationSimulationDto } from './dto/presentation-simulation.dto';
+import { PresentationComparisonResult } from './dto/presentation-comparison-result.dto';
 import { SimulationResult } from './dto/simulation-result.dto';
+import { CompareScenariosQueryDto } from './dto/compare-scenarios-query.dto';
 import { ScenarioComparison } from './dto/scenario-comparison.dto';
-import { Scenario } from '../entities/scenario.entity';
+import { ScenarioPage } from './dto/scenario-summary.dto';
 
 /**
  * M13 — Simulación de escenarios. Cada simulación (precio o presentación)
@@ -36,25 +40,30 @@ export class SimulationController {
 
   @Post('presentation')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
-  @ApiOperation({ summary: 'Compara dos presentaciones (desembolso, precio unitario, demanda) y guarda el escenario.' })
-  @ApiCreatedResponse({ type: SimulationResult })
+  @ApiOperation({
+    summary:
+      'Compara las presentaciones de un mismo producto (desembolso, precio por unidad base, demanda, accesibilidad) y guarda el escenario.',
+  })
+  @ApiCreatedResponse({ type: PresentationComparisonResult })
   simulatePresentationChange(@Body() dto: PresentationSimulationDto, @CurrentUser() user: SesionUsuario) {
     return this.simulationService.simulatePresentationChange(dto, user);
   }
 
   @Get('scenarios')
+  @XmlRoot('simulacionEscenariosResponse')
   @Roles(...PERFILES_INTERNOS)
-  @ApiOperation({ summary: 'Lista los escenarios guardados.' })
-  @ApiOkResponse({ type: [Scenario] })
-  findAllScenarios() {
-    return this.simulationService.findAllScenarios();
+  @ApiOperation({ summary: 'Lista paginada de los escenarios guardados, con su tipo e insumos.' })
+  @ApiOkResponse({ type: ScenarioPage })
+  findAllScenarios(@Query() filtros: PaginationDto) {
+    return this.simulationService.findAllScenarios(filtros);
   }
 
   @Get('compare')
+  @XmlRoot('simulacionCompareResponse')
   @Roles(...PERFILES_INTERNOS)
-  @ApiOperation({ summary: 'Compara varios escenarios guardados entre sí.' })
+  @ApiOperation({ summary: 'Compara varios escenarios guardados entre sí (ids=a,b o ids=a&ids=b).' })
   @ApiOkResponse({ type: ScenarioComparison })
-  compareScenarios(@Query('ids') ids: string) {
-    return this.simulationService.compareScenarios(ids.split(','));
+  compareScenarios(@Query() query: CompareScenariosQueryDto) {
+    return this.simulationService.compareScenarios(query.ids);
   }
 }
