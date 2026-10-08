@@ -53,6 +53,12 @@ export class NotificationsService {
       rol?: string;
       rolId?: number;
       ip?: string;
+      /**
+       * `Authorization` del usuario que originó la acción, para reenviar a
+       * `POST /v1/auditoria`: ese endpoint exige sesión y ya no acepta
+       * `usuarioId`/`rolId` en el cuerpo (el actor sale del token).
+       */
+      token?: string;
     } = {},
   ): Promise<{ data: Notification; creada: boolean }> {
     if (!esEventoSoportado(dto.eventType)) {
@@ -103,20 +109,21 @@ export class NotificationsService {
       priority: dto.priority ?? base.priority,
     });
 
-    await this.auditoria.reportar({
-      tabla: 'notificaciones',
-      registroId: guardada.id,
-      accion: 'insert',
-      descripcion: `Notificación ${dto.eventType} para ${guardada.recipientUserId ?? guardada.recipientRole}.`,
-      usuarioId: emisor.usuarioId ?? null,
-      rolId: emisor.rolId ?? null,
-      ip: emisor.ip,
-      cambios: [
-        { campo: 'evento', posterior: dto.eventType },
-        { campo: 'sourceService', posterior: dto.sourceService },
-        { campo: 'rolOrigen', posterior: emisor.rol ?? '' },
-      ],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'notificaciones',
+        registroId: guardada.id,
+        accion: 'insert',
+        descripcion: `Notificación ${dto.eventType} para ${guardada.recipientUserId ?? guardada.recipientRole}.`,
+        ip: emisor.ip,
+        cambios: [
+          { campo: 'evento', posterior: dto.eventType },
+          { campo: 'sourceService', posterior: dto.sourceService },
+          { campo: 'rolOrigen', posterior: emisor.rol ?? '' },
+        ],
+      },
+      emisor.token,
+    );
 
     return { data: this.aPublica(guardada), creada: true };
   }

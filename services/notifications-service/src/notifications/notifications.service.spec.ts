@@ -271,6 +271,7 @@ describe('create: sourceService', () => {
           { campo: 'rolOrigen', posterior: ROL.ADMINISTRADOR },
         ]),
       }),
+      undefined, // emisorDe() no manda token: nada que reenviar.
     );
   });
 });
@@ -489,8 +490,8 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
   it('cada creación reporta a auditoría sin bloquear, reenviando el token del emisor', async () => {
     const { servicio, audit } = servicioFresco();
     await servicio.create(
-      { ...BASE, relatedEntityId: 'p7', recipientUserId: 'u1' },
-      { token: 'Bearer t-1' },
+      { ...ESCENARIO, relatedEntityId: 'p7', recipientUserId: 'u1' },
+      { ...emisorDe('escenario.generado'), token: 'Bearer t-1' },
     );
     expect(audit.reportar).toHaveBeenCalledWith(
       expect.objectContaining({ tabla: 'notificaciones', accion: 'insert' }),
