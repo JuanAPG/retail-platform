@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de documents-service (M16). Espacio de nombres fijo `documents/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`.
+     El PDF (`/export`) no es XML: sale como application/pdf. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="documents/v1"
+           xmlns:doc="documents/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="reportState">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="generado"/>
+      <xs:enumeration value="exportado"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="reportParameters">
+    <xs:sequence>
+      <xs:element name="dateFrom" type="xs:string"/>
+      <xs:element name="dateTo" type="xs:string"/>
+      <!-- Nulos se omiten en XML. -->
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Un indicador. `valor` puede ser un numero, texto, lista u objeto segun el
+       indicador (xs:anyType). Si el servicio origen no respondio: disponible=false,
+       sin `valor` y con `motivo`; NUNCA un 0. -->
+  <xs:complexType name="indicator">
+    <xs:sequence>
+      <xs:element name="clave" type="xs:string"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="servicio" type="xs:string"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="valor" type="xs:anyType" minOccurs="0"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="report">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="tipo" type="xs:string"/>
+      <xs:element name="parametros" type="doc:reportParameters"/>
+      <xs:element name="formato" type="xs:string"/>
+      <xs:element name="usuarioId" type="xs:string"/>
+      <xs:element name="estado" type="doc:reportState"/>
+      <xs:element name="creadoEn" type="xs:dateTime"/>
+      <xs:element name="secciones">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="doc:indicator" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/reports/executive, GET /v1/reports/:id, PATCH /v1/reports/:id -->
+  <xs:element name="reportResponse" type="doc:report"/>
+
+  <!-- GET /v1/reports -->
+  <xs:element name="reportListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="doc:report" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/reports/stats/by-user-month -->
+  <xs:element name="reportStatsResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="usuarioId" type="xs:string"/>
+                    <xs:element name="mes" type="xs:string"/>
+                    <xs:element name="reportes" type="xs:integer"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
