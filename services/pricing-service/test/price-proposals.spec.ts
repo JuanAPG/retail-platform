@@ -375,7 +375,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
   it('XML: la lista de propuestas sale con <item>', async () => {
     const r = await http('GET', '/v1/price-proposals?limit=2', gerente, undefined, 'application/xml');
     expect(r.estado).toBe(200);
-    expect(r.texto).toContain('<response>');
+    expect(r.texto).toContain('<priceProposalListResponse');
     expect(r.texto).toContain('<proposedPrice>');
     expect(r.texto.match(/<data>/g)).toHaveLength(1);
   });

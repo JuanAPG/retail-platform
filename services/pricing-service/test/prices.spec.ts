@@ -111,7 +111,9 @@ describe('/v1/prices (integración, requiere stack)', () => {
     // la elección sea siempre la misma (sin él, cambia con el orden físico de la tabla).
     const libre = await db.query(`
       SELECT pres.id AS presentacion_id, pres.producto_id, t.id AS tienda_id, t.zona_id
-      FROM producto_presentaciones pres CROSS JOIN tiendas t
+      FROM producto_presentaciones pres
+      JOIN productos prod ON prod.id = pres.producto_id AND prod.estatus = 'activo'
+      CROSS JOIN tiendas t
       WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
       ORDER BY pres.id, t.id
       LIMIT 1`);
@@ -257,7 +259,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
   it('historial en XML: cada precio sale como <item>', async () => {
     const r = await http('GET', `/v1/prices/history?productId=${productId}&limit=2`, precios, undefined, 'application/xml');
     expect(r.estado).toBe(200);
-    expect(r.texto).toContain('<response>');
+    expect(r.texto).toContain('<priceListResponse');
     expect(r.texto).toContain('<effectiveDate>');
     expect(r.texto.match(/<data>/g)).toHaveLength(1);
   });
@@ -267,13 +269,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(r.estado).toBe(200);
     expect(r.cuerpo.productId).toBe(productId);
 
-    const zona = r.cuerpo.zones.find((z: { zoneId: string }) => z.zoneId === zoneId);
+    const zona = r.cuerpo.zones.find(
+      (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
+    );
     expect(zona).toBeDefined();
     expect(typeof zona.averagePrice).toBe('number');
     expect(zona.minPrice).toBeLessThanOrEqual(zona.maxPrice);
     expect(zona.storeCount).toBeGreaterThanOrEqual(1);
 
-    // La zona agrega TODAS sus tiendas con precio vigente de este producto (las del
+    // La fila (zona, presentación) agrega TODAS sus tiendas con precio vigente de esa presentación (las del
     // seed también): se compara contra el cálculo directo en SQL, que solo cuenta
     // `vigente` (nunca el histórico cerrado de 40 y 42.5).
     const esperado = await db.query(
@@ -282,8 +286,8 @@ describe('/v1/prices (integración, requiere stack)', () => {
        FROM precios p
        JOIN producto_presentaciones pres ON pres.id = p.presentacion_id
        JOIN tiendas t ON t.id = p.tienda_id
-       WHERE pres.producto_id = $1 AND t.zona_id = $2 AND p.vigente`,
-      [productId, zoneId],
+       WHERE pres.producto_id = $1 AND t.zona_id = $2 AND pres.id = $3 AND p.vigente`,
+      [productId, zoneId, presentationId],
     );
     const { min, max, avg, tiendas } = esperado.rows[0];
     expect(zona).toMatchObject({ minPrice: min, maxPrice: max, storeCount: tiendas });
@@ -349,7 +353,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
       expect(despues.cuerpo.data[0].id).not.toBe(antes.cuerpo.data[0].id);
 
       const zona = (await http('GET', rutaComparacion, planeador)).cuerpo.zones.find(
-        (z: { zoneId: string }) => z.zoneId === zoneId,
+        (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
       );
       expect(zona.maxPrice).toBe(999);
     });
@@ -359,7 +363,11 @@ describe('/v1/prices (integración, requiere stack)', () => {
 
       const r = await http('GET', `/v1/prices/compare-zones?productId=${productId}`, planeador);
       expect(r.estado).toBe(200);
-      expect(r.cuerpo.zones.find((z: { zoneId: string }) => z.zoneId === zoneId).maxPrice).toBe(999);
+      expect(
+        r.cuerpo.zones.find(
+          (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
+        ).maxPrice,
+      ).toBe(999);
     });
   });
 });
