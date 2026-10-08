@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -44,8 +44,12 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(SessionGuard)
   @ApiOperation({ summary: 'Cierra la sesión: borra Redis y revoca el refresh.' })
-  logout(@CurrentUser() usuario: SesionUsuario, @Ip() ip: string) {
-    return this.authService.logout(usuario, ip);
+  logout(
+    @CurrentUser() usuario: SesionUsuario,
+    @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
+  ) {
+    return this.authService.logout(usuario, ip, token);
   }
 
   @Post('validate')

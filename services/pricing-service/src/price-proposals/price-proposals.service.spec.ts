@@ -131,7 +131,7 @@ describe('PriceProposalsService.create', () => {
     escenarioValido(ctx);
     ctx.dataSource.query.mockResolvedValueOnce([filaPropuesta('prop-nueva')]);
 
-    const resultado = await ctx.servicio.create(dto, proveedorUsuario, '172.18.0.4');
+    const resultado = await ctx.servicio.create(dto, proveedorUsuario, '172.18.0.4', 'Bearer t-prov');
 
     expect(ctx.repo.create).toHaveBeenCalledWith({
       presentationId: 'pres-1',
@@ -145,9 +145,9 @@ describe('PriceProposalsService.create', () => {
         tabla: 'precios_propuestos_proveedor',
         registroId: 'prop-nueva',
         accion: 'insert',
-        usuarioId: 'u-prov',
         ip: '172.18.0.4',
       }),
+      'Bearer t-prov',
     );
     expect(resultado).toMatchObject({ id: 'prop-nueva', status: 'pendiente', supplier: { razonSocial: 'Lácteos del Norte' } });
   });
@@ -358,6 +358,7 @@ describe('PriceProposalsService.reject', () => {
     );
     expect(audit.reportar).toHaveBeenCalledWith(
       expect.objectContaining({ tabla: 'precios_propuestos_proveedor', accion: 'update', registroId: 'prop-1' }),
+      undefined,
     );
     expect(resultado.status).toBe('rechazado');
   });

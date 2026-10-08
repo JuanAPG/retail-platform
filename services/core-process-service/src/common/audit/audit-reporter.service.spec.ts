@@ -14,10 +14,9 @@ const EVENTO = {
   registroId: 'imp1',
   accion: 'importacion' as const,
   descripcion: 'Importación CSV confirmada.',
-  usuarioId: '55555555-5555-4555-8555-555555555555',
-  rolId: 2,
   ip: '1.2.3.4',
 };
+const TOKEN = 'token-de-prueba';
 
 function levantar(manejador: Parameters<typeof createServer>[1]): Promise<Server> {
   const servidor = createServer(manejador);
@@ -44,11 +43,13 @@ describe('AuditReporter (paso 8, best-effort)', () => {
     else process.env.AUDIT_SERVICE_URL = original;
   });
 
-  it('manda el evento completo a POST /v1/auditoria', async () => {
+  it('manda el evento completo a POST /v1/auditoria, con servicio y el Authorization del usuario', async () => {
     let recibido: Record<string, unknown> | null = null;
     let ruta = '';
+    let authRecibido: string | undefined;
     const servidor = await levantar((req, res) => {
       ruta = req.url ?? '';
+      authRecibido = req.headers.authorization;
       let cuerpo = '';
       req.on('data', (c) => (cuerpo += c));
       req.on('end', () => {
@@ -58,18 +59,48 @@ describe('AuditReporter (paso 8, best-effort)', () => {
     });
     process.env.AUDIT_SERVICE_URL = urlDe(servidor);
 
-    await new AuditReporter().reportar(EVENTO);
+    await new AuditReporter().reportar(EVENTO, `Bearer ${TOKEN}`);
     await cerrar(servidor);
 
     expect(ruta).toBe('/v1/auditoria');
     expect(recibido).toMatchObject({
       tabla: 'importaciones',
       accion: 'importacion',
-      usuarioId: EVENTO.usuarioId,
-      rolId: 2,
+      servicio: 'core-process-service',
       ip: '1.2.3.4',
     });
+    expect(recibido).not.toHaveProperty('usuarioId');
+    expect(recibido).not.toHaveProperty('rolId');
+    expect(authRecibido).toBe(`Bearer ${TOKEN}`);
     expect(avisos).toHaveLength(0);
+  });
+
+  it('agrega "Bearer " si el token llega sin prefijo', async () => {
+    let authRecibido: string | undefined;
+    const servidor = await levantar((req, res) => {
+      authRecibido = req.headers.authorization;
+      res.writeHead(201).end('{}');
+    });
+    process.env.AUDIT_SERVICE_URL = urlDe(servidor);
+
+    await new AuditReporter().reportar(EVENTO, TOKEN);
+    await cerrar(servidor);
+
+    expect(authRecibido).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it('sin token no manda Authorization (no rompe la operación que reporta)', async () => {
+    let authRecibido: string | undefined;
+    const servidor = await levantar((req, res) => {
+      authRecibido = req.headers.authorization;
+      res.writeHead(201).end('{}');
+    });
+    process.env.AUDIT_SERVICE_URL = urlDe(servidor);
+
+    await new AuditReporter().reportar(EVENTO);
+    await cerrar(servidor);
+
+    expect(authRecibido).toBeUndefined();
   });
 
   it('un no-2xx no rompe la operación, pero deja aviso en el log', async () => {

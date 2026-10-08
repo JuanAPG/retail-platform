@@ -3,15 +3,27 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
-  IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { AccionAuditoria } from '../../entities/auditoria.entity';
 
-const ACCIONES: AccionAuditoria[] = ['insert', 'update', 'delete', 'login', 'importacion'];
+export const ACCIONES: AccionAuditoria[] = [
+  'insert',
+  'update',
+  'delete',
+  'login',
+  'importacion',
+  'aprobar',
+  'rechazar',
+  'desactivar',
+  'ejecutar_corrida',
+  'simular',
+  'generar_recomendacion',
+  'exportar',
+];
 
 export class CambioDto {
   @IsString()
@@ -27,8 +39,13 @@ export class CambioDto {
 }
 
 /**
- * Evento que reporta otro microservicio. Solo `tabla` y `accion` son
- * obligatorios: un evento sin actor o sin registro igual queda.
+ * Evento que reporta otro microservicio. `tabla`, `servicio` y `accion`
+ * son obligatorios: un evento sin ellos no dice quién reportó qué.
+ *
+ * `usuarioId` y `rolId` NO están aquí a propósito: el actor SIEMPRE sale
+ * del token verificado por `SessionGuard` en el controller, nunca del
+ * cuerpo (`forbidNonWhitelisted` responde 400 si alguien los manda,
+ * para no poder falsificar quién hizo qué).
  */
 export class RegistrarEventoDto {
   @IsString()
@@ -38,7 +55,14 @@ export class RegistrarEventoDto {
   @IsString()
   registroId?: string;
 
-  @IsIn(ACCIONES, { message: 'accion debe ser insert, update, delete, login o importacion.' })
+  /** Nombre del microservicio emisor, p. ej. `pricing-service`. */
+  @IsString()
+  @MaxLength(40, { message: 'servicio no puede tener más de 40 caracteres.' })
+  servicio: string;
+
+  @IsIn(ACCIONES, {
+    message: `accion debe ser una de: ${ACCIONES.join(', ')}.`,
+  })
   accion: AccionAuditoria;
 
   @IsOptional()
@@ -51,15 +75,6 @@ export class RegistrarEventoDto {
   @ValidateNested({ each: true })
   @Type(() => CambioDto)
   cambios?: CambioDto[];
-
-  @IsOptional()
-  @IsUUID('4')
-  usuarioId?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  rolId?: number;
 
   @IsOptional()
   @IsString()

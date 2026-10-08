@@ -4,14 +4,26 @@ Base: `http://audit-service:3110` · Todas las rutas cuelgan de `/v1/`.
 Responde JSON por defecto y XML si `Accept: application/xml` (XSD en
 `audit-service.xsd`). Errores con el cuerpo estándar.
 
-> Este contrato lo exige el `AuditReporter` de `auth-service`: el `POST`
-> acepta **exactamente** la forma de abajo. Los demás servicios reportan
-> igual cuando empiecen en Fase B.
+> El `POST` lo usa el `AuditReporter` de cada microservicio que reporta
+> eventos: `pricing-service`, `core-process-service`,
+> `notifications-service` y `auth-service`. El reportero REENVÍA el
+> `Authorization` del usuario que originó el evento: `usuarioId`/`rolId`
+> nunca van en el cuerpo, siempre salen del token.
+>
+> En `auth-service`, login/refresh reenvían el `accessToken` que ellos
+> mismos acaban de emitir (la sesión ya existe en Redis para ese
+> momento); logout reporta ANTES de borrar su propia sesión (si lo
+> hiciera después, su propio token ya no tendría sesión que validar); el
+> alta de proveedor NO reporta nada — es un formulario público sin
+> sesión, y la activación posterior por un Administrador ya queda
+> auditada vía `PATCH /v1/usuarios/:id`.
 
-## POST /v1/auditoria (red privada, sin guard)
+## POST /v1/auditoria (SessionGuard, cualquier perfil autenticado)
 
-Registra un evento. Nunca devuelve error por contenido (si la forma es
-válida): la auditoría es append-only y secundaria.
+Registra un evento a nombre del usuario del token. Exige sesión válida
+(JWT + `session:{userId}` en Redis); sin eso, 401. No hay restricción de
+rol adicional: un Proveedor puede reportar sus propias acciones (p. ej.
+proponer un precio), igual que cualquier perfil interno.
 
 Request JSON:
 
@@ -19,18 +31,35 @@ Request JSON:
 {
   "tabla": "usuarios",
   "registroId": "uuid-del-usuario",
+  "servicio": "pricing-service",
   "accion": "update",
   "descripcion": "Usuario actualizado (a@x.mx).",
   "cambios": [{ "campo": "activo", "previo": "true", "posterior": "false" }],
-  "usuarioId": "uuid-del-actor",
-  "rolId": 1,
   "ip": "172.18.0.5"
 }
 ```
 
-`accion` solo admite `insert | update | delete | login | importacion`.
-Todo campo salvo `tabla` y `accion` puede ser `null` (evento sin actor o
-sin registro, pero nunca sin tabla ni acción).
+`tabla`, `servicio` y `accion` son obligatorios. `usuarioId` y `rolId`
+**no se aceptan en el cuerpo**: si llegan, `forbidNonWhitelisted` responde
+400 (el actor siempre sale del token, nunca de lo que mande el cliente).
+Todo campo salvo `tabla`, `servicio` y `accion` puede ser `null`.
+
+`accion` admite:
+
+| Acción | Cuándo usarla |
+|---|---|
+| `insert` | Alta de un registro (precio, propuesta, transacción, notificación...). |
+| `update` | Modificación de un registro existente. |
+| `delete` | Baja lógica o eliminación de un registro. |
+| `login` | Inicio/cierre/renovación de sesión (uso de `auth-service`). |
+| `importacion` | Confirmación de una importación CSV. |
+| `aprobar` | Resolución positiva de una propuesta o solicitud (p. ej. propuesta de precio aprobada). |
+| `rechazar` | Resolución negativa de una propuesta o solicitud. |
+| `desactivar` | Baja lógica explícita de una entidad (proveedor, producto, usuario). |
+| `ejecutar_corrida` | Corrida de un algoritmo (Apriori, elasticidad, sustitución). |
+| `simular` | Simulación de `decision-service`. |
+| `generar_recomendacion` | Generación de una recomendación comercial. |
+| `exportar` | Exportación de un reporte (PDF/Excel) u otro artefacto. |
 
 Response `201`: `{ "id": "123" }` (id numérico del evento).
 
@@ -38,9 +67,10 @@ Response `201`: `{ "id": "123" }` (id numérico del evento).
 
 Bitácora paginada `{data, total, page, limit}`, de la más reciente a la
 más antigua. Filtros (todos opcionales): `tabla`, `registroId`,
-`usuarioId`, `accion`, `dateFrom`, `dateTo` (inclusivo, día completo),
-`page` (default 1), `limit` (default 20, máx 100).
+`servicio`, `usuarioId`, `accion`, `dateFrom`, `dateTo` (inclusivo, día
+completo), `page` (default 1), `limit` (default 20, máx 100).
 
 Historial por entidad: `GET /v1/auditoria?tabla=precios&registroId=<id>`.
+Eventos de un emisor: `GET /v1/auditoria?servicio=pricing-service`.
 
 Cada evento trae `cambios[]` (`campo`, `valorPrevio`, `valorPosterior`).

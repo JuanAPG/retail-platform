@@ -13,8 +13,9 @@ import { AuditoriaCambio } from './entities/auditoria-cambio.entity';
 /**
  * audit-service: bitácora append-only y consultas históricas. Dueño de
  * `auditoria` y `auditoria_cambios`. Los demás servicios reportan con
- * `POST /v1/auditoria` (red privada, sin guard); la lectura exige
- * Administrador o Auditor.
+ * `POST /v1/auditoria` reenviando el `Authorization` del usuario que
+ * originó el evento (SessionGuard: JWT + sesión activa en Redis); la
+ * lectura exige Administrador o Auditor.
  */
 @Module({
   imports: [

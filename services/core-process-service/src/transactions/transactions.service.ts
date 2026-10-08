@@ -328,19 +328,20 @@ export class TransactionsService {
       throw error;
     }
 
-    await this.auditoria.reportar({
-      tabla: 'transacciones',
-      registroId: guardadaId,
-      accion: 'insert',
-      descripcion: `Transacción manual ${dto.folio} en ${tienda.nombre}.`,
-      usuarioId: usuario.id,
-      rolId: usuario.rolId,
-      ip,
-      cambios: [
-        { campo: 'folio', posterior: dto.folio },
-        { campo: 'total', posterior: total },
-      ],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'transacciones',
+        registroId: guardadaId,
+        accion: 'insert',
+        descripcion: `Transacción manual ${dto.folio} en ${tienda.nombre}.`,
+        ip,
+        cambios: [
+          { campo: 'folio', posterior: dto.folio },
+          { campo: 'total', posterior: total },
+        ],
+      },
+      token,
+    );
 
     return this.findOne(guardadaId);
   }
@@ -470,6 +471,7 @@ export class TransactionsService {
     previewId: string,
     usuario: SesionUsuario,
     ip?: string,
+    token?: string,
   ): Promise<CsvImportResult> {
     const importacion = await this.importacionesRepo.findOne({ where: { id: previewId } });
     if (!importacion) {
@@ -514,7 +516,7 @@ export class TransactionsService {
       if (yaInsertadas > 0) {
         // Todas sus filas válidas ya están en la base: se cierra el estado
         // en vez de dejarla pendiente para siempre.
-        return this.cerrarImportacion(importacion, usuario, ip, {
+        return this.cerrarImportacion(importacion, usuario, ip, token, {
           creadas: 0,
           canastas: 0,
           lineas: 0,
@@ -622,7 +624,7 @@ export class TransactionsService {
       where: { importacionId: previewId, valida: true, transactionId: IsNull() },
     });
 
-    return this.cerrarImportacion(importacion, usuario, ip, {
+    return this.cerrarImportacion(importacion, usuario, ip, token, {
       creadas,
       canastas,
       lineas,
@@ -645,6 +647,7 @@ export class TransactionsService {
     importacion: Importacion,
     usuario: SesionUsuario,
     ip: string | undefined,
+    token: string | undefined,
     resumen: {
       creadas: number;
       canastas: number;
@@ -678,8 +681,6 @@ export class TransactionsService {
     // Solo se audita la confirmación (la mutación real). Si audit-service
     // no responde, la importación igual queda (best-effort).
     await this.auditoria.reportar({
-      usuarioId: usuario.id,
-      rolId: usuario.rolId,
       tabla: 'importaciones',
       registroId: importacion.id,
       accion: 'importacion',
@@ -699,7 +700,7 @@ export class TransactionsService {
         { campo: 'folios_omitidos', posterior: String(omitidos.length) },
         { campo: 'estado', posterior: importacion.estado },
       ],
-    });
+    }, token);
 
     return {
       importacionId: importacion.id,
@@ -738,6 +739,7 @@ export class TransactionsService {
     previewId: string,
     usuario: SesionUsuario,
     ip?: string,
+    token?: string,
   ): Promise<ImportacionDescartada> {
     const importacion = await this.importacionesRepo.findOne({ where: { id: previewId } });
     if (!importacion) {
@@ -756,16 +758,17 @@ export class TransactionsService {
     importacion.estado = 'descartado';
     await this.importacionesRepo.save(importacion);
 
-    await this.auditoria.reportar({
-      tabla: 'importaciones',
-      registroId: importacion.id,
-      accion: 'update',
-      descripcion: `Importación CSV "${importacion.fileName}" descartada sin confirmar.`,
-      usuarioId: usuario.id,
-      rolId: usuario.rolId,
-      ip,
-      cambios: [{ campo: 'estado', previo: estadoPrevio, posterior: 'descartado' }],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'importaciones',
+        registroId: importacion.id,
+        accion: 'update',
+        descripcion: `Importación CSV "${importacion.fileName}" descartada sin confirmar.`,
+        ip,
+        cambios: [{ campo: 'estado', previo: estadoPrevio, posterior: 'descartado' }],
+      },
+      token,
+    );
 
     return {
       importacionId: importacion.id,

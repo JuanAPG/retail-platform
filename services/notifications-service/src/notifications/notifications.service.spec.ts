@@ -115,11 +115,15 @@ describe('NotificationsService (sin Mongo)', () => {
     expect(await servicio.countUnread('u1')).toEqual({ unread: 1 });
   });
 
-  it('cada creación reporta a auditoría sin bloquear', async () => {
+  it('cada creación reporta a auditoría sin bloquear, reenviando el token del emisor', async () => {
     const { servicio, audit } = servicioFresco();
-    await servicio.create({ ...BASE, relatedEntityId: 'p7', recipientUserId: 'u1' }, {});
+    await servicio.create(
+      { ...BASE, relatedEntityId: 'p7', recipientUserId: 'u1' },
+      { token: 'Bearer t-1' },
+    );
     expect(audit.reportar).toHaveBeenCalledWith(
       expect.objectContaining({ tabla: 'notificaciones', accion: 'insert' }),
+      'Bearer t-1',
     );
   });
 

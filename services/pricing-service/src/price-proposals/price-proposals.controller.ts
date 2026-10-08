@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Ip, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -39,8 +51,13 @@ export class PriceProposalsController {
   })
   @ApiRespuesta(201, 'Propuesta registrada, pendiente de aprobación.', muestras.propuesta)
   @ApiErrores(400, 401, 403, 409)
-  create(@Body() dto: CreatePriceProposalDto, @CurrentUser() usuario: SesionUsuario, @Ip() ip: string) {
-    return this.proposalsService.create(dto, usuario, ip);
+  create(
+    @Body() dto: CreatePriceProposalDto,
+    @CurrentUser() usuario: SesionUsuario,
+    @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
+  ) {
+    return this.proposalsService.create(dto, usuario, ip, token);
   }
 
   @Get()
@@ -69,8 +86,9 @@ export class PriceProposalsController {
     @Body() dto: ApprovePriceProposalDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.proposalsService.approve(id, dto, usuario, ip);
+    return this.proposalsService.approve(id, dto, usuario, ip, token);
   }
 
   @Patch(':id/reject')
@@ -83,7 +101,8 @@ export class PriceProposalsController {
     @Body() dto: RejectPriceProposalDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.proposalsService.reject(id, dto, usuario, ip);
+    return this.proposalsService.reject(id, dto, usuario, ip, token);
   }
 }

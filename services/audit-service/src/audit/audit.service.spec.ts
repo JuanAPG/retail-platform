@@ -29,6 +29,7 @@ describe('AuditService.registrar', () => {
     const id = await servicio.registrar({
       tabla: 'usuarios',
       registroId: 'u1',
+      servicio: 'pricing-service',
       accion: 'update',
       descripcion: 'Usuario actualizado.',
       cambios: [{ campo: 'activo', previo: 'true', posterior: 'false' }],
@@ -41,10 +42,19 @@ describe('AuditService.registrar', () => {
     expect(cambios[0]).toMatchObject({ campo: 'activo', valorPrevio: 'true' });
   });
 
+  it('guarda el servicio emisor', async () => {
+    const { auditoriaRepo, cambiosRepo } = reposFalsos();
+    const servicio = new AuditService(auditoriaRepo as never, cambiosRepo as never);
+    await servicio.registrar({ tabla: 'precios', servicio: 'pricing-service', accion: 'login' });
+    expect(auditoriaRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ servicio: 'pricing-service' }),
+    );
+  });
+
   it('sin cambios no toca auditoria_cambios', async () => {
     const { auditoriaRepo, cambiosRepo, cambios } = reposFalsos();
     const servicio = new AuditService(auditoriaRepo as never, cambiosRepo as never);
-    await servicio.registrar({ tabla: 'precios', accion: 'login' });
+    await servicio.registrar({ tabla: 'precios', servicio: 'pricing-service', accion: 'login' });
     expect(cambios).toHaveLength(0);
   });
 });

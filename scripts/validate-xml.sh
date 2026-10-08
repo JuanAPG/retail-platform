@@ -12,9 +12,10 @@
 # Variables:
 #   CORE_TOKEN      JWT de un perfil interno (obligatorio).
 #   CORE_TOKEN_ADMIN JWT de Administrador. Hace falta para la bandeja de
-#                   propuestas (productos pendientes, precios): esos
-#                   endpoints no los ve un Analista. Si falta, se usa
-#                   CORE_TOKEN y esas filas saldran como HTTP 403.
+#                   propuestas (productos pendientes, precios) y para la
+#                   bitacora de audit-service: esos endpoints no los ve
+#                   un Analista. Si falta, se usa CORE_TOKEN y esas filas
+#                   saldran como HTTP 403.
 #   HOST            host de los servicios (default localhost).
 #   SOLO            filtra por servicio: SOLO=catalog scripts/validate-xml.sh
 #
@@ -69,6 +70,13 @@ try:
     d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
 except Exception: print("")' 2>/dev/null)"
 
+AUDITORIA_ID="$(curl -s -H "Authorization: Bearer ${CORE_TOKEN_ADMIN:-$CORE_TOKEN}" \
+  "http://$HOST:3110/v1/auditoria?limit=1" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
 # servicio|puerto|xsd|ruta[|admin]
 # Solo endpoints de LECTURA: el script no muta nada.
 # `admin` marca los que exigen un rol que el Analista no tiene.
@@ -92,6 +100,8 @@ ENDPOINTS=(
   "algorithms|3105|algorithms-core|/v1/association/runs?limit=2"
   "decision|3107|decision-service|/v1/accessibility/index"
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
+  "audit|3110|audit-service|/v1/auditoria?limit=2|admin"
+  "audit|3110|audit-service|/v1/auditoria/AUDITORIA_ID|admin"
 )
 
 # Errores: el mismo cuerpo tiene que validar contra el elemento `error`.
@@ -101,6 +111,7 @@ ERRORES=(
   "pricing|3103|pricing-service|/v1/prices/history?limit=abc|400"
   "decision|3107|decision-service|/v1/accessibility/index|401"
   "algorithms|3105|algorithms-core|/v1/association/runs|401"
+  "audit|3110|audit-service|/v1/auditoria|401"
 )
 
 ok=0; fallo=0
@@ -140,6 +151,7 @@ for fila in "${ENDPOINTS[@]}"; do
   ruta="${ruta//ZONA_IDS/$ZONA_IDS}"
   ruta="${ruta//ZONA_ID/$ZONA_ID}"
   ruta="${ruta//PRODUCTO_ID/$PRODUCTO_ID}"
+  ruta="${ruta//AUDITORIA_ID/$AUDITORIA_ID}"
   token="$CORE_TOKEN"
   [[ "$rol" == "admin" ]] && token="${CORE_TOKEN_ADMIN:-$CORE_TOKEN}"
   archivo="$TMP/$svc$(echo "$ruta" | tr '/?=&' '____').xml"

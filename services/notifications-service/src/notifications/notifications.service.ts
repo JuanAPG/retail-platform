@@ -33,7 +33,7 @@ export class NotificationsService {
 
   async create(
     dto: CreateNotificationDto,
-    emisor?: { servicio?: string; usuarioId?: string; rolId?: number; ip?: string },
+    emisor?: { servicio?: string; ip?: string; token?: string },
   ): Promise<{ data: Notification; creada: boolean }> {
     if (!esEventoSoportado(dto.eventType)) {
       throw new BadRequestException(`El eventType ${dto.eventType} no está soportado.`);
@@ -66,16 +66,17 @@ export class NotificationsService {
       priority: dto.priority ?? base.priority,
     });
 
-    await this.auditoria.reportar({
-      tabla: 'notificaciones',
-      registroId: guardada.id,
-      accion: 'insert',
-      descripcion: `Notificación ${dto.eventType} para ${guardada.recipientUserId ?? guardada.recipientRole}.`,
-      usuarioId: emisor?.usuarioId ?? null,
-      rolId: emisor?.rolId ?? null,
-      ip: emisor?.ip,
-      cambios: [{ campo: 'evento', posterior: dto.eventType }],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'notificaciones',
+        registroId: guardada.id,
+        accion: 'insert',
+        descripcion: `Notificación ${dto.eventType} para ${guardada.recipientUserId ?? guardada.recipientRole}.`,
+        ip: emisor?.ip,
+        cambios: [{ campo: 'evento', posterior: dto.eventType }],
+      },
+      emisor?.token,
+    );
 
     return { data: this.aPublica(guardada), creada: true };
   }
