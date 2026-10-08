@@ -45,9 +45,22 @@ const comparacion = {
     {
       zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
       zoneName: 'Zona Centro',
+      presentationId: '0b1f6c1e-3a52-4d0b-9a55-2f4e6a1d7c10',
+      presentationName: '1 L',
       averagePrice: 41.25,
       minPrice: 39.9,
       maxPrice: 42.5,
+      storeCount: 2,
+    },
+  ],
+  perUnit: [
+    {
+      zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+      zoneName: 'Zona Centro',
+      baseUnit: 'l',
+      averagePricePerBaseUnit: 41.25,
+      minPricePerBaseUnit: 39.9,
+      maxPricePerBaseUnit: 42.5,
       storeCount: 2,
     },
   ],

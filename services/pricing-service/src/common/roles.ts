@@ -29,11 +29,10 @@ export const APRUEBAN_PRODUCTOS = [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA] as 
 
 /**
  * Quién aprueba o rechaza las propuestas de precio del Proveedor (RN-14).
- * POR CONFIRMAR con el equipo (¿Gerente de categoría o Responsable de precios?):
- * hoy coincide con la pestaña "Aprobaciones de precio" del portal de categoría.
- * Cambiarlo es tocar solo esta constante.
+ * Decisión D1 del equipo: ÚNICAMENTE el Responsable de precios. El Gerente de
+ * categoría y el Administrador no resuelven precios.
  */
-export const APRUEBAN_PRECIOS = [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA] as const;
+export const APRUEBAN_PRECIOS = [ROL.RESPONSABLE_PRECIOS] as const;
 
 /** Quién consulta las propuestas de precio (el Proveedor, solo las suyas). */
 export const VEN_PROPUESTAS_PRECIO = [

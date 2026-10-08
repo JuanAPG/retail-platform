@@ -165,6 +165,8 @@ export class PriceProposalsService {
     token?: string,
   ): Promise<ApprovalResult> {
     const propuesta = await this.buscarPendiente(id);
+    // Se valida también al aprobar: el producto pudo desactivarse después de la propuesta (D-08).
+    await this.prices.exigirProductoActivo(propuesta.presentationId);
 
     const existentes: { id: string }[] = await this.dataSource.query(
       'SELECT id FROM tiendas WHERE id = ANY($1::uuid[])',

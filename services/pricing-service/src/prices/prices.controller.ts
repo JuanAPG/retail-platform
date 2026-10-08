@@ -25,7 +25,7 @@ export class PricesController {
   constructor(private readonly pricesService: PricesService) {}
 
   @Post()
-  @Roles(ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS)
+  @Roles(ROL.RESPONSABLE_PRECIOS)
   @ApiOperation({
     summary:
       'Registra un precio por presentación y tienda. Si había uno vigente, lo cierra el día anterior (el histórico no se sobrescribe).',
@@ -55,13 +55,14 @@ export class PricesController {
 
   @Get('compare-zones')
   @XmlRoot('priceComparisonResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.PROVEEDOR)
   @ApiOperation({
-    summary: 'Compara el precio vigente de un producto entre zonas (agregado para gráficas, sin paginar).',
+    summary:
+      'Compara el precio vigente de un producto entre zonas (agregado para gráficas, sin paginar). Un Proveedor solo puede consultar productos suyos.',
   })
   @ApiRespuesta(200, 'Promedio, mínimo, máximo y número de tiendas por zona.', muestras.comparacion)
   @ApiErrores(400, 401, 403, 404)
-  compareAcrossZones(@Query() filtros: PriceComparisonQueryDto) {
-    return this.pricesService.compareAcrossZones(filtros.productId);
+  compareAcrossZones(@Query() filtros: PriceComparisonQueryDto, @CurrentUser() usuario: SesionUsuario) {
+    return this.pricesService.compareAcrossZones(filtros.productId, usuario);
   }
 }

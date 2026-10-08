@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { ROL } from '../common/roles';
 import { CacheService } from '../common/cache/cache.service';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
@@ -26,18 +27,33 @@ export interface PriceDto {
   store: { id: string; nombre: string; zonaId: string; zona: { id: string; nombre: string } };
 }
 
+/** Vista por presentación (D-06): una fila por zona Y presentación, nunca un promedio entre tamaños distintos. */
 export interface ZonePriceComparison {
   zoneId: string;
   zoneName: string;
+  presentationId: string;
+  presentationName: string;
   averagePrice: number;
   minPrice: number;
   maxPrice: number;
   storeCount: number;
 }
 
+/** Vista normalizada (D-06): precio por unidad base (kg, l, pza) para que tamaños distintos sean comparables. */
+export interface ZoneUnitPriceComparison {
+  zoneId: string;
+  zoneName: string;
+  baseUnit: string;
+  averagePricePerBaseUnit: number;
+  minPricePerBaseUnit: number;
+  maxPricePerBaseUnit: number;
+  storeCount: number;
+}
+
 export interface PriceComparisonResult {
   productId: string;
   zones: ZonePriceComparison[];
+  perUnit: ZoneUnitPriceComparison[];
 }
 
 function codigoSql(err: unknown): string | undefined {
@@ -120,6 +136,7 @@ export class PricesService {
     // Presentaciones y tiendas son de catalog-service: solo se verifica que existan.
     await this.exigirExistencia('producto_presentaciones', dto.presentationId, 'La presentación indicada no existe.');
     await this.exigirExistencia('tiendas', dto.storeId, 'La tienda indicada no existe.');
+    await this.exigirProductoActivo(dto.presentationId);
 
     // Solo la fecha: un ISO con hora (2026-09-14T10:00:00Z) se normaliza a YYYY-MM-DD.
     const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
@@ -202,7 +219,11 @@ export class PricesService {
    * Compara el precio VIGENTE de un producto entre las zonas donde se
    * vende. La zona no vive en `precios`: se deriva de `tiendas.zona_id`.
    */
-  async compareAcrossZones(productId: string): Promise<PriceComparisonResult> {
+  async compareAcrossZones(productId: string, solicitante: SesionUsuario): Promise<PriceComparisonResult> {
+    // Un Proveedor solo compara lo suyo; el producto de otro es un 404, no un 403,
+    // para no confirmar que existe. Va ANTES de la caché: la respuesta cacheada
+    // es la misma para todos y no debe saltarse esta regla.
+    if (solicitante.rol === ROL.PROVEEDOR) await this.exigirProductoDelProveedor(productId, solicitante);
     const version = await this.cache.version(llaveVersionProducto(productId));
     return this.cache.obtener(`pricing:compare:${productId}:v${version}`, TTL_PRECIOS_SEGUNDOS, () =>
       this.consultarComparacion(productId),
@@ -215,6 +236,7 @@ export class PricesService {
     const filas: Record<string, string>[] = await this.dataSource.query(
       `
       SELECT z.id AS "zoneId", z.nombre AS "zoneName",
+             pres.id AS "presentationId", pres.nombre AS "presentationName",
              AVG(p.precio) AS "averagePrice", MIN(p.precio) AS "minPrice",
              MAX(p.precio) AS "maxPrice", COUNT(DISTINCT p.tienda_id) AS "storeCount"
       FROM precios p
@@ -222,19 +244,53 @@ export class PricesService {
       JOIN tiendas t ON t.id = p.tienda_id
       JOIN zonas z ON z.id = t.zona_id
       WHERE pres.producto_id = $1 AND p.vigente
-      GROUP BY z.id, z.nombre
+      GROUP BY z.id, z.nombre, pres.id, pres.nombre
+      ORDER BY z.nombre ASC, pres.nombre ASC
+      `,
+      [productId],
+    );
+
+    // Precio por unidad base = precio / (contenido x factor a la unidad base de su tipo).
+    // Se agrupa también por tipo de unidad: kg y l no se mezclan.
+    const porUnidad: Record<string, string>[] = await this.dataSource.query(
+      `
+      SELECT z.id AS "zoneId", z.nombre AS "zoneName",
+             (SELECT b.clave FROM unidades_medida b WHERE b.tipo = u.tipo AND b.factor_base = 1 LIMIT 1) AS "baseUnit",
+             AVG(p.precio / (pres.contenido * u.factor_base)) AS "averagePricePerBaseUnit",
+             MIN(p.precio / (pres.contenido * u.factor_base)) AS "minPricePerBaseUnit",
+             MAX(p.precio / (pres.contenido * u.factor_base)) AS "maxPricePerBaseUnit",
+             COUNT(DISTINCT p.tienda_id) AS "storeCount"
+      FROM precios p
+      JOIN producto_presentaciones pres ON pres.id = p.presentacion_id
+      JOIN unidades_medida u ON u.id = pres.unidad_medida_id
+      JOIN tiendas t ON t.id = p.tienda_id
+      JOIN zonas z ON z.id = t.zona_id
+      WHERE pres.producto_id = $1 AND p.vigente
+      GROUP BY z.id, z.nombre, u.tipo
       ORDER BY z.nombre ASC
       `,
       [productId],
     );
+
     return {
       productId,
       zones: filas.map((fila) => ({
         zoneId: fila.zoneId,
         zoneName: fila.zoneName,
+        presentationId: fila.presentationId,
+        presentationName: fila.presentationName,
         averagePrice: Number(fila.averagePrice),
         minPrice: Number(fila.minPrice),
         maxPrice: Number(fila.maxPrice),
+        storeCount: Number(fila.storeCount),
+      })),
+      perUnit: porUnidad.map((fila) => ({
+        zoneId: fila.zoneId,
+        zoneName: fila.zoneName,
+        baseUnit: fila.baseUnit,
+        averagePricePerBaseUnit: redondear(Number(fila.averagePricePerBaseUnit)),
+        minPricePerBaseUnit: redondear(Number(fila.minPricePerBaseUnit)),
+        maxPricePerBaseUnit: redondear(Number(fila.maxPricePerBaseUnit)),
         storeCount: Number(fila.storeCount),
       })),
     };
@@ -309,12 +365,41 @@ export class PricesService {
     }
   }
 
+  /** D-08: un producto pendiente o rechazado no existe para el resto hasta aprobarse. */
+  async exigirProductoActivo(presentationId: string) {
+    const [fila] = await this.dataSource.query(
+      `SELECT prod.estatus::text AS estatus
+       FROM producto_presentaciones pres JOIN productos prod ON prod.id = pres.producto_id
+       WHERE pres.id = $1`,
+      [presentationId],
+    );
+    if (fila && fila.estatus !== 'activo') {
+      throw new ConflictException('El producto no está activo: no se le pueden registrar precios.');
+    }
+  }
+
+  private async exigirProductoDelProveedor(productId: string, solicitante: SesionUsuario) {
+    const [fila] = await this.dataSource.query(
+      `SELECT 1 FROM productos prod JOIN proveedores pr ON pr.id = prod.proveedor_id
+       WHERE prod.id = $1 AND pr.email = $2`,
+      [productId, solicitante.email],
+    );
+    if (!fila) {
+      throw new NotFoundException('El producto no existe.');
+    }
+  }
+
   private async exigirExistencia(tabla: 'producto_presentaciones' | 'tiendas', id: string, mensaje: string) {
     const [fila] = await this.dataSource.query(`SELECT 1 FROM ${tabla} WHERE id = $1`, [id]);
     if (!fila) {
       throw new BadRequestException(mensaje);
     }
   }
+}
+
+/** Precio por unidad base a 2 decimales (centavos), para no devolver 396.0000001. */
+function redondear(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 function diaAnterior(fechaIso: string): string {

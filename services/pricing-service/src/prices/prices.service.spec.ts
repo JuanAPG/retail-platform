@@ -7,6 +7,7 @@ import { PriceHistory } from '../entities/price-history.entity';
 import { PricesService } from './prices.service';
 
 const usuario: SesionUsuario = { id: 'u-1', email: 'precios@retail.mx', rol: 'Responsable de precios', rolId: 4 };
+const proveedor: SesionUsuario = { id: 'u-p', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
 const dto = { presentationId: 'pres-1', storeId: 'tienda-1', price: 42.5, effectiveDate: '2026-09-14' };
 
 const errorSql = (code: string) => Object.assign(new QueryFailedError('q', [], new Error('x')), { code });
@@ -68,6 +69,7 @@ function existenYDetalle(dataSource: { query: jest.Mock }, detalle: unknown[]) {
   dataSource.query
     .mockResolvedValueOnce([{ '?column?': 1 }]) // presentación
     .mockResolvedValueOnce([{ '?column?': 1 }]) // tienda
+    .mockResolvedValueOnce([{ estatus: 'activo' }]) // producto activo (D-08)
     .mockResolvedValueOnce(detalle);
 }
 
@@ -137,7 +139,10 @@ describe('PricesService.create', () => {
 
   it('no permite fechas iguales o anteriores al precio vigente (409) y no escribe nada', async () => {
     const { dataSource, manager, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue({ id: 'previo', effectiveDate: '2026-09-14' });
 
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
@@ -168,7 +173,10 @@ describe('PricesService.create', () => {
 
   it('un registro simultáneo (unique_violation 23505) responde 409', async () => {
     const { dataSource, manager, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue(null);
     manager.save.mockRejectedValue(errorSql('23505'));
 
@@ -177,7 +185,10 @@ describe('PricesService.create', () => {
 
   it('otros errores de la base no se disfrazan de conflicto', async () => {
     const { dataSource, manager, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue(null);
     manager.save.mockRejectedValue(new Error('conexión caída'));
 
@@ -231,11 +242,17 @@ describe('PricesService.create — auditoría', () => {
     dataSource.query.mockResolvedValueOnce([]); // presentación inexistente
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(BadRequestException);
 
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
 
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue(null);
     manager.save.mockRejectedValue(errorSql('23505'));
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
@@ -309,28 +326,70 @@ describe('PricesService.compareAcrossZones', () => {
     const { dataSource, servicio } = crearServicio();
     dataSource.query.mockResolvedValueOnce([]);
 
-    await expect(servicio.compareAcrossZones('x')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(servicio.compareAcrossZones('x', usuario)).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('convierte los agregados de la base (cadenas) a números', async () => {
+  it('separa por presentación (D-06): 1 L y 250 ml de la misma zona NO se promedian', async () => {
     const { dataSource, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([
-      { zoneId: 'z1', zoneName: 'Centro', averagePrice: '41.2500000', minPrice: '39.90', maxPrice: '42.50', storeCount: '2' },
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }]) // producto existe
+      .mockResolvedValueOnce([
+        { zoneId: 'z1', zoneName: 'Oriente', presentationId: 'p1', presentationName: '1 L', averagePrice: '29.0000000', minPrice: '29.00', maxPrice: '29.00', storeCount: '1' },
+        { zoneId: 'z1', zoneName: 'Oriente', presentationId: 'p2', presentationName: '250 ml', averagePrice: '99.0000000', minPrice: '99.00', maxPrice: '99.00', storeCount: '1' },
+      ])
+      .mockResolvedValueOnce([
+        { zoneId: 'z1', zoneName: 'Oriente', baseUnit: 'l', averagePricePerBaseUnit: '212.5000000', minPricePerBaseUnit: '29.00', maxPricePerBaseUnit: '396.00', storeCount: '1' },
+      ]);
+
+    const resultado = await servicio.compareAcrossZones('prod-1', usuario);
+
+    expect(resultado.zones).toHaveLength(2);
+    expect(resultado.zones.map((z) => [z.presentationName, z.averagePrice])).toEqual([
+      ['1 L', 29],
+      ['250 ml', 99],
     ]);
-
-    const resultado = await servicio.compareAcrossZones('prod-1');
-
-    expect(resultado).toEqual({
-      productId: 'prod-1',
-      zones: [{ zoneId: 'z1', zoneName: 'Centro', averagePrice: 41.25, minPrice: 39.9, maxPrice: 42.5, storeCount: 2 }],
-    });
+    expect(resultado.perUnit).toEqual([
+      { zoneId: 'z1', zoneName: 'Oriente', baseUnit: 'l', averagePricePerBaseUnit: 212.5, minPricePerBaseUnit: 29, maxPricePerBaseUnit: 396, storeCount: 1 },
+    ]);
   });
 
-  it('sin precios vigentes devuelve zones vacío', async () => {
+  it('sin precios vigentes devuelve zones y perUnit vacíos', async () => {
     const { dataSource, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([]);
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
-    expect(await servicio.compareAcrossZones('prod-1')).toEqual({ productId: 'prod-1', zones: [] });
+    expect(await servicio.compareAcrossZones('prod-1', usuario)).toEqual({ productId: 'prod-1', zones: [], perUnit: [] });
+  });
+
+  it('un Proveedor solo compara productos suyos: el de otro es 404 y no toca la caché', async () => {
+    const { dataSource, cache, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([]); // no es de su empresa
+
+    await expect(servicio.compareAcrossZones('prod-ajeno', proveedor)).rejects.toBeInstanceOf(NotFoundException);
+    expect(cache.obtener).not.toHaveBeenCalled();
+  });
+
+  it('un Proveedor puede comparar un producto suyo', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query
+      .mockResolvedValueOnce([{ '?column?': 1 }]) // es suyo
+      .mockResolvedValueOnce([{ x: 1 }]) // existe
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    expect(await servicio.compareAcrossZones('prod-1', proveedor)).toEqual({ productId: 'prod-1', zones: [], perUnit: [] });
+  });
+});
+
+describe('PricesService.create — producto no activo (D-08)', () => {
+  it('rechaza con 409 un precio para una presentación de un producto pendiente o rechazado', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'pendiente_aprobacion' }]);
+
+    await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -371,9 +430,9 @@ describe('PricesService — caché', () => {
   it('la comparación por zonas se cachea por producto y versión', async () => {
     const { cache, servicio } = crearServicio();
     cache.version.mockResolvedValue(5);
-    cache.obtener.mockResolvedValue({ productId: 'prod-1', zones: [] });
+    cache.obtener.mockResolvedValue({ productId: 'prod-1', zones: [], perUnit: [] });
 
-    await servicio.compareAcrossZones('prod-1');
+    await servicio.compareAcrossZones('prod-1', usuario);
 
     expect(cache.obtener).toHaveBeenCalledWith('pricing:compare:prod-1:v5', 300, expect.any(Function));
   });
@@ -382,7 +441,7 @@ describe('PricesService — caché', () => {
     const { dataSource, servicio } = crearServicio();
     dataSource.query.mockResolvedValueOnce([]);
 
-    await expect(servicio.compareAcrossZones('x')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(servicio.compareAcrossZones('x', usuario)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('un alta exitosa invalida la caché del producto de la presentación (no de otro)', async () => {
@@ -398,7 +457,10 @@ describe('PricesService — caché', () => {
 
   it('un alta rechazada no invalida nada', async () => {
     const { dataSource, manager, cache, servicio } = crearServicio();
-    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ x: 1 }]);
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo' }]);
     manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
 
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);

@@ -134,13 +134,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(r.cuerpo).toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
   });
 
-  it('el Proveedor no entra a ninguna ruta de precios (403)', async () => {
+  it('el Proveedor no entra al historial ni registra (403); la comparación solo la ve de productos suyos (PRI-08)', async () => {
     expect((await http('GET', `/v1/prices/history?productId=${productId}`, proveedor)).estado).toBe(403);
-    expect((await http('GET', `/v1/prices/compare-zones?productId=${productId}`, proveedor)).estado).toBe(403);
     expect((await http('POST', '/v1/prices', proveedor, alta(10))).estado).toBe(403);
+    // Este token de Proveedor no es dueño del producto: 404, no 403, para no confirmar que existe.
+    expect((await http('GET', `/v1/prices/compare-zones?productId=${productId}`, proveedor)).estado).toBe(404);
   });
 
-  it('solo Administrador y Responsable de precios registran (el Planeador lee pero no escribe)', async () => {
+  it('solo el Responsable de precios registra (el Administrador y el Planeador leen pero no escriben)', async () => {
+    expect((await http('POST', '/v1/prices', admin, alta(10))).estado).toBe(403);
     expect((await http('POST', '/v1/prices', planeador, alta(10))).estado).toBe(403);
     expect((await http('GET', `/v1/prices/history?productId=${productId}`, planeador)).estado).toBe(200);
   });
@@ -184,7 +186,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
       expect.arrayContaining([expect.objectContaining({ campo: 'precio', valorPosterior: '40' })]),
     );
 
-    const segundo = await http('POST', '/v1/prices', admin, alta(42.5, '2026-02-20'));
+    const segundo = await http('POST', '/v1/prices', precios, alta(42.5, '2026-02-20'));
     expect(segundo.estado).toBe(201);
     expect(segundo.cuerpo).toMatchObject({ price: '42.50', vigente: true });
 
@@ -218,7 +220,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
   it('dos registros simultáneos: uno gana (201) y el otro recibe 409, sin dejar dos vigentes', async () => {
     const [a, b] = await Promise.all([
       http('POST', '/v1/prices', precios, alta(44, '2026-03-05')),
-      http('POST', '/v1/prices', admin, alta(45, '2026-03-05')),
+      http('POST', '/v1/prices', precios, alta(45, '2026-03-05')),
     ]);
     expect([a.estado, b.estado].sort()).toEqual([201, 409]);
 

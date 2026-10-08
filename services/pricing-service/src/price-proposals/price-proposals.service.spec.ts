@@ -7,7 +7,7 @@ import { PricesService } from '../prices/prices.service';
 import { PriceProposalsService } from './price-proposals.service';
 
 const proveedorUsuario: SesionUsuario = { id: 'u-prov', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
-const gerente: SesionUsuario = { id: 'u-ger', email: 'g@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+const gerente: SesionUsuario = { id: 'u-ger', email: 'p@retail.mx', rol: 'Responsable de precios', rolId: 4 };
 const interno: SesionUsuario = { id: 'u-adm', email: 'a@retail.mx', rol: 'Administrador', rolId: 1 };
 
 const errorSql = (code: string) => Object.assign(new QueryFailedError('q', [], new Error('x')), { code });
@@ -56,6 +56,7 @@ function crearServicio() {
     ),
     detallar: jest.fn(async (ids: string[]) => ids.map((id) => ({ id }))),
     invalidarProducto: jest.fn().mockResolvedValue(undefined),
+    exigirProductoActivo: jest.fn().mockResolvedValue(undefined),
   };
   const servicio = new PriceProposalsService(
     repo as unknown as Repository<PriceProposal>,
@@ -221,6 +222,16 @@ describe('PriceProposalsService.approve', () => {
 
     repo.findOne.mockResolvedValueOnce({ ...pendiente, status: 'rechazado' });
     await expect(servicio.approve('x', dto, gerente)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('no aprueba una propuesta de un producto que ya no está activo (D-08): 409 y nada se aplica', async () => {
+    const ctx = crearServicio();
+    ctx.repo.findOne.mockResolvedValue(pendiente);
+    ctx.prices.exigirProductoActivo.mockRejectedValueOnce(new ConflictException('El producto no está activo.'));
+
+    await expect(ctx.servicio.approve('prop-1', dto, gerente)).rejects.toBeInstanceOf(ConflictException);
+    expect(ctx.dataSource.transaction).not.toHaveBeenCalled();
+    expect(ctx.prices.registrarPrecio).not.toHaveBeenCalled();
   });
 
   it('tiendas inexistentes responde 400 y nombra cuáles', async () => {
