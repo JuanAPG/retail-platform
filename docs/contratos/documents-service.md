@@ -18,7 +18,7 @@ de servicio de Docker).
 | GET | `/v1/reports` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | GET | `/v1/reports/stats/by-user-month` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | GET | `/v1/reports/:id` | Los 6 perfiles internos; Proveedor (solo los suyos) |
-| GET | `/v1/reports/:id/export?format=pdf` | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| GET | `/v1/reports/:id/export?format=pdf\|xlsx` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | PATCH | `/v1/reports/:id` | Gerente de categoría |
 
 **Aislamiento del Proveedor (DOC-04):** en el listado y la agregación se filtra por su
@@ -86,12 +86,17 @@ XML: `reportStatsResponse`.
 `GET`: Report. `PATCH` body `{ "estado": "generado" | "exportado" }` (solo el Gerente).
 `:id` mal formado → `400`; inexistente (o ajeno, para un Proveedor) → `404`.
 
-## GET /v1/reports/:id/export?format=pdf
+## GET /v1/reports/:id/export?format=pdf|xlsx
 
-`Content-Type: application/pdf` y `Content-Disposition: attachment; filename="reporte-ejecutivo-<fecha>.pdf"`.
-Sale del documento guardado en MongoDB (mismos números que el JSON), con acentos, ñ, `$` y `%`.
-Los indicadores no disponibles se imprimen como tales, nunca como cero. `format` distinto de
-`pdf` → `400` (Excel/xlsx queda para después, D-19). Marca el reporte como `exportado`.
+Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el reporte como `exportado` y audita `exportar`.
+`format` ausente o distinto de `pdf` y `xlsx` → `400`.
+
+- **`pdf`** (obligatorio, D-19): `Content-Type: application/pdf` y `Content-Disposition: attachment; filename="reporte-ejecutivo-<fecha>.pdf"`.
+  Con acentos, ñ, `$` y `%`. Un reporte vacío o sin datos produce un PDF, nunca `500`.
+- **`xlsx`** (opcional, D-19): `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+  archivo `reporte-ejecutivo-<fecha>.xlsx`. Dos hojas: `Reporte` (periodo, zona, segmento, id) e `Indicadores`
+  (servicio, indicador, valor, estado, nota). **Las cifras van como celdas numéricas**; un indicador no disponible va
+  con estado `No disponible`, su motivo en la nota y la celda de valor vacía (nunca 0). Las listas dan una fila por elemento.
 
 ## MongoDB
 

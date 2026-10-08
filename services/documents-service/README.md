@@ -10,8 +10,8 @@ Contrato: [docs/contratos/documents-service.md](../../docs/contratos/documents-s
   y lo guarda en MongoDB. Si un servicio no responde (3 s), su indicador sale `disponible: false`
   con el motivo, **nunca como 0**.
 - `GET /v1/reports`, `GET /v1/reports/:id`, `PATCH /v1/reports/:id`, `GET /v1/reports/stats/by-user-month`.
-- `GET /v1/reports/:id/export?format=pdf`: PDF generado del documento guardado (acentos, ñ, `$` y `%`).
-  Excel queda para después (D-19).
+- `GET /v1/reports/:id/export?format=pdf|xlsx`: PDF (acentos, ñ, `$` y `%`) o Excel con las cifras como celdas
+  numéricas, generados del documento guardado.
 - El Proveedor solo ve sus propios reportes (`404` con los de otro).
 
 ## MongoDB
@@ -47,4 +47,4 @@ como no disponibles: es el comportamiento esperado.
   por defecto (4 hilos) bloquea las consultas a los servicios sanos.
 - Variables opcionales: `CORE_PROCESS_SERVICE_URL`, `CATALOG_SERVICE_URL`, `PRICING_SERVICE_URL`,
   `ALGORITHMS_CORE_URL`, `DECISION_SERVICE_URL`, `AUDIT_SERVICE_URL` (por defecto, el nombre del servicio en Docker).
-- Pendiente: exportación a Excel (`xlsx`) y avisos a notifications-service.
+- Pendiente: avisos a notifications-service (hoy el reporte no emite notificaciones).
