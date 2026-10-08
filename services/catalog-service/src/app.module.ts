@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { EventosModule } from './common/eventos.module';
 import { SegmentsModule } from './segments/segments.module';
 import { ProductsModule } from './products/products.module';
 import { StoresModule } from './stores/stores.module';
@@ -23,6 +24,7 @@ import { ZonesModule } from './zones/zones.module';
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    EventosModule,
     SegmentsModule,
     ZonesModule,
     StoresModule,

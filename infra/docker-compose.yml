@@ -197,6 +197,9 @@ services:
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: catalog/v1
+      # Auditoría (CAT-08) y notificaciones del alta de producto (CAT-09): no bloqueantes.
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
