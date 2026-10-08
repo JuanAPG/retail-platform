@@ -58,14 +58,63 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- GET /v1/recommendations/:id/explain. `xs:all`: no depende del orden
+       en que el servicio arme los campos. -->
   <xs:element name="recomendacion">
     <xs:complexType>
-      <xs:sequence>
+      <xs:all>
         <xs:element name="recommendationId" type="xs:string" minOccurs="0"/>
         <xs:element name="title" type="xs:string"/>
         <xs:element name="whatRecommends" type="xs:string"/>
         <xs:element name="why" type="xs:string"/>
         <xs:element name="estimatedImpact" type="xs:string"/>
+        <!-- Lista: el interceptor XML la envuelve como <evidence><item>…
+             Sin evidencia sale <evidence></evidence>, sin ningún <item>. -->
+        <xs:element name="evidence">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:all>
+                    <xs:element name="dimension" type="xs:string"/>
+                    <xs:element name="referenceId" type="xs:string"/>
+                    <xs:element name="description" type="xs:string"/>
+                  </xs:all>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="status" type="xs:string"/>
+        <xs:element name="generatedAt" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/recommendations/generate. El arreglo de la raíz sale como
+       <recomendacionesResponse><item>…; sin recomendaciones, la raíz va
+       vacía. Cada <item> es la recomendación tal como se guardó (mismos
+       campos que el JSON), NO la forma de `recomendacion` (explain). Los
+       tres ids son opcionales porque un nulo se omite en el XML. -->
+  <xs:element name="recomendacionesResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:all>
+              <xs:element name="id" type="xs:string"/>
+              <xs:element name="corridaId" type="xs:string" minOccurs="0"/>
+              <xs:element name="escenarioId" type="xs:string" minOccurs="0"/>
+              <xs:element name="zonaId" type="xs:string" minOccurs="0"/>
+              <xs:element name="titulo" type="xs:string"/>
+              <xs:element name="queRecomienda" type="xs:string"/>
+              <xs:element name="porQue" type="xs:string"/>
+              <xs:element name="impactoEstimado" type="xs:string"/>
+              <xs:element name="estatus" type="xs:string"/>
+              <xs:element name="generadaEn" type="xs:dateTime"/>
+            </xs:all>
+          </xs:complexType>
+        </xs:element>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

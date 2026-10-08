@@ -26,6 +26,7 @@ export class RecommendationsController {
   constructor(private readonly recommendationsService: RecommendationsService) {}
 
   @Post('generate')
+  @XmlRoot('recomendacionesResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary: 'Evalúa las 4 reglas (accesibilidad, elasticidad, simulación, asociación) y guarda las recomendaciones generadas.',

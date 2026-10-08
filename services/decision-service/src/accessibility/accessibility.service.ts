@@ -73,8 +73,14 @@ export class AccessibilityService {
         this.coberturaBasicos(zoneId),
       ]);
 
+    // `basicBasketCost` en 0 no es "canasta gratis": es que la zona no tiene
+    // ningún precio vigente de canasta básica. Sin datos el componente vale
+    // 0 (peor caso), igual que los otros tres; antes puntuaba 1.
     const valores: Record<AccessibilityComponentType, number> = {
-      precio: avgBasicBasketCostTodas > 0 ? clamp01(1 - basicBasketCost / avgBasicBasketCostTodas) : 0,
+      precio:
+        basicBasketCost > 0 && avgBasicBasketCostTodas > 0
+          ? clamp01(1 - basicBasketCost / avgBasicBasketCostTodas)
+          : 0,
       ingreso_segmento: maxIncome > 0 ? clamp01((estimatedIncome ?? 0) / maxIncome) : 0,
       disponibilidad: maxAvailability > 0 ? clamp01(availability / maxAvailability) : 0,
       cobertura_basicos: clamp01(coverage),
