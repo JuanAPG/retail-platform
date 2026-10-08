@@ -9,7 +9,8 @@ import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common
 import { paginar } from '../common/helpers/pagination.helper';
 import { PriceHistory } from '../entities/price-history.entity';
 import { CreatePriceDto } from './dto/create-price.dto';
-import { PriceHistoryQueryDto } from './dto/price-queries.dto';
+import { PriceAlertsService } from '../price-alerts/price-alerts.service';
+import { PriceCurrentQueryDto, PriceHistoryQueryDto, PriceSeriesQueryDto } from './dto/price-queries.dto';
 
 /** Un precio con el resumen de su presentación y su tienda (ver contrato). */
 export interface PriceDto {
@@ -56,6 +57,14 @@ export interface PriceComparisonResult {
   perUnit: ZoneUnitPriceComparison[];
 }
 
+/**
+ * PRI-05 (D-05): "precio actual" se define POR FECHA, no por la columna `vigente` (que solo dice "sin fecha de
+ * fin"). Un precio programado a futuro tiene `vigente = true` desde que se registra, pero no aplica hasta su
+ * fecha; y el anterior, ya cerrado con `hasta = desde_nuevo - 1`, sigue siendo el actual hasta entonces.
+ */
+export const ES_ACTUAL = (alias: string) =>
+  `(${alias}.fecha_vigencia_desde <= CURRENT_DATE AND (${alias}.fecha_vigencia_hasta IS NULL OR ${alias}.fecha_vigencia_hasta >= CURRENT_DATE))`;
+
 function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
 }
@@ -91,6 +100,7 @@ export class PricesService {
     private readonly dataSource: DataSource,
     private readonly audit: AuditReporter,
     private readonly cache: CacheService,
+    private readonly alertas: PriceAlertsService,
   ) {}
 
   /**
@@ -171,6 +181,11 @@ export class PricesService {
       const [creado] = await this.detallar([id]);
       // El historial y la comparación cacheados de este producto ya no valen.
       await this.invalidarProducto(creado.presentation.productoId);
+      // PRI-07: ¿el cambio acumulado en la ventana cruza el umbral? Avisa al Responsable de precios.
+      await this.alertas.evaluar(
+        { presentationId: dto.presentationId, storeId: dto.storeId, nuevoPrecio: dto.price, effectiveDate },
+        token,
+      );
       return creado;
     } catch (err) {
       // 23505 = unique_violation: otra petición registró un precio vigente
@@ -243,7 +258,7 @@ export class PricesService {
       JOIN producto_presentaciones pres ON pres.id = p.presentacion_id
       JOIN tiendas t ON t.id = p.tienda_id
       JOIN zonas z ON z.id = t.zona_id
-      WHERE pres.producto_id = $1 AND p.vigente
+      WHERE pres.producto_id = $1 AND ${ES_ACTUAL('p')}
       GROUP BY z.id, z.nombre, pres.id, pres.nombre
       ORDER BY z.nombre ASC, pres.nombre ASC
       `,
@@ -265,7 +280,7 @@ export class PricesService {
       JOIN unidades_medida u ON u.id = pres.unidad_medida_id
       JOIN tiendas t ON t.id = p.tienda_id
       JOIN zonas z ON z.id = t.zona_id
-      WHERE pres.producto_id = $1 AND p.vigente
+      WHERE pres.producto_id = $1 AND ${ES_ACTUAL('p')}
       GROUP BY z.id, z.nombre, u.tipo
       ORDER BY z.nombre ASC
       `,
@@ -296,6 +311,53 @@ export class PricesService {
     };
   }
 
+  /**
+   * PRI-05 / PRI-11 — El precio ACTUAL (por fecha) de una presentación, uno por tienda. Lo usan
+   * decision-service y algorithms-core en vez de leer `precios.vigente` por SQL (esa columna no mira fechas).
+   */
+  async findCurrent(filtros: PriceCurrentQueryDto): Promise<Pagina<PriceDto>> {
+    await this.exigirExistencia('producto_presentaciones', filtros.presentationId, 'La presentación indicada no existe.');
+    const page = filtros.page ?? PAGINA_DEFAULT;
+    const limit = Math.min(filtros.limit ?? LIMITE_DEFAULT, LIMITE_MAXIMO);
+
+    const where = [`p.presentacion_id = $1`, ES_ACTUAL('p')];
+    const params: unknown[] = [filtros.presentationId];
+    if (filtros.storeId) { params.push(filtros.storeId); where.push(`p.tienda_id = $${params.length}`); }
+    if (filtros.zoneId) { params.push(filtros.zoneId); where.push(`t.zona_id = $${params.length}`); }
+    const desde = `FROM precios p JOIN tiendas t ON t.id = p.tienda_id WHERE ${where.join(' AND ')}`;
+
+    const [{ n }] = await this.dataSource.query(`SELECT count(*)::int AS n ${desde}`, params);
+    const filas: { id: string }[] = await this.dataSource.query(
+      `SELECT p.id ${desde} ORDER BY t.nombre ASC, p.id ASC LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
+      params,
+    );
+    return { data: await this.detallar(filas.map((f) => f.id)), total: n, page, limit };
+  }
+
+  /**
+   * PRI-11 — Serie COMPLETA de precios de una presentación (todas las tiendas, con zona y rango de vigencia),
+   * sin paginar: es lo que necesita la elasticidad para armar un periodo, y `history` topa en 100 por página.
+   * Excepción declarada en `paginacion.md`. Orden: fecha de inicio, tienda.
+   */
+  async findSeries(filtros: PriceSeriesQueryDto): Promise<{ data: PriceDto[]; total: number }> {
+    await this.exigirExistencia('producto_presentaciones', filtros.presentationId, 'La presentación indicada no existe.');
+    if (filtros.dateFrom && filtros.dateTo && filtros.dateFrom > filtros.dateTo) {
+      throw new BadRequestException('dateFrom no puede ser posterior a dateTo.');
+    }
+    const params: unknown[] = [filtros.presentationId];
+    const where = ['p.presentacion_id = $1'];
+    // Un precio entra si su vigencia se cruza con [dateFrom, dateTo].
+    if (filtros.dateFrom) { params.push(filtros.dateFrom); where.push(`(p.fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= $${params.length}::date)`); }
+    if (filtros.dateTo) { params.push(filtros.dateTo); where.push(`p.fecha_vigencia_desde <= $${params.length}::date`); }
+    const filas: { id: string }[] = await this.dataSource.query(
+      `SELECT p.id FROM precios p JOIN tiendas t ON t.id = p.tienda_id
+       WHERE ${where.join(' AND ')} ORDER BY p.fecha_vigencia_desde ASC, t.nombre ASC, p.id ASC`,
+      params,
+    );
+    const data = await this.detallar(filas.map((f) => f.id));
+    return { data, total: data.length };
+  }
+
   // -------------------------------------------------------------------
   // Apoyo
   // -------------------------------------------------------------------
@@ -313,7 +375,7 @@ export class PricesService {
       SELECT p.id, p.presentacion_id, p.tienda_id, p.precio::text AS precio,
              to_char(p.fecha_vigencia_desde, 'YYYY-MM-DD') AS desde,
              to_char(p.fecha_vigencia_hasta, 'YYYY-MM-DD') AS hasta,
-             p.vigente, p.origen::text AS origen, p.creado_por, p.created_at,
+             ${ES_ACTUAL('p')} AS vigente, p.origen::text AS origen, p.creado_por, p.created_at,
              pres.producto_id, pres.nombre AS pres_nombre, pres.contenido::text AS contenido,
              u.clave AS unidad,
              t.nombre AS tienda_nombre, t.zona_id, z.nombre AS zona_nombre

@@ -5,6 +5,7 @@ import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { CacheService } from '../common/cache/cache.service';
 import { SessionGuard } from '../common/auth/session.guard';
 import { PriceHistory } from '../entities/price-history.entity';
+import { PriceAlertsModule } from '../price-alerts/price-alerts.module';
 import { PricesController } from './prices.controller';
 import { PricesService } from './prices.service';
 
@@ -14,7 +15,7 @@ import { PricesService } from './prices.service';
  * se consultan por SQL.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([PriceHistory]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([PriceHistory]), JwtModule.register({}), PriceAlertsModule],
   controllers: [PricesController],
   providers: [PricesService, SessionGuard, AuditReporter, CacheService],
   exports: [PricesService],

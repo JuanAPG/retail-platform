@@ -4,6 +4,7 @@ import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { CacheService } from '../common/cache/cache.service';
 import { PriceHistory } from '../entities/price-history.entity';
+import { PriceAlertsService } from '../price-alerts/price-alerts.service';
 import { PricesService } from './prices.service';
 
 const usuario: SesionUsuario = { id: 'u-1', email: 'precios@retail.mx', rol: 'Responsable de precios', rolId: 4 };
@@ -55,13 +56,15 @@ function crearServicio() {
     obtener: jest.fn((_clave: string, _ttl: number, cargar: () => Promise<unknown>) => cargar()),
     invalidarGrupo: jest.fn().mockResolvedValue(undefined),
   };
+  const alertas = { evaluar: jest.fn().mockResolvedValue({ alerta: false, basePrecio: null, variacionPct: null }) };
   const servicio = new PricesService(
     repo as unknown as Repository<PriceHistory>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
     cache as unknown as CacheService,
+    alertas as unknown as PriceAlertsService,
   );
-  return { repo, manager, dataSource, audit, cache, servicio };
+  return { repo, manager, dataSource, audit, cache, alertas, servicio };
 }
 
 /** Existen presentación y tienda; luego la consulta de detalle devuelve `detalle`. */
@@ -465,5 +468,85 @@ describe('PricesService — caché', () => {
 
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
     expect(cache.invalidarGrupo).not.toHaveBeenCalled();
+  });
+});
+
+describe('PricesService — PRI-05 (precio actual por fecha), PRI-07 (alerta) y PRI-11 (series)', () => {
+  it('compare-zones define "actual" por FECHA, no por la bandera vigente: un precio futuro no cambia lo de hoy', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await servicio.compareAcrossZones('prod-1', usuario);
+
+    for (const [sql] of dataSource.query.mock.calls.slice(1)) {
+      expect(String(sql)).toContain('fecha_vigencia_desde <= CURRENT_DATE');
+      expect(String(sql)).toContain('fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= CURRENT_DATE');
+      expect(String(sql)).not.toMatch(/AND p\.vigente/);
+    }
+  });
+
+  it('el campo vigente de cada precio también sale calculado por fecha', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([filaDetalle('a')]);
+    await servicio.detallar(['a']);
+    expect(String(dataSource.query.mock.calls[0][0])).toContain('fecha_vigencia_desde <= CURRENT_DATE');
+  });
+
+  it('un alta directa evalúa la alerta de cambio con el precio, la fecha y el token de quien lo registró', async () => {
+    const { dataSource, manager, alertas, servicio } = crearServicio();
+    existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
+    manager.findOne.mockResolvedValue(null);
+
+    await servicio.create(dto, usuario, '10.0.0.1', 'Bearer t');
+
+    expect(alertas.evaluar).toHaveBeenCalledWith(
+      { presentationId: 'pres-1', storeId: 'tienda-1', nuevoPrecio: 42.5, effectiveDate: '2026-09-14' },
+      'Bearer t',
+    );
+  });
+
+  it('current: exige presentación existente, filtra por zona y tienda y pagina', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ n: 1 }]).mockResolvedValueOnce([{ id: 'p1' }]).mockResolvedValueOnce([filaDetalle('p1')]);
+
+    const r = await servicio.findCurrent({ presentationId: 'pres-1', zoneId: 'z1', storeId: 't1', page: 2, limit: 5 });
+
+    expect(r).toMatchObject({ total: 1, page: 2, limit: 5 });
+    const [sql, params] = dataSource.query.mock.calls[1];
+    expect(String(sql)).toContain('fecha_vigencia_desde <= CURRENT_DATE');
+    expect(String(sql)).toContain('t.zona_id = $3');
+    expect(params).toEqual(['pres-1', 't1', 'z1']);
+    expect(String(dataSource.query.mock.calls[2][0])).toContain('LIMIT 5 OFFSET 5');
+  });
+
+  it('current: una presentación inexistente es 400', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([]);
+    await expect(servicio.findCurrent({ presentationId: 'x' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('series: SIN paginar (sin LIMIT), ordenada por fecha de inicio, y con rango de fechas que se cruza con la vigencia', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]).mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }]).mockResolvedValueOnce([filaDetalle('a'), filaDetalle('b')]);
+
+    const r = await servicio.findSeries({ presentationId: 'pres-1', dateFrom: '2026-01-01', dateTo: '2026-06-30' });
+
+    expect(r).toMatchObject({ total: 2 });
+    expect(r.data.map((p) => p.id)).toEqual(['a', 'b']);
+    const [sql, params] = dataSource.query.mock.calls[1];
+    expect(String(sql)).not.toMatch(/LIMIT/i);
+    expect(String(sql)).toContain('ORDER BY p.fecha_vigencia_desde ASC');
+    expect(String(sql)).toContain('p.fecha_vigencia_hasta >= $2::date');
+    expect(String(sql)).toContain('p.fecha_vigencia_desde <= $3::date');
+    expect(params).toEqual(['pres-1', '2026-01-01', '2026-06-30']);
+  });
+
+  it('series: un rango invertido es 400 y una presentación inexistente también', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query.mockResolvedValueOnce([{ x: 1 }]);
+    await expect(servicio.findSeries({ presentationId: 'p', dateFrom: '2026-12-01', dateTo: '2026-01-01' })).rejects.toBeInstanceOf(BadRequestException);
+
+    dataSource.query.mockResolvedValueOnce([]);
+    await expect(servicio.findSeries({ presentationId: 'x' })).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -3,10 +3,10 @@ import { ejemploXml, pagina } from './ejemplos';
 import { muestras } from './muestras';
 
 describe('ejemploXml', () => {
-  it('envuelve en <response> y cada elemento de una lista sale como <item>', () => {
+  it('sin raíz declarada conserva <response> con el namespace del servicio; cada elemento de una lista sale como <item>', () => {
     const xml = ejemploXml(pagina([muestras.precio, muestras.precioCerrado], 2));
 
-    expect(xml).toContain('<response>');
+    expect(xml).toContain('<response xmlns="pricing/v1">');
     expect(xml.match(/<data>/g)).toHaveLength(1);
     // Cada precio de la página es un <item> dentro de <data>.
     expect(xml.match(/<item>/g)).toHaveLength(2);
@@ -32,5 +32,13 @@ describe('ejemploXml', () => {
     for (const [nombre, muestra] of Object.entries(muestras)) {
       expect({ nombre, valido: XMLValidator.validate(ejemploXml(muestra)) }).toEqual({ nombre, valido: true });
     }
+  });
+
+  it('con raíz declarada el ejemplo trae la raíz y el namespace reales del XSD, no <response>', () => {
+    const xml = ejemploXml(pagina([muestras.precio], 1), 'priceListResponse');
+
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml).toContain('<priceListResponse xmlns="pricing/v1">');
+    expect(xml).not.toContain('<response');
   });
 });

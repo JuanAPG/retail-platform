@@ -1,4 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -7,9 +8,11 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors();
+  // PRI-12: tope de 1 MB para el cuerpo JSON (el error 413 sale con el cuerpo estándar, ver HttpErrorFilter).
+  app.useBodyParser('json', { limit: '1mb' });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });

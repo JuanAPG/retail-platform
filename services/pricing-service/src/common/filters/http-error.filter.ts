@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import {
@@ -62,7 +63,13 @@ export function serializarErrorXml(cuerpo: CuerpoError): string {
 export class HttpErrorFilter implements ExceptionFilter {
   private readonly logger = new Logger('error');
 
-  catch(exception: unknown, host: ArgumentsHost) {
+  catch(original: unknown, host: ArgumentsHost) {
+    // El parser de JSON (body-parser) lanza un error CRUDO (no HttpException) cuando el cuerpo pasa
+    // el límite: sin esto salía como un 500 "Error interno", y es un 413 del cliente (PRI-12).
+    const exception: unknown =
+      (original as { type?: string } | null)?.type === 'entity.too.large'
+        ? new PayloadTooLargeException('El cuerpo de la petición excede el límite permitido (1 MB).')
+        : original;
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
