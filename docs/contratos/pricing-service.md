@@ -410,10 +410,9 @@ Todas no bloqueantes (timeout de 1.5 s, un fallo solo deja una advertencia) y co
 | El Responsable de precios aprueba o rechaza | `propuesta.resuelta` | el usuario que propuso (con el motivo si se rechazó) |
 | Un precio cruza el umbral de la alerta | `precio.umbral` | rol Responsable de precios |
 
-> **Pendiente con notifications-service (Juan):** su tabla de permisos manda `precio.propuesto` al rol *Gerente de categoría*
-> (la decisión D1 dice que resuelve el Responsable de precios) y solo deja originar `propuesta.resuelta` al Administrador y al
-> Gerente (hoy resuelve el Responsable de precios, así que el receptor responde `403` y el aviso se pierde hasta que se
-> amplíe). Tampoco define un destino Auditor.
+> **Con notifications-service:** su tabla de permisos manda `precio.propuesto` al rol *Responsable de precios* y deja
+> que éste origine `propuesta.resuelta` (rama `fix/notifications-destinos`, decisión D1). Sin ese cambio mergeado, el
+> receptor respondería `403` a la resolución y el aviso se perdería. No define un destino Auditor para estos eventos.
 
 ### Auditoría de la resolución (PRI-14)
 
