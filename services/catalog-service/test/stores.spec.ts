@@ -7,6 +7,7 @@
  */
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
+import { Client } from 'pg';
 
 const BASE = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
 const SECRET = process.env.JWT_ACCESS_SECRET ?? 'dev_access_secret_solo_para_local';
@@ -21,6 +22,23 @@ async function sesion(userId: string, rol: string): Promise<string> {
   return sign({ sub: userId, email: `${userId}@test`, rol, rolId: 1, jti: `jti-${userId}` }, SECRET, {
     expiresIn: '10m',
   });
+}
+
+/** Conexión directa a Postgres para sembrar/limpiar historial (precios) que este servicio no escribe. */
+async function conDb<T>(fn: (db: Client) => Promise<T>): Promise<T> {
+  const db = new Client({
+    host: process.env.DB_HOST ?? 'localhost',
+    port: parseInt(process.env.DB_PORT ?? '5432', 10),
+    user: process.env.DB_USER ?? 'retail_user',
+    password: process.env.DB_PASSWORD ?? 'retail_pass_2026',
+    database: process.env.DB_NAME ?? 'retaildb',
+  });
+  await db.connect();
+  try {
+    return await fn(db);
+  } finally {
+    await db.end();
+  }
 }
 
 async function http(metodo: string, ruta: string, token?: string, cuerpo?: object, accept?: string) {
@@ -139,6 +157,32 @@ describe('/v1/stores (integración, requiere stack)', () => {
     expect((await http('DELETE', `/v1/stores/${id}`, analista)).estado).toBe(403);
     expect((await http('DELETE', `/v1/stores/${id}`, admin)).estado).toBe(204);
     expect((await http('GET', `/v1/stores/${id}`, admin)).estado).toBe(404);
+  });
+
+  it('D-07: una tienda con precios NO se borra: queda inactiva, fuera de la lista, y conserva su historial', async () => {
+    const creada = await http('POST', '/v1/stores', admin, alta());
+    expect(creada.estado).toBe(201);
+    const id = creada.cuerpo.id;
+    await conDb(async (db) => {
+      const pres = (await db.query('SELECT id FROM producto_presentaciones LIMIT 1')).rows[0].id;
+      await db.query(
+        "INSERT INTO precios (presentacion_id, tienda_id, precio, fecha_vigencia_desde, fecha_vigencia_hasta) VALUES ($1, $2, 10, '2000-01-01', '2000-12-31')",
+        [pres, id],
+      );
+    });
+
+    const baja = await http('DELETE', `/v1/stores/${id}`, admin);
+    expect(baja.estado).toBe(200);
+    expect(baja.cuerpo).toMatchObject({ id, activo: false });
+
+    const filas = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM precios WHERE tienda_id = $1', [id])).rows[0].n);
+    expect(filas).toBe(1);
+    const lista = await http('GET', '/v1/stores?limit=100', admin);
+    expect(lista.cuerpo.data.map((t: { id: string }) => t.id)).not.toContain(id);
+
+    // Limpieza: sin historial ya se puede borrar de verdad.
+    await conDb((db) => db.query('DELETE FROM precios WHERE tienda_id = $1', [id]));
+    expect((await http('DELETE', `/v1/stores/${id}`, admin)).estado).toBe(204);
   });
 
   it('valida zona y código postal inexistentes (400) y campos extra (400)', async () => {

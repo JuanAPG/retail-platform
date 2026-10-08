@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { TiendaEntity } from '../entities/tienda.entity';
 import { DireccionEntity } from '../entities/direccion.entity';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
@@ -8,6 +8,7 @@ import { ZonaEntity } from '../entities/zona.entity';
 import { CacheService } from '../common/cache/cache.service';
 import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
+import { ResultadoBaja, tiendaTieneHistorial } from '../common/helpers/historial.helper';
 import { paginar } from '../common/helpers/pagination.helper';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { StoreFilterDto } from './dto/store-filter.dto';
@@ -42,6 +43,8 @@ export class StoresService {
       .leftJoinAndSelect('t.zona', 'z')
       .leftJoinAndSelect('z.municipio', 'zm')
       .leftJoinAndSelect('t.proveedor', 'p')
+      // Las tiendas desactivadas (D-07) quedan fuera de las listas.
+      .where('t.activo = true')
       .orderBy('t.nombre', 'ASC')
       .addOrderBy('t.id', 'ASC');
     return paginar(qb, filtros);
@@ -149,26 +152,24 @@ export class StoresService {
     });
   }
 
-  async remove(id: string): Promise<void> {
+  /**
+   * D-07: una tienda con historial (precios, inventario o ventas) NUNCA se
+   * borra: queda inactiva y fuera de las listas. Solo se borra físicamente
+   * la que no tiene nada colgando.
+   */
+  async remove(id: string): Promise<ResultadoBaja<TiendaEntity>> {
     const tienda = await this.findOne(id);
-    try {
+    return this.dataSource.transaction(async (manager) => {
+      if (await tiendaTieneHistorial(manager, id)) {
+        await manager.update(TiendaEntity, { id }, { activo: false });
+        return { eliminado: false as const, entidad: await manager.findOneOrFail(TiendaEntity, { where: { id } }) };
+      }
       // La dirección es exclusiva de la tienda: se borra con ella para no
       // dejar domicilios huérfanos en `direcciones`.
-      await this.dataSource.transaction(async (manager) => {
-        await manager.remove(tienda);
-        await manager.delete(DireccionEntity, { id: tienda.direccionId });
-      });
-    } catch (err) {
-      // 23503 = foreign_key_violation. `transacciones.tienda_id` NO tiene
-      // ON DELETE CASCADE a propósito: no se puede borrar una tienda con
-      // historial de ventas. Sin este catch, Postgres sube un 500 crudo.
-      if (err instanceof QueryFailedError && (err as unknown as { code?: string }).code === '23503') {
-        throw new ConflictException(
-          'No se puede eliminar: esta tienda tiene transacciones u otros registros asociados. Desactívala en vez de borrarla.',
-        );
-      }
-      throw err;
-    }
+      await manager.remove(tienda);
+      await manager.delete(DireccionEntity, { id: tienda.direccionId });
+      return { eliminado: true as const };
+    });
   }
 
   private async exigirZona(zonaId: string) {

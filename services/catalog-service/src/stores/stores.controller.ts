@@ -3,14 +3,15 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -83,12 +84,20 @@ export class StoresController {
   }
 
   @Delete(':id')
-  @HttpCode(204)
+  @XmlRoot('storeResponse')
   @Roles(ROL.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Elimina la tienda y su dirección. 409 si tiene transacciones (desactívala en su lugar).' })
-  @ApiSinCuerpo(204, 'Eliminada, sin cuerpo.')
-  @ApiErrores(400, 401, 403, 404, 409)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.storesService.remove(id);
+  @ApiOperation({
+    summary:
+      'Elimina la tienda y su dirección (204). Si tiene historial (precios, inventario, ventas) NO se borra: queda inactiva y responde 200 con la tienda.',
+  })
+  @ApiSinCuerpo(204, 'Eliminada, sin cuerpo (no tenía historial).')
+  @ApiErrores(400, 401, 403, 404)
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const resultado = await this.storesService.remove(id);
+    if (resultado.eliminado) {
+      res.status(204);
+      return;
+    }
+    return resultado.entidad;
   }
 }
