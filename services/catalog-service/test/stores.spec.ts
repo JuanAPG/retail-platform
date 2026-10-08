@@ -121,7 +121,7 @@ describe('/v1/stores (integración, requiere stack)', () => {
   it('XML: la lista sale con <item> por cada tienda', async () => {
     const r = await http('GET', '/v1/stores?limit=2', analista, undefined, 'application/xml');
     expect(r.estado).toBe(200);
-    expect(r.texto).toContain('<response>');
+    expect(r.texto).toContain('<storeListResponse');
     expect((r.texto.match(/<item>/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
