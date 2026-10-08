@@ -5,20 +5,18 @@ Responde JSON por defecto y XML si `Accept: application/xml` (XSD en
 `audit-service.xsd`). Errores con el cuerpo estándar.
 
 > El `POST` lo usa el `AuditReporter` de cada microservicio que reporta
-> eventos (hoy: `pricing-service`, `core-process-service`,
-> `notifications-service`). El reportero REENVÍA el `Authorization` del
-> usuario que originó el evento: `usuarioId`/`rolId` nunca van en el
-> cuerpo, siempre salen del token.
+> eventos: `pricing-service`, `core-process-service`,
+> `notifications-service` y `auth-service`. El reportero REENVÍA el
+> `Authorization` del usuario que originó el evento: `usuarioId`/`rolId`
+> nunca van en el cuerpo, siempre salen del token.
 >
-> **Pendiente:** el `AuditReporter` de `auth-service` (login, refresh,
-> logout, alta de proveedor, altas/bajas de usuarios y roles) todavía
-> manda `usuarioId`/`rolId` en el cuerpo y sin `Authorization` — con este
-> contrato, sus reportes van a fallar en silencio (best-effort) hasta que
-> se actualice. Casos a resolver ahí antes de tocarlo: login/refresh
-> pueden reenviar el token recién emitido (la sesión ya existe en Redis
-> en ese punto); logout reporta DESPUÉS de borrar su propia sesión, así
-> que necesita reportar antes de borrarla; el alta de proveedor no tiene
-> ningún usuario autenticado todavía.
+> En `auth-service`, login/refresh reenvían el `accessToken` que ellos
+> mismos acaban de emitir (la sesión ya existe en Redis para ese
+> momento); logout reporta ANTES de borrar su propia sesión (si lo
+> hiciera después, su propio token ya no tendría sesión que validar); el
+> alta de proveedor NO reporta nada — es un formulario público sin
+> sesión, y la activación posterior por un Administrador ya queda
+> auditada vía `PATCH /v1/usuarios/:id`.
 
 ## POST /v1/auditoria (SessionGuard, cualquier perfil autenticado)
 
