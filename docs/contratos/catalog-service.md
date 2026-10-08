@@ -26,9 +26,9 @@ se relaciona con la zona y qué limitaciones tiene.
 |---|---|---|
 | GET | `/v1/segments` | Los 6 perfiles internos |
 | GET | `/v1/segments/:id` | Los 6 perfiles internos |
-| POST | `/v1/segments` | Administrador, Analista comercial |
-| PATCH | `/v1/segments/:id` | Administrador, Analista comercial |
-| DELETE | `/v1/segments/:id` | Administrador |
+| POST | `/v1/segments` | Analista comercial |
+| PATCH | `/v1/segments/:id` | Analista comercial |
+| DELETE | `/v1/segments/:id` | Analista comercial |
 
 El Proveedor no tiene acceso a ninguna ruta de segmentos (`403`).
 
@@ -339,9 +339,13 @@ dirección se actualiza la dirección de la tienda (es exclusiva de ella). Respo
 
 ### DELETE /v1/stores/:id
 
-Response `204`. Se borra también su dirección (es exclusiva de la tienda). Inexistente →
-`404`. Con transacciones u otros registros asociados → `409` y no se borra nada
-(desactivar en lugar de borrar).
+Inexistente → `404`. **Nunca se pierde el historial (D-07):**
+
+- Sin precios, inventario ni transacciones: se borra (con su dirección, que es
+  exclusiva de la tienda) y responde `204` sin cuerpo.
+- Con alguno de ellos: **no se borra**; queda `activo = false`, sale de
+  `GET /v1/stores` y responde `200` con la Store ya inactiva. Sus precios siguen en
+  el historial.
 
 ### Códigos de error de zonas y tiendas
 
@@ -369,17 +373,17 @@ producto (RF-35). Un producto se da de alta siempre **con su primera presentaci�
 | GET | `/v1/units` | Cualquier usuario autenticado |
 | GET | `/v1/providers` | Administrador, Analista comercial, Gerente de categoría, Auditor |
 | GET | `/v1/products` | Los 7 perfiles (**el Proveedor solo ve los suyos**) |
-| GET | `/v1/products/pending` | Administrador, Gerente de categoría |
+| GET | `/v1/products/pending` | Gerente de categoría, Administrador (solo lectura), Auditor (solo lectura) |
 | GET | `/v1/products/:id` | Los 6 perfiles internos |
-| POST | `/v1/products` | Administrador, Gerente de categoría |
+| POST | `/v1/products` | Gerente de categoría |
 | POST | `/v1/products/proposals` | Proveedor |
-| PATCH | `/v1/products/:id` | Administrador, Gerente de categoría |
-| DELETE | `/v1/products/:id` | Administrador, Gerente de categoría |
-| PATCH | `/v1/products/:id/approve` | Administrador, Gerente de categoría |
-| PATCH | `/v1/products/:id/reject` | Administrador, Gerente de categoría |
+| PATCH | `/v1/products/:id` | Gerente de categoría |
+| DELETE | `/v1/products/:id` | Gerente de categoría |
+| PATCH | `/v1/products/:id/approve` | Gerente de categoría |
+| PATCH | `/v1/products/:id/reject` | Gerente de categoría |
 | GET | `/v1/products/:id/presentations` | Los 6 perfiles internos |
-| POST | `/v1/products/:id/presentations` | Administrador, Gerente de categoría |
-| DELETE | `/v1/presentations/:id` | Administrador, Gerente de categoría |
+| POST | `/v1/products/:id/presentations` | Gerente de categoría |
+| DELETE | `/v1/presentations/:id` | Gerente de categoría |
 
 `:id` es UUID; otro valor → `400`. Los perfiles de consulta (Auditor, Analista,
 Planeador) no tienen ninguna ruta de escritura sobre productos.
@@ -451,17 +455,22 @@ Response `200`: `{ "data": [Product], "total": n, "page": 1, "limit": 20 }`.
 **El recorte por dueño del dato se hace en la consulta**, no en el cliente: un
 Proveedor recibe únicamente los productos de su empresa (vínculo por correo:
 `usuarios.email` = `proveedores.email`, ambos únicos); los perfiles internos ven el
-catálogo completo. Un Proveedor sin empresa vinculada → `403`.
+productos **activos** (D-08: un producto pendiente o rechazado no existe para el resto
+del equipo hasta que se aprueba; core-process y pricing lo validan con este mismo
+catálogo). Un Proveedor sin empresa vinculada → `403`.
 
 ### GET /v1/products/pending
 
 Bandeja de propuestas por revisar. Paginado, orden fijo `createdAt` **ascendente**
 (las más antiguas primero: es una cola de trabajo). Solo `estatus =
-pendiente_aprobacion`.
+pendiente_aprobacion`. La resuelve el Gerente de categoría; Administrador y Auditor la
+leen.
 
 ### GET /v1/products/:id
 
-Response `200`: Product con sus presentaciones. Inexistente → `404`.
+Response `200`: Product con sus presentaciones. Inexistente → `404`. Un producto que no
+está `activo` solo lo ve el Gerente, el Administrador y el Auditor; para los demás
+perfiles internos responde `404` (D-08).
 
 ### POST /v1/products — alta directa
 
@@ -512,8 +521,13 @@ quede en `producto_revisiones`. Response `200`: Product actualizado.
 
 ### DELETE /v1/products/:id
 
-Response `204`. Borra también sus presentaciones. Si alguna presentación tiene ventas
-→ `409` y no se borra nada.
+Inexistente → `404`. **Nunca se pierde el historial (D-07):**
+
+- Si ninguna presentación tiene precios, inventario, ventas ni propuestas de precio: se
+  borra con sus presentaciones y responde `204` sin cuerpo.
+- Si alguna lo tiene: **no se borra**; el producto queda `estatus = inactivo`, sus
+  presentaciones `activo = false`, y responde `200` con el Product. Los precios siguen
+  en el historial.
 
 ### PATCH /v1/products/:id/approve
 
@@ -532,7 +546,7 @@ guarda motivo, revisor y fecha. Response `200`: Product. Ya resuelta → `409`.
 
 ### GET /v1/products/:id/presentations
 
-Arreglo plano de Presentation (las de un solo producto; **sin paginar**), orden
+Arreglo plano de Presentation activas (las de un solo producto; **sin paginar**), orden
 `nombre`. Producto inexistente → `404`.
 
 ### POST /v1/products/:id/presentations
@@ -549,9 +563,10 @@ Como **solo puede haber una presentación predeterminada por producto**, marcar
 
 ### DELETE /v1/presentations/:id
 
-Response `204`. Inexistente → `404`. Con ventas asociadas → `409` (desactivar en lugar
-de borrar). **Atención:** si no tiene ventas, el borrado arrastra en cascada sus
-precios, su inventario y sus precios propuestos (así está definido en el esquema).
+Inexistente → `404`. **Nunca se pierde el historial (D-07):** sin precios, inventario,
+ventas ni propuestas de precio se borra (`204`); con alguno de ellos queda
+`activo = false`, sale de `GET /v1/products/:id/presentations` y responde `200` con la
+Presentation.
 
 ### Códigos de error de esta sección
 
@@ -561,7 +576,7 @@ precios, su inventario y sus precios propuestos (así está definido en el esque
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso; empresa proveedora inactiva o no vinculada |
 | 404 | Producto o presentación inexistente |
-| 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada; borrado con ventas |
+| 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada |
 
 ---
 
