@@ -258,6 +258,35 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:complexType name="InsumosSimulacionPrecio">
+    <xs:all>
+      <xs:element name="currentPrice" type="xs:decimal"/>
+      <xs:element name="newPrice" type="xs:decimal"/>
+      <xs:element name="baseDemand" type="xs:decimal"/>
+      <xs:element name="elasticity" type="xs:decimal"/>
+      <xs:element name="elasticityRunId" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- POST /v1/simulation/price. `results` reutiliza ResultadoIndicador
+       (aqui sin `difference`, que solo lo agrega compare). -->
+  <xs:element name="simulacionPrecioResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="type" type="xs:string"/>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
+        <xs:element name="inputs" type="dec:InsumosSimulacionPrecio"/>
+        <xs:element name="results" type="dec:ListaResultados"/>
+        <xs:element name="scenarioId" type="xs:string"/>
+        <xs:element name="assumptions" type="dec:ListaTexto" minOccurs="0"/>
+        <xs:element name="note" type="xs:string" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="simulacionPresentacionResponse">
     <xs:complexType>
       <xs:all>

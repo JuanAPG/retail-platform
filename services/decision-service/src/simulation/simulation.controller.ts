@@ -31,6 +31,7 @@ export class SimulationController {
   constructor(private readonly simulationService: SimulationService) {}
 
   @Post('price')
+  @XmlRoot('simulacionPrecioResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({ summary: 'Simula un cambio de precio con la elasticidad ya calculada y guarda el escenario.' })
   @ApiCreatedResponse({ type: SimulationResult })
@@ -39,6 +40,7 @@ export class SimulationController {
   }
 
   @Post('presentation')
+  @XmlRoot('simulacionPresentacionResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary:
