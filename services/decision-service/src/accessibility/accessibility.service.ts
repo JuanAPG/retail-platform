@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
 import {
   ACCESSIBILITY_COMPONENTS,
@@ -48,10 +48,18 @@ export class AccessibilityService {
    * puede ver cómo se mueve el número en el tiempo, en vez de pisar el
    * resultado anterior.
    */
-  async calculateIndex(zoneId: string, segmentId: string): Promise<AccessibilityIndex> {
-    const segmento = await this.segmentosRepo.findOne({ where: { id: Number(segmentId) } });
+  async calculateIndex(zoneId: string, segmentId: number): Promise<AccessibilityIndex> {
+    const segmento = await this.segmentosRepo.findOne({ where: { id: segmentId } });
     if (!segmento) {
       throw new NotFoundException('El segmento de ingreso indicado no existe.');
+    }
+
+    // Sin esto una zona inexistente llegaba hasta el INSERT de
+    // `accesibilidad_zona`, violaba su FK y salía como 500, dejando además
+    // una corrida huérfana ya creada.
+    const [zona] = await this.dataSource.query(`SELECT 1 FROM zonas WHERE id = $1`, [zoneId]);
+    if (!zona) {
+      throw new NotFoundException(`La zona ${zoneId} no existe.`);
     }
 
     const [basicBasketCost, avgBasicBasketCostTodas, estimatedIncome, maxIncome, availability, maxAvailability, coverage] =
@@ -76,27 +84,37 @@ export class AccessibilityService {
       ACCESSIBILITY_COMPONENTS.reduce((suma, comp) => suma + valores[comp] * PESO_IGUAL, 0),
     );
 
-    const corridaId = await this.crearCorrida(segmento.id, basicBasketCost, estimatedIncome);
+    // Una sola transacción para toda la corrida: o se guarda completa
+    // (corrida, parámetros, índice, pesos y componentes) o no queda nada.
+    // Las validaciones y los cálculos van antes, para no tenerla abierta
+    // más de lo necesario.
+    await this.dataSource.transaction(async (manager) => {
+      const zonaRepo = manager.withRepository(this.zonaRepo);
+      const pesosRepo = manager.withRepository(this.pesosRepo);
+      const componentesRepo = manager.withRepository(this.componentesRepo);
 
-    const zonaGuardada = await this.zonaRepo.save(
-      this.zonaRepo.create({ corridaId, zonaId: zoneId, indice: indice.toFixed(4) }),
-    );
+      const corridaId = await this.crearCorrida(manager, segmento.id, basicBasketCost, estimatedIncome);
 
-    await this.pesosRepo.save(
-      ACCESSIBILITY_COMPONENTS.map((componente) =>
-        this.pesosRepo.create({ corridaId, componente, peso: PESO_IGUAL.toFixed(4) }),
-      ),
-    );
+      const zonaGuardada = await zonaRepo.save(
+        zonaRepo.create({ corridaId, zonaId: zoneId, indice: indice.toFixed(4) }),
+      );
 
-    await this.componentesRepo.save(
-      ACCESSIBILITY_COMPONENTS.map((componente) =>
-        this.componentesRepo.create({
-          accesibilidadId: zonaGuardada.id,
-          componente,
-          valor: valores[componente].toFixed(4),
-        }),
-      ),
-    );
+      await pesosRepo.save(
+        ACCESSIBILITY_COMPONENTS.map((componente) =>
+          pesosRepo.create({ corridaId, componente, peso: PESO_IGUAL.toFixed(4) }),
+        ),
+      );
+
+      await componentesRepo.save(
+        ACCESSIBILITY_COMPONENTS.map((componente) =>
+          componentesRepo.create({
+            accesibilidadId: zonaGuardada.id,
+            componente,
+            valor: valores[componente].toFixed(4),
+          }),
+        ),
+      );
+    });
 
     return {
       zoneId,
@@ -108,12 +126,24 @@ export class AccessibilityService {
   }
 
   /**
-   * Historial real de corridas de una zona. `segmentId`, `basicBasketCost`
-   * y `estimatedIncome` se leen de `analisis_corrida_parametros` (guardados
-   * en `calculateIndex`), no se recalculan: por eso sí reflejan lo que
-   * pasaste en cada llamada, no el valor actual.
+   * Accesibilidad VIGENTE de una zona: la corrida más reciente, sin importar
+   * el segmento (el `segmentId` de la respuesta dice con cuál se calculó).
+   * Es un solo objeto y no el historial porque el XSD declara
+   * `indiceAccesibilidad` como un único elemento, no como una lista.
+   *
+   * `segmentId`, `basicBasketCost` y `estimatedIncome` se leen de
+   * `analisis_corrida_parametros` (guardados en `calculateIndex`), no se
+   * recalculan: por eso reflejan lo que se pasó en esa corrida, no el valor
+   * actual.
    */
-  async findByZone(zoneId: string): Promise<AccessibilityIndex[]> {
+  async findByZone(zoneId: string): Promise<AccessibilityIndex> {
+    // `zonas` es de catalog-service: aquí solo se lee, para distinguir
+    // "la zona no existe" de "existe pero nunca se le calculó el índice".
+    const [zona] = await this.dataSource.query(`SELECT 1 FROM zonas WHERE id = $1`, [zoneId]);
+    if (!zona) {
+      throw new NotFoundException(`La zona ${zoneId} no existe.`);
+    }
+
     const filas: {
       corridaId: string;
       indice: string;
@@ -133,21 +163,28 @@ export class AccessibilityService {
       WHERE az.zona_id = $1
       GROUP BY az.corrida_id, az.indice, ac.ejecutada_en
       ORDER BY ac.ejecutada_en DESC
+      LIMIT 1
       `,
       [zoneId],
     );
 
-    return filas.map((f) => ({
+    const [f] = filas;
+    if (!f) {
+      throw new NotFoundException(`La zona ${zoneId} todavía no tiene accesibilidad calculada.`);
+    }
+
+    return {
       zoneId,
       segmentId: f.segmentId ? Number(f.segmentId) : 0,
       basicBasketCost: f.basicBasketCost ? Number(f.basicBasketCost) : 0,
       estimatedIncome: f.estimatedIncome ? Number(f.estimatedIncome) : null,
       indexValue: Number(f.indice),
       calculatedAt: f.executedAt,
-    }));
+    };
   }
 
   private async crearCorrida(
+    manager: EntityManager,
     segmentId: number,
     basicBasketCost: number,
     estimatedIncome: number | null,
@@ -156,7 +193,7 @@ export class AccessibilityService {
     const hace30Dias = new Date();
     hace30Dias.setDate(hoy.getDate() - 30);
 
-    const [fila] = await this.dataSource.query(
+    const [fila] = await manager.query(
       `
       INSERT INTO analisis_corridas (tipo, estado, periodo_inicio, periodo_fin)
       VALUES ('accesibilidad', 'completada', $1, $2)
@@ -166,7 +203,7 @@ export class AccessibilityService {
     );
     const corridaId = fila.id;
 
-    await this.dataSource.query(
+    await manager.query(
       `
       INSERT INTO analisis_corrida_parametros (corrida_id, clave, valor)
       VALUES ($1, 'segmentId', $2), ($1, 'basicBasketCost', $3), ($1, 'estimatedIncome', $4)

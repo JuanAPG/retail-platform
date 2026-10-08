@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -40,7 +40,17 @@ export class RecommendationsController {
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Explica una recomendación ya generada: qué recomienda, por qué y con qué evidencia.' })
   @ApiOkResponse({ type: RecommendationExplanation })
-  explain(@Param('id', ParseUUIDPipe) id: string): Promise<RecommendationExplanation> {
+  explain(
+    @Param(
+      'id',
+      // El mensaje va en arreglo, como los del ValidationPipe: así el filtro
+      // común lo pasa a `details` y el 400 sale con la misma forma.
+      new ParseUUIDPipe({
+        exceptionFactory: () => new BadRequestException(['id debe ser un UUID válido.']),
+      }),
+    )
+    id: string,
+  ): Promise<RecommendationExplanation> {
     return this.recommendationsService.explain(id);
   }
 }
