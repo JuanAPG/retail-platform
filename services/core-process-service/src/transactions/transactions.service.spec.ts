@@ -470,21 +470,20 @@ describe('TransactionsService — confirmación CSV', () => {
       importacion: { ...IMPORTACION_VALIDADA },
       filas: [FILA_VALIDA],
     });
-    await svc.confirmCsvImport('imp1', USUARIO as never, '1.2.3.4');
+    await svc.confirmCsvImport('imp1', USUARIO as never, '1.2.3.4', 'Bearer t-1');
 
     expect(auditoria.reportar).toHaveBeenCalledWith(
       expect.objectContaining({
         tabla: 'importaciones',
         registroId: 'imp1',
         accion: 'importacion',
-        usuarioId: 'u1',
-        rolId: 2,
         ip: '1.2.3.4',
         cambios: expect.arrayContaining([
           { campo: 'transacciones_creadas', posterior: '1' },
           { campo: 'canastas_creadas', posterior: '1' },
         ]),
       }),
+      'Bearer t-1',
     );
   });
 
@@ -817,6 +816,7 @@ describe('TransactionsService — alta manual', () => {
         ip: '9.9.9.9',
         cambios: expect.arrayContaining([{ campo: 'total', posterior: '85.00' }]),
       }),
+      undefined,
     );
   });
 
@@ -918,7 +918,7 @@ describe('TransactionsService — descartar importación', () => {
     const importacion = { ...IMPORTACION_VALIDADA, estado: 'con_errores' };
     const { svc, auditoria } = servicio({ importacion });
 
-    const r = await svc.discardCsvImport('imp1', USUARIO as never, '1.2.3.4');
+    const r = await svc.discardCsvImport('imp1', USUARIO as never, '1.2.3.4', 'Bearer t-1');
 
     expect(r).toMatchObject({ estado: 'descartado', estadoPrevio: 'con_errores' });
     // `descartado` es el único estado que libera el hash: sin él, un
@@ -929,6 +929,7 @@ describe('TransactionsService — descartar importación', () => {
         accion: 'update',
         cambios: [{ campo: 'estado', previo: 'con_errores', posterior: 'descartado' }],
       }),
+      'Bearer t-1',
     );
   });
 

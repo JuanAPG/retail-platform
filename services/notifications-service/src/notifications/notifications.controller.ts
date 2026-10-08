@@ -1,13 +1,5 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -45,6 +37,7 @@ export class NotificationsController {
     @Body() dto: CreateNotificationDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
     const { data, creada } = await this.notificationsService.create(dto, {
@@ -55,6 +48,7 @@ export class NotificationsController {
       rol: usuario.rol,
       rolId: usuario.rolId,
       ip,
+      token,
     });
     res.status(creada ? HttpStatus.CREATED : HttpStatus.OK);
     return data;

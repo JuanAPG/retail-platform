@@ -486,14 +486,15 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
     expect(await servicio.countUnread('u1')).toEqual({ unread: 1 });
   });
 
-  it('cada creación reporta a auditoría sin bloquear', async () => {
+  it('cada creación reporta a auditoría sin bloquear, reenviando el token del emisor', async () => {
     const { servicio, audit } = servicioFresco();
     await servicio.create(
-      { ...ESCENARIO, relatedEntityId: 'p7', recipientUserId: 'u1' },
-      emisorDe('escenario.generado'),
+      { ...BASE, relatedEntityId: 'p7', recipientUserId: 'u1' },
+      { token: 'Bearer t-1' },
     );
     expect(audit.reportar).toHaveBeenCalledWith(
       expect.objectContaining({ tabla: 'notificaciones', accion: 'insert' }),
+      'Bearer t-1',
     );
   });
 });

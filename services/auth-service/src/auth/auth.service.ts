@@ -105,16 +105,12 @@ export class AuthService {
       };
     });
 
-    await this.auditoria.reportar({
-      tabla: 'proveedores',
-      registroId: resultado.proveedorId,
-      accion: 'insert',
-      descripcion: `Solicitud de registro de proveedor (${dto.email}).`,
-      usuarioId: resultado.usuarioId,
-      rolId: rolProveedor.id,
-      ip,
-    });
-
+    // Sin reportar a audit-service: quien solicita no tiene sesión (es un
+    // formulario público, antes de que exista ninguna cuenta activa), así
+    // que no hay Authorization que reenviar ni actor real que auditar en
+    // este instante. La activación posterior SÍ queda auditada: la hace
+    // un Administrador autenticado vía `PATCH /v1/usuarios/:id`
+    // (UsersService.update).
     return resultado;
   }
 
@@ -147,15 +143,21 @@ export class AuthService {
       this.refreshTtl(),
     );
 
-    await this.auditoria.reportar({
-      tabla: 'usuarios',
-      registroId: usuario.id,
-      accion: 'login',
-      descripcion: `Inicio de sesión (${usuario.email}).`,
-      usuarioId: usuario.id,
-      rolId: usuario.rolId,
-      ip,
-    });
+    // El propio accessToken recién emitido ya es válido para SessionGuard:
+    // la sesión que exige se acaba de escribir arriba. Es el único caso en
+    // los 8 reportar() de auth-service donde no hay un Authorization del
+    // caller que reenviar (login es público), así que se reenvía el que
+    // acaba de nacer.
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: usuario.id,
+        accion: 'login',
+        descripcion: `Inicio de sesión (${usuario.email}).`,
+        ip,
+      },
+      tokens.accessToken,
+    );
 
     return {
       accessToken: tokens.accessToken,
@@ -207,15 +209,18 @@ export class AuthService {
       this.refreshTtl(),
     );
 
-    await this.auditoria.reportar({
-      tabla: 'usuarios',
-      registroId: usuario.id,
-      accion: 'login',
-      descripcion: `Sesión renovada (${usuario.email}).`,
-      usuarioId: usuario.id,
-      rolId: usuario.rolId,
-      ip,
-    });
+    // Mismo razonamiento que en login(): el accessToken recién rotado ya
+    // vale para SessionGuard porque la sesión nueva se acaba de escribir.
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: usuario.id,
+        accion: 'login',
+        descripcion: `Sesión renovada (${usuario.email}).`,
+        ip,
+      },
+      tokens.accessToken,
+    );
 
     return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
@@ -223,24 +228,30 @@ export class AuthService {
   // ---------------------------------------------------------------
   // LOGOUT
   // ---------------------------------------------------------------
-  async logout(solicitante: SesionUsuario, ip?: string) {
+  async logout(solicitante: SesionUsuario, ip?: string, token?: string) {
     const redis = getRedis();
     const sesion = await redis.get(`session:${solicitante.id}`);
+
+    // Se reporta ANTES de borrar la sesión (abajo): el SessionGuard de
+    // audit-service exige que exista `session:{userId}` en Redis, y el
+    // propio `del` de este método la borra. Reportar después rechazaría
+    // con 401 el logout legítimo del mismo actor que lo origina.
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: solicitante.id,
+        accion: 'login',
+        descripcion: `Cierre de sesión (${solicitante.email}).`,
+        ip,
+      },
+      token,
+    );
+
     if (sesion) {
       // Revoca el refresh vigente para que no se pueda rotar después.
       await redis.set(`revoked:${JSON.parse(sesion).refreshJti}`, '1', 'EX', this.refreshTtl());
       await redis.del(`session:${solicitante.id}`);
     }
-
-    await this.auditoria.reportar({
-      tabla: 'usuarios',
-      registroId: solicitante.id,
-      accion: 'login',
-      descripcion: `Cierre de sesión (${solicitante.email}).`,
-      usuarioId: solicitante.id,
-      rolId: solicitante.rolId,
-      ip,
-    });
 
     // El access muere por sesión ausente aunque no expire: el guard lo rechaza.
     return { mensaje: 'Sesión cerrada.' };

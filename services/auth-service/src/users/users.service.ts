@@ -26,12 +26,6 @@ interface AuditCambioInput {
 /** Código de Postgres para violación de llave foránea. */
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 
-/** Actor mínimo que la bitácora necesita (id + rol vigente). */
-export interface ActorAuditoria {
-  id: string;
-  rolId: number;
-}
-
 /** Campos de `usuarios` que se comparan para la bitácora (sin password_hash). */
 const CAMPOS_AUDITADOS = ['nombre', 'email', 'rolId', 'activo'] as const;
 
@@ -83,7 +77,7 @@ export class UsersService {
     return this.toPublic(await this.obtenerOFallar(id));
   }
 
-  async create(dto: CreateUsuarioDto, actor?: ActorAuditoria, ip?: string) {
+  async create(dto: CreateUsuarioDto, ip?: string, token?: string) {
     await this.validarEmailLibre(dto.email);
     await this.validarRol(dto.rolId);
 
@@ -97,28 +91,35 @@ export class UsersService {
 
     const guardado = await this.usuariosRepo.save(usuario);
 
-    await this.auditoria.reportar({
-      usuarioId: actor?.id ?? null,
-      rolId: actor?.rolId ?? null,
-      tabla: 'usuarios',
-      registroId: guardado.id,
-      accion: 'insert',
-      descripcion: `Usuario creado (${dto.email}).`,
-      ip,
-      cambios: [
-        { campo: 'nombre', posterior: dto.nombre },
-        { campo: 'email', posterior: dto.email },
-        { campo: 'rolId', posterior: String(dto.rolId) },
-        { campo: 'activo', posterior: String(dto.activo ?? true) },
-      ],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: guardado.id,
+        accion: 'insert',
+        descripcion: `Usuario creado (${dto.email}).`,
+        ip,
+        cambios: [
+          { campo: 'nombre', posterior: dto.nombre },
+          { campo: 'email', posterior: dto.email },
+          { campo: 'rolId', posterior: String(dto.rolId) },
+          { campo: 'activo', posterior: String(dto.activo ?? true) },
+        ],
+      },
+      token,
+    );
 
     // Se relee para que la respuesta incluya el rol (relación eager) y
     // los timestamps que genera la base, no solo lo que se mandó.
     return this.findOne(guardado.id);
   }
 
-  async update(id: string, dto: UpdateUsuarioDto, solicitanteId: string, ip?: string) {
+  async update(
+    id: string,
+    dto: UpdateUsuarioDto,
+    solicitanteId: string,
+    ip?: string,
+    token?: string,
+  ) {
     const usuario = await this.obtenerOFallar(id);
     const previo = this.foto(usuario);
 
@@ -153,20 +154,22 @@ export class UsersService {
     if (dto.password) {
       cambios.push({ campo: 'password', previo: null, posterior: '***' });
     }
-    await this.auditoria.reportar({
-      ...(await this.actorDe(solicitanteId)),
-      tabla: 'usuarios',
-      registroId: usuario.id,
-      accion: 'update',
-      descripcion: `Usuario actualizado (${usuario.email}).`,
-      ip,
-      cambios,
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: usuario.id,
+        accion: 'update',
+        descripcion: `Usuario actualizado (${usuario.email}).`,
+        ip,
+        cambios,
+      },
+      token,
+    );
 
     return this.findOne(usuario.id);
   }
 
-  async remove(id: string, solicitanteId: string, ip?: string) {
+  async remove(id: string, solicitanteId: string, ip?: string, token?: string) {
     const usuario = await this.obtenerOFallar(id);
     const previo = this.foto(usuario);
 
@@ -192,15 +195,17 @@ export class UsersService {
       throw error;
     }
 
-    await this.auditoria.reportar({
-      ...(await this.actorDe(solicitanteId)),
-      tabla: 'usuarios',
-      registroId: id,
-      accion: 'delete',
-      descripcion: `Usuario eliminado (${previo.email}).`,
-      ip,
-      cambios: CAMPOS_AUDITADOS.map((campo) => ({ campo, previo: previo[campo], posterior: null })),
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'usuarios',
+        registroId: id,
+        accion: 'delete',
+        descripcion: `Usuario eliminado (${previo.email}).`,
+        ip,
+        cambios: CAMPOS_AUDITADOS.map((campo) => ({ campo, previo: previo[campo], posterior: null })),
+      },
+      token,
+    );
 
     return { mensaje: 'Usuario eliminado.', id };
   }
@@ -216,16 +221,6 @@ export class UsersService {
       ...publicUser,
       rol: usuario.rol?.nombre,
     };
-  }
-
-  // ---------------------------------------------------------------
-  // Apoyo de auditoría (M15)
-  // ---------------------------------------------------------------
-
-  /** Resuelve el actor (id + rol vigente) para la bitácora. */
-  private async actorDe(solicitanteId: string): Promise<{ usuarioId: string; rolId: number | null }> {
-    const actor = await this.usuariosRepo.findOne({ where: { id: solicitanteId } });
-    return { usuarioId: solicitanteId, rolId: actor?.rolId ?? null };
   }
 
   /** Foto comparable de un usuario (sin secretos). */

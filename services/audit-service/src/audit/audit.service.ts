@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AccionAuditoria, Auditoria } from '../entities/auditoria.entity';
@@ -16,6 +16,7 @@ export interface AuditLogInput {
   rolId?: number | null;
   tabla: string;
   registroId?: string | null;
+  servicio: string;
   accion: AccionAuditoria;
   descripcion?: string | null;
   ip?: string | null;
@@ -54,6 +55,7 @@ export class AuditService {
           rolId: input.rolId ?? null,
           tablaAfectada: input.tabla,
           registroId: input.registroId ?? null,
+          servicio: input.servicio,
           accion: input.accion,
           descripcion: input.descripcion ?? null,
           direccionIp: input.ip ?? null,
@@ -93,6 +95,7 @@ export class AuditService {
         rolId: input.rolId ?? null,
         tablaAfectada: input.tabla,
         registroId: input.registroId ?? null,
+        servicio: input.servicio,
         accion: input.accion,
         descripcion: input.descripcion ?? null,
         direccionIp: input.ip ?? null,
@@ -131,6 +134,9 @@ export class AuditService {
     if (filters.tabla) {
       qb.andWhere('evento.tablaAfectada = :tabla', { tabla: filters.tabla });
     }
+    if (filters.servicio) {
+      qb.andWhere('evento.servicio = :servicio', { servicio: filters.servicio });
+    }
     if (filters.registroId) {
       qb.andWhere('evento.registroId = :registroId', { registroId: filters.registroId });
     }
@@ -149,5 +155,25 @@ export class AuditService {
 
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
+  }
+
+  /**
+   * Detalle de un evento. 404 si no existe — incluido un id no numérico:
+   * el id es `bigint` en Postgres, así que compararlo contra un string no
+   * numérico daría un 500 (`invalid input syntax for type bigint`) en vez
+   * de un 404 honesto si se dejara pasar tal cual al repositorio.
+   */
+  async findOne(id: string): Promise<Auditoria> {
+    if (!/^\d+$/.test(id)) {
+      throw new NotFoundException('El evento no existe.');
+    }
+    const evento = await this.auditoriaRepo.findOne({
+      where: { id },
+      relations: { cambios: true },
+    });
+    if (!evento) {
+      throw new NotFoundException('El evento no existe.');
+    }
+    return evento;
   }
 }

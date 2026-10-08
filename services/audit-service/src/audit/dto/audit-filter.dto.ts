@@ -2,8 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { AccionAuditoria } from '../../entities/auditoria.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-
-const ACCIONES: AccionAuditoria[] = ['insert', 'update', 'delete', 'login', 'importacion'];
+import { ACCIONES } from './registrar-evento.dto';
 
 /**
  * Filtros de `GET /v1/auditoria`. Todos opcionales: sin filtros trae
@@ -21,6 +20,11 @@ export class AuditFilterDto extends PaginationDto {
   @IsString()
   registroId?: string;
 
+  @ApiPropertyOptional({ description: 'Solo eventos reportados por este microservicio.' })
+  @IsOptional()
+  @IsString()
+  servicio?: string;
+
   @ApiPropertyOptional({ description: 'Solo eventos de este usuario.' })
   @IsOptional()
   @IsUUID('4', { message: 'usuarioId debe ser un UUID válido.' })
@@ -28,7 +32,7 @@ export class AuditFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({ enum: ACCIONES })
   @IsOptional()
-  @IsIn(ACCIONES, { message: 'accion debe ser insert, update, delete, login o importacion.' })
+  @IsIn(ACCIONES, { message: `accion debe ser una de: ${ACCIONES.join(', ')}.` })
   accion?: AccionAuditoria;
 
   @ApiPropertyOptional({ example: '2026-09-01' })
