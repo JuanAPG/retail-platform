@@ -69,7 +69,7 @@ describe('/v1/segments (integración, requiere stack)', () => {
     // Limpieza por si una aserción falló a medias.
     const lista = await http('GET', '/v1/segments?limit=100', admin);
     for (const s of lista.cuerpo?.data ?? []) {
-      if (s.code === nuevo.code) await http('DELETE', `/v1/segments/${s.id}`, admin);
+      if (s.code === nuevo.code) await http('DELETE', `/v1/segments/${s.id}`, analista);
     }
     await redis.quit();
   });
@@ -108,14 +108,16 @@ describe('/v1/segments (integración, requiere stack)', () => {
 
     expect((await http('POST', '/v1/segments', analista, nuevo)).estado).toBe(409);
     expect((await http('POST', '/v1/segments', auditor, nuevo)).estado).toBe(403);
+    expect((await http('POST', '/v1/segments', admin, nuevo)).estado).toBe(403);
 
     const editado = await http('PATCH', `/v1/segments/${id}`, analista, { incomeRangeMax: 950000 });
     expect(editado.estado).toBe(200);
     expect(Number(editado.cuerpo.incomeRangeMax)).toBe(950000);
 
-    // Solo el Administrador borra.
-    expect((await http('DELETE', `/v1/segments/${id}`, analista)).estado).toBe(403);
-    const borrado = await http('DELETE', `/v1/segments/${id}`, admin);
+    // CAT-06: el Analista tiene control total; el Administrador solo lee.
+    expect((await http('DELETE', `/v1/segments/${id}`, admin)).estado).toBe(403);
+    expect((await http('PATCH', `/v1/segments/${id}`, admin, { incomeRangeMax: 1 })).estado).toBe(403);
+    const borrado = await http('DELETE', `/v1/segments/${id}`, analista);
     expect(borrado.estado).toBe(204);
     expect(borrado.cuerpo).toBeNull();
 

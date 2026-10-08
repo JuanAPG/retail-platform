@@ -33,7 +33,7 @@ export class SegmentsController {
   constructor(private readonly segmentsService: SegmentsService) {}
 
   @Post()
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({ summary: 'Crea un segmento de ingreso (Administrador, Analista comercial).' })
   @ApiRespuesta(201, 'Segmento creado.', muestras.segmento)
   @ApiErrores(400, 401, 403, 409)
@@ -62,7 +62,7 @@ export class SegmentsController {
   }
 
   @Patch(':id')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({ summary: 'Edita un segmento; todos los campos son opcionales.' })
   @ApiRespuesta(200, 'Segmento actualizado.', muestras.segmento)
   @ApiErrores(400, 401, 403, 404, 409)
@@ -72,7 +72,7 @@ export class SegmentsController {
 
   @Delete(':id')
   @HttpCode(204)
-  @Roles(ROL.ADMINISTRADOR)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({ summary: 'Elimina un segmento (solo Administrador). 409 si hay zonas clasificadas con él.' })
   @ApiSinCuerpo(204, 'Eliminado, sin cuerpo.')
   @ApiErrores(400, 401, 403, 404, 409)
