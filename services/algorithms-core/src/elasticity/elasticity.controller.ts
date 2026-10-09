@@ -37,7 +37,7 @@ export class ElasticityController {
     'elasticityCalculateResponse',
     { siemprePresentes: ['zoneId', 'rSquared'] },
   )
-  @ApiErrores(400, 401, 403, 404, 500)
+  @ApiErrores(400, 401, 403, 404, 500, 503)
   calculate(@Body() params: ElasticityParamsDto, @CurrentUser() user: SesionUsuario) {
     // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar.
     return this.elasticityService.calculate(params, user);
@@ -53,7 +53,7 @@ export class ElasticityController {
     'elasticityChartResponse',
     { siemprePresentes: ['value', 'classification', 'rSquared', 'national'] },
   )
-  @ApiErrores(400, 401, 403, 404)
+  @ApiErrores(400, 401, 403, 404, 503)
   getComparativeChart(@Query() filters: ElasticityFilterDto) {
     return this.elasticityService.getComparativeChart(filters);
   }
@@ -70,7 +70,7 @@ export class ElasticityController {
     'currentElasticityListResponse',
     { siemprePresentes: ['zoneId', 'rSquared'] },
   )
-  @ApiErrores(400, 401, 403)
+  @ApiErrores(400, 401, 403, 503)
   current(@Query() filtros: CurrentElasticityFilterDto) {
     return this.elasticityService.current(filtros);
   }

@@ -68,6 +68,13 @@ const ERRORES: Record<number, { code: string; message: string; descripcion: stri
     message: 'No se pudo completar el cálculo; quedó registrado como corrida fallida.',
     descripcion: 'Falla durante el cálculo; la corrida queda registrada como fallida.',
   },
+  // Lo emite SessionGuard cuando Redis (sesiones) no responde. El 503 por
+  // core-process/catalog/pricing/auth caídos llega con ALG-11 (Fase C).
+  503: {
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'No se pudo verificar la sesión: el servicio de sesiones no responde.',
+    descripcion: 'Redis (sesiones) no responde: no se puede verificar la sesión.',
+  },
 };
 
 /**

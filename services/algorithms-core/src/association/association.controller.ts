@@ -36,7 +36,7 @@ export class AssociationController {
     'aprioriRunResponse',
     { siemprePresentes: ['lift', 'transactionCount'] },
   )
-  @ApiErrores(400, 401, 403, 500)
+  @ApiErrores(400, 401, 403, 500, 503)
   runApriori(@Body() params: AprioriParamsDto, @CurrentUser() user: SesionUsuario) {
     // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar.
     return this.associationService.runApriori(params, user);
@@ -48,7 +48,7 @@ export class AssociationController {
   @RespuestaXml(200, 'Página de corridas con sus parámetros, sin reglas.', pagina([muestras.corrida], 5), 'runListResponse', {
     siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage'],
   })
-  @ApiErrores(400, 401, 403)
+  @ApiErrores(400, 401, 403, 503)
   findAllRuns(@Query() paginacion: PaginationDto) {
     return this.associationService.findAllRuns(paginacion);
   }
@@ -59,7 +59,7 @@ export class AssociationController {
   @RespuestaXml(200, 'La corrida con sus supuestos, filtros y reglas en `results`.', muestras.corridaCompleta, 'runResponse', {
     siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'],
   })
-  @ApiErrores(400, 401, 403, 404)
+  @ApiErrores(400, 401, 403, 404, 503)
   findRun(@Param('id', ParseUUIDPipe) id: string) {
     return this.associationService.findRun(id);
   }
