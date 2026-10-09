@@ -17,6 +17,7 @@
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
+import { borrarPresentaciones, crearPresentaciones, PresentacionPropia } from './fixtures';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
 const AUDIT_BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
@@ -81,6 +82,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
   let ajena: string; // presentación de OTRA empresa
   let tiendaA: string;
   let tiendaB: string;
+  let propias: PresentacionPropia[];
 
   const propuesta = (proposedPrice = 38) => ({ presentationId, proposedPrice, purchaseUnit: 'caja 12 pzas' });
   const crear = async (precio = 38) => (await http('POST', '/v1/price-proposals', proveedor, propuesta(precio))).cuerpo.id as string;
@@ -111,16 +113,9 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     proveedor = await sesion(await usuarioPorCorreo(EMAIL_PROVEEDOR), 'Proveedor', EMAIL_PROVEEDOR);
     otroProveedor = await sesion(await usuarioPorCorreo(EMAIL_OTRO_PROVEEDOR), 'Proveedor', EMAIL_OTRO_PROVEEDOR);
 
-    const libre = await db.query(
-      `SELECT pres.id AS presentacion_id, pres.producto_id
-       FROM producto_presentaciones pres
-       JOIN productos prod ON prod.id = pres.producto_id AND prod.estatus = 'activo'
-       JOIN proveedores pr ON pr.id = prod.proveedor_id AND pr.email = $1
-       WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
-       ORDER BY pres.id DESC LIMIT 1`,
-      [EMAIL_PROVEEDOR],
-    );
-    ({ presentacion_id: presentationId, producto_id: productId } = libre.rows[0]);
+    // PRI-13: presentación PROPIA del proveedor (creada aquí, borrada al final), sin precios previos.
+    propias = await crearPresentaciones(db, 'PP', 1, { emailProveedor: EMAIL_PROVEEDOR });
+    ({ presentacion_id: presentationId, producto_id: productId } = propias[0]);
 
     const otra = await db.query(
       `SELECT pres.id FROM producto_presentaciones pres JOIN productos prod ON prod.id = pres.producto_id
@@ -139,6 +134,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     // Los precios de la prueba ya no existen, pero la caché del producto seguiría mostrándolos.
     await redis.incr(`pricing:v:${productId}`);
     await redis.expire(`pricing:v:${productId}`, 86400);
+    await borrarPresentaciones(db, propias);
     await db.end();
     await redis.quit();
   });

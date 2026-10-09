@@ -11,6 +11,7 @@
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
+import { borrarPresentaciones, crearPresentaciones, PresentacionPropia } from './fixtures';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
 const AUDIT = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
@@ -91,16 +92,8 @@ describe('pricing: programados, series, alertas, observaciones y límites (integ
     planeador = await sesion('it-px-planeador', 'Planeador');
     proveedor = await sesion('it-px-prov', 'Proveedor');
 
-    // Una pareja por presentación activa: la primera tienda en la que esa presentación aún no tiene precio.
-    parejas = (
-      await db.query(`
-        SELECT DISTINCT ON (pres.id) pres.id AS presentacion_id, pres.producto_id, t.id AS tienda_id, t.zona_id
-        FROM producto_presentaciones pres
-        JOIN productos prod ON prod.id = pres.producto_id AND prod.estatus = 'activo'
-        CROSS JOIN tiendas t
-        WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id AND p.tienda_id = t.id)
-        ORDER BY pres.id DESC, t.id`)
-    ).rows;
+    // PRI-13: seis presentaciones PROPIAS (creadas aquí, borradas al final), todas sin precios.
+    parejas = await crearPresentaciones(db, 'PX', 6);
     expect(parejas.length).toBeGreaterThanOrEqual(4);
     usar(0);
     await limpiar();
@@ -111,6 +104,7 @@ describe('pricing: programados, series, alertas, observaciones y límites (integ
       usar(k);
       await limpiar();
     }
+    await borrarPresentaciones(db, parejas);
     await db.end();
     await redis.quit();
   });
@@ -245,49 +239,58 @@ describe('pricing: programados, series, alertas, observaciones y límites (integ
   it('PRI-07 / D-09: un cambio de 4.99 % NO avisa; uno de 5 % SÍ, y le llega al Responsable de precios', async () => {
     usar(1);
     await http('PUT', '/v1/prices/alert-settings', precios, { umbralPct: 5, ventanaDias: 1 }); // base = el precio de ayer
-    // Se filtra por el CONTENIDO del aviso (los precios de esta prueba), porque las notificaciones persisten entre pruebas y corridas.
-    const avisos = async (precioNuevo: string) =>
+    // El aviso se identifica por el id del PRECIO que lo causó (QA-PRI53-05): las notificaciones persisten entre pruebas y corridas.
+    const avisosDe = async (precioId: string) =>
       ((await http('GET', '/v1/notifications?limit=100', precios, undefined, undefined, NOTIF)).cuerpo?.data ?? []).filter(
-        (n: { eventType: string; relatedEntityId: string; message: string }) =>
-          n.eventType === 'precio.umbral' && n.relatedEntityId === presentationId && n.message.includes(`a ${precioNuevo} `),
+        (n: { eventType: string; relatedEntityId: string }) => n.eventType === 'precio.umbral' && n.relatedEntityId === precioId,
       );
+    const registrar = async (precio: number, fecha: string) => {
+      const r = await http('POST', '/v1/prices', precios, alta(precio, fecha));
+      expect(r.estado).toBe(201);
+      return r.cuerpo.id as string;
+    };
 
-    expect((await http('POST', '/v1/prices', precios, alta(100, '2026-05-01'))).estado).toBe(201); // primer precio: no hay con qué comparar
-    expect(await avisos('100.00')).toHaveLength(0);
+    expect(await avisosDe(await registrar(100, '2026-05-01'))).toHaveLength(0); // primer precio: no hay con qué comparar
+    expect(await avisosDe(await registrar(104.99, '2026-05-03'))).toHaveLength(0); // 4.99 %
 
-    expect((await http('POST', '/v1/prices', precios, alta(104.99, '2026-05-03'))).estado).toBe(201); // 4.99 %
-    expect(await avisos('104.99')).toHaveLength(0);
-
-    expect((await http('POST', '/v1/prices', precios, alta(110.24, '2026-05-05'))).estado).toBe(201); // 5.0005 % sobre 104.99
-    const hechos = await avisos('110.24');
+    const hechos = await avisosDe(await registrar(110.24, '2026-05-05')); // 5.0005 % sobre 104.99
     expect(hechos).toHaveLength(1);
-    expect(hechos[0]).toMatchObject({ sourceService: 'pricing-service', relatedEntityType: 'presentacion' });
+    expect(hechos[0]).toMatchObject({ sourceService: 'pricing-service', relatedEntityType: 'precio' });
     expect(hechos[0].title).toContain('5 %');
     expect(hechos[0].message).toContain('subió de 104.99 a 110.24');
+
+    // QA-PRI53-05: una SEGUNDA alerta de la misma presentación, enseguida, no se funde con la primera.
+    const bajada = await avisosDe(await registrar(104, '2026-05-06')); // -5.67 % sobre 110.24
+    expect(bajada).toHaveLength(1);
+    expect(bajada[0].message).toContain('bajó de 110.24 a 104.00');
     await limpiar();
   });
 
   it('PRI-07: el cambio ACUMULADO en la ventana también avisa aunque cada paso quede bajo el umbral', async () => {
     usar(2);
     await http('PUT', '/v1/prices/alert-settings', precios, { umbralPct: 5, ventanaDias: 10 });
-    // Se filtra por el CONTENIDO del aviso (los precios de esta prueba), porque las notificaciones persisten entre pruebas y corridas.
-    const avisos = async (precioNuevo: string) =>
+    const avisosDe = async (precioId: string) =>
       ((await http('GET', '/v1/notifications?limit=100', precios, undefined, undefined, NOTIF)).cuerpo?.data ?? []).filter(
-        (n: { eventType: string; relatedEntityId: string; message: string }) =>
-          n.eventType === 'precio.umbral' && n.relatedEntityId === presentationId && n.message.includes(`a ${precioNuevo} `),
+        (n: { eventType: string; relatedEntityId: string }) => n.eventType === 'precio.umbral' && n.relatedEntityId === precioId,
       );
     // +1 % por día durante 6 días: ninguno pasa de 1 %, pero contra el precio de hace 10 días el acumulado sí.
     let precio = 100;
-    expect((await http('POST', '/v1/prices', precios, alta(precio, '2026-06-01'))).estado).toBe(201);
+    const ids: Record<string, string> = {};
+    const primero = await http('POST', '/v1/prices', precios, alta(precio, '2026-06-01'));
+    expect(primero.estado).toBe(201);
+    ids['100.00'] = primero.cuerpo.id;
     for (let dia = 2; dia <= 7; dia++) {
       precio = Math.round(precio * 1.01 * 100) / 100;
-      expect((await http('POST', '/v1/prices', precios, alta(precio, `2026-06-0${dia}`))).estado).toBe(201);
+      const r = await http('POST', '/v1/prices', precios, alta(precio, `2026-06-0${dia}`));
+      expect(r.estado).toBe(201);
+      ids[precio.toFixed(2)] = r.cuerpo.id;
     }
     // El historial es más corto que la ventana: la base es el precio más antiguo (100). El primer paso que cruza el 5 %
-    // es 105.10 (5.10 %); los de 101, 102.01, 103.03 y 104.06 (1 % a 4.06 %) no avisaron. El de 106.15 ya no genera un
-    // aviso nuevo: notifications-service no repite el mismo evento y entidad en 5 minutos.
-    expect(await avisos('105.10')).toHaveLength(1);
-    for (const antes of ['101.00', '102.01', '103.03', '104.06']) expect(await avisos(antes)).toHaveLength(0);
+    // es 105.10 (5.10 %); los de 101, 102.01, 103.03 y 104.06 (1 % a 4.06 %) no avisaron. Cada precio tiene su propia llave,
+    // así que el de 106.15 (6.15 %) también avisa (antes se perdía por la deduplicación de 5 minutos).
+    expect(await avisosDe(ids['105.10'])).toHaveLength(1);
+    for (const antes of ['101.00', '102.01', '103.03', '104.06']) expect(await avisosDe(ids[antes])).toHaveLength(0);
+    expect(await avisosDe(ids['106.15'])).toHaveLength(1);
     await limpiar();
   });
 

@@ -17,6 +17,7 @@
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
+import { borrarPresentaciones, crearPresentaciones, PresentacionPropia } from './fixtures';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
 const AUDIT_BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
@@ -98,6 +99,8 @@ describe('/v1/prices (integración, requiere stack)', () => {
   const limpiar = () =>
     db.query('DELETE FROM precios WHERE presentacion_id = $1 AND tienda_id = $2', [presentationId, storeId]);
 
+  let propias: PresentacionPropia[];
+
   beforeAll(async () => {
     await db.connect();
     precios = await sesion(await usuarioReal('Responsable de precios'), 'Responsable de precios');
@@ -106,22 +109,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     auditor = await sesion('it-pr-auditor', 'Auditor');
     proveedor = await sesion('it-pr-prov', 'Proveedor');
 
-    // Una presentación SIN ningún precio en el seed (en ninguna tienda): así el historial
-    // filtrado por esa presentación contiene solo lo que crea la prueba. ORDER BY para que
-    // la elección sea siempre la misma (sin él, cambia con el orden físico de la tabla).
-    const libre = await db.query(`
-      SELECT pres.id AS presentacion_id, pres.producto_id, t.id AS tienda_id, t.zona_id
-      FROM producto_presentaciones pres
-      JOIN productos prod ON prod.id = pres.producto_id AND prod.estatus = 'activo'
-      CROSS JOIN tiendas t
-      WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
-      ORDER BY pres.id, t.id
-      LIMIT 1`);
-    ({ presentacion_id: presentationId, producto_id: productId, tienda_id: storeId, zona_id: zoneId } = libre.rows[0]);
+    // PRI-13: una presentación PROPIA (creada aquí y borrada al final), sin ningún precio: el historial filtrado por ella
+    // contiene solo lo que crea la prueba, sin importar qué datos tenga la base ni qué corridas hubo antes.
+    propias = await crearPresentaciones(db, 'PR', 1);
+    ({ presentacion_id: presentationId, producto_id: productId, tienda_id: storeId, zona_id: zoneId } = propias[0]);
   });
 
   afterAll(async () => {
     await limpiar();
+    await borrarPresentaciones(db, propias);
     // Los precios de la prueba ya no existen, pero la caché del producto seguiría
     // mostrándolos hasta 5 min: se invalida subiendo la versión, como hace el servicio.
     await redis.incr(`pricing:v:${productId}`);
