@@ -1,36 +1,50 @@
-# Plantilla NestJS transversal (Sprint 2+3)
+# documents-service (M16) — Reportes ejecutivos, PDF e historial en MongoDB
 
-Base de los 9 microservicios NestJS. Ya resuelve lo transversal — **no se
-modifica por servicio**, solo se agregan módulos de negocio.
+Contrato: [docs/contratos/documents-service.md](../../docs/contratos/documents-service.md) · XSD:
+[documents-service.xsd](../../docs/contratos/documents-service.xsd) (namespace `documents/v1`).
 
-## Qué trae resuelto
+## Qué hace
 
-- `GET /v1/health` sin auth (`src/health/`)
-- Error estándar `{ statusCode, message, code, details, path, timestamp }`
-  (`src/common/filters/`, catálogo en `services/snippets/error-codes.md`)
-- Logging JSON por operación (`src/common/interceptors/logging.interceptor.ts`)
-- XML si `Accept: application/xml` (`xml.interceptor.ts`; XSD en `docs/contratos/`)
-- `SessionGuard`: JWT + `revoked:{jti}` + `session:{userId}` en Redis
-  (`src/common/auth/`). Aplicar con `@UseGuards(SessionGuard)`.
+- `POST /v1/reports/executive` (Gerente de categoría): arma el reporte con los **16 indicadores** de la
+  retroalimentación, consultando por HTTP a core-process, catalog, algorithms-core, pricing y decision,
+  y lo guarda en MongoDB. Si un servicio no responde (3 s), su indicador sale `disponible: false`
+  con el motivo, **nunca como 0**.
+- `GET /v1/reports`, `GET /v1/reports/:id`, `PATCH /v1/reports/:id`, `GET /v1/reports/stats/by-user-month`.
+- `GET /v1/reports/:id/export?format=pdf|xlsx`: PDF (acentos, ñ, `$` y `%`) o Excel con las cifras como celdas
+  numéricas, generados del documento guardado.
+- El Proveedor solo ve sus propios reportes (`404` con los de otro).
 
-## Cómo copiarme a un servicio nuevo (5 pasos)
+## MongoDB
 
-```bash
-cp -r services/template-nest services/<nuevo-servicio>
-cd services/<nuevo-servicio>
-# 1. En .env.example y docker-compose: fija PORT y SERVICE_NAME
-# 2. Agrega tus módulos (controladores con rutas que cuelguen de /v1/)
-# 3. Protege rutas con @UseGuards(SessionGuard) (health queda abierto)
-# 4. Documenta en Swagger con ejemplos JSON y XML
-# 5. npm install && npm run build && curl localhost:<PORT>/v1/health
-```
+Colección `reportes` con índices `{usuarioId: 1, creadoEn: -1}` y `{tipo: 1, creadoEn: -1}`.
+Con Mongo caído las rutas de reportes responden `503` y `GET /v1/health` sale `degraded`.
 
-## Probarla sola
+## Levantarlo
 
 ```bash
-npm install
-PORT=3000 SERVICE_NAME=plantilla-test npm run start:dev
-curl localhost:3000/v1/health
-curl localhost:3000/v1/no-existe              # error estándar 404
-curl -H 'Accept: application/xml' localhost:3000/v1/health
+docker compose -f infra/docker-compose.yml up -d mongodb redis documents-service
+curl localhost:3108/v1/health      # {"status":"ok", ... "checks":{"redis":"ok","mongodb":"ok"}}
 ```
+
+Swagger en `http://localhost:3108/docs` (ejemplos JSON y XML con la raíz y namespace reales).
+`mongo-express` (opcional): `http://localhost:8081` (admin / admin_pass_2026).
+
+## Pruebas
+
+```bash
+npm test                    # unitarias (indicadores con fetch simulado, servicio con modelo simulado, PDF)
+npm run test:integracion    # contra el servicio y MongoDB reales (requiere el stack arriba)
+```
+
+Las de integración generan reportes reales, comprueban que las cifras coinciden con su servicio de
+origen, leen el PDF con un parser, verifican los índices con `explain()` (IXSCAN) y el aislamiento del
+Proveedor. Con core-process, algorithms-core y decision apagados, el reporte sale con esos indicadores
+como no disponibles: es el comportamiento esperado.
+
+## Notas
+
+- `UV_THREADPOOL_SIZE` se sube en `main.ts`: el DNS de un servicio apagado tarda ~2.5 s y con el pool
+  por defecto (4 hilos) bloquea las consultas a los servicios sanos.
+- Variables opcionales: `CORE_PROCESS_SERVICE_URL`, `CATALOG_SERVICE_URL`, `PRICING_SERVICE_URL`,
+  `ALGORITHMS_CORE_URL`, `DECISION_SERVICE_URL`, `AUDIT_SERVICE_URL` (por defecto, el nombre del servicio en Docker).
+- Pendiente: avisos a notifications-service (hoy el reporte no emite notificaciones).
