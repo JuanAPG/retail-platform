@@ -91,6 +91,17 @@ describe('Tabla de permisos por evento', () => {
     expect(permisoDe('propuesta.resuelta').destino).toEqual({ tipo: 'usuario' });
   });
 
+  it('precio.observado y observacion.resuelta (PRI-09/D-16, agregados 2026-10-09)', () => {
+    expect(permisoDe('precio.observado')).toMatchObject({
+      origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+      destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    });
+    expect(permisoDe('observacion.resuelta')).toMatchObject({
+      origenes: [ROL.RESPONSABLE_PRECIOS],
+      destino: { tipo: 'usuario' },
+    });
+  });
+
   it('los eventos sin flujo implementado no tienen origen: nadie los emite', () => {
     // No existe endpoint de solicitud de proveedor en ningún servicio, así
     // que no hay de dónde sacar el origen. Mejor que falle a que cualquiera
@@ -253,6 +264,74 @@ describe('create: el destinatario lo fija la regla, no el emisor', () => {
       emisorDe('escenario.generado'),
     );
     expect(data.recipientUserId).toBe('analista-7');
+    expect(data.recipientRole).toBeNull();
+  });
+});
+
+describe('create: precio.observado y observacion.resuelta (PRI-09/D-16)', () => {
+  const OBSERVADO = {
+    eventType: 'precio.observado' as const,
+    sourceService: 'pricing-service' as const,
+    title: 'Precio observado en tienda pendiente de revisión',
+    message: 'Presentación 500 g observada en $24.00 (zona Centro).',
+  };
+
+  it('el Analista que captura la observación la emite; le llega al Responsable de precios', async () => {
+    const { servicio } = servicioFresco();
+    const { data } = await servicio.create(
+      { ...OBSERVADO, relatedEntityId: 'obs-1' },
+      { usuarioId: 'analista-1', rol: ROL.ANALISTA, rolId: 2 },
+    );
+    expect(data.recipientRole).toBe(ROL.RESPONSABLE_PRECIOS);
+    expect(data.recipientUserId).toBeNull();
+  });
+
+  it('el Responsable de precios también puede capturar (CAPTURAN_OBSERVACIONES)', async () => {
+    const { servicio } = servicioFresco();
+    const { creada } = await servicio.create(
+      { ...OBSERVADO, relatedEntityId: 'obs-2' },
+      emisorDe('precio.observado'),
+    );
+    expect(creada).toBe(true);
+  });
+
+  it('un Proveedor NO puede emitir precio.observado (403)', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create(
+        { ...OBSERVADO, relatedEntityId: 'obs-3' },
+        { usuarioId: 'prov-1', rol: ROL.PROVEEDOR, rolId: 7 },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('observacion.resuelta: solo el Responsable de precios la origina, y vuelve a quien capturó', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create(
+        {
+          eventType: 'observacion.resuelta',
+          sourceService: 'pricing-service',
+          title: 'Tu precio observado fue resuelto',
+          message: 'Aprobado.',
+          relatedEntityId: 'obs-4',
+        } as never,
+        { usuarioId: 'analista-1', rol: ROL.ANALISTA, rolId: 2 }, // quien capturó, no quien resuelve
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const { data } = await servicio.create(
+      {
+        eventType: 'observacion.resuelta',
+        sourceService: 'pricing-service',
+        title: 'Tu precio observado fue resuelto',
+        message: 'Aprobado.',
+        relatedEntityId: 'obs-5',
+        recipientUserId: 'analista-1',
+      } as never,
+      emisorDe('observacion.resuelta'),
+    );
+    expect(data.recipientUserId).toBe('analista-1');
     expect(data.recipientRole).toBeNull();
   });
 });

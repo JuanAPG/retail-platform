@@ -34,6 +34,8 @@ export type EventType =
   | 'proveedor.solicitud'
   | 'proveedor.resuelto'
   | 'precio.umbral'
+  | 'precio.observado'
+  | 'observacion.resuelta'
   | 'escenario.generado'
   | 'recomendacion.generada'
   | 'recomendacion.resuelta';
@@ -108,6 +110,16 @@ const MATRIZ: Record<EventType, AtributosEvento> = {
     priority: 'warning',
     title: 'Precio fuera de rango',
     relatedEntityType: 'presentacion',
+  },
+  'precio.observado': {
+    priority: 'info',
+    title: 'Precio observado en tienda pendiente de revisión',
+    relatedEntityType: 'precio_observado',
+  },
+  'observacion.resuelta': {
+    priority: 'info',
+    title: 'Tu precio observado fue resuelto',
+    relatedEntityType: 'precio_observado',
   },
   'escenario.generado': {
     priority: 'info',
@@ -208,6 +220,30 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
     origenes: [ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
     fundamento: 'pricing POST prices es de Administrador y Responsable de precios. Destino: Responsable de precios (bandeja del área), decidido por el equipo el 2026-10-08.',
+  },
+
+  // PRI-09/D-16: pricing POST /v1/price-observations (app móvil) ->
+  // @Roles(CAPTURAN_OBSERVACIONES) = [Analista comercial, Responsable de
+  // precios] (pricing/src/common/roles.ts:56). Nace `pendiente`: avisa a
+  // quien la resuelve. Agregado 2026-10-09 junto con `observacion.resuelta`
+  // porque PriceObservationsService no emitía ninguno de los dos (no
+  // inyectaba NotificationsReporter).
+  'precio.observado': {
+    origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+    destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    fundamento:
+      'pricing POST price-observations es de Analista y Responsable de precios (CAPTURAN_OBSERVACIONES). Destino: Responsable de precios, que es quien la resuelve (D1 APRUEBAN_PRECIOS).',
+  },
+
+  // PRI-09/D-16: pricing PATCH price-observations/:id/approve|reject ->
+  // @Roles(APRUEBAN_PRECIOS) = [Responsable de precios] (D1, mismo rol que
+  // resuelve propuestas de precio). Le llega a quien la capturó
+  // (`capturado_por`): solo el emisor sabe quién fue.
+  'observacion.resuelta': {
+    origenes: [ROL.RESPONSABLE_PRECIOS],
+    destino: { tipo: 'usuario' },
+    fundamento:
+      'pricing PATCH price-observations/:id/approve|reject es D1 APRUEBAN_PRECIOS = [Responsable de precios]. El aviso va a quien capturó la observación (recipientUserId).',
   },
 
   // decision: POST /v1/simulation/price|presentation -> @Roles(Administrador, Analista).
