@@ -10,6 +10,8 @@ contra esto una sola vez, no por servicio.
 | `page` | `1` | Entero mayor a 0. Fuera de rango → `data: []`, nunca error |
 | `limit` | `20` | Entero entre 1 y 100. Mayor a 100 se recorta a 100 |
 
+`page` es un entero entre 1 y 1 000 000; más allá responde `400` (con un OFFSET mayor, Postgres desbordaba y la API respondía 500).
+
 ## Respuesta (JSON)
 
 ```json
@@ -42,6 +44,9 @@ y el `_llenar` de FastAPI producen exactamente la misma forma.
 - Cálculos al vuelo con tope propio (p. ej. sustituciones, `limit` top-N).
 - Catálogos chicos e inmutables en la práctica (unidades de medida,
   municipios, roles): devuelven arreglo plano y lo declaran en su contrato.
+- Series completas para un cálculo, acotadas por el filtro obligatorio del endpoint (p. ej.
+  `GET /v1/prices/series?presentationId=…`): la elasticidad necesita el periodo completo y no
+  una página de 100.
 
 ## Plantilla
 

@@ -17,6 +17,7 @@
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
+import { borrarPresentaciones, crearPresentaciones, PresentacionPropia } from './fixtures';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
 const AUDIT_BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
@@ -98,6 +99,8 @@ describe('/v1/prices (integración, requiere stack)', () => {
   const limpiar = () =>
     db.query('DELETE FROM precios WHERE presentacion_id = $1 AND tienda_id = $2', [presentationId, storeId]);
 
+  let propias: PresentacionPropia[];
+
   beforeAll(async () => {
     await db.connect();
     precios = await sesion(await usuarioReal('Responsable de precios'), 'Responsable de precios');
@@ -106,20 +109,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     auditor = await sesion('it-pr-auditor', 'Auditor');
     proveedor = await sesion('it-pr-prov', 'Proveedor');
 
-    // Una presentación SIN ningún precio en el seed (en ninguna tienda): así el historial
-    // filtrado por esa presentación contiene solo lo que crea la prueba. ORDER BY para que
-    // la elección sea siempre la misma (sin él, cambia con el orden físico de la tabla).
-    const libre = await db.query(`
-      SELECT pres.id AS presentacion_id, pres.producto_id, t.id AS tienda_id, t.zona_id
-      FROM producto_presentaciones pres CROSS JOIN tiendas t
-      WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
-      ORDER BY pres.id, t.id
-      LIMIT 1`);
-    ({ presentacion_id: presentationId, producto_id: productId, tienda_id: storeId, zona_id: zoneId } = libre.rows[0]);
+    // PRI-13: una presentación PROPIA (creada aquí y borrada al final), sin ningún precio: el historial filtrado por ella
+    // contiene solo lo que crea la prueba, sin importar qué datos tenga la base ni qué corridas hubo antes.
+    propias = await crearPresentaciones(db, 'PR', 1);
+    ({ presentacion_id: presentationId, producto_id: productId, tienda_id: storeId, zona_id: zoneId } = propias[0]);
   });
 
   afterAll(async () => {
     await limpiar();
+    await borrarPresentaciones(db, propias);
     // Los precios de la prueba ya no existen, pero la caché del producto seguiría
     // mostrándolos hasta 5 min: se invalida subiendo la versión, como hace el servicio.
     await redis.incr(`pricing:v:${productId}`);
@@ -134,13 +132,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(r.cuerpo).toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
   });
 
-  it('el Proveedor no entra a ninguna ruta de precios (403)', async () => {
+  it('el Proveedor no entra al historial ni registra (403); la comparación solo la ve de productos suyos (PRI-08)', async () => {
     expect((await http('GET', `/v1/prices/history?productId=${productId}`, proveedor)).estado).toBe(403);
-    expect((await http('GET', `/v1/prices/compare-zones?productId=${productId}`, proveedor)).estado).toBe(403);
     expect((await http('POST', '/v1/prices', proveedor, alta(10))).estado).toBe(403);
+    // Este token de Proveedor no es dueño del producto: 404, no 403, para no confirmar que existe.
+    expect((await http('GET', `/v1/prices/compare-zones?productId=${productId}`, proveedor)).estado).toBe(404);
   });
 
-  it('solo Administrador y Responsable de precios registran (el Planeador lee pero no escribe)', async () => {
+  it('solo el Responsable de precios registra (el Administrador y el Planeador leen pero no escriben)', async () => {
+    expect((await http('POST', '/v1/prices', admin, alta(10))).estado).toBe(403);
     expect((await http('POST', '/v1/prices', planeador, alta(10))).estado).toBe(403);
     expect((await http('GET', `/v1/prices/history?productId=${productId}`, planeador)).estado).toBe(200);
   });
@@ -184,7 +184,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
       expect.arrayContaining([expect.objectContaining({ campo: 'precio', valorPosterior: '40' })]),
     );
 
-    const segundo = await http('POST', '/v1/prices', admin, alta(42.5, '2026-02-20'));
+    const segundo = await http('POST', '/v1/prices', precios, alta(42.5, '2026-02-20'));
     expect(segundo.estado).toBe(201);
     expect(segundo.cuerpo).toMatchObject({ price: '42.50', vigente: true });
 
@@ -218,7 +218,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
   it('dos registros simultáneos: uno gana (201) y el otro recibe 409, sin dejar dos vigentes', async () => {
     const [a, b] = await Promise.all([
       http('POST', '/v1/prices', precios, alta(44, '2026-03-05')),
-      http('POST', '/v1/prices', admin, alta(45, '2026-03-05')),
+      http('POST', '/v1/prices', precios, alta(45, '2026-03-05')),
     ]);
     expect([a.estado, b.estado].sort()).toEqual([201, 409]);
 
@@ -255,7 +255,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
   it('historial en XML: cada precio sale como <item>', async () => {
     const r = await http('GET', `/v1/prices/history?productId=${productId}&limit=2`, precios, undefined, 'application/xml');
     expect(r.estado).toBe(200);
-    expect(r.texto).toContain('<response>');
+    expect(r.texto).toContain('<priceListResponse');
     expect(r.texto).toContain('<effectiveDate>');
     expect(r.texto.match(/<data>/g)).toHaveLength(1);
   });
@@ -265,13 +265,15 @@ describe('/v1/prices (integración, requiere stack)', () => {
     expect(r.estado).toBe(200);
     expect(r.cuerpo.productId).toBe(productId);
 
-    const zona = r.cuerpo.zones.find((z: { zoneId: string }) => z.zoneId === zoneId);
+    const zona = r.cuerpo.zones.find(
+      (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
+    );
     expect(zona).toBeDefined();
     expect(typeof zona.averagePrice).toBe('number');
     expect(zona.minPrice).toBeLessThanOrEqual(zona.maxPrice);
     expect(zona.storeCount).toBeGreaterThanOrEqual(1);
 
-    // La zona agrega TODAS sus tiendas con precio vigente de este producto (las del
+    // La fila (zona, presentación) agrega TODAS sus tiendas con precio vigente de esa presentación (las del
     // seed también): se compara contra el cálculo directo en SQL, que solo cuenta
     // `vigente` (nunca el histórico cerrado de 40 y 42.5).
     const esperado = await db.query(
@@ -280,8 +282,8 @@ describe('/v1/prices (integración, requiere stack)', () => {
        FROM precios p
        JOIN producto_presentaciones pres ON pres.id = p.presentacion_id
        JOIN tiendas t ON t.id = p.tienda_id
-       WHERE pres.producto_id = $1 AND t.zona_id = $2 AND p.vigente`,
-      [productId, zoneId],
+       WHERE pres.producto_id = $1 AND t.zona_id = $2 AND pres.id = $3 AND p.vigente`,
+      [productId, zoneId, presentationId],
     );
     const { min, max, avg, tiendas } = esperado.rows[0];
     expect(zona).toMatchObject({ minPrice: min, maxPrice: max, storeCount: tiendas });
@@ -347,7 +349,7 @@ describe('/v1/prices (integración, requiere stack)', () => {
       expect(despues.cuerpo.data[0].id).not.toBe(antes.cuerpo.data[0].id);
 
       const zona = (await http('GET', rutaComparacion, planeador)).cuerpo.zones.find(
-        (z: { zoneId: string }) => z.zoneId === zoneId,
+        (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
       );
       expect(zona.maxPrice).toBe(999);
     });
@@ -357,7 +359,11 @@ describe('/v1/prices (integración, requiere stack)', () => {
 
       const r = await http('GET', `/v1/prices/compare-zones?productId=${productId}`, planeador);
       expect(r.estado).toBe(200);
-      expect(r.cuerpo.zones.find((z: { zoneId: string }) => z.zoneId === zoneId).maxPrice).toBe(999);
+      expect(
+        r.cuerpo.zones.find(
+          (z: { zoneId: string; presentationId: string }) => z.zoneId === zoneId && z.presentationId === presentationId,
+        ).maxPrice,
+      ).toBe(999);
     });
   });
 });

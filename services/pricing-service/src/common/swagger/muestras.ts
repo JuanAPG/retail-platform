@@ -45,12 +45,52 @@ const comparacion = {
     {
       zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
       zoneName: 'Zona Centro',
+      presentationId: '0b1f6c1e-3a52-4d0b-9a55-2f4e6a1d7c10',
+      presentationName: '1 L',
       averagePrice: 41.25,
       minPrice: 39.9,
       maxPrice: 42.5,
       storeCount: 2,
     },
   ],
+  perUnit: [
+    {
+      zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+      zoneName: 'Zona Centro',
+      baseUnit: 'l',
+      averagePricePerBaseUnit: 41.25,
+      minPricePerBaseUnit: 39.9,
+      maxPricePerBaseUnit: 42.5,
+      storeCount: 2,
+    },
+  ],
+};
+
+const observacion = {
+  id: '2c1f6e0a-7b3d-4e8a-9a41-5d0c1b2a3f4e',
+  presentationId: 'a3475b93-07c0-4c38-997a-5a13563abec9',
+  storeId: '866487b8-0830-4dae-a50b-4eaeb6780a11',
+  price: '27.50',
+  observedAt: '2026-10-08T15:30:00.000Z',
+  lat: 25.6866,
+  lng: -100.3161,
+  status: 'pendiente',
+  origin: 'observado_en_campo',
+  rejectionReason: null,
+  capturedBy: 'a8e46052-34a0-4dda-baf2-40bca267454f',
+  reviewedBy: null,
+  reviewedAt: null,
+  priceId: null,
+  createdAt: '2026-10-08T15:31:00.000Z',
+  presentation: { id: 'a3475b93-07c0-4c38-997a-5a13563abec9', productoId: 'c9a1f0bb-7777-4888-9999-aaaabbbbcccc', nombre: '1 L', producto: { sku: 'LDN-LEC', nombre: 'Leche entera' } },
+  store: { id: '866487b8-0830-4dae-a50b-4eaeb6780a11', nombre: 'Super Valle Centro', zonaId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476' },
+};
+
+const alertaConfig = {
+  umbralPct: 5,
+  ventanaDias: 30,
+  updatedBy: 'a8e46052-34a0-4dda-baf2-40bca267454f',
+  updatedAt: '2026-10-08T18:00:00.000Z',
 };
 
 const propuesta = {
@@ -99,6 +139,8 @@ export const muestras = {
   precio,
   precioCerrado,
   comparacion,
+  alertaConfig,
+  observacion,
   propuesta,
   propuestaAprobada,
   propuestaRechazada,

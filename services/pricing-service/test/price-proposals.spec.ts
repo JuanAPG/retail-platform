@@ -17,6 +17,7 @@
 import Redis from 'ioredis';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
+import { borrarPresentaciones, crearPresentaciones, PresentacionPropia } from './fixtures';
 
 const BASE = process.env.PRICING_BASE_URL ?? 'http://localhost:3103';
 const AUDIT_BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
@@ -71,7 +72,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
   let proveedor: string;
   let otroProveedor: string;
   let gerente: string;
-  let gerenteId: string;
+  let preciosId: string;
   let admin: string;
   let auditor: string;
   let planeador: string;
@@ -81,6 +82,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
   let ajena: string; // presentación de OTRA empresa
   let tiendaA: string;
   let tiendaB: string;
+  let propias: PresentacionPropia[];
 
   const propuesta = (proposedPrice = 38) => ({ presentationId, proposedPrice, purchaseUnit: 'caja 12 pzas' });
   const crear = async (precio = 38) => (await http('POST', '/v1/price-proposals', proveedor, propuesta(precio))).cuerpo.id as string;
@@ -100,10 +102,10 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
 
   beforeAll(async () => {
     await db.connect();
-    gerenteId = await usuarioReal('Gerente de categoría');
-    gerente = await sesion(gerenteId, 'Gerente de categoría');
+    gerente = await sesion(await usuarioReal('Gerente de categoría'), 'Gerente de categoría');
     admin = await sesion(await usuarioReal('Administrador'), 'Administrador');
-    precios = await sesion(await usuarioReal('Responsable de precios'), 'Responsable de precios');
+    preciosId = await usuarioReal('Responsable de precios');
+    precios = await sesion(preciosId, 'Responsable de precios');
     auditor = await sesion('it-pp-auditor', 'Auditor');
     planeador = await sesion('it-pp-planeador', 'Planeador');
     // Cuentas Proveedor reales del seed: el token lleva su id y su correo, y la bitácora
@@ -111,16 +113,9 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     proveedor = await sesion(await usuarioPorCorreo(EMAIL_PROVEEDOR), 'Proveedor', EMAIL_PROVEEDOR);
     otroProveedor = await sesion(await usuarioPorCorreo(EMAIL_OTRO_PROVEEDOR), 'Proveedor', EMAIL_OTRO_PROVEEDOR);
 
-    const libre = await db.query(
-      `SELECT pres.id AS presentacion_id, pres.producto_id
-       FROM producto_presentaciones pres
-       JOIN productos prod ON prod.id = pres.producto_id AND prod.estatus = 'activo'
-       JOIN proveedores pr ON pr.id = prod.proveedor_id AND pr.email = $1
-       WHERE NOT EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = pres.id)
-       ORDER BY pres.id DESC LIMIT 1`,
-      [EMAIL_PROVEEDOR],
-    );
-    ({ presentacion_id: presentationId, producto_id: productId } = libre.rows[0]);
+    // PRI-13: presentación PROPIA del proveedor (creada aquí, borrada al final), sin precios previos.
+    propias = await crearPresentaciones(db, 'PP', 1, { emailProveedor: EMAIL_PROVEEDOR });
+    ({ presentacion_id: presentationId, producto_id: productId } = propias[0]);
 
     const otra = await db.query(
       `SELECT pres.id FROM producto_presentaciones pres JOIN productos prod ON prod.id = pres.producto_id
@@ -139,6 +134,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     // Los precios de la prueba ya no existen, pero la caché del producto seguiría mostrándolos.
     await redis.incr(`pricing:v:${productId}`);
     await redis.expire(`pricing:v:${productId}`, 86400);
+    await borrarPresentaciones(db, propias);
     await db.end();
     await redis.quit();
   });
@@ -150,9 +146,10 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     for (const token of [admin, gerente, precios, auditor]) {
       expect((await http('POST', '/v1/price-proposals', token, propuesta())).estado).toBe(403);
     }
-    // Solo quien aprueba resuelve: ni el Proveedor, ni el Responsable de precios, ni el Auditor.
+    // PRI-01 / D1: solo el Responsable de precios resuelve. Ni el Gerente, ni el Administrador,
+    // ni el Proveedor, ni el Auditor, ni el Planeador.
     const ghost = '00000000-0000-4000-8000-000000000000';
-    for (const token of [proveedor, precios, auditor, planeador]) {
+    for (const token of [proveedor, gerente, admin, auditor, planeador]) {
       expect((await http('PATCH', `/v1/price-proposals/${ghost}/approve`, token, { storeIds: [tiendaA] })).estado).toBe(403);
       expect((await http('PATCH', `/v1/price-proposals/${ghost}/reject`, token, { rejectionReason: 'x'.repeat(12) })).estado).toBe(403);
     }
@@ -214,27 +211,27 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     expect(eventos.data[0]).toMatchObject({ accion: 'insert', usuarioId: expect.any(String) });
 
     // Se resuelve rechazándola para dejar libre la presentación en las siguientes pruebas.
-    await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, { rejectionReason: 'Prueba de ciclo de vida.' });
+    await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, { rejectionReason: 'Prueba de ciclo de vida.' });
   });
 
   it('rechazar: exige motivo, el Proveedor ve el motivo y no se resuelve dos veces', async () => {
     const id = await crear(41);
 
-    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, {})).estado).toBe(400);
-    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, { rejectionReason: 'corto' })).estado).toBe(400);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, {})).estado).toBe(400);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, { rejectionReason: 'corto' })).estado).toBe(400);
 
     const motivo = 'El precio propuesto excede el límite de variación de la zona.';
-    const rechazada = await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, { rejectionReason: motivo });
+    const rechazada = await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, { rejectionReason: motivo });
     expect(rechazada.estado).toBe(200);
-    expect(rechazada.cuerpo).toMatchObject({ status: 'rechazado', rejectionReason: motivo, reviewedBy: gerenteId });
+    expect(rechazada.cuerpo).toMatchObject({ status: 'rechazado', rejectionReason: motivo, reviewedBy: preciosId });
     expect(rechazada.cuerpo.reviewedAt).toBeTruthy();
 
     // El Proveedor consulta por qué se le rechazó.
     const suyas = await http('GET', '/v1/price-proposals?status=rechazado&limit=100', proveedor);
     expect(suyas.cuerpo.data.find((p: { id: string }) => p.id === id)).toMatchObject({ rejectionReason: motivo });
 
-    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, { rejectionReason: motivo })).estado).toBe(409);
-    expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, { storeIds: [tiendaA] })).estado).toBe(409);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, { rejectionReason: motivo })).estado).toBe(409);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, { storeIds: [tiendaA] })).estado).toBe(409);
 
     // Resuelta la anterior, ya puede volver a proponer.
     expect((await http('POST', '/v1/price-proposals', proveedor, propuesta(40))).estado).toBe(201);
@@ -246,15 +243,15 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     const id = cuerpo.data.find((p: { presentationId: string }) => p.presentationId === presentationId).id;
 
     for (const malo of [{}, { storeIds: [] }, { storeIds: ['abc'] }, { storeIds: [tiendaA, tiendaA] }, { storeIds: [tiendaA], extra: 1 }]) {
-      expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, malo)).estado).toBe(400);
+      expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, malo)).estado).toBe(400);
     }
     const ghost = '00000000-0000-4000-8000-000000000000';
-    const inexistente = await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, { storeIds: [tiendaA, ghost] });
+    const inexistente = await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, { storeIds: [tiendaA, ghost] });
     expect(inexistente.estado).toBe(400);
     expect(inexistente.cuerpo.message).toContain(ghost);
 
-    expect((await http('PATCH', `/v1/price-proposals/${ghost}/approve`, gerente, { storeIds: [tiendaA] })).estado).toBe(404);
-    expect((await http('PATCH', '/v1/price-proposals/abc/approve', gerente, { storeIds: [tiendaA] })).estado).toBe(400);
+    expect((await http('PATCH', `/v1/price-proposals/${ghost}/approve`, precios, { storeIds: [tiendaA] })).estado).toBe(404);
+    expect((await http('PATCH', '/v1/price-proposals/abc/approve', precios, { storeIds: [tiendaA] })).estado).toBe(400);
 
     // Nada de lo anterior aplicó precios.
     const filas = await db.query('SELECT count(*)::int AS n FROM precios WHERE presentacion_id = $1', [presentationId]);
@@ -271,12 +268,12 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     expect((await http('GET', historial, planeador)).cuerpo.total).toBe(0);
     const versionAntes = Number((await redis.get(`pricing:v:${productId}`)) ?? 0);
 
-    const aprobada = await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, {
+    const aprobada = await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, {
       storeIds: [tiendaA, tiendaB],
       effectiveDate: '2026-10-05',
     });
     expect(aprobada.estado).toBe(200);
-    expect(aprobada.cuerpo.proposal).toMatchObject({ id, status: 'aprobado', reviewedBy: gerenteId });
+    expect(aprobada.cuerpo.proposal).toMatchObject({ id, status: 'aprobado', reviewedBy: preciosId });
     expect(aprobada.cuerpo.prices).toHaveLength(2);
     for (const precio of aprobada.cuerpo.prices) {
       expect(precio).toMatchObject({
@@ -284,7 +281,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
         effectiveDate: '2026-10-05',
         vigente: true,
         origen: 'propuesta_proveedor_aprobada',
-        createdBy: gerenteId,
+        createdBy: preciosId,
         presentationId,
       });
     }
@@ -297,17 +294,24 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     // Bitácora: la resolución de la propuesta y cada precio creado.
     const resolucion = await bitacora(auditor, 'precios_propuestos_proveedor', id);
     expect(resolucion.data.map((e) => e.accion).sort()).toEqual(['insert', 'update']);
+    // PRI-14: la bitácora dice quién propuso y quién aprobó (en `precios`, `creado_por` es solo quien aprueba).
+    const proponente = await usuarioPorCorreo(EMAIL_PROVEEDOR);
+    const evResolucion = resolucion.data.find((e) => e.accion === 'update')!;
+    expect(evResolucion.cambios).toEqual(expect.arrayContaining([
+      expect.objectContaining({ campo: 'propuesto_por', valorPosterior: proponente }),
+      expect.objectContaining({ campo: 'aprobado_por', valorPosterior: preciosId }),
+    ]));
     const eventoPrecio = await bitacora(auditor, 'precios', aprobada.cuerpo.prices[0].id);
     expect(eventoPrecio.total).toBe(1);
-    expect(eventoPrecio.data[0]).toMatchObject({ accion: 'insert', usuarioId: gerenteId });
+    expect(eventoPrecio.data[0]).toMatchObject({ accion: 'insert', usuarioId: preciosId });
 
     // El Proveedor ve su propuesta aprobada; no se resuelve dos veces.
     const suya = (await http('GET', '/v1/price-proposals?status=aprobado&limit=100', proveedor)).cuerpo.data.find(
       (p: { id: string }) => p.id === id,
     );
     expect(suya.status).toBe('aprobado');
-    expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, { storeIds: [tiendaA] })).estado).toBe(409);
-    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, gerente, { rejectionReason: 'Ya estaba aprobada.' })).estado).toBe(409);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, { storeIds: [tiendaA] })).estado).toBe(409);
+    expect((await http('PATCH', `/v1/price-proposals/${id}/reject`, precios, { rejectionReason: 'Ya estaba aprobada.' })).estado).toBe(409);
   });
 
   it('todo o nada: si una tienda tiene un precio vigente más reciente, no se aplica ninguna', async () => {
@@ -319,7 +323,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     );
 
     // Fecha anterior al vigente en ambas tiendas → 409 con la tienda en el mensaje.
-    const r = await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, {
+    const r = await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, {
       storeIds: [tiendaB, tiendaA],
       effectiveDate: '2026-10-01',
     });
@@ -338,7 +342,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
     expect(sigue).toBeDefined();
 
     // Con una fecha posterior sí se aplica y cierra los vigentes de las dos tiendas.
-    const bien = await http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, {
+    const bien = await http('PATCH', `/v1/price-proposals/${id}/approve`, precios, {
       storeIds: [tiendaA, tiendaB],
       effectiveDate: '2026-10-20',
     });
@@ -362,8 +366,8 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
 
     const cuerpo = { storeIds: [tiendaA], effectiveDate: '2026-11-01' };
     const [a, b] = await Promise.all([
-      http('PATCH', `/v1/price-proposals/${id}/approve`, gerente, cuerpo),
-      http('PATCH', `/v1/price-proposals/${id}/approve`, admin, cuerpo),
+      http('PATCH', `/v1/price-proposals/${id}/approve`, precios, cuerpo),
+      http('PATCH', `/v1/price-proposals/${id}/approve`, precios, cuerpo),
     ]);
     expect([a.estado, b.estado].sort()).toEqual([200, 409]);
 
@@ -374,7 +378,7 @@ describe('/v1/price-proposals (integración, requiere stack)', () => {
   it('XML: la lista de propuestas sale con <item>', async () => {
     const r = await http('GET', '/v1/price-proposals?limit=2', gerente, undefined, 'application/xml');
     expect(r.estado).toBe(200);
-    expect(r.texto).toContain('<response>');
+    expect(r.texto).toContain('<priceProposalListResponse');
     expect(r.texto).toContain('<proposedPrice>');
     expect(r.texto.match(/<data>/g)).toHaveLength(1);
   });
