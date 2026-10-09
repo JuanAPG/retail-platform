@@ -32,14 +32,22 @@ Administrador y Analista. El Proveedor no tiene acceso a ninguna ruta.
 
 En XML, la raíz es el elemento de cada endpoint (p. ej. `<runListResponse
 xmlns="algorithms/v1">`) y las fechas-hora van en ISO 8601 UTC. Un `null` sale
-como elemento vacío (`<lift/>`) en los campos que el XSD exige presentes
+como elemento vacío —el servicio emite la forma larga `<lift></lift>`,
+equivalente en XML a `<lift/>`— en los campos que el XSD exige presentes
 (tipos `*OrEmpty`, declarados en `@XmlRoot(..., { siemprePresentes })`) y se
 omite en los demás. Los errores con `Accept: application/xml` salen como
 `<error>` con la misma forma que el JSON.
 
-`503 SERVICE_UNAVAILABLE`: desde Fase C, cuando un servicio del que depende
-(core-process, catalog, pricing, auth) no responde. Aplica a todas las rutas
-que leen datos de otros servicios.
+`503 SERVICE_UNAVAILABLE`, hoy y a futuro:
+
+- **Hoy:** en todas las rutas, cuando Redis (sesiones) no responde: `SessionGuard`
+  no puede verificar la sesión y responde 503.
+- **Hoy:** las lecturas de otros servicios son SQL de solo lectura (Fase B). Si
+  fallan, la ruta responde `500 INTERNAL` (y un `POST` deja la corrida `fallida`),
+  igual que cualquier fallo de base de datos (`services/snippets/error-codes.md`).
+- **Con ALG-11 (Fase C):** esas lecturas pasan a HTTP; si core-process, catalog,
+  pricing o auth no responden, la ruta responderá `503` en menos de 4 s. Se
+  documentará en Swagger cuando exista.
 
 ---
 
@@ -246,6 +254,7 @@ otro tipo** (p. ej. de elasticidad) → `404`.
 | 403 | Rol sin permiso (p. ej. Planeador corriendo Apriori, o Proveedor) |
 | 404 | Corrida inexistente o que no es de asociación |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
 
@@ -449,6 +458,7 @@ si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResp
 | 403 | Rol sin permiso (p. ej. Planeador calculando, o Proveedor) |
 | 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; ninguna corrida con resultados para graficar |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
 
@@ -511,6 +521,7 @@ XML: elemento `substitutionPatternListResponse`.
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso (Proveedor) |
 | 404 | Categoría inexistente |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
 
@@ -518,8 +529,10 @@ XML: elemento `substitutionPatternListResponse`.
 
 Fase B: lectura por SQL de solo lectura en el Postgres compartido, aislada en
 una sola clase. Fase C: esa clase pasa a llamar por HTTP, reenviando el
-`Authorization` del usuario (cada servicio sigue validando JWT + Redis). Si el
-servicio llamado no responde → `503 SERVICE_UNAVAILABLE`.
+`Authorization` del usuario (cada servicio sigue validando JWT + Redis). Desde
+ese cambio (ALG-11), si el servicio llamado no responde → `503
+SERVICE_UNAVAILABLE` en menos de 4 s; hasta entonces, un fallo de lectura es
+`500 INTERNAL`.
 
 | Servicio | Qué necesita | Para qué |
 |---|---|---|
