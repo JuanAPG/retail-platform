@@ -30,11 +30,11 @@
 
   <xs:element name="simulacionPresentacionRequest">
     <xs:complexType>
-      <xs:sequence>
-        <xs:element name="presentationIdA" type="xs:string"/>
-        <xs:element name="presentationIdB" type="xs:string"/>
+      <xs:all>
+        <xs:element name="productId" type="xs:string"/>
         <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
-      </xs:sequence>
+        <xs:element name="presentationIds" type="dec:ListaTexto" minOccurs="0"/>
+      </xs:all>
     </xs:complexType>
   </xs:element>
 
@@ -139,6 +139,170 @@
         <xs:element name="path" type="xs:string"/>
         <xs:element name="timestamp" type="xs:dateTime"/>
       </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+    <!-- ===== Tipos reutilizables de simulacion ===== -->
+
+  <xs:complexType name="ListaTexto">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ResultadoIndicador">
+    <xs:all>
+      <xs:element name="indicatorKey" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="baseValue" type="xs:decimal"/>
+      <xs:element name="simulatedValue" type="xs:decimal"/>
+      <xs:element name="variationPct" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="difference" type="xs:decimal" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ListaResultados">
+    <xs:sequence>
+      <xs:element name="item" type="dec:ResultadoIndicador" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EfectoAccesibilidad">
+    <xs:all>
+      <xs:element name="incomeSharePct" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="unitPricePremiumPct" type="xs:decimal" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="PresentacionEvaluada">
+    <xs:all>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="presentationName" type="xs:string"/>
+      <xs:element name="baseUnit" type="xs:string" minOccurs="0"/>
+      <xs:element name="priceStatus" type="xs:string"/>
+      <xs:element name="outlay" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="unitPrice" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="estimatedDemand" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="accessibilityEffect" type="dec:EfectoAccesibilidad" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ListaPresentaciones">
+    <xs:sequence>
+      <xs:element name="item" type="dec:PresentacionEvaluada" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EscenarioResumen">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="type" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="productId" type="xs:string" minOccurs="0"/>
+      <xs:element name="presentationId" type="xs:string" minOccurs="0"/>
+      <xs:element name="elasticity" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="elasticityRunId" type="xs:string" minOccurs="0"/>
+      <xs:element name="currentPrice" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="newPrice" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="baseDemand" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="presentations" type="dec:ListaPresentaciones" minOccurs="0"/>
+      <xs:element name="assumptions" type="dec:ListaTexto" minOccurs="0"/>
+      <xs:element name="createdBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ListaEscenarios">
+    <xs:sequence>
+      <xs:element name="item" type="dec:EscenarioResumen" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EscenarioComparado">
+    <xs:all>
+      <xs:element name="scenarioId" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="type" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="elasticity" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="elasticityRunId" type="xs:string" minOccurs="0"/>
+      <xs:element name="results" type="dec:ListaResultados" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="ListaEscenariosComparados">
+    <xs:sequence>
+      <xs:element name="item" type="dec:EscenarioComparado" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="simulacionEscenariosResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data" type="dec:ListaEscenarios" minOccurs="0"/>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="simulacionCompareResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="scenarioIds" type="dec:ListaTexto"/>
+        <xs:element name="scenarios" type="dec:ListaEscenariosComparados"/>
+        <xs:element name="warnings" type="dec:ListaTexto" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="InsumosSimulacionPrecio">
+    <xs:all>
+      <xs:element name="currentPrice" type="xs:decimal"/>
+      <xs:element name="newPrice" type="xs:decimal"/>
+      <xs:element name="baseDemand" type="xs:decimal"/>
+      <xs:element name="elasticity" type="xs:decimal"/>
+      <xs:element name="elasticityRunId" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- POST /v1/simulation/price. `results` reutiliza ResultadoIndicador
+       (aqui sin `difference`, que solo lo agrega compare). -->
+  <xs:element name="simulacionPrecioResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="type" type="xs:string"/>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
+        <xs:element name="inputs" type="dec:InsumosSimulacionPrecio"/>
+        <xs:element name="results" type="dec:ListaResultados"/>
+        <xs:element name="scenarioId" type="xs:string"/>
+        <xs:element name="assumptions" type="dec:ListaTexto" minOccurs="0"/>
+        <xs:element name="note" type="xs:string" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="simulacionPresentacionResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="type" type="xs:string"/>
+        <xs:element name="scenarioId" type="xs:string"/>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="productName" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="segmentId" type="xs:integer" minOccurs="0"/>
+        <xs:element name="presentations" type="dec:ListaPresentaciones"/>
+        <xs:element name="referencePresentationId" type="xs:string" minOccurs="0"/>
+        <xs:element name="comparedPresentationId" type="xs:string" minOccurs="0"/>
+        <xs:element name="results" type="dec:ListaResultados" minOccurs="0"/>
+        <xs:element name="assumptions" type="dec:ListaTexto" minOccurs="0"/>
+        <xs:element name="warnings" type="dec:ListaTexto" minOccurs="0"/>
+      </xs:all>
     </xs:complexType>
   </xs:element>
 
