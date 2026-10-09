@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { HttpErrorFilter } from './common/filters/http-error.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
+import { ProfundidadPipe } from './common/pipes/profundidad.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -18,6 +19,7 @@ async function bootstrap() {
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });
 
   app.useGlobalPipes(
+    new ProfundidadPipe(),
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalFilters(new HttpErrorFilter());

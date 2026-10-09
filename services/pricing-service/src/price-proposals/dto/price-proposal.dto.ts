@@ -5,7 +5,6 @@ import {
   ArrayMinSize,
   ArrayUnique,
   IsArray,
-  IsDateString,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -17,6 +16,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { IsFechaIso } from '../../common/validators/fecha-calendario';
 import { ESTATUS_PROPUESTA } from '../../entities/price-proposal.entity';
 
 /**
@@ -56,7 +56,7 @@ export class ApprovePriceProposalDto {
 
   @ApiPropertyOptional({ example: '2026-10-05', description: 'Fecha desde la que aplica (YYYY-MM-DD). Por omisión, hoy.' })
   @IsOptional()
-  @IsDateString()
+  @IsFechaIso({ message: 'effectiveDate debe ser una fecha válida (YYYY-MM-DD).' })
   effectiveDate?: string;
 }
 

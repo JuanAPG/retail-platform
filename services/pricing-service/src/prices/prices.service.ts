@@ -121,11 +121,13 @@ export class PricesService {
     manager: EntityManager,
     datos: NuevoPrecio,
   ): Promise<{ id: string; precioPrevio: string | null }> {
-    // FOR UPDATE: dos altas simultáneas sobre la misma pareja se serializan en vez de insertar ambas.
+    // Candado consultivo por pareja: dos altas simultáneas se serializan. `FOR UPDATE` no alcanza: bajo READ COMMITTED no ve
+    // las filas que otra transacción inserta mientras espera, y dos altas con fechas distintas dejaban vigencias traslapadas.
+    // El candado se suelta solo al terminar la transacción; la lectura de abajo ya ve lo que la anterior confirmó.
+    await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${datos.presentationId}:${datos.storeId}`]);
     const historial = await manager.find(PriceHistory, {
       where: { presentationId: datos.presentationId, storeId: datos.storeId },
       order: { effectiveDate: 'ASC' },
-      lock: { mode: 'pessimistic_write' },
     });
     const fecha = datos.effectiveDate;
     const cubre = historial.filter((p) => p.effectiveDate <= fecha && (!p.effectiveUntil || p.effectiveUntil >= fecha)).pop();

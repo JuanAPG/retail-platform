@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, Max, MaxLength, MinLength, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, Max, MaxLength, MinLength, Min } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PRECIO_MAXIMO } from '../../common/precio';
+import { IsFechaIso } from '../../common/validators/fecha-calendario';
 
 /**
  * PRI-09 / D-16 — Un precio levantado EN TIENDA desde la app móvil. Nace pendiente, igual que una propuesta de
@@ -25,11 +27,12 @@ export class CreatePriceObservationDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 }, { message: 'price debe ser numérico, con máximo 2 decimales.' })
   @IsPositive({ message: 'price debe ser mayor que cero.' })
+  @Max(PRECIO_MAXIMO, { message: `price no puede pasar de ${PRECIO_MAXIMO}.` })
   price: number;
 
   @ApiPropertyOptional({ example: '2026-10-08T15:30:00Z', description: 'Cuándo se observó (ISO 8601). Por omisión, ahora. No puede ser futuro.' })
   @IsOptional()
-  @IsDateString()
+  @IsFechaIso({ message: 'observedAt debe ser una fecha ISO 8601 válida.' })
   observedAt?: string;
 
   @ApiPropertyOptional({ example: 25.6866, description: 'Latitud GPS del levantamiento, entre -90 y 90.' })

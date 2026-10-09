@@ -41,6 +41,7 @@ function crearServicio() {
   const repo = { createQueryBuilder: jest.fn() };
   const manager = {
     find: jest.fn(async (): Promise<unknown[]> => []),
+    query: jest.fn(async (): Promise<unknown[]> => []),
     update: jest.fn(),
     create: jest.fn((_entidad, valores) => ({ ...valores })),
     save: jest.fn(async (x) => ({ id: 'nuevo-id', ...x })),
@@ -242,12 +243,13 @@ describe('PricesService.registrarPrecio — con un precio futuro programado (QA-
     await expect(servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-09-01' })).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('bloquea el historial de la pareja (FOR UPDATE) para serializar altas simultáneas', async () => {
+  it('toma un candado consultivo POR PAREJA antes de leer el historial, para serializar altas simultáneas', async () => {
     const { manager, servicio } = crearServicio();
 
     await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-10-09' });
 
-    expect(manager.find).toHaveBeenCalledWith(PriceHistory, expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_xact_lock'), ['pres-1:tienda-1']);
+    expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(manager.find.mock.invocationCallOrder[0]);
   });
 });
 
