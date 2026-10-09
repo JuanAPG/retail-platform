@@ -42,6 +42,26 @@ const comparacionZona = {
   availability: null,
 };
 
+const indicadoresZona = {
+  zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+  estimatedIncome: 18500,
+  population: 42000,
+  availability: 0.85,
+  periodStart: '2026-01-01',
+  periodEnd: '2026-09-30',
+  source: 'INEGI - Censo 2020',
+  runId: '3f1c2b8e-5b1d-4a56-9c3e-7a1b2c3d4e5f',
+};
+
+const clasificacionZona = {
+  zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+  segmentId: 2,
+  segmentCode: 'ING_2',
+  segmentName: 'Ingreso medio',
+  since: '2026-10-08',
+  previousSegmentId: 1,
+};
+
 const codigoPostal = { codigoPostal: '64000', municipioId: 2, municipio };
 
 const tienda = {
@@ -132,6 +152,8 @@ export const muestras = {
   segmento,
   zona,
   comparacionZona,
+  indicadoresZona,
+  clasificacionZona,
   codigoPostal,
   tienda,
   proveedor,

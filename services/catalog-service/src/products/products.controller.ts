@@ -3,30 +3,36 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL } from '../common/roles';
+import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL, VEN_NO_ACTIVOS } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { EditarPropuestaProductoDto } from './dto/editar-propuesta-producto.dto';
+import { ProductListFilterDto } from './dto/product-list-filter.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
+import { Auditar, AuditarInterceptor } from '../common/audit/auditar.interceptor';
+import { NotificarInterceptor, NotificarProducto } from '../common/notifications/notificar.interceptor';
 
 /**
  * Catálogo de productos y presentaciones. Contrato:
@@ -44,6 +50,7 @@ import { ProductsService } from './products.service';
 @ApiTags('M04 Products')
 @ApiBearerAuth()
 @UseGuards(SessionGuard, RolesGuard)
+@UseInterceptors(AuditarInterceptor, NotificarInterceptor)
 @Controller()
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -53,7 +60,7 @@ export class ProductsController {
   @Get('product-categories')
   @XmlRoot('categoryListResponse')
   @ApiOperation({ summary: 'Catálogo de categorías (arreglo plano, sin paginar). Abierto a todo usuario autenticado.' })
-  @ApiRespuesta(200, 'Categorías ordenadas por nombre.', [muestras.categoria])
+  @ApiRespuesta(200, 'Categorías ordenadas por nombre.', [muestras.categoria], 'categoryListResponse')
   @ApiErrores(401)
   findCategories() {
     return this.productsService.findCategories();
@@ -64,7 +71,7 @@ export class ProductsController {
   @Get('units')
   @XmlRoot('unitListResponse')
   @ApiOperation({ summary: 'Catálogo de unidades de medida (arreglo plano, sin paginar). Abierto a todo usuario autenticado.' })
-  @ApiRespuesta(200, 'Unidades ordenadas por clave.', [muestras.unidad])
+  @ApiRespuesta(200, 'Unidades ordenadas por clave.', [muestras.unidad], 'unitListResponse')
   @ApiErrores(401)
   findUnits() {
     return this.productsService.findUnits();
@@ -74,7 +81,7 @@ export class ProductsController {
   @XmlRoot('supplierListResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.GERENTE_CATEGORIA, ROL.AUDITOR)
   @ApiOperation({ summary: 'Padrón de empresas proveedoras, paginado por razón social (solo lectura).' })
-  @ApiRespuesta(200, 'Página de proveedores.', pagina([muestras.proveedor]))
+  @ApiRespuesta(200, 'Página de proveedores.', pagina([muestras.proveedor]), 'supplierListResponse')
   @ApiErrores(400, 401, 403)
   findProviders(@Query() filtros: ProductFilterDto) {
     return this.productsService.findProviders(filtros);
@@ -89,9 +96,9 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Catálogo de productos, paginado por nombre. Un Proveedor recibe únicamente los suyos.',
   })
-  @ApiRespuesta(200, 'Página de productos con sus presentaciones.', pagina([muestras.producto]))
+  @ApiRespuesta(200, 'Página de productos con sus presentaciones.', pagina([muestras.producto]), 'productListResponse')
   @ApiErrores(400, 401, 403)
-  findAll(@CurrentUser() usuario: SesionUsuario, @Query() filtros: ProductFilterDto) {
+  findAll(@CurrentUser() usuario: SesionUsuario, @Query() filtros: ProductListFilterDto) {
     return this.productsService.findAll(usuario, filtros);
   }
 
@@ -101,9 +108,9 @@ export class ProductsController {
    */
   @Get('products/pending')
   @XmlRoot('productListResponse')
-  @Roles(...APRUEBAN_PRODUCTOS)
+  @Roles(...VEN_NO_ACTIVOS)
   @ApiOperation({ summary: 'Bandeja de propuestas por revisar, las más antiguas primero.' })
-  @ApiRespuesta(200, 'Página de propuestas pendientes.', pagina([muestras.productoPendiente]))
+  @ApiRespuesta(200, 'Página de propuestas pendientes.', pagina([muestras.productoPendiente]), 'productListResponse')
   @ApiErrores(400, 401, 403)
   findPending(@Query() filtros: ProductFilterDto) {
     return this.productsService.findPending(filtros);
@@ -111,12 +118,12 @@ export class ProductsController {
 
   @Get('products/:id')
   @XmlRoot('productResponse')
-  @Roles(...PERFILES_INTERNOS)
-  @ApiOperation({ summary: 'Detalle de un producto con sus presentaciones.' })
-  @ApiRespuesta(200, 'El producto.', muestras.producto)
+  @Roles(...PERFILES_INTERNOS, ROL.PROVEEDOR)
+  @ApiOperation({ summary: 'Detalle de un producto con sus presentaciones. Un Proveedor solo ve los suyos (404 si es de otro).' })
+  @ApiRespuesta(200, 'El producto.', muestras.producto, 'productResponse')
   @ApiErrores(400, 401, 403, 404)
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() usuario: SesionUsuario) {
+    return this.productsService.findOneVisible(id, usuario);
   }
 
   /**
@@ -125,57 +132,94 @@ export class ProductsController {
    * en su propia ruta para no mezclar dos flujos con reglas distintas.
    */
   @Post('products')
-  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  @XmlRoot('productResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  @Auditar('productos', 'insert')
   @ApiOperation({ summary: 'Alta directa de un producto con su primera presentación, sin pasar por la bandeja de aprobación.' })
-  @ApiRespuesta(201, 'Producto creado, activo.', muestras.producto)
+  @ApiRespuesta(201, 'Producto creado, activo.', muestras.producto, 'productResponse')
   @ApiErrores(400, 401, 403, 409)
   create(@Body() dto: CreateProductDto) {
     return this.productsService.create(dto);
   }
 
   @Post('products/proposals')
+  @XmlRoot('productResponse')
   @Roles(ROL.PROVEEDOR)
+  @Auditar('productos', 'insert')
+  @NotificarProducto('propuesto')
   @ApiOperation({
     summary: 'Un Proveedor propone un alta. Nace pendiente y ligada a su propia empresa (no acepta proveedorId, estatus ni esCanastaBasica).',
   })
-  @ApiRespuesta(201, 'Propuesta registrada, pendiente de aprobación.', muestras.productoPendiente)
+  @ApiRespuesta(201, 'Propuesta registrada, pendiente de aprobación.', muestras.productoPendiente, 'productResponse')
   @ApiErrores(400, 401, 403, 409)
   createProposal(@Body() dto: CrearPropuestaProductoDto, @CurrentUser() usuario: SesionUsuario) {
     return this.productsService.createProposal(dto, usuario);
   }
 
+  @Patch('products/proposals/:id')
+  @XmlRoot('productResponse')
+  @Roles(ROL.PROVEEDOR)
+  @Auditar('productos', 'update')
+  @ApiOperation({
+    summary:
+      'El Proveedor edita SU propuesta mientras está pendiente (nombre, descripción, categoría y presentación). Una resuelta no se edita (409); la de otro proveedor es 404.',
+  })
+  @ApiRespuesta(200, 'Propuesta actualizada.', muestras.productoPendiente, 'productResponse')
+  @ApiErrores(400, 401, 403, 404, 409)
+  editProposal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EditarPropuestaProductoDto, @CurrentUser() usuario: SesionUsuario) {
+    return this.productsService.editProposal(id, dto, usuario);
+  }
+
   @Patch('products/:id')
-  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  @XmlRoot('productResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  @Auditar('productos', 'update')
   @ApiOperation({ summary: 'Edita nombre, descripción, categoría o canasta básica. No acepta estatus.' })
-  @ApiRespuesta(200, 'Producto actualizado.', muestras.producto)
+  @ApiRespuesta(200, 'Producto actualizado.', muestras.producto, 'productResponse')
   @ApiErrores(400, 401, 403, 404)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }
 
   @Delete('products/:id')
-  @HttpCode(204)
-  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
-  @ApiOperation({ summary: 'Elimina el producto y sus presentaciones. 409 si alguna tiene ventas.' })
-  @ApiSinCuerpo(204, 'Eliminado, sin cuerpo.')
-  @ApiErrores(400, 401, 403, 404, 409)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.remove(id);
+  @XmlRoot('productResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  @Auditar('productos', 'delete')
+  @ApiOperation({
+    summary:
+      'Elimina el producto (204). Si alguna presentación tiene historial (precios, inventario, ventas) NO se borra: queda inactivo y responde 200 con el producto.',
+  })
+  @ApiSinCuerpo(204, 'Eliminado, sin cuerpo (no tenía historial).')
+  @ApiRespuesta(200, 'Tenía historial: no se borra, queda inactivo con sus presentaciones desactivadas.', { ...muestras.producto, estatus: 'inactivo' }, 'productResponse')
+  @ApiErrores(400, 401, 403, 404)
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const resultado = await this.productsService.remove(id);
+    if (resultado.eliminado) {
+      res.status(204);
+      return;
+    }
+    return resultado.entidad;
   }
 
   @Patch('products/:id/approve')
+  @XmlRoot('productResponse')
   @Roles(...APRUEBAN_PRODUCTOS)
+  @Auditar('productos', 'aprobar')
+  @NotificarProducto('resuelto')
   @ApiOperation({ summary: 'Aprueba una propuesta pendiente y registra quién y cuándo.' })
-  @ApiRespuesta(200, 'Producto activo.', muestras.producto)
+  @ApiRespuesta(200, 'Producto activo.', muestras.producto, 'productResponse')
   @ApiErrores(400, 401, 403, 404, 409)
   approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() usuario: SesionUsuario) {
     return this.productsService.approve(id, usuario);
   }
 
   @Patch('products/:id/reject')
+  @XmlRoot('productResponse')
   @Roles(...APRUEBAN_PRODUCTOS)
+  @Auditar('productos', 'rechazar')
+  @NotificarProducto('resuelto')
   @ApiOperation({ summary: 'Rechaza una propuesta pendiente; exige motivo de al menos 10 caracteres.' })
-  @ApiRespuesta(200, 'Producto rechazado.', { ...muestras.productoPendiente, estatus: 'rechazado' })
+  @ApiRespuesta(200, 'Producto rechazado.', { ...muestras.productoPendiente, estatus: 'rechazado' }, 'productResponse')
   @ApiErrores(400, 401, 403, 404, 409)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
@@ -193,30 +237,40 @@ export class ProductsController {
   @XmlRoot('presentationListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Presentaciones de un producto (arreglo plano, sin paginar).' })
-  @ApiRespuesta(200, 'Presentaciones ordenadas por nombre.', [muestras.presentacion])
+  @ApiRespuesta(200, 'Presentaciones ordenadas por nombre.', [muestras.presentacion], 'presentationListResponse')
   @ApiErrores(400, 401, 403, 404)
-  findPresentations(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.findPresentations(id);
+  findPresentations(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() usuario: SesionUsuario) {
+    return this.productsService.findPresentations(id, usuario);
   }
 
   @Post('products/:id/presentations')
-  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  @XmlRoot('presentationResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  @Auditar('producto_presentaciones', 'insert', 'respuesta')
   @ApiOperation({ summary: 'Agrega una presentación. 409 si ya hay otra predeterminada.' })
-  @ApiRespuesta(201, 'Presentación creada.', muestras.presentacion)
+  @ApiRespuesta(201, 'Presentación creada.', muestras.presentacion, 'presentationResponse')
   @ApiErrores(400, 401, 403, 404, 409)
   addPresentation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreatePresentationDto) {
     return this.productsService.addPresentation(id, dto);
   }
 
   @Delete('presentations/:id')
-  @HttpCode(204)
-  @Roles(ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA)
+  @XmlRoot('presentationResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  @Auditar('producto_presentaciones', 'delete')
   @ApiOperation({
-    summary: 'Elimina una presentación. 409 si tiene ventas; si no, arrastra en cascada sus precios e inventario.',
+    summary:
+      'Elimina una presentación (204). Si tiene historial (precios, inventario, ventas) NO se borra: queda inactiva y responde 200 con la presentación.',
   })
-  @ApiSinCuerpo(204, 'Eliminada, sin cuerpo.')
-  @ApiErrores(400, 401, 403, 404, 409)
-  removePresentation(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.removePresentation(id);
+  @ApiSinCuerpo(204, 'Eliminada, sin cuerpo (no tenía historial).')
+  @ApiRespuesta(200, 'Tenía historial: no se borra, queda inactiva.', { ...muestras.presentacion, activo: false }, 'presentationResponse')
+  @ApiErrores(400, 401, 403, 404)
+  async removePresentation(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
+    const resultado = await this.productsService.removePresentation(id);
+    if (resultado.eliminado) {
+      res.status(204);
+      return;
+    }
+    return resultado.entidad;
   }
 }

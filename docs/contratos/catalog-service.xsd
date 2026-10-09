@@ -143,6 +143,36 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- PUT /v1/zones/:id/indicators (carga manual de ingreso, población y disponibilidad) -->
+  <xs:element name="zoneIndicatorsResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="estimatedIncome" type="xs:decimal"/>
+        <xs:element name="population" type="xs:decimal"/>
+        <xs:element name="availability" type="xs:decimal"/>
+        <xs:element name="periodStart" type="xs:string"/>
+        <xs:element name="periodEnd" type="xs:string"/>
+        <xs:element name="source" type="xs:string"/>
+        <xs:element name="runId" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PUT /v1/zones/:id/classification (nulos se omiten) -->
+  <xs:element name="zoneClassificationResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="segmentId" type="xs:integer"/>
+        <xs:element name="segmentCode" type="xs:string"/>
+        <xs:element name="segmentName" type="xs:string"/>
+        <xs:element name="since" type="xs:string"/>
+        <xs:element name="previousSegmentId" type="xs:integer" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
   <!-- ===== /v1/stores ===== -->
 
   <xs:simpleType name="storeFormat">

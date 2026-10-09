@@ -1,7 +1,6 @@
 import { applyDecorators } from '@nestjs/common';
 import { ApiResponse } from '@nestjs/swagger';
-import { XMLBuilder } from 'fast-xml-parser';
-import { normalizarListas } from '../interceptors/xml.interceptor';
+import { serializarXml } from '../interceptors/xml.interceptor';
 
 /**
  * XML de ejemplo para Swagger, generado desde el MISMO ejemplo JSON y con la
@@ -9,21 +8,24 @@ import { normalizarListas } from '../interceptors/xml.interceptor';
  * quien consume la API es exactamente lo que el servicio emite con
  * `Accept: application/xml`, sin escribir ni mantener XML a mano.
  */
-export function ejemploXml(ejemplo: unknown): string {
-  return new XMLBuilder({ format: true }).build({ response: normalizarListas(ejemplo ?? null) });
+export function ejemploXml(ejemplo: unknown, raiz?: string): string {
+  // Se serializa con la MISMA función que usa el interceptor: raíz con nombre, namespace y prólogo
+  // reales, así el ejemplo es idéntico a lo que sale con `Accept: application/xml` (CAT-15).
+  return serializarXml(ejemplo ?? null, { raiz, namespace: process.env.XML_NAMESPACE ?? 'catalog/v1' });
 }
 
 /**
- * Documenta una respuesta exitosa con ejemplo en JSON **y** en XML
- * (gate del PR). Uso: `@ApiRespuesta(200, 'Detalle del segmento.', muestras.segmento)`.
+ * Documenta una respuesta exitosa con ejemplo en JSON **y** en XML (gate del PR).
+ * Uso: `@ApiRespuesta(200, 'Detalle del segmento.', muestras.segmento, 'segmentResponse')`;
+ * la raíz es la misma que declara `@XmlRoot` en el handler.
  */
-export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown) {
+export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown, raizXml?: string) {
   return ApiResponse({
     status,
     description: descripcion,
     content: {
       'application/json': { example: ejemplo },
-      'application/xml': { example: ejemploXml(ejemplo) },
+      'application/xml': { example: ejemploXml(ejemplo, raizXml) },
     },
   });
 }
@@ -32,6 +34,15 @@ export function ApiRespuesta(status: number, descripcion: string, ejemplo: unkno
 export function ApiSinCuerpo(status: number, descripcion: string) {
   return ApiResponse({ status, description: descripcion });
 }
+
+const cuerpoError = (statusCode: number, message: string, code: string) => ({
+  statusCode,
+  message,
+  code,
+  details: null,
+  path: '/v1/…',
+  timestamp: '2026-10-03T12:00:00.000Z',
+});
 
 const ERRORES: Record<number, { code: string; message: string; descripcion: string }> = {
   400: { code: 'VALIDATION_ERROR', message: 'Validation failed (uuid is expected)', descripcion: 'Petición inválida.' },
@@ -54,16 +65,9 @@ export function ApiErrores(...statuses: number[]) {
         status: statusCode,
         description: descripcion,
         content: {
-          'application/json': {
-            example: {
-              statusCode,
-              message,
-              code,
-              details: null,
-              path: '/v1/…',
-              timestamp: '2026-10-03T12:00:00.000Z',
-            },
-          },
+          'application/json': { example: cuerpoError(statusCode, message, code) },
+          // Un error pedido en XML sale como <error> (el filtro usa el mismo serializador).
+          'application/xml': { example: serializarXml(cuerpoError(statusCode, message, code), { raiz: 'error', namespace: process.env.XML_NAMESPACE ?? 'catalog/v1' }) },
         },
       });
     }),

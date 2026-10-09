@@ -8,7 +8,7 @@ import { ProductoPresentacionEntity } from '../entities/producto-presentacion.en
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
 import { CreateProductDto } from './dto/create-product.dto';
-import { ProductsService } from './products.service';
+import { armarProducto, ProductsService } from './products.service';
 
 const dto: CreateProductDto = {
   sku: 'ABA-ARR-001',
@@ -45,7 +45,7 @@ function crearServicio() {
     save: jest.fn(async (x) => ({ id: 'pres-1', ...x })),
     findOne: jest.fn(),
     findOneOrFail: jest.fn(async () => ({ id: 'pres-1' })),
-    find: jest.fn(),
+    find: jest.fn(async (): Promise<unknown[]> => []),
     remove: jest.fn(),
   };
   const unidades = { findOne: jest.fn(), find: jest.fn() };
@@ -53,7 +53,10 @@ function crearServicio() {
     create: jest.fn((_entidad, valores) => ({ ...valores })),
     save: jest.fn(async (x) => ({ id: 'nuevo-id', ...x })),
     update: jest.fn(async () => ({ affected: 1 })),
-    findOneOrFail: jest.fn(async () => ({ id: 'nuevo-id' })),
+    remove: jest.fn(),
+    // Por omisión la presentación NO tiene historial (ninguna tabla dependiente devuelve filas).
+    query: jest.fn(async (_sql: string, _params?: unknown[]) => [] as unknown[]),
+    findOneOrFail: jest.fn(async (): Promise<Record<string, unknown>> => ({ id: 'nuevo-id' })),
   };
   const dataSource = {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
@@ -147,12 +150,67 @@ describe('ProductsService — productos y presentaciones', () => {
     expect(productos.update).not.toHaveBeenCalled();
   });
 
-  it('remove convierte la violación de llave foránea en 409', async () => {
-    const { productos, servicio } = crearServicio();
-    productos.findOne.mockResolvedValue({ id: 'p-1' });
-    productos.remove.mockRejectedValue(errorSql('23503'));
+  it('remove borra el producto cuando ninguna presentación tiene historial', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    const producto = { id: 'p-1', presentaciones: [{ id: 'pres-1' }] };
+    productos.findOne.mockResolvedValue(producto);
 
-    await expect(servicio.remove('p-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(await servicio.remove('p-1')).toEqual({ eliminado: true });
+    expect(manager.remove).toHaveBeenCalledWith(producto);
+  });
+
+  it('remove NO borra un producto con historial (D-07): queda inactivo, con presentaciones desactivadas', async () => {
+    const { productos, manager, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', presentaciones: [{ id: 'pres-1' }] });
+    manager.query.mockResolvedValueOnce([{ '?column?': 1 }]); // hay precios
+    manager.findOneOrFail.mockResolvedValueOnce({ id: 'p-1', estatus: 'inactivo' });
+
+    const resultado = await servicio.remove('p-1');
+
+    expect(resultado).toEqual({ eliminado: false, entidad: { id: 'p-1', estatus: 'inactivo' } });
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1' }, { estatus: 'inactivo' });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { productoId: 'p-1' }, { activo: false });
+    expect(manager.remove).not.toHaveBeenCalled();
+  });
+
+  it('CAT-11: rechaza una presentación con el mismo contenido físico aunque cambie el nombre o la unidad (500 g = Medio kilo = 0.5 kg)', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'kg', tipo: 'masa', factorBase: '1' });
+    presentaciones.find.mockResolvedValue([
+      { nombre: '500 g', contenido: '500', unidadMedida: { clave: 'g', tipo: 'masa', factorBase: '0.001' } },
+    ]);
+
+    await expect(
+      servicio.addPresentation('p-1', { nombre: 'Medio kilo', contenido: 0.5, unidadMedida: 'kg' }),
+    ).rejects.toThrow(/mismo contenido: "500 g"/);
+    expect(presentaciones.save).not.toHaveBeenCalled();
+  });
+
+  it('CAT-11: una presentación de OTRO tipo de unidad con el mismo número no es duplicada (500 ml vs 500 g)', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 3, clave: 'ml', tipo: 'volumen', factorBase: '0.001' });
+    presentaciones.find.mockResolvedValue([
+      { nombre: '500 g', contenido: '500', unidadMedida: { clave: 'g', tipo: 'masa', factorBase: '0.001' } },
+    ]);
+
+    await expect(
+      servicio.addPresentation('p-1', { nombre: '500 ml', contenido: 500, unidadMedida: 'ml' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('CAT-11: el 409 del índice único dice el motivo real: nombre repetido o código de barras repetido', async () => {
+    const { productos, unidades, presentaciones, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1' });
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'kg', tipo: 'masa', factorBase: '1' });
+    const con = (constraint: string) => Object.assign(errorSql('23505'), { constraint });
+
+    presentaciones.save.mockRejectedValueOnce(con('producto_presentaciones_producto_id_nombre_key'));
+    await expect(servicio.addPresentation('p-1', { nombre: '2 kg', contenido: 2, unidadMedida: 'kg' })).rejects.toThrow(/llamada "2 kg"/);
+
+    presentaciones.save.mockRejectedValueOnce(con('producto_presentaciones_codigo_barras_key'));
+    await expect(servicio.addPresentation('p-1', { nombre: '3 kg', contenido: 3, unidadMedida: 'kg', codigoBarras: '123' })).rejects.toThrow(/código de barras/);
   });
 
   it('addPresentation convierte la segunda predeterminada (23505) en 409', async () => {
@@ -166,29 +224,202 @@ describe('ProductsService — productos y presentaciones', () => {
     ).rejects.toThrow(/predeterminada/);
   });
 
-  it('removePresentation lanza 404 si no existe y 409 si tiene ventas', async () => {
+  it('removePresentation lanza 404 si no existe', async () => {
     const { presentaciones, servicio } = crearServicio();
     presentaciones.findOne.mockResolvedValueOnce(null);
     await expect(servicio.removePresentation('x')).rejects.toBeInstanceOf(NotFoundException);
+  });
 
-    presentaciones.findOne.mockResolvedValueOnce({ id: 'pres-1' });
-    presentaciones.remove.mockRejectedValue(errorSql('23503'));
-    await expect(servicio.removePresentation('pres-1')).rejects.toBeInstanceOf(ConflictException);
+  it('removePresentation borra la que no tiene historial y desactiva la que sí (D-07)', async () => {
+    const { presentaciones, manager, servicio } = crearServicio();
+    const pres = { id: 'pres-1' };
+    presentaciones.findOne.mockResolvedValue(pres);
+
+    expect(await servicio.removePresentation('pres-1')).toEqual({ eliminado: true });
+    expect(manager.remove).toHaveBeenCalledWith(pres);
+
+    manager.remove.mockClear();
+    manager.query.mockResolvedValueOnce([{ '?column?': 1 }]);
+    manager.findOneOrFail.mockResolvedValueOnce({ id: 'pres-1', activo: false });
+    expect(await servicio.removePresentation('pres-1')).toEqual({
+      eliminado: false,
+      entidad: { id: 'pres-1', activo: false },
+    });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { activo: false });
+    expect(manager.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductsService — editar la propuesta (CAT-14, D-11)', () => {
+  const prov: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
+  const propia = (extra: Record<string, unknown> = {}) => ({
+    id: 'p-1',
+    proveedorId: 'prov-1',
+    estatus: 'pendiente_aprobacion',
+    presentaciones: [{ id: 'pres-1', esPredeterminada: true }],
+    ...extra,
+  });
+
+  it('edita producto y presentación en una transacción, con el UPDATE condicionado a que siga pendiente', async () => {
+    const { proveedores, productos, unidades, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    unidades.findOne.mockResolvedValue({ id: 2, clave: 'g' });
+
+    await servicio.editProposal('p-1', { nombre: 'Nuevo', presentacion: '450 g', contenido: 450, unidadMedida: 'g' }, prov);
+
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, { nombre: 'Nuevo', updatedAt: expect.any(Date) });
+    expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { nombre: '450 g', contenido: '450', unidadMedidaId: 2 });
+  });
+
+  it('un PATCH que solo cambia la presentación también lleva el candado `estatus = pendiente` en el UPDATE', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    manager.update.mockResolvedValueOnce({ affected: 0 });
+
+    await expect(servicio.editProposal('p-1', { presentacion: '2 kg' }, prov)).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, expect.any(Object));
+    expect(manager.update).toHaveBeenCalledTimes(1); // no llegó a tocar la presentación
+  });
+
+  it('la propuesta de otro proveedor o inexistente es 404, no 403', async () => {
+    const { proveedores, productos, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+
+    productos.findOne.mockResolvedValueOnce(propia({ proveedorId: 'otro' }));
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(NotFoundException);
+    productos.findOne.mockResolvedValueOnce(null);
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('una propuesta ya resuelta no se edita (409) y el mensaje dice que haga una nueva', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+
+    for (const estatus of ['rechazado', 'activo']) {
+      productos.findOne.mockResolvedValueOnce(propia({ estatus }));
+      const error = await servicio.editProposal('p-1', { nombre: 'x' }, prov).catch((e) => e);
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(error.message).toContain('propuesta nueva');
+    }
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('si el Gerente la resuelve justo entre la lectura y el UPDATE, no se pisa (409)', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    manager.update.mockResolvedValueOnce({ affected: 0 } as never);
+
+    await expect(servicio.editProposal('p-1', { nombre: 'x' }, prov)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('un Proveedor ve el detalle de SU producto (aun pendiente) y el de otro es 404', async () => {
+    const { proveedores, productos, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    expect(await servicio.findOneVisible('p-1', prov)).toMatchObject({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+
+    productos.findOne.mockResolvedValue(propia({ proveedorId: 'otro' }));
+    await expect(servicio.findOneVisible('p-1', prov)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('armarProducto — forma de las respuestas (CAT-01 / CAT-15)', () => {
+  it('saca las llaves en el orden del XSD, con categoría y proveedor antes de presentaciones', () => {
+    const entidad = {
+      presentaciones: [],
+      proveedor: null,
+      categoria: { id: 1 },
+      updatedAt: 'u',
+      createdAt: 'c',
+      proveedorId: null,
+      estatus: 'activo',
+      esCanastaBasica: false,
+      categoriaId: 1,
+      descripcion: null,
+      nombre: 'n',
+      sku: 's',
+      id: 'i',
+    } as unknown as ProductoEntity;
+
+    expect(Object.keys(armarProducto(entidad))).toEqual([
+      'id', 'sku', 'nombre', 'descripcion', 'categoriaId', 'esCanastaBasica', 'estatus',
+      'proveedorId', 'createdAt', 'updatedAt', 'categoria', 'proveedor', 'presentaciones',
+    ]);
+  });
+
+  it('las escrituras (alta directa, propuesta y aprobación) devuelven esa misma forma, no la entidad cruda', async () => {
+    const { categorias, productos, unidades, manager, servicio } = crearServicio();
+    categorias.findOne.mockResolvedValue({ id: 1 });
+    productos.findOne.mockResolvedValue(null);
+    unidades.findOne.mockResolvedValue({ id: 1, clave: 'kg' });
+    manager.findOneOrFail.mockResolvedValue({ presentaciones: [], categoria: { id: 1 }, proveedor: null, id: 'nuevo-id' });
+
+    const creado = await servicio.create(dto);
+
+    expect(Object.keys(creado).slice(-3)).toEqual(['categoria', 'proveedor', 'presentaciones']);
+    expect(manager.findOneOrFail).toHaveBeenCalledWith(
+      ProductoEntity,
+      expect.objectContaining({ relations: { categoria: true, proveedor: true, presentaciones: true } }),
+    );
   });
 });
 
 describe('ProductsService — lectura según el perfil', () => {
+  const gerente: SesionUsuario = { id: 'u3', email: 'gerente@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+  const analista: SesionUsuario = { id: 'u4', email: 'analista@retail.mx', rol: 'Analista comercial', rolId: 2 };
+
+  it('el Gerente puede listar los rechazados con ?estatus=rechazado; el Analista recibe 403', async () => {
+    const { productos, servicio } = crearServicio();
+    const qb = crearQb();
+    productos.createQueryBuilder.mockReturnValue(qb);
+
+    await servicio.findAll(gerente, { estatus: 'rechazado' });
+    expect(qb.where).toHaveBeenCalledWith('p.estatus = :estatus', { estatus: 'rechazado' });
+
+    await expect(servicio.findAll(analista, { estatus: 'rechazado' })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   const interno: SesionUsuario = { id: 'u1', email: 'admin@retail.mx', rol: 'Administrador', rolId: 1 };
   const proveedor: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
 
-  it('un perfil interno ve el catálogo completo (sin filtro por proveedor)', async () => {
+  it('un perfil interno solo ve productos ACTIVOS (D-08), sin filtro por proveedor', async () => {
     const { productos, servicio } = crearServicio();
     const qb = crearQb();
     productos.createQueryBuilder.mockReturnValue(qb);
 
     await servicio.findAll(interno, {});
 
-    expect(qb.where).not.toHaveBeenCalled();
+    expect(qb.where).toHaveBeenCalledTimes(1);
+    expect(qb.where).toHaveBeenCalledWith('p.estatus = :activo', { activo: 'activo' });
+  });
+
+  it('el detalle de un producto pendiente es 404 para un Analista y visible para el Gerente', async () => {
+    const { productos, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({ id: 'p-1', estatus: 'pendiente_aprobacion', presentaciones: [] });
+    const analista: SesionUsuario = { id: 'u3', email: 'a@retail.mx', rol: 'Analista comercial', rolId: 2 };
+    const gerente: SesionUsuario = { id: 'u4', email: 'g@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+
+    await expect(servicio.findOneVisible('p-1', analista)).rejects.toBeInstanceOf(NotFoundException);
+    expect(await servicio.findOneVisible('p-1', gerente)).toMatchObject({ id: 'p-1', estatus: 'pendiente_aprobacion' });
+  });
+
+  it('el detalle sale con las llaves en el orden del XSD (presentaciones al final)', async () => {
+    const { productos, servicio } = crearServicio();
+    productos.findOne.mockResolvedValue({
+      id: 'p-1',
+      presentaciones: [],
+      categoria: { id: 1 },
+      estatus: 'activo',
+    });
+
+    const llaves = Object.keys(await servicio.findOneVisible('p-1', interno));
+
+    expect(llaves.indexOf('categoria')).toBeLessThan(llaves.indexOf('presentaciones'));
+    expect(llaves.indexOf('updatedAt')).toBeLessThan(llaves.indexOf('categoria'));
+    expect(llaves[llaves.length - 1]).toBe('presentaciones');
   });
 
   it('un Proveedor solo recibe los productos de su empresa, filtrado en la consulta', async () => {

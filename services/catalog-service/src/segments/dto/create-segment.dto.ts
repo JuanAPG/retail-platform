@@ -7,6 +7,7 @@ import {
   IsPositive,
   IsString,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 /**
@@ -34,6 +35,7 @@ export class CreateSegmentDto {
   @ApiProperty({ example: 0 })
   @Type(() => Number)
   @IsNumber({}, { message: 'incomeRangeMin debe ser numérico.' })
+  @Min(0, { message: 'incomeRangeMin no puede ser negativo.' })
   incomeRangeMin: number;
 
   @ApiPropertyOptional({ example: 15000, description: 'Vacío = sin tope superior.' })

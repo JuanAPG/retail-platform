@@ -26,9 +26,9 @@ se relaciona con la zona y qué limitaciones tiene.
 |---|---|---|
 | GET | `/v1/segments` | Los 6 perfiles internos |
 | GET | `/v1/segments/:id` | Los 6 perfiles internos |
-| POST | `/v1/segments` | Administrador, Analista comercial |
-| PATCH | `/v1/segments/:id` | Administrador, Analista comercial |
-| DELETE | `/v1/segments/:id` | Administrador |
+| POST | `/v1/segments` | Analista comercial |
+| PATCH | `/v1/segments/:id` | Analista comercial |
+| DELETE | `/v1/segments/:id` | Analista comercial |
 
 El Proveedor no tiene acceso a ninguna ruta de segmentos (`403`).
 
@@ -90,14 +90,16 @@ Request JSON:
 |---|---|
 | `code` | obligatorio, ≤ 20 caracteres, único |
 | `name` | obligatorio, ≤ 60 caracteres, único |
-| `incomeRangeMin` | obligatorio, numérico |
-| `incomeRangeMax` | opcional, numérico positivo; omitir = sin tope |
+| `incomeRangeMin` | obligatorio, numérico **≥ 0** (negativo → `400`) |
+| `incomeRangeMax` | opcional, numérico positivo; omitir = sin tope. Debe ser **mayor** que `incomeRangeMin` (si no → `400`, no `500`) |
 | `source`, `zoneRelation`, `limitations` | obligatorios, texto |
 | `updateFrequency` | obligatorio, ≤ 60 caracteres |
 | `description` | opcional |
 
 Campos no listados → `400` (`forbidNonWhitelisted`). Response `201`: objeto Segment.
 `code` o `name` repetido → `409`.
+
+**Los rangos no pueden encimarse (D-10):** si el rango se cruza con el de otro segmento (`a.min ≤ b.max` y `b.min ≤ a.max`, con "sin tope" como infinito) → `409` con el código del segmento con el que choca. Vale igual al editar (se compara el rango resultante, sin chocar consigo mismo).
 
 ### PATCH /v1/segments/:id
 
@@ -140,9 +142,11 @@ ingreso y sus indicadores cambian con el tiempo y viven en `zona_clasificaciones
 | GET | `/v1/zones` | Los 6 perfiles internos |
 | GET | `/v1/zones/compare?ids=` | Los 6 perfiles internos |
 | GET | `/v1/zones/:id` | Los 6 perfiles internos |
-| POST | `/v1/zones` | Administrador |
-| PATCH | `/v1/zones/:id` | Administrador |
-| DELETE | `/v1/zones/:id` | Administrador |
+| POST | `/v1/zones` | Analista comercial |
+| PATCH | `/v1/zones/:id` | Analista comercial |
+| DELETE | `/v1/zones/:id` | Analista comercial |
+| PUT | `/v1/zones/:id/indicators` | Analista comercial |
+| PUT | `/v1/zones/:id/classification` | Analista comercial |
 | GET | `/v1/municipalities` | Los 6 perfiles internos |
 
 El Proveedor no tiene acceso (`403`). `:id` es UUID; otro valor → `400`.
@@ -219,8 +223,37 @@ Response `200` (arreglo plano):
 ```
 
 `classification`, `estimatedIncome`, `population` y `availability` son `null` mientras no
-exista clasificación vigente o el indicador no se haya calculado. Sin `ids` → `400`;
-ninguna zona existente → `404`.
+exista clasificación vigente o el indicador no se haya cargado (ver `PUT /zones/:id/indicators`).
+
+- Exige **al menos 2 ids distintos**: sin `ids`, un solo id, o ids repetidos que se reducen a uno → `400`. Los ids repetidos se deduplican.
+- Algún id no UUID → `400`. Algún id inexistente → `404` y el mensaje **lista cuáles** faltan.
+
+### PUT /v1/zones/:id/indicators
+
+Carga a mano el **ingreso estimado, la población y la disponibilidad** de una zona (solo Analista comercial).
+Son los indicadores que lee `GET /v1/zones/compare` y la accesibilidad; sin ellos salían `null`.
+
+```json
+{ "ingresoEstimado": 18500, "poblacion": 42000, "disponibilidad": 0.85,
+  "periodoInicio": "2026-01-01", "periodoFin": "2026-09-30", "fuente": "INEGI - Censo 2020" }
+```
+
+Validaciones (todo → `400`): `ingresoEstimado` y `poblacion` ≥ 0; `disponibilidad` entre 0 y 1; fechas `YYYY-MM-DD`
+con `periodoFin ≥ periodoInicio`; `fuente` obligatoria; campos extra. Zona inexistente → `404`.
+
+Trazabilidad: en **una transacción** crea una corrida `descriptiva` ya `completada` (quién, cuándo, periodo) con
+los parámetros `origen = carga_manual`, `fuente` y `zona_id`, y un `indicador_valores` por indicador ligado a ella.
+No pisa el historial: si dos cargas comparten `periodoFin`, gana la más reciente.
+
+Response `200` (`zoneIndicatorsResponse`): `{ zoneId, estimatedIncome, population, availability, periodStart, periodEnd, source, runId }`.
+
+### PUT /v1/zones/:id/classification
+
+Clasifica la zona **a mano** en un segmento de ingreso (solo Analista comercial). Cierra la clasificación vigente
+(le pone `vigente_hasta`; el historial se conserva) y crea la nueva con quién la asignó (RN-02).
+
+Body: `{ "segmentId": 2 }`. Segmento inexistente → `400`; zona inexistente → `404`.
+Response `200` (`zoneClassificationResponse`): `{ zoneId, segmentId, segmentCode, segmentName, since, previousSegmentId }`.
 
 ### GET /v1/municipalities
 
@@ -242,9 +275,9 @@ Una tienda nace siempre **con su dirección** (se crean en una sola transacción
 | GET | `/v1/stores` | Los 6 perfiles internos |
 | GET | `/v1/stores/catalog/postal-codes` | Los 6 perfiles internos |
 | GET | `/v1/stores/:id` | Los 6 perfiles internos |
-| POST | `/v1/stores` | Administrador |
-| PATCH | `/v1/stores/:id` | Administrador |
-| DELETE | `/v1/stores/:id` | Administrador |
+| POST | `/v1/stores` | Gerente de categoría |
+| PATCH | `/v1/stores/:id` | Gerente de categoría |
+| DELETE | `/v1/stores/:id` | Gerente de categoría |
 
 El Proveedor no tiene acceso (`403`). `:id` es UUID; otro valor → `400`.
 
@@ -339,9 +372,13 @@ dirección se actualiza la dirección de la tienda (es exclusiva de ella). Respo
 
 ### DELETE /v1/stores/:id
 
-Response `204`. Se borra también su dirección (es exclusiva de la tienda). Inexistente →
-`404`. Con transacciones u otros registros asociados → `409` y no se borra nada
-(desactivar en lugar de borrar).
+Inexistente → `404`. **Nunca se pierde el historial (D-07):**
+
+- Sin precios, inventario ni transacciones: se borra (con su dirección, que es
+  exclusiva de la tienda) y responde `204` sin cuerpo.
+- Con alguno de ellos: **no se borra**; queda `activo = false`, sale de
+  `GET /v1/stores` y responde `200` con la Store ya inactiva. Sus precios siguen en
+  el historial.
 
 ### Códigos de error de zonas y tiendas
 
@@ -369,17 +406,18 @@ producto (RF-35). Un producto se da de alta siempre **con su primera presentaci�
 | GET | `/v1/units` | Cualquier usuario autenticado |
 | GET | `/v1/providers` | Administrador, Analista comercial, Gerente de categoría, Auditor |
 | GET | `/v1/products` | Los 7 perfiles (**el Proveedor solo ve los suyos**) |
-| GET | `/v1/products/pending` | Administrador, Gerente de categoría |
-| GET | `/v1/products/:id` | Los 6 perfiles internos |
-| POST | `/v1/products` | Administrador, Gerente de categoría |
+| GET | `/v1/products/pending` | Gerente de categoría, Administrador (solo lectura), Auditor (solo lectura) |
+| GET | `/v1/products/:id` | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| POST | `/v1/products` | Gerente de categoría |
 | POST | `/v1/products/proposals` | Proveedor |
-| PATCH | `/v1/products/:id` | Administrador, Gerente de categoría |
-| DELETE | `/v1/products/:id` | Administrador, Gerente de categoría |
-| PATCH | `/v1/products/:id/approve` | Administrador, Gerente de categoría |
-| PATCH | `/v1/products/:id/reject` | Administrador, Gerente de categoría |
+| PATCH | `/v1/products/proposals/:id` | Proveedor (solo la suya, pendiente) |
+| PATCH | `/v1/products/:id` | Gerente de categoría |
+| DELETE | `/v1/products/:id` | Gerente de categoría |
+| PATCH | `/v1/products/:id/approve` | Gerente de categoría |
+| PATCH | `/v1/products/:id/reject` | Gerente de categoría |
 | GET | `/v1/products/:id/presentations` | Los 6 perfiles internos |
-| POST | `/v1/products/:id/presentations` | Administrador, Gerente de categoría |
-| DELETE | `/v1/presentations/:id` | Administrador, Gerente de categoría |
+| POST | `/v1/products/:id/presentations` | Gerente de categoría |
+| DELETE | `/v1/presentations/:id` | Gerente de categoría |
 
 `:id` es UUID; otro valor → `400`. Los perfiles de consulta (Auditor, Analista,
 Planeador) no tienen ninguna ruta de escritura sobre productos.
@@ -451,17 +489,27 @@ Response `200`: `{ "data": [Product], "total": n, "page": 1, "limit": 20 }`.
 **El recorte por dueño del dato se hace en la consulta**, no en el cliente: un
 Proveedor recibe únicamente los productos de su empresa (vínculo por correo:
 `usuarios.email` = `proveedores.email`, ambos únicos); los perfiles internos ven el
-catálogo completo. Un Proveedor sin empresa vinculada → `403`.
+productos **activos** (D-08: un producto pendiente o rechazado no existe para el resto
+del equipo hasta que se aprueba; core-process y pricing lo validan con este mismo
+catálogo). Un Proveedor sin empresa vinculada → `403`.
+
+**Cómo encuentra el revisor un producto rechazado:** `GET /v1/products?estatus=rechazado`
+(también `pendiente_aprobacion`, `inactivo` o `activo`). Solo lo aceptan el Gerente de categoría,
+el Administrador y el Auditor; otro perfil recibe `403`, y un valor fuera de esos cuatro, `400`.
+Un Proveedor ignora el filtro: siempre ve únicamente los suyos.
 
 ### GET /v1/products/pending
 
 Bandeja de propuestas por revisar. Paginado, orden fijo `createdAt` **ascendente**
 (las más antiguas primero: es una cola de trabajo). Solo `estatus =
-pendiente_aprobacion`.
+pendiente_aprobacion`. La resuelve el Gerente de categoría; Administrador y Auditor la
+leen.
 
 ### GET /v1/products/:id
 
-Response `200`: Product con sus presentaciones. Inexistente → `404`.
+Response `200`: Product con sus presentaciones. Inexistente → `404`. Un producto que no
+está `activo` solo lo ve el Gerente, el Administrador y el Auditor; para los demás
+perfiles internos responde `404` (D-08).
 
 ### POST /v1/products — alta directa
 
@@ -504,6 +552,19 @@ el proveedor no decide: `proveedorId` sale del token, `estatus` es
 Response `201`: Product pendiente. Empresa proveedora inactiva → `403`; cuenta sin
 empresa vinculada → `403`; `sku` repetido → `409`.
 
+### PATCH /v1/products/proposals/:id — el Proveedor edita su propuesta (D-11)
+
+Cuerpo (todos opcionales): `nombre`, `descripcion`, `categoriaId` y la presentación propuesta (`presentacion`,
+`contenido`, `unidadMedida`). **No acepta** `sku`, `proveedorId`, `estatus` ni `esCanastaBasica` (`400`).
+
+- Solo mientras la propuesta está `pendiente_aprobacion`; ya resuelta (aprobada o rechazada) → `409`: si se rechazó,
+  el Proveedor hace una **propuesta nueva**. La condición va en el propio `UPDATE`: si el Gerente la resuelve justo en
+  ese instante, no se pisa (`409`).
+- Solo la de su empresa; la de otro proveedor o inexistente → `404` (no se confirma que exista). Otros roles → `403`.
+- Categoría o unidad inexistente → `400`. Response `200`: Product. Se audita como `update`.
+
+Para ver el detalle de su propuesta, el Proveedor usa `GET /v1/products/:id` (solo de sus productos, en cualquier estatus).
+
 ### PATCH /v1/products/:id
 
 Cuerpo (todos opcionales): `nombre`, `descripcion`, `categoriaId`, `esCanastaBasica`.
@@ -512,8 +573,13 @@ quede en `producto_revisiones`. Response `200`: Product actualizado.
 
 ### DELETE /v1/products/:id
 
-Response `204`. Borra también sus presentaciones. Si alguna presentación tiene ventas
-→ `409` y no se borra nada.
+Inexistente → `404`. **Nunca se pierde el historial (D-07):**
+
+- Si ninguna presentación tiene precios, inventario, ventas ni propuestas de precio: se
+  borra con sus presentaciones y responde `204` sin cuerpo.
+- Si alguna lo tiene: **no se borra**; el producto queda `estatus = inactivo`, sus
+  presentaciones `activo = false`, y responde `200` con el Product. Los precios siguen
+  en el historial.
 
 ### PATCH /v1/products/:id/approve
 
@@ -532,7 +598,7 @@ guarda motivo, revisor y fecha. Response `200`: Product. Ya resuelta → `409`.
 
 ### GET /v1/products/:id/presentations
 
-Arreglo plano de Presentation (las de un solo producto; **sin paginar**), orden
+Arreglo plano de Presentation activas (las de un solo producto; **sin paginar**), orden
 `nombre`. Producto inexistente → `404`.
 
 ### POST /v1/products/:id/presentations
@@ -547,11 +613,14 @@ Response `201`: Presentation. Producto inexistente → `404`; unidad inexistente
 Como **solo puede haber una presentación predeterminada por producto**, marcar
 `esPredeterminada: true` cuando ya existe otra → `409`.
 
+**Duplicadas (CAT-11):** una presentación con el mismo contenido físico que otra activa del producto (`contenido × factor_base` y mismo tipo de unidad) → `409` aunque cambie el nombre o la unidad: "Medio kilo" 0.5 kg, "500 g" y 0.5 kg son la misma. El `409` de los índices únicos dice el motivo real: nombre repetido, código de barras repetido o predeterminada repetida.
+
 ### DELETE /v1/presentations/:id
 
-Response `204`. Inexistente → `404`. Con ventas asociadas → `409` (desactivar en lugar
-de borrar). **Atención:** si no tiene ventas, el borrado arrastra en cascada sus
-precios, su inventario y sus precios propuestos (así está definido en el esquema).
+Inexistente → `404`. **Nunca se pierde el historial (D-07):** sin precios, inventario,
+ventas ni propuestas de precio se borra (`204`); con alguno de ellos queda
+`activo = false`, sale de `GET /v1/products/:id/presentations` y responde `200` con la
+Presentation.
 
 ### Códigos de error de esta sección
 
@@ -561,7 +630,7 @@ precios, su inventario y sus precios propuestos (así está definido en el esque
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso; empresa proveedora inactiva o no vinculada |
 | 404 | Producto o presentación inexistente |
-| 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada; borrado con ventas |
+| 409 | SKU duplicado; propuesta ya resuelta; segunda presentación predeterminada |
 
 ---
 
@@ -585,3 +654,22 @@ pantalla y la app móvil los piden para llenar listas y casi nunca cambian:
 - Si Redis no responde o el valor guardado está corrupto, el servicio responde desde Postgres como si no
   hubiera caché. El cuerpo (JSON o XML) es el mismo con o sin caché.
 - Otros servicios deben pedir estos catálogos por la API, no leer las llaves de Redis directamente.
+
+## Auditoría y notificaciones (CAT-08, CAT-09)
+
+**Auditoría.** Cada alta, edición, baja o desactivación de producto, presentación, tienda, zona y segmento, la
+aprobación y el rechazo de un producto (con su motivo) y las cargas de `PUT /zones/:id/indicators|classification`
+se reportan a audit-service (`POST /v1/auditoria`, `servicio: catalog-service`) **después** de que la operación
+tuvo éxito, con `cambios: [{ campo, previo, posterior }]` de las columnas que cambiaron. Un `DELETE` que solo
+desactivó se reporta como `desactivar`. Las operaciones rechazadas (4xx) no dejan evento. Si audit-service está
+caído, la operación igual responde (timeout de 1.5 s). Variable: `AUDIT_SERVICE_URL`.
+
+**Notificaciones** (a notifications-service, mismo patrón no bloqueante; variable `NOTIFICATIONS_SERVICE_URL`):
+
+| Cuándo | Evento | Le llega a |
+|---|---|---|
+| Un Proveedor propone un producto | `producto.propuesto` | rol Gerente de categoría (lo fija el receptor) |
+| El Gerente aprueba o rechaza | `propuesta.resuelta` | el usuario que propuso (con el motivo si se rechazó) |
+
+El contrato de notificaciones no define un destino Auditor para estos eventos. Un producto sin proveedor (alta
+directa) no genera aviso de resolución.
