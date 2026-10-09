@@ -127,6 +127,16 @@ descendente. Response `200`: `{ "data": [Price], "total": n, "page": 1, "limit":
 `productId` ausente o no UUID → `400`; producto inexistente → `404`. Un producto sin
 precios devuelve `data: []`.
 
+**Qué es "hoy".** La base corre en UTC, pero el negocio opera en `America/Monterrey`: "hoy" (para el precio
+actual, `compare-zones`, la alerta y la fecha por omisión de un alta) se calcula en ese huso, no con
+`CURRENT_DATE`. Así, entre las 18:00 y las 24:00 locales un precio fechado mañana no aparece como el actual.
+
+**Corregir el precio de hoy con uno futuro ya programado.** `POST /v1/prices` y la aprobación de propuestas
+buscan el precio que *cubre la fecha indicada* (no la bandera `vigente`). Si hay uno programado después, el
+precio nuevo queda cerrado un día antes de ese, sin traslaparlo. Misma fecha que el que lo cubre, o una fecha
+anterior a todo el historial → `409`. El historial de la pareja se bloquea (`FOR UPDATE`) para que dos altas
+simultáneas no inserten ambas.
+
 ### GET /v1/prices/current
 
 El precio **actual** (por fecha, D-05) de una presentación, uno por tienda. Lo usan `decision-service` y
@@ -137,7 +147,7 @@ El precio **actual** (por fecha, D-05) de una presentación, uno por tienda. Lo 
 | `presentationId` | **obligatorio**, UUID de una presentación existente (`400` si no) |
 | `zoneId`, `storeId` | opcionales, UUID |
 
-Response `200` (`priceListResponse`): `{ data: [Price], total, page, limit }`. Un precio programado a futuro no aparece hasta su fecha.
+Response `200` (`priceListResponse`): `{ data: [Price], total, page, limit }`. Un precio programado a futuro no aparece hasta su fecha. Una presentación dada de baja en catalog (`activo = false`) no admite precios nuevos (`409`).
 
 ### GET /v1/prices/series
 
