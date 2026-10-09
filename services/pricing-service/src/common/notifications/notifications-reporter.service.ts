@@ -2,7 +2,7 @@ import { Global, Injectable, Logger, Module } from '@nestjs/common';
 
 /** Evento a emitir (ver docs/contratos/notifications-service.md). El destinatario lo fija el receptor según el evento. */
 export interface EventoNotificacion {
-  eventType: 'precio.propuesto' | 'propuesta.resuelta' | 'precio.umbral';
+  eventType: 'precio.propuesto' | 'propuesta.resuelta' | 'precio.umbral' | 'precio.observado' | 'observacion.resuelta';
   relatedEntityType: string;
   relatedEntityId: string;
   title: string;

@@ -420,9 +420,8 @@ Todas no bloqueantes (timeout de 1.5 s, un fallo solo deja una advertencia) y co
 | El Responsable de precios aprueba o rechaza | `propuesta.resuelta` | el usuario que propuso (con el motivo si se rechazó) |
 | Un precio cruza el umbral de la alerta | `precio.umbral` | rol Responsable de precios |
 
-> **Con notifications-service:** su tabla de permisos manda `precio.propuesto` al rol *Responsable de precios* y deja
-> que éste origine `propuesta.resuelta` (rama `fix/notifications-destinos`, decisión D1). Sin ese cambio mergeado, el
-> receptor respondería `403` a la resolución y el aviso se perdería. No define un destino Auditor para estos eventos.
+> **Con notifications-service** (ya en `main`, decisión D1): `precio.propuesto` llega al rol *Responsable de precios* y éste
+> puede originar `propuesta.resuelta`, que le llega al proveedor que propuso. No define un destino Auditor para estos eventos.
 
 ### Auditoría de la resolución (PRI-14)
 
@@ -454,6 +453,11 @@ Un precio **levantado en campo** no es un precio oficial hasta que el Responsabl
 relojes de teléfono). `lat` y `lng` opcionales y **van juntas** (`-90..90`, `-180..180`). Presentación o tienda
 inexistente → `400`; producto no `activo` → `409` (D-08). El autor sale del token (no se acepta `capturedBy`, `status` ni `origin`).
 Response `201` (`priceObservationResponse`): la observación `pendiente`.
+
+**Avisos (PRI-09).** Capturar una observación emite `precio.observado` al rol *Responsable de precios* (el que la resuelve);
+aprobarla o rechazarla emite `observacion.resuelta` a quien la capturó, con el motivo si se rechazó. Como el resto de los
+avisos de pricing, no bloquean la operación y se envían en paralelo con la auditoría. Una presentación dada de baja en
+catalog no admite observaciones (`409`).
 
 ### GET /v1/price-observations
 

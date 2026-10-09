@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { DataSource } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { hoyOperacion } from '../common/fecha';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { ROL } from '../common/roles';
 import { PriceAlertsService } from '../price-alerts/price-alerts.service';
@@ -52,11 +54,12 @@ export class PriceObservationsService {
     private readonly audit: AuditReporter,
     private readonly prices: PricesService,
     private readonly alertas: PriceAlertsService,
+    private readonly notificaciones: NotificationsReporter,
   ) {}
 
   async create(dto: CreatePriceObservationDto, solicitante: SesionUsuario, ip?: string, token?: string): Promise<PriceObservationDto> {
     const [fila] = await this.dataSource.query(
-      `SELECT prod.estatus::text AS estatus FROM producto_presentaciones pres
+      `SELECT prod.estatus::text AS estatus, pres.activo AS activa FROM producto_presentaciones pres
        JOIN productos prod ON prod.id = pres.producto_id WHERE pres.id = $1`,
       [dto.presentationId],
     );
@@ -65,6 +68,7 @@ export class PriceObservationsService {
     if (!tienda) throw new BadRequestException('La tienda indicada no existe.');
     // D-08: un producto pendiente o rechazado no existe para el resto hasta aprobarse.
     if (fila.estatus !== 'activo') throw new ConflictException('El producto no está activo: no se le pueden levantar precios.');
+    if (fila.activa === false) throw new ConflictException('La presentación está dada de baja: no se le pueden levantar precios.');
 
     const observadoEn = dto.observedAt ? new Date(dto.observedAt) : new Date();
     // Un margen de 5 minutos por relojes de teléfono desfasados; más allá, es una fecha futura.
@@ -80,23 +84,38 @@ export class PriceObservationsService {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [dto.presentationId, dto.storeId, dto.price, observadoEn, dto.lat ?? null, dto.lng ?? null, solicitante.id],
     );
-    await this.audit.reportar(
-      {
-        tabla: 'precios_observados',
-        registroId: creada.id,
-        accion: 'insert',
-        descripcion: `Precio observado en campo (${dto.price}) para la presentación ${dto.presentationId} en la tienda ${dto.storeId}.`,
-        cambios: [
-          { campo: 'origen', previo: null, posterior: ORIGEN },
-          { campo: 'precio', previo: null, posterior: String(dto.price) },
-          { campo: 'estatus', previo: null, posterior: 'pendiente' },
-          { campo: 'capturado_por', previo: null, posterior: solicitante.id },
-        ],
-        ip: ip ?? null,
-      },
-      token,
-    );
-    return (await this.detallar([creada.id]))[0];
+    const creada_ = (await this.detallar([creada.id]))[0];
+    // Auditoría y aviso en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
+    await Promise.all([
+      this.audit.reportar(
+        {
+          tabla: 'precios_observados',
+          registroId: creada.id,
+          accion: 'insert',
+          descripcion: `Precio observado en campo (${dto.price}) para la presentación ${dto.presentationId} en la tienda ${dto.storeId}.`,
+          cambios: [
+            { campo: 'origen', previo: null, posterior: ORIGEN },
+            { campo: 'precio', previo: null, posterior: String(dto.price) },
+            { campo: 'estatus', previo: null, posterior: 'pendiente' },
+            { campo: 'capturado_por', previo: null, posterior: solicitante.id },
+          ],
+          ip: ip ?? null,
+        },
+        token,
+      ),
+      // QA-PRI53-08: avisa al Responsable de precios (rol fijo en notifications-service) que hay una observación por resolver.
+      this.notificaciones.emitir(
+        {
+          eventType: 'precio.observado',
+          relatedEntityType: 'precio_observado',
+          relatedEntityId: creada.id,
+          title: 'Precio observado en tienda pendiente de revisión',
+          message: `${creada_.presentation.producto.nombre} (${creada_.presentation.nombre}) en ${creada_.store.nombre}: ${Number(dto.price).toFixed(2)}, capturado en campo.`,
+        },
+        token,
+      ),
+    ]);
+    return creada_;
   }
 
   /** Un perfil con permiso ve todas; el Analista, solo las que capturó. Cola de trabajo: la más antigua primero. */
@@ -124,7 +143,7 @@ export class PriceObservationsService {
    */
   async approve(id: string, dto: ApprovePriceObservationDto, solicitante: SesionUsuario, ip?: string, token?: string): Promise<PriceObservationDto> {
     const obs = await this.buscarPendiente(id);
-    const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
+    const effectiveDate = (dto.effectiveDate ?? hoyOperacion()).slice(0, 10);
 
     const { precio } = await this.dataSource.transaction(async (manager) => {
       // Atómico: solo cambia si SIGUE pendiente (otro revisor pudo ganar en medio).
@@ -147,44 +166,46 @@ export class PriceObservationsService {
       return { precio: creado };
     });
 
-    await this.audit.reportar(
-      {
-        tabla: 'precios_observados',
-        registroId: id,
-        accion: 'aprobar',
-        descripcion: `Precio observado en campo aprobado (${obs.precio}).`,
-        cambios: [
-          { campo: 'origen', previo: null, posterior: ORIGEN },
-          { campo: 'estatus', previo: 'pendiente', posterior: 'aprobado' },
-          { campo: 'capturado_por', previo: null, posterior: obs.capturado_por },
-          { campo: 'aprobado_por', previo: null, posterior: solicitante.id },
-        ],
-        ip: ip ?? null,
-      },
-      token,
-    );
-    await this.audit.reportar(
-      {
-        tabla: 'precios',
-        registroId: precio.id,
-        accion: 'insert',
-        descripcion: `Precio registrado (${obs.precio}) por aprobación del precio observado ${id}.`,
-        cambios: [
-          { campo: 'origen', previo: null, posterior: ORIGEN },
-          { campo: 'precio_anterior', previo: precio.precioPrevio, posterior: null },
-          { campo: 'precio', previo: null, posterior: String(obs.precio) },
-        ],
-        ip: ip ?? null,
-      },
-      token,
-    );
-
     const [aprobada] = await this.detallar([id]);
-    await this.prices.invalidarProducto(aprobada.presentation.productoId);
-    await this.alertas.evaluar(
-      { presentationId: obs.presentacion_id, storeId: obs.tienda_id, nuevoPrecio: Number(obs.precio), effectiveDate },
-      token,
-    );
+    await Promise.all([
+      this.audit.reportar(
+        {
+          tabla: 'precios_observados',
+          registroId: id,
+          accion: 'aprobar',
+          descripcion: `Precio observado en campo aprobado (${obs.precio}).`,
+          cambios: [
+            { campo: 'origen', previo: null, posterior: ORIGEN },
+            { campo: 'estatus', previo: 'pendiente', posterior: 'aprobado' },
+            { campo: 'capturado_por', previo: null, posterior: obs.capturado_por },
+            { campo: 'aprobado_por', previo: null, posterior: solicitante.id },
+          ],
+          ip: ip ?? null,
+        },
+        token,
+      ),
+      this.audit.reportar(
+        {
+          tabla: 'precios',
+          registroId: precio.id,
+          accion: 'insert',
+          descripcion: `Precio registrado (${obs.precio}) por aprobación del precio observado ${id}.`,
+          cambios: [
+            { campo: 'origen', previo: null, posterior: ORIGEN },
+            { campo: 'precio_anterior', previo: precio.precioPrevio, posterior: null },
+            { campo: 'precio', previo: null, posterior: String(obs.precio) },
+          ],
+          ip: ip ?? null,
+        },
+        token,
+      ),
+      this.prices.invalidarProducto(aprobada.presentation.productoId),
+      this.alertas.evaluar(
+        { presentationId: obs.presentacion_id, storeId: obs.tienda_id, nuevoPrecio: Number(obs.precio), effectiveDate, precioId: precio.id },
+        token,
+      ),
+      this.avisarResolucion(aprobada, true, null, token),
+    ]);
     return aprobada;
   }
 
@@ -197,24 +218,45 @@ export class PriceObservationsService {
     );
     if (!afectadas) throw new ConflictException('Esta observación ya fue resuelta por otro revisor.');
 
-    await this.audit.reportar(
+    const rechazada = (await this.detallar([id]))[0];
+    await Promise.all([
+      this.audit.reportar(
+        {
+          tabla: 'precios_observados',
+          registroId: id,
+          accion: 'rechazar',
+          descripcion: `Precio observado en campo rechazado: ${dto.rejectionReason}`,
+          cambios: [
+            { campo: 'origen', previo: null, posterior: ORIGEN },
+            { campo: 'estatus', previo: 'pendiente', posterior: 'rechazado' },
+            { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
+            { campo: 'capturado_por', previo: null, posterior: obs.capturado_por },
+            { campo: 'rechazado_por', previo: null, posterior: solicitante.id },
+          ],
+          ip: ip ?? null,
+        },
+        token,
+      ),
+      this.avisarResolucion(rechazada, false, dto.rejectionReason, token),
+    ]);
+    return rechazada;
+  }
+
+  /** `observacion.resuelta`: le llega a quien capturó la observación (recipientUserId), con el motivo si se rechazó. No bloquea. */
+  private avisarResolucion(obs: PriceObservationDto, aprobada: boolean, motivo: string | null, token?: string) {
+    const que = `${obs.presentation.producto.nombre} (${obs.presentation.nombre}) en ${obs.store.nombre}: ${Number(obs.price).toFixed(2)}`;
+    return this.notificaciones.emitir(
       {
-        tabla: 'precios_observados',
-        registroId: id,
-        accion: 'rechazar',
-        descripcion: `Precio observado en campo rechazado: ${dto.rejectionReason}`,
-        cambios: [
-          { campo: 'origen', previo: null, posterior: ORIGEN },
-          { campo: 'estatus', previo: 'pendiente', posterior: 'rechazado' },
-          { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
-          { campo: 'capturado_por', previo: null, posterior: obs.capturado_por },
-          { campo: 'rechazado_por', previo: null, posterior: solicitante.id },
-        ],
-        ip: ip ?? null,
+        eventType: 'observacion.resuelta',
+        relatedEntityType: 'precio_observado',
+        relatedEntityId: obs.id,
+        title: aprobada ? 'Tu precio observado fue aprobado' : 'Tu precio observado fue rechazado',
+        message: `${que}: ${aprobada ? 'aprobado' : `rechazado. Motivo: ${motivo}`}.`,
+        priority: aprobada ? 'info' : 'warning',
+        recipientUserId: obs.capturedBy,
       },
       token,
     );
-    return (await this.detallar([id]))[0];
   }
 
   private async buscarPendiente(id: string) {

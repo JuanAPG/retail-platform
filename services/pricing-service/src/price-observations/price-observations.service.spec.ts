@@ -26,8 +26,9 @@ function armar() {
     invalidarProducto: jest.fn().mockResolvedValue(undefined),
   };
   const alertas = { evaluar: jest.fn().mockResolvedValue({ alerta: false }) };
-  const servicio = new PriceObservationsService(dataSource as never, audit as never, prices as never, alertas as never);
-  return { servicio, dataSource, manager, audit, prices, alertas };
+  const notificaciones = { emitir: jest.fn().mockResolvedValue(undefined) };
+  const servicio = new PriceObservationsService(dataSource as never, audit as never, prices as never, alertas as never, notificaciones as never);
+  return { servicio, dataSource, manager, audit, prices, alertas, notificaciones };
 }
 
 /** `create` consulta: presentación (con estatus del producto), tienda, INSERT, detalle. */
@@ -105,7 +106,7 @@ describe('PriceObservationsService.approve / reject', () => {
     expect(ctx.manager.query.mock.calls[1][1]).toEqual(['obs-1', 'precio-1']);
     expect(r).toMatchObject({ status: 'aprobado', priceId: 'precio-1' });
     expect(ctx.prices.invalidarProducto).toHaveBeenCalledWith('prod-1');
-    expect(ctx.alertas.evaluar).toHaveBeenCalledWith({ presentationId: 'pres-1', storeId: 't-1', nuevoPrecio: 27.5, effectiveDate: '2026-10-09' }, 'Bearer t');
+    expect(ctx.alertas.evaluar).toHaveBeenCalledWith({ presentationId: 'pres-1', storeId: 't-1', nuevoPrecio: 27.5, effectiveDate: '2026-10-09', precioId: 'precio-1' }, 'Bearer t');
   });
 
   it('la auditoría de aprobar dice "observado en campo", quién capturó y quién aprobó; y el precio creado también', async () => {
@@ -186,5 +187,48 @@ describe('PriceObservationsService.findAll', () => {
     b.dataSource.query.mockResolvedValueOnce([{ n: 0 }]).mockResolvedValueOnce([]);
     await b.servicio.findAll(revisor, {});
     expect(String(b.dataSource.query.mock.calls[1][0])).toContain('ORDER BY po.created_at DESC');
+  });
+});
+
+describe('PriceObservationsService — avisos (QA-PRI53-08)', () => {
+  it('capturar emite precio.observado con la entidad precio_observado', async () => {
+    const ctx = armar();
+    preparaCreate(ctx);
+
+    await ctx.servicio.create(dto, capturador, undefined, 'Bearer t');
+
+    expect(ctx.notificaciones.emitir).toHaveBeenCalledTimes(1);
+    const [evento, token] = ctx.notificaciones.emitir.mock.calls[0];
+    expect(evento).toMatchObject({ eventType: 'precio.observado', relatedEntityType: 'precio_observado', relatedEntityId: 'obs-1' });
+    expect(evento.message).toContain('Leche entera');
+    expect(token).toBe('Bearer t');
+  });
+
+  it('aprobar y rechazar emiten observacion.resuelta dirigida a quien la capturó', async () => {
+    const aprobada = armar();
+    aprobada.dataSource.query
+      .mockResolvedValueOnce([{ id: 'obs-1', presentacion_id: 'pres-1', tienda_id: 't-1', precio: '27.50', capturado_por: 'u-cap', estatus: 'pendiente' }])
+      .mockResolvedValueOnce([fila({ estatus: 'aprobado' })]);
+    aprobada.manager.query.mockResolvedValueOnce([[], 1]).mockResolvedValue([]);
+    await aprobada.servicio.approve('obs-1', {}, revisor, undefined, 'Bearer t');
+    expect(aprobada.notificaciones.emitir.mock.calls[0][0]).toMatchObject({
+      eventType: 'observacion.resuelta', recipientUserId: 'u-cap', relatedEntityId: 'obs-1',
+    });
+
+    const rechazada = armar();
+    rechazada.dataSource.query
+      .mockResolvedValueOnce([{ id: 'obs-1', presentacion_id: 'pres-1', tienda_id: 't-1', precio: '27.50', capturado_por: 'u-cap', estatus: 'pendiente' }])
+      .mockResolvedValueOnce([[], 1])
+      .mockResolvedValueOnce([fila({ estatus: 'rechazado' })]);
+    await rechazada.servicio.reject('obs-1', { rejectionReason: 'Precio fuera de mercado' }, revisor);
+    const [evento] = rechazada.notificaciones.emitir.mock.calls[0];
+    expect(evento).toMatchObject({ eventType: 'observacion.resuelta', recipientUserId: 'u-cap', priority: 'warning' });
+    expect(evento.message).toContain('Precio fuera de mercado');
+  });
+
+  it('una presentación dada de baja no admite observaciones (409)', async () => {
+    const ctx = armar();
+    ctx.dataSource.query.mockResolvedValueOnce([{ estatus: 'activo', activa: false }]).mockResolvedValueOnce([{ x: 1 }]);
+    await expect(ctx.servicio.create(dto, capturador)).rejects.toBeInstanceOf(ConflictException);
   });
 });
