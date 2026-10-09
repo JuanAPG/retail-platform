@@ -86,7 +86,7 @@ describe('historial de precios — invariantes bajo secuencias aleatorias (integ
     token = sign({ sub: id, email: 'p@test', rol: 'Responsable de precios', rolId: 1, jti: 'jti-inv' }, SECRET, { expiresIn: '25m' });
     await redis.set('session:it-inv-aud', '1', 'EX', 1800);
     tokenAuditor = sign({ sub: 'it-inv-aud', email: 'a@test', rol: 'Auditor', rolId: 1, jti: 'jti-inv-aud' }, SECRET, { expiresIn: '25m' });
-    pares = await crearPresentaciones(db, 'INV', 6);
+    pares = await crearPresentaciones(db, 'INV', 7);
   });
 
   afterAll(async () => {
@@ -131,6 +131,20 @@ describe('historial de precios — invariantes bajo secuencias aleatorias (integ
     expect(estados.filter((e) => e === 201)).toHaveLength(1);
     expect(estados.filter((e) => e === 409)).toHaveLength(7);
     await revisarInvariantes(p, 'misma fecha');
+  });
+
+  it('QA-PRI53-18: una pareja con SOLO un precio futuro admite colocar uno anterior (hoy o intermedio)', async () => {
+    const p = pares[6];
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Monterrey' }).format(new Date());
+    expect(await alta(p, 120, sumarDias(hoy, 60))).toBe(201); // único precio: futuro
+    expect(await alta(p, 100, sumarDias(hoy, 20))).toBe(201); // intermedio, antes del futuro
+    expect(await alta(p, 95, hoy)).toBe(201); // hoy, antes de los dos
+    expect(await alta(p, 99, hoy)).toBe(409); // misma fecha que uno existente
+    const filas = await revisarInvariantes(p, 'solo futuros');
+    expect(filas.map((f) => f.precio)).toEqual([95, 100, 120]);
+    expect(filas[2].hasta).toBeNull();
+    // ya rige el de hoy: insertar hacia atrás sigue prohibido
+    expect(await alta(p, 80, sumarDias(hoy, -5))).toBe(409);
   });
 
   it('con un precio futuro programado se puede corregir el de hoy, y el futuro sigue intacto (QA-PRI53-03)', async () => {

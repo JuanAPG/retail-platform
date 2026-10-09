@@ -88,6 +88,7 @@ const MALOS: Array<[string, unknown]> = [
   ['decimal negativo', -0.001],
   ['3 decimales', 12.345],
   ['desborda numeric(12,2)', 99999999999999],
+  ['1e15', 1e15],
   ['1e308', 1e308],
   ['entero enorme', 123456789012345678901234567890],
   ['notación científica', '1e5'],
@@ -254,6 +255,27 @@ describe('pricing-service — robustez ante entradas hostiles (integración, req
       expect(fallos).toEqual([]);
     });
   }
+
+  it('QA-PRI53-01/-19: una observación real aprobada con fecha imposible, y una propuesta de 1e15, dan 400 y no cambian nada', async () => {
+    const obs = await pedir('POST', '/v1/price-observations', {
+      token: analista,
+      cuerpo: { presentationId, storeId, price: 9.9, observedAt: '2026-10-01T12:00:00Z' },
+    });
+    expect(obs.estado).toBe(201);
+    for (const effectiveDate of ['2026-02-30', '2026-13-45', '0000-00-00', '2026-04-31']) {
+      const r = await pedir('PATCH', `/v1/price-observations/${obs.json.id}/approve`, { token: precios, cuerpo: { effectiveDate } });
+      expect(r.estado).toBe(400);
+      exigirSano(r, `approve ${effectiveDate}`);
+    }
+    // sigue pendiente: ninguna aprobación fallida la consumió
+    const pendiente = await pedir('GET', '/v1/price-observations?status=pendiente&limit=100', { token: precios });
+    expect(pendiente.json.data.map((o: { id: string }) => o.id)).toContain(obs.json.id);
+
+    for (const proposedPrice of [1e15, 1e308, 10_000_000_000]) {
+      const r = await pedir('POST', '/v1/price-proposals', { token: proveedor, cuerpo: { presentationId, proposedPrice, purchaseUnit: 'caja' } });
+      expect(r.estado).toBe(400);
+    }
+  });
 
   it('el cuerpo de 1 MB o más se rechaza con 413 y el error estándar, no con 500', async () => {
     const r = await pedir('POST', '/v1/prices', { token: precios, cuerpo: { presentationId, storeId, price: 1, nota: 'x'.repeat(1_200_000) } });

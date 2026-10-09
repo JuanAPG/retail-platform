@@ -12,10 +12,12 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PRECIO_MAXIMO } from '../../common/precio';
 import { IsFechaIso } from '../../common/validators/fecha-calendario';
 import { ESTATUS_PROPUESTA } from '../../entities/price-proposal.entity';
 
@@ -35,6 +37,7 @@ export class CreatePriceProposalDto {
   @Type(() => Number)
   @IsNumber({}, { message: 'proposedPrice debe ser numérico.' })
   @IsPositive({ message: 'proposedPrice debe ser mayor que cero.' })
+  @Max(PRECIO_MAXIMO, { message: `proposedPrice no puede pasar de ${PRECIO_MAXIMO}.` })
   proposedPrice: number;
 
   @ApiPropertyOptional({ example: 'caja 12 pzas', description: 'Dato informativo.' })

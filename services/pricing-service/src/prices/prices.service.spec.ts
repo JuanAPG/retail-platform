@@ -236,6 +236,25 @@ describe('PricesService.registrarPrecio — con un precio futuro programado (QA-
     expect(manager.save).not.toHaveBeenCalled();
   });
 
+  it('QA-PRI53-18: si la pareja solo tiene precios FUTUROS se puede colocar uno antes (queda cerrado un día antes del primero)', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([{ id: 'f', price: '120.00', effectiveDate: '2999-12-01', effectiveUntil: null }]);
+
+    await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2999-11-01' });
+    expect(manager.create.mock.calls[0][1]).toMatchObject({ effectiveDate: '2999-11-01', effectiveUntil: '2999-11-30' });
+    expect(manager.update).not.toHaveBeenCalled(); // no había nada que cerrar
+
+    await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-10-09' }); // hoy, también antes del futuro
+    expect(manager.create.mock.calls[1][1]).toMatchObject({ effectiveDate: '2026-10-09', effectiveUntil: '2999-11-30' });
+  });
+
+  it('QA-PRI53-18: con el primer precio ya vigente (o pasado), una fecha anterior sigue siendo 409', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([{ id: 'p', price: '90.00', effectiveDate: '2020-01-01', effectiveUntil: null }]);
+
+    await expect(servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2019-06-01' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('una fecha anterior a todo el historial es 409 (no se inserta hacia atrás)', async () => {
     const { manager, servicio } = crearServicio();
     manager.find.mockResolvedValue([hoy, futuro]);

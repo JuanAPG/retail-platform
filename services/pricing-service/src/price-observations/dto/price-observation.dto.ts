@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, Max, MaxLength, MinLength, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Max, MaxLength, MinLength, Min } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PRECIO_MAXIMO } from '../../common/precio';
 import { IsFechaIso } from '../../common/validators/fecha-calendario';
@@ -62,7 +62,7 @@ export class PriceObservationQueryDto extends PaginationDto {
 export class ApprovePriceObservationDto {
   @ApiPropertyOptional({ example: '2026-10-08', description: 'Desde cuándo rige el precio aprobado (YYYY-MM-DD). Por omisión, hoy.' })
   @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'effectiveDate debe ser YYYY-MM-DD.' })
+  @IsFechaIso({ message: 'effectiveDate debe ser una fecha válida (YYYY-MM-DD).' })
   effectiveDate?: string;
 }
 

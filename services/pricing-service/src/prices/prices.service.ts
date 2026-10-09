@@ -132,7 +132,10 @@ export class PricesService {
     const fecha = datos.effectiveDate;
     const cubre = historial.filter((p) => p.effectiveDate <= fecha && (!p.effectiveUntil || p.effectiveUntil >= fecha)).pop();
     const siguiente = historial.find((p) => p.effectiveDate > fecha);
-    if (cubre ? cubre.effectiveDate >= fecha : siguiente) {
+    // Sin precio que cubra la fecha: solo se admite si TODO lo que existe sigue programado a futuro (nada ha regido todavía),
+    // para poder colocar un precio antes de ese. Si el más cercano ya rige o ya pasó, insertar hacia atrás reescribiría historia.
+    const soloFuturos = !cubre && siguiente !== undefined && siguiente.effectiveDate > hoyOperacion();
+    if (cubre ? cubre.effectiveDate >= fecha : siguiente && !soloFuturos) {
       throw new ConflictException('Ya existe un precio vigente con fecha igual o posterior a la indicada.');
     }
     if (cubre) {

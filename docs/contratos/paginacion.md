@@ -10,6 +10,8 @@ contra esto una sola vez, no por servicio.
 | `page` | `1` | Entero mayor a 0. Fuera de rango → `data: []`, nunca error |
 | `limit` | `20` | Entero entre 1 y 100. Mayor a 100 se recorta a 100 |
 
+`page` es un entero entre 1 y 1 000 000; más allá responde `400` (con un OFFSET mayor, Postgres desbordaba y la API respondía 500).
+
 ## Respuesta (JSON)
 
 ```json
