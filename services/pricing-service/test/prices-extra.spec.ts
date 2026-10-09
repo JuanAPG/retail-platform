@@ -142,8 +142,8 @@ describe('pricing: programados, series, alertas, observaciones y límites (integ
         (
           await db.query(
             `SELECT avg(p.precio)::float AS media FROM precios p JOIN tiendas t ON t.id = p.tienda_id
-             WHERE p.presentacion_id = $1 AND t.zona_id = $2 AND p.fecha_vigencia_desde <= CURRENT_DATE
-               AND (p.fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= CURRENT_DATE)`,
+             WHERE p.presentacion_id = $1 AND t.zona_id = $2 AND p.fecha_vigencia_desde <= (now() AT TIME ZONE 'America/Monterrey')::date
+               AND (p.fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= (now() AT TIME ZONE 'America/Monterrey')::date)`,
             [presentationId, zoneId],
           )
         ).rows[0].media,

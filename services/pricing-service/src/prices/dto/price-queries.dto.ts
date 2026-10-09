@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsUUID, Matches } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { IsFechaCalendario } from '../../common/validators/fecha-calendario';
 
 /** Query de `GET /v1/prices/history`: producto (obligatorio), presentación (opcional) y paginación. */
 export class PriceHistoryQueryDto extends PaginationDto {
@@ -20,8 +21,6 @@ export class PriceComparisonQueryDto {
   @IsUUID(undefined, { message: 'productId es obligatorio y debe ser un UUID.' })
   productId: string;
 }
-
-const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Query de `GET /v1/prices/current`: el precio ACTUAL (por fecha) de una presentación, por tienda. */
 export class PriceCurrentQueryDto extends PaginationDto {
@@ -48,11 +47,11 @@ export class PriceSeriesQueryDto {
 
   @ApiPropertyOptional({ description: 'Desde esta fecha (YYYY-MM-DD): trae los precios cuya vigencia llega a ella o después.' })
   @IsOptional()
-  @Matches(FECHA, { message: 'dateFrom debe ser YYYY-MM-DD.' })
+  @IsFechaCalendario({ message: 'dateFrom debe ser una fecha válida YYYY-MM-DD.' })
   dateFrom?: string;
 
   @ApiPropertyOptional({ description: 'Hasta esta fecha (YYYY-MM-DD): trae los precios que empezaron en ella o antes.' })
   @IsOptional()
-  @Matches(FECHA, { message: 'dateTo debe ser YYYY-MM-DD.' })
+  @IsFechaCalendario({ message: 'dateTo debe ser una fecha válida YYYY-MM-DD.' })
   dateTo?: string;
 }

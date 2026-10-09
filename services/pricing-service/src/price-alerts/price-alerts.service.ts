@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { hoyOperacion } from '../common/fecha';
 import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 
 /** Defaults de D-09 cuando todavía nadie configuró la alerta: 5 % dentro de 30 días. */
@@ -22,6 +23,8 @@ export interface CambioPrecio {
   nuevoPrecio: number;
   /** Fecha desde la que aplica el precio nuevo (YYYY-MM-DD). */
   effectiveDate: string;
+  /** Id del precio recién creado: es la llave del aviso, para que dos cambios seguidos no se fusionen (QA-PRI53-05). */
+  precioId?: string;
 }
 
 export interface ResultadoAlerta {
@@ -117,13 +120,17 @@ export class PriceAlertsService {
       await this.notificaciones.emitir(
         {
           eventType: 'precio.umbral',
-          relatedEntityType: 'presentacion',
-          relatedEntityId: cambio.presentationId,
+          // notifications-service deduplica por (evento, entidad, destinatario) en 5 min: la llave es el PRECIO,
+          // no la presentación, para que una segunda alerta de la misma presentación o de otra tienda no se pierda.
+          relatedEntityType: cambio.precioId ? 'precio' : 'presentacion',
+          relatedEntityId: cambio.precioId ?? cambio.presentationId,
           title: `Cambio de precio de ${variacionPct} % en ${ventanaDias} días`,
           message:
             `${ctx?.producto ?? 'Producto'} (${ctx?.presentacion ?? 'presentación'}) en ${ctx?.tienda ?? 'tienda'}: ` +
             `${sube ? 'subió' : 'bajó'} de ${base.toFixed(2)} a ${cambio.nuevoPrecio.toFixed(2)} ` +
-            `(umbral ${umbralPct} % en ${ventanaDias} días).`,
+            `(umbral ${umbralPct} % en ${ventanaDias} días).` +
+            // PRI-15: si el precio es programado, el aviso lo dice en vez de sonar a un cambio que ya rige.
+            (cambio.effectiveDate > hoyOperacion() ? ` Aplica a partir del ${cambio.effectiveDate}.` : ''),
           priority: variacionPct >= umbralPct * 2 ? 'critical' : 'warning',
         },
         token,

@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { hoyOperacion } from '../common/fecha';
 import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
@@ -121,30 +122,32 @@ export class PriceProposalsService {
       }),
     );
 
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: guardada.id,
-      accion: 'insert',
-      descripcion: `Propuesta de precio (${dto.proposedPrice}) para la presentación ${dto.presentationId}.`,
-      cambios: [
-        { campo: 'precio_propuesto', previo: null, posterior: String(dto.proposedPrice) },
-        { campo: 'estatus', previo: null, posterior: ESTATUS_PROPUESTA.PENDIENTE },
-      ],
-      ip: ip ?? null,
-    }, token);
-
     const detalle = (await this.detallar([guardada.id]))[0];
-    // PRI-07: aviso de la propuesta nueva (el receptor fija a quién le llega según el evento).
-    await this.notificaciones.emitir(
-      {
-        eventType: 'precio.propuesto',
-        relatedEntityType: 'propuesta_precio',
-        relatedEntityId: guardada.id,
-        title: 'Nueva propuesta de precio',
-        message: `${detalle.supplier.razonSocial} propuso ${Number(dto.proposedPrice).toFixed(2)} para ${detalle.presentation.producto.nombre} (${detalle.presentation.nombre}).`,
-      },
-      token,
-    );
+    // Auditoría y aviso (PRI-07) en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: guardada.id,
+        accion: 'insert',
+        descripcion: `Propuesta de precio (${dto.proposedPrice}) para la presentación ${dto.presentationId}.`,
+        cambios: [
+          { campo: 'precio_propuesto', previo: null, posterior: String(dto.proposedPrice) },
+          { campo: 'estatus', previo: null, posterior: ESTATUS_PROPUESTA.PENDIENTE },
+        ],
+        ip: ip ?? null,
+      }, token),
+      // El receptor fija a quién le llega según el evento.
+      this.notificaciones.emitir(
+        {
+          eventType: 'precio.propuesto',
+          relatedEntityType: 'propuesta_precio',
+          relatedEntityId: guardada.id,
+          title: 'Nueva propuesta de precio',
+          message: `${detalle.supplier.razonSocial} propuso ${Number(dto.proposedPrice).toFixed(2)} para ${detalle.presentation.producto.nombre} (${detalle.presentation.nombre}).`,
+        },
+        token,
+      ),
+    ]);
     return detalle;
   }
 
@@ -194,7 +197,7 @@ export class PriceProposalsService {
     }
 
     // Solo la fecha: un ISO con hora se normaliza a YYYY-MM-DD.
-    const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
+    const effectiveDate = (dto.effectiveDate ?? hoyOperacion()).slice(0, 10);
 
     let creados: { id: string; storeId: string; precioPrevio: string | null }[];
     try {
@@ -242,43 +245,45 @@ export class PriceProposalsService {
     // Después de confirmar: auditoría (nunca rompe la operación) y caché.
     // PRI-14: el precio queda con `creado_por` = quien aprueba; el proponente se rescata aquí, de la propuesta.
     const proponente = await this.usuarioDelProveedor(propuesta.supplierId);
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: id,
-      accion: 'update',
-      descripcion: `Propuesta de precio aprobada (${propuesta.proposedPrice}) para ${creados.length} tienda(s).`,
-      cambios: [
-        { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.APROBADO },
-        { campo: 'propuesto_por', previo: null, posterior: proponente },
-        { campo: 'aprobado_por', previo: null, posterior: solicitante.id },
-      ],
-      ip: ip ?? null,
-    }, token);
-    for (const c of creados) {
-      await this.audit.reportar({
-        tabla: 'precios',
-        registroId: c.id,
-        accion: 'insert',
-        descripcion: `Precio registrado (${propuesta.proposedPrice}) por aprobación de la propuesta ${id}, tienda ${c.storeId}.`,
+    const [proposal] = await this.detallar([id]);
+    // Todo lo de afuera va en UN Promise.all: con servicios colgados la aprobación espera un timeout y no uno por tienda
+    // y por precio (QA-PRI53-06). Ninguno rompe la operación.
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: id,
+        accion: 'update',
+        descripcion: `Propuesta de precio aprobada (${propuesta.proposedPrice}) para ${creados.length} tienda(s).`,
         cambios: [
-          { campo: 'precio_anterior', previo: c.precioPrevio, posterior: null },
-          { campo: 'precio', previo: null, posterior: propuesta.proposedPrice },
+          { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.APROBADO },
+          { campo: 'propuesto_por', previo: null, posterior: proponente },
+          { campo: 'aprobado_por', previo: null, posterior: solicitante.id },
         ],
         ip: ip ?? null,
-      }, token);
-    }
-
-    const [proposal] = await this.detallar([id]);
-    await this.prices.invalidarProducto(proposal.presentation.productoId);
-
-    // PRI-07: aviso al usuario que propuso y alerta de cambio de precio por cada tienda afectada.
-    await this.avisarResolucion(proposal, proponente, true, null, token);
-    for (const c of creados) {
-      await this.alertas.evaluar(
-        { presentationId: propuesta.presentationId, storeId: c.storeId, nuevoPrecio: Number(propuesta.proposedPrice), effectiveDate },
-        token,
-      );
-    }
+      }, token),
+      ...creados.map((c) =>
+        this.audit.reportar({
+          tabla: 'precios',
+          registroId: c.id,
+          accion: 'insert',
+          descripcion: `Precio registrado (${propuesta.proposedPrice}) por aprobación de la propuesta ${id}, tienda ${c.storeId}.`,
+          cambios: [
+            { campo: 'precio_anterior', previo: c.precioPrevio, posterior: null },
+            { campo: 'precio', previo: null, posterior: propuesta.proposedPrice },
+          ],
+          ip: ip ?? null,
+        }, token),
+      ),
+      this.prices.invalidarProducto(proposal.presentation.productoId),
+      // PRI-07: aviso al usuario que propuso y alerta de cambio de precio por cada tienda afectada.
+      this.avisarResolucion(proposal, proponente, true, null, token),
+      ...creados.map((c) =>
+        this.alertas.evaluar(
+          { presentationId: propuesta.presentationId, storeId: c.storeId, nuevoPrecio: Number(propuesta.proposedPrice), effectiveDate, precioId: c.id },
+          token,
+        ),
+      ),
+    ]);
     return { proposal, prices: await this.prices.detallar(creados.map((c) => c.id)) };
   }
 
@@ -306,22 +311,24 @@ export class PriceProposalsService {
       throw new ConflictException('Esta propuesta ya fue resuelta por otro revisor.');
     }
 
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: id,
-      accion: 'update',
-      descripcion: `Propuesta de precio rechazada: ${dto.rejectionReason}`,
-      cambios: [
-        { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.RECHAZADO },
-        { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
-        { campo: 'propuesto_por', previo: null, posterior: proponente },
-        { campo: 'rechazado_por', previo: null, posterior: solicitante.id },
-      ],
-      ip: ip ?? null,
-    }, token);
-
     const rechazada = (await this.detallar([id]))[0];
-    await this.avisarResolucion(rechazada, proponente, false, dto.rejectionReason, token);
+    // Auditoría y aviso en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: id,
+        accion: 'update',
+        descripcion: `Propuesta de precio rechazada: ${dto.rejectionReason}`,
+        cambios: [
+          { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.RECHAZADO },
+          { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
+          { campo: 'propuesto_por', previo: null, posterior: proponente },
+          { campo: 'rechazado_por', previo: null, posterior: solicitante.id },
+        ],
+        ip: ip ?? null,
+      }, token),
+      this.avisarResolucion(rechazada, proponente, false, dto.rejectionReason, token),
+    ]);
     return rechazada;
   }
 

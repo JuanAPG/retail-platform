@@ -5,6 +5,7 @@ import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { CacheService } from '../common/cache/cache.service';
 import { PriceHistory } from '../entities/price-history.entity';
 import { PriceAlertsService } from '../price-alerts/price-alerts.service';
+import { hoyOperacion } from '../common/fecha';
 import { PricesService } from './prices.service';
 
 const usuario: SesionUsuario = { id: 'u-1', email: 'precios@retail.mx', rol: 'Responsable de precios', rolId: 4 };
@@ -39,7 +40,7 @@ function filaDetalle(id: string, extra: Record<string, unknown> = {}) {
 function crearServicio() {
   const repo = { createQueryBuilder: jest.fn() };
   const manager = {
-    findOne: jest.fn(),
+    find: jest.fn(async (): Promise<unknown[]> => []),
     update: jest.fn(),
     create: jest.fn((_entidad, valores) => ({ ...valores })),
     save: jest.fn(async (x) => ({ id: 'nuevo-id', ...x })),
@@ -96,7 +97,7 @@ describe('PricesService.create', () => {
   it('el primer precio de una pareja no cierra nada y lo fija el servidor (origen interno, creador del token)', async () => {
     const { dataSource, manager, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
 
     const precio = await servicio.create(dto, usuario);
 
@@ -118,7 +119,7 @@ describe('PricesService.create', () => {
   it('cierra el precio vigente un día antes de la nueva vigencia, en la misma transacción', async () => {
     const { dataSource, manager, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue({ id: 'previo', effectiveDate: '2026-08-01' });
+    manager.find.mockResolvedValue([{ id: 'previo', effectiveDate: '2026-08-01' }]);
 
     await servicio.create(dto, usuario);
 
@@ -133,7 +134,7 @@ describe('PricesService.create', () => {
   ])('el día anterior a %s es %s (cambio de mes, año y bisiesto)', async (fecha, esperado) => {
     const { dataSource, manager, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue({ id: 'previo', effectiveDate: '2020-01-01' });
+    manager.find.mockResolvedValue([{ id: 'previo', effectiveDate: '2020-01-01' }]);
 
     await servicio.create({ ...dto, effectiveDate: fecha }, usuario);
 
@@ -146,7 +147,7 @@ describe('PricesService.create', () => {
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue({ id: 'previo', effectiveDate: '2026-09-14' });
+    manager.find.mockResolvedValue([{ id: 'previo', effectiveDate: '2026-09-14' }]);
 
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
     expect(manager.update).not.toHaveBeenCalled();
@@ -156,7 +157,7 @@ describe('PricesService.create', () => {
   it('normaliza un ISO con hora a solo fecha', async () => {
     const { dataSource, manager, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue({ id: 'previo', effectiveDate: '2026-08-01' });
+    manager.find.mockResolvedValue([{ id: 'previo', effectiveDate: '2026-08-01' }]);
 
     await servicio.create({ ...dto, effectiveDate: '2026-09-14T22:30:00.000Z' }, usuario);
 
@@ -167,11 +168,11 @@ describe('PricesService.create', () => {
   it('sin fecha usa hoy', async () => {
     const { dataSource, manager, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
 
     await servicio.create({ presentationId: 'pres-1', storeId: 'tienda-1', price: 10 }, usuario);
 
-    expect(manager.create.mock.calls[0][1].effectiveDate).toBe(new Date().toISOString().slice(0, 10));
+    expect(manager.create.mock.calls[0][1].effectiveDate).toBe(hoyOperacion());
   });
 
   it('un registro simultáneo (unique_violation 23505) responde 409', async () => {
@@ -180,7 +181,7 @@ describe('PricesService.create', () => {
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
     manager.save.mockRejectedValue(errorSql('23505'));
 
     await expect(servicio.create(dto, usuario)).rejects.toThrow(/al mismo tiempo/);
@@ -192,10 +193,74 @@ describe('PricesService.create', () => {
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
     manager.save.mockRejectedValue(new Error('conexión caída'));
 
     await expect(servicio.create(dto, usuario)).rejects.toThrow('conexión caída');
+  });
+});
+
+describe('PricesService.registrarPrecio — con un precio futuro programado (QA-PRI53-03)', () => {
+  // Hoy rige 100 (10-08 en adelante, cerrado el 10-19) y hay 120 programado desde el 10-20.
+  const hoy = { id: 'hoy', price: '100.00', effectiveDate: '2026-10-08', effectiveUntil: '2026-10-19' };
+  const futuro = { id: 'futuro', price: '120.00', effectiveDate: '2026-10-20', effectiveUntil: null };
+  const datos = { presentationId: 'pres-1', storeId: 'tienda-1', price: '110.00', origen: 'interno' as const, createdBy: 'u-1' };
+
+  it('se puede corregir el precio de hoy: cierra el que cubre la fecha y el nuevo queda cerrado antes del futuro', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([hoy, futuro]);
+
+    const r = await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-10-09' });
+
+    expect(manager.update).toHaveBeenCalledWith(PriceHistory, { id: 'hoy' }, { effectiveUntil: '2026-10-08' });
+    expect(manager.create.mock.calls[0][1]).toMatchObject({ effectiveDate: '2026-10-09', effectiveUntil: '2026-10-19' });
+    expect(r.precioPrevio).toBe('100.00');
+  });
+
+  it('un precio posterior al futuro cierra al futuro, no al de hoy', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([hoy, futuro]);
+
+    await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-11-01' });
+
+    expect(manager.update).toHaveBeenCalledWith(PriceHistory, { id: 'futuro' }, { effectiveUntil: '2026-10-31' });
+    expect(manager.create.mock.calls[0][1].effectiveUntil).toBeNull();
+  });
+
+  it('el mismo día que el precio que lo cubre sigue siendo 409', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([hoy, futuro]);
+
+    await expect(servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-10-08' })).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('una fecha anterior a todo el historial es 409 (no se inserta hacia atrás)', async () => {
+    const { manager, servicio } = crearServicio();
+    manager.find.mockResolvedValue([hoy, futuro]);
+
+    await expect(servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-09-01' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('bloquea el historial de la pareja (FOR UPDATE) para serializar altas simultáneas', async () => {
+    const { manager, servicio } = crearServicio();
+
+    await servicio.registrarPrecio(manager as never, { ...datos, effectiveDate: '2026-10-09' });
+
+    expect(manager.find).toHaveBeenCalledWith(PriceHistory, expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+  });
+});
+
+describe('PricesService.create — presentación dada de baja (CAT-04)', () => {
+  it('rechaza con 409 registrar precio a una presentación inactiva', async () => {
+    const { dataSource, servicio } = crearServicio();
+    dataSource.query
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ x: 1 }])
+      .mockResolvedValueOnce([{ estatus: 'activo', activa: false }]);
+
+    await expect(servicio.create(dto, usuario)).rejects.toThrow(/dada de baja/);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -203,7 +268,7 @@ describe('PricesService.create — auditoría', () => {
   it('reporta el alta con el precio anterior, el actor y la IP, después de confirmar la transacción', async () => {
     const { dataSource, manager, audit, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-08-01' });
+    manager.find.mockResolvedValue([{ id: 'previo', price: '40.00', effectiveDate: '2026-08-01' }]);
 
     await servicio.create(dto, usuario, '172.18.0.9', 'Bearer t-1');
 
@@ -231,7 +296,7 @@ describe('PricesService.create — auditoría', () => {
   it('el primer precio de una pareja reporta precio_anterior nulo', async () => {
     const { dataSource, manager, audit, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
 
     await servicio.create(dto, usuario);
 
@@ -249,14 +314,14 @@ describe('PricesService.create — auditoría', () => {
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
+    manager.find.mockResolvedValue([{ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' }]);
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
 
     dataSource.query
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
     manager.save.mockRejectedValue(errorSql('23505'));
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
 
@@ -450,7 +515,7 @@ describe('PricesService — caché', () => {
   it('un alta exitosa invalida la caché del producto de la presentación (no de otro)', async () => {
     const { dataSource, manager, cache, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id', { producto_id: 'prod-77' })]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
 
     await servicio.create(dto, usuario);
 
@@ -464,7 +529,7 @@ describe('PricesService — caché', () => {
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ x: 1 }])
       .mockResolvedValueOnce([{ estatus: 'activo' }]);
-    manager.findOne.mockResolvedValue({ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' });
+    manager.find.mockResolvedValue([{ id: 'previo', price: '40.00', effectiveDate: '2026-09-14' }]);
 
     await expect(servicio.create(dto, usuario)).rejects.toBeInstanceOf(ConflictException);
     expect(cache.invalidarGrupo).not.toHaveBeenCalled();
@@ -479,8 +544,8 @@ describe('PricesService — PRI-05 (precio actual por fecha), PRI-07 (alerta) y 
     await servicio.compareAcrossZones('prod-1', usuario);
 
     for (const [sql] of dataSource.query.mock.calls.slice(1)) {
-      expect(String(sql)).toContain('fecha_vigencia_desde <= CURRENT_DATE');
-      expect(String(sql)).toContain('fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= CURRENT_DATE');
+      expect(String(sql)).toContain("fecha_vigencia_desde <= (now() AT TIME ZONE 'America/Monterrey')::date");
+      expect(String(sql)).toContain("fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= (now() AT TIME ZONE 'America/Monterrey')::date");
       expect(String(sql)).not.toMatch(/AND p\.vigente/);
     }
   });
@@ -489,18 +554,18 @@ describe('PricesService — PRI-05 (precio actual por fecha), PRI-07 (alerta) y 
     const { dataSource, servicio } = crearServicio();
     dataSource.query.mockResolvedValueOnce([filaDetalle('a')]);
     await servicio.detallar(['a']);
-    expect(String(dataSource.query.mock.calls[0][0])).toContain('fecha_vigencia_desde <= CURRENT_DATE');
+    expect(String(dataSource.query.mock.calls[0][0])).toContain("fecha_vigencia_desde <= (now() AT TIME ZONE 'America/Monterrey')::date");
   });
 
   it('un alta directa evalúa la alerta de cambio con el precio, la fecha y el token de quien lo registró', async () => {
     const { dataSource, manager, alertas, servicio } = crearServicio();
     existenYDetalle(dataSource, [filaDetalle('nuevo-id')]);
-    manager.findOne.mockResolvedValue(null);
+    manager.find.mockResolvedValue([]);
 
     await servicio.create(dto, usuario, '10.0.0.1', 'Bearer t');
 
     expect(alertas.evaluar).toHaveBeenCalledWith(
-      { presentationId: 'pres-1', storeId: 'tienda-1', nuevoPrecio: 42.5, effectiveDate: '2026-09-14' },
+      { presentationId: 'pres-1', storeId: 'tienda-1', nuevoPrecio: 42.5, effectiveDate: '2026-09-14', precioId: 'nuevo-id' },
       'Bearer t',
     );
   });
@@ -513,7 +578,7 @@ describe('PricesService — PRI-05 (precio actual por fecha), PRI-07 (alerta) y 
 
     expect(r).toMatchObject({ total: 1, page: 2, limit: 5 });
     const [sql, params] = dataSource.query.mock.calls[1];
-    expect(String(sql)).toContain('fecha_vigencia_desde <= CURRENT_DATE');
+    expect(String(sql)).toContain("fecha_vigencia_desde <= (now() AT TIME ZONE 'America/Monterrey')::date");
     expect(String(sql)).toContain('t.zona_id = $3');
     expect(params).toEqual(['pres-1', 't1', 'z1']);
     expect(String(dataSource.query.mock.calls[2][0])).toContain('LIMIT 5 OFFSET 5');

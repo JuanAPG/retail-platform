@@ -7,6 +7,7 @@ import { ROL } from '../common/roles';
 import { CacheService } from '../common/cache/cache.service';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { HOY_SQL, hoyOperacion } from '../common/fecha';
 import { PriceHistory } from '../entities/price-history.entity';
 import { CreatePriceDto } from './dto/create-price.dto';
 import { PriceAlertsService } from '../price-alerts/price-alerts.service';
@@ -63,7 +64,7 @@ export interface PriceComparisonResult {
  * fecha; y el anterior, ya cerrado con `hasta = desde_nuevo - 1`, sigue siendo el actual hasta entonces.
  */
 export const ES_ACTUAL = (alias: string) =>
-  `(${alias}.fecha_vigencia_desde <= CURRENT_DATE AND (${alias}.fecha_vigencia_hasta IS NULL OR ${alias}.fecha_vigencia_hasta >= CURRENT_DATE))`;
+  `(${alias}.fecha_vigencia_desde <= ${HOY_SQL} AND (${alias}.fecha_vigencia_hasta IS NULL OR ${alias}.fecha_vigencia_hasta >= ${HOY_SQL}))`;
 
 function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
@@ -105,29 +106,41 @@ export class PricesService {
 
   /**
    * Inserta un precio dentro de la transacción de quien llama. El histórico
-   * nunca se sobrescribe (RN-06): si ya hay un precio vigente para esa
-   * pareja, se cierra (se le pone `effectiveUntil` un día antes de la nueva
-   * vigencia), porque el índice único `uq_precios_vigente` no permite dos
-   * precios vigentes a la vez.
+   * nunca se sobrescribe (RN-06): el precio que CUBRE la nueva fecha se cierra
+   * (`effectiveUntil` un día antes), porque el índice único `uq_precios_vigente`
+   * no permite dos precios abiertos a la vez.
    *
-   * @throws ConflictException si el vigente tiene fecha igual o posterior.
+   * El anterior se busca POR FECHA, no por la bandera `vigente`: con un precio
+   * futuro programado, la bandera apunta al futuro y no se podría corregir el de
+   * hoy (QA-PRI53-03). Si hay uno programado después de la nueva fecha, el nuevo
+   * precio se cierra un día antes de ese, para no traslaparlo.
+   *
+   * @throws ConflictException si empieza el mismo día que el que la cubre, o si hay precios posteriores sin que uno la cubra.
    */
   async registrarPrecio(
     manager: EntityManager,
     datos: NuevoPrecio,
   ): Promise<{ id: string; precioPrevio: string | null }> {
-    const vigente = await manager.findOne(PriceHistory, {
-      where: { presentationId: datos.presentationId, storeId: datos.storeId, vigente: true },
+    // FOR UPDATE: dos altas simultáneas sobre la misma pareja se serializan en vez de insertar ambas.
+    const historial = await manager.find(PriceHistory, {
+      where: { presentationId: datos.presentationId, storeId: datos.storeId },
+      order: { effectiveDate: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
     });
-    if (vigente) {
-      if (vigente.effectiveDate >= datos.effectiveDate) {
-        throw new ConflictException('Ya existe un precio vigente con fecha igual o posterior a la indicada.');
-      }
-      await manager.update(PriceHistory, { id: vigente.id }, { effectiveUntil: diaAnterior(datos.effectiveDate) });
+    const fecha = datos.effectiveDate;
+    const cubre = historial.filter((p) => p.effectiveDate <= fecha && (!p.effectiveUntil || p.effectiveUntil >= fecha)).pop();
+    const siguiente = historial.find((p) => p.effectiveDate > fecha);
+    if (cubre ? cubre.effectiveDate >= fecha : siguiente) {
+      throw new ConflictException('Ya existe un precio vigente con fecha igual o posterior a la indicada.');
+    }
+    if (cubre) {
+      await manager.update(PriceHistory, { id: cubre.id }, { effectiveUntil: diaAnterior(fecha) });
     }
 
-    const nuevo = await manager.save(manager.create(PriceHistory, datos));
-    return { id: nuevo.id, precioPrevio: vigente?.price ?? null };
+    const nuevo = await manager.save(
+      manager.create(PriceHistory, { ...datos, effectiveUntil: siguiente ? diaAnterior(siguiente.effectiveDate) : null }),
+    );
+    return { id: nuevo.id, precioPrevio: cubre?.price ?? null };
   }
 
   /** Invalida lo cacheado de un producto (historial y comparación). Llamar DESPUÉS de confirmar la escritura. */
@@ -149,7 +162,7 @@ export class PricesService {
     await this.exigirProductoActivo(dto.presentationId);
 
     // Solo la fecha: un ISO con hora (2026-09-14T10:00:00Z) se normaliza a YYYY-MM-DD.
-    const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
+    const effectiveDate = (dto.effectiveDate ?? hoyOperacion()).slice(0, 10);
 
     try {
       const { id, precioPrevio } = await this.dataSource.transaction((manager) =>
@@ -163,29 +176,30 @@ export class PricesService {
         }),
       );
 
-      // Después de confirmar la transacción: la auditoría nunca rompe ni
-      // retrasa de forma notable el alta (el reporter traga sus propios errores).
-      await this.audit.reportar({
-        tabla: 'precios',
-        registroId: id,
-        accion: 'insert',
-        descripcion: `Precio registrado (${dto.price}) para presentación ${dto.presentationId} en tienda ${dto.storeId}.`,
-        // El precio anterior se cierra, no se sobrescribe: queda como previo.
-        cambios: [
-          { campo: 'precio_anterior', previo: precioPrevio, posterior: null },
-          { campo: 'precio', previo: null, posterior: String(dto.price) },
-        ],
-        ip: ip ?? null,
-      }, token);
-
       const [creado] = await this.detallar([id]);
-      // El historial y la comparación cacheados de este producto ya no valen.
-      await this.invalidarProducto(creado.presentation.productoId);
-      // PRI-07: ¿el cambio acumulado en la ventana cruza el umbral? Avisa al Responsable de precios.
-      await this.alertas.evaluar(
-        { presentationId: dto.presentationId, storeId: dto.storeId, nuevoPrecio: dto.price, effectiveDate },
-        token,
-      );
+      // Después de confirmar la transacción. Auditoría, caché y alerta no dependen entre sí: van en paralelo, para que
+      // con un servicio colgado la petición espere un solo timeout y no la suma de todos (QA-PRI53-06). Ninguna rompe el alta.
+      await Promise.all([
+        this.audit.reportar({
+          tabla: 'precios',
+          registroId: id,
+          accion: 'insert',
+          descripcion: `Precio registrado (${dto.price}) para presentación ${dto.presentationId} en tienda ${dto.storeId}.`,
+          // El precio anterior se cierra, no se sobrescribe: queda como previo.
+          cambios: [
+            { campo: 'precio_anterior', previo: precioPrevio, posterior: null },
+            { campo: 'precio', previo: null, posterior: String(dto.price) },
+          ],
+          ip: ip ?? null,
+        }, token),
+        // El historial y la comparación cacheados de este producto ya no valen.
+        this.invalidarProducto(creado.presentation.productoId),
+        // PRI-07: ¿el cambio acumulado en la ventana cruza el umbral? Avisa al Responsable de precios.
+        this.alertas.evaluar(
+          { presentationId: dto.presentationId, storeId: dto.storeId, nuevoPrecio: dto.price, effectiveDate, precioId: id },
+          token,
+        ),
+      ]);
       return creado;
     } catch (err) {
       // 23505 = unique_violation: otra petición registró un precio vigente
@@ -430,13 +444,17 @@ export class PricesService {
   /** D-08: un producto pendiente o rechazado no existe para el resto hasta aprobarse. */
   async exigirProductoActivo(presentationId: string) {
     const [fila] = await this.dataSource.query(
-      `SELECT prod.estatus::text AS estatus
+      `SELECT prod.estatus::text AS estatus, pres.activo AS activa
        FROM producto_presentaciones pres JOIN productos prod ON prod.id = pres.producto_id
        WHERE pres.id = $1`,
       [presentationId],
     );
     if (fila && fila.estatus !== 'activo') {
       throw new ConflictException('El producto no está activo: no se le pueden registrar precios.');
+    }
+    // CAT-04: una presentación dada de baja en catalog (activo = false) tampoco se cotiza.
+    if (fila && fila.activa === false) {
+      throw new ConflictException('La presentación está dada de baja: no se le pueden registrar precios.');
     }
   }
 

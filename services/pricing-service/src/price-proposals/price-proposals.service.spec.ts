@@ -6,6 +6,7 @@ import { PriceProposal } from '../entities/price-proposal.entity';
 import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { PriceAlertsService } from '../price-alerts/price-alerts.service';
 import { PricesService } from '../prices/prices.service';
+import { hoyOperacion } from '../common/fecha';
 import { PriceProposalsService } from './price-proposals.service';
 
 const proveedorUsuario: SesionUsuario = { id: 'u-prov', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
@@ -376,7 +377,7 @@ describe('PriceProposalsService.approve', () => {
     expect(evento.title).toContain('aprobada');
     expect(token).toBe('Bearer t');
     expect(ctx.alertas.evaluar).toHaveBeenCalledTimes(2);
-    expect(ctx.alertas.evaluar).toHaveBeenNthCalledWith(1, { presentationId: 'pres-1', storeId: 't1', nuevoPrecio: 38, effectiveDate: '2026-10-05' }, 'Bearer t');
+    expect(ctx.alertas.evaluar).toHaveBeenNthCalledWith(1, { presentationId: 'pres-1', storeId: 't1', nuevoPrecio: 38, effectiveDate: '2026-10-05', precioId: expect.any(String) }, 'Bearer t');
     expect(ctx.alertas.evaluar.mock.calls[1][0]).toMatchObject({ storeId: 't2' });
   });
 
@@ -394,7 +395,7 @@ describe('PriceProposalsService.approve', () => {
     const ctx = crearServicio();
     escenarioValido(ctx);
     await ctx.servicio.approve('prop-1', { storeIds: ['t1', 't2'] }, gerente);
-    expect(ctx.prices.registrarPrecio.mock.calls[0][1].effectiveDate).toBe(new Date().toISOString().slice(0, 10));
+    expect(ctx.prices.registrarPrecio.mock.calls[0][1].effectiveDate).toBe(hoyOperacion());
 
     const otra = crearServicio();
     escenarioValido(otra);
