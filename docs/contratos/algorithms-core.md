@@ -30,8 +30,16 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo
 Administrador y Analista. El Proveedor no tiene acceso a ninguna ruta.
 
-En XML, los `null` salen como elemento vacío (`<lift/>`) y las fechas-hora en
-ISO 8601 UTC. El XSD declara esos campos con tipos que aceptan vacío.
+En XML, la raíz es el elemento de cada endpoint (p. ej. `<runListResponse
+xmlns="algorithms/v1">`) y las fechas-hora van en ISO 8601 UTC. Un `null` sale
+como elemento vacío (`<lift/>`) en los campos que el XSD exige presentes
+(tipos `*OrEmpty`, declarados en `@XmlRoot(..., { siemprePresentes })`) y se
+omite en los demás. Los errores con `Accept: application/xml` salen como
+`<error>` con la misma forma que el JSON.
+
+`503 SERVICE_UNAVAILABLE`: desde Fase C, cuando un servicio del que depende
+(core-process, catalog, pricing, auth) no responde. Aplica a todas las rutas
+que leen datos de otros servicios.
 
 ---
 
@@ -510,7 +518,8 @@ XML: elemento `substitutionPatternListResponse`.
 
 Fase B: lectura por SQL de solo lectura en el Postgres compartido, aislada en
 una sola clase. Fase C: esa clase pasa a llamar por HTTP, reenviando el
-`Authorization` del usuario (cada servicio sigue validando JWT + Redis).
+`Authorization` del usuario (cada servicio sigue validando JWT + Redis). Si el
+servicio llamado no responde → `503 SERVICE_UNAVAILABLE`.
 
 | Servicio | Qué necesita | Para qué |
 |---|---|---|

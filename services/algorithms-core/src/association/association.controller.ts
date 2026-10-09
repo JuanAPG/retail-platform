@@ -26,6 +26,7 @@ export class AssociationController {
   constructor(private readonly associationService: AssociationService) {}
 
   @Post('apriori/run')
+  @XmlRoot('aprioriRunResponse', { siemprePresentes: ['lift', 'transactionCount'] })
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary: 'Corre Apriori con el soporte y la confianza dados y guarda la corrida (Administrador, Analista comercial).',
@@ -38,7 +39,9 @@ export class AssociationController {
   }
 
   @Get('runs')
-  @XmlRoot('runListResponse', { siemprePresentes: ['transactionsConsidered', 'basketsConsidered', 'errorMessage'] })
+  @XmlRoot('runListResponse', {
+    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage'],
+  })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Historial de corridas de Apriori, de la más reciente a la más antigua (paginado).' })
   @ApiRespuesta(200, 'Página de corridas con sus parámetros, sin reglas.', pagina([muestras.corrida], 5))
@@ -48,7 +51,9 @@ export class AssociationController {
   }
 
   @Get('runs/:id')
-  @XmlRoot('runResponse', { siemprePresentes: ['transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'] })
+  @XmlRoot('runResponse', {
+    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'],
+  })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Una corrida completa: parámetros, supuestos, filtros y reglas.' })
   @ApiRespuesta(200, 'La corrida con sus supuestos, filtros y reglas en `results`.', muestras.corridaCompleta)
