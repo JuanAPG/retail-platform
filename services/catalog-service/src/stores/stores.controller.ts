@@ -70,9 +70,9 @@ export class StoresController {
 
   @Post()
   @XmlRoot('storeResponse')
-  @Roles(ROL.ADMINISTRADOR)
+  @Roles(ROL.GERENTE_CATEGORIA)
   @Auditar('tiendas', 'insert')
-  @ApiOperation({ summary: 'Crea una tienda junto con su dirección (solo Administrador).' })
+  @ApiOperation({ summary: 'Crea una tienda junto con su dirección (solo Gerente de categoría).' })
   @ApiRespuesta(201, 'Tienda creada, activa.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403)
   create(@Body() dto: CreateStoreDto) {
@@ -81,7 +81,7 @@ export class StoresController {
 
   @Patch(':id')
   @XmlRoot('storeResponse')
-  @Roles(ROL.ADMINISTRADOR)
+  @Roles(ROL.GERENTE_CATEGORIA)
   @Auditar('tiendas', 'update')
   @ApiOperation({ summary: 'Edita la tienda y/o su dirección; `activo: false` la desactiva sin borrarla.' })
   @ApiRespuesta(200, 'Tienda actualizada.', muestras.tienda, 'storeResponse')
@@ -92,13 +92,14 @@ export class StoresController {
 
   @Delete(':id')
   @XmlRoot('storeResponse')
-  @Roles(ROL.ADMINISTRADOR)
+  @Roles(ROL.GERENTE_CATEGORIA)
   @Auditar('tiendas', 'delete')
   @ApiOperation({
     summary:
       'Elimina la tienda y su dirección (204). Si tiene historial (precios, inventario, ventas) NO se borra: queda inactiva y responde 200 con la tienda.',
   })
   @ApiSinCuerpo(204, 'Eliminada, sin cuerpo (no tenía historial).')
+  @ApiRespuesta(200, 'Tenía historial: no se borra, queda inactiva.', { ...muestras.tienda, activo: false }, 'storeResponse')
   @ApiErrores(400, 401, 403, 404)
   async remove(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
     const resultado = await this.storesService.remove(id);

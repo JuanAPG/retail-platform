@@ -39,7 +39,7 @@ export class SegmentsController {
   @XmlRoot('segmentResponse')
   @Roles(ROL.ANALISTA)
   @Auditar('segmentos_ingreso', 'insert')
-  @ApiOperation({ summary: 'Crea un segmento de ingreso (Administrador, Analista comercial).' })
+  @ApiOperation({ summary: 'Crea un segmento de ingreso (solo Analista comercial).' })
   @ApiRespuesta(201, 'Segmento creado.', muestras.segmento, 'segmentResponse')
   @ApiErrores(400, 401, 403, 409)
   create(@Body() dto: CreateSegmentDto) {
@@ -81,7 +81,7 @@ export class SegmentsController {
   @HttpCode(204)
   @Roles(ROL.ANALISTA)
   @Auditar('segmentos_ingreso', 'delete')
-  @ApiOperation({ summary: 'Elimina un segmento (solo Administrador). 409 si hay zonas clasificadas con él.' })
+  @ApiOperation({ summary: 'Elimina un segmento (solo Analista comercial). 409 si hay zonas clasificadas con él.' })
   @ApiSinCuerpo(204, 'Eliminado, sin cuerpo.')
   @ApiErrores(400, 401, 403, 404, 409)
   remove(@Param('id', ParseIntPipe) id: number) {

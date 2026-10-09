@@ -75,7 +75,7 @@ describe('/v1/stores (integración, requiere stack)', () => {
   });
 
   beforeAll(async () => {
-    admin = await sesion('it-s-admin', 'Administrador');
+    admin = await sesion('it-s-gerente', 'Gerente de categoría');
     analista = await sesion('it-s-analista', 'Analista comercial');
     proveedor = await sesion('it-s-proveedor', 'Proveedor');
     const zonas = (await http('GET', '/v1/zones?limit=100', admin)).cuerpo.data;

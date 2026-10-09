@@ -62,7 +62,7 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
   const nombre = 'Zona Integración';
 
   beforeAll(async () => {
-    admin = await sesion('it-z-admin', 'Administrador');
+    admin = await sesion('it-z-analista', 'Analista comercial');
     auditor = await sesion('it-z-auditor', 'Auditor');
     proveedor = await sesion('it-z-proveedor', 'Proveedor');
     municipioId = (await http('GET', '/v1/municipalities', auditor)).cuerpo[0].id;
@@ -159,10 +159,10 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
     expect(faltante.cuerpo.message).not.toContain(a);
   });
 
-  it('CAT-13: el Administrador carga indicadores y clasificación, y /zones/compare los muestra', async () => {
+  it('CAT-13: el Analista carga indicadores y clasificación, y /zones/compare los muestra', async () => {
     const adminReal = await sesion(
-      await conDb(async (db) => (await db.query("SELECT u.id FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE r.nombre = 'Administrador' LIMIT 1")).rows[0].id),
-      'Administrador',
+      await conDb(async (db) => (await db.query("SELECT u.id FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE r.nombre = 'Analista comercial' LIMIT 1")).rows[0].id),
+      'Analista comercial',
     );
     const zona = await http('POST', '/v1/zones', adminReal, { nombre: 'Zona Indicadores IT', municipioId });
     expect(zona.estado).toBe(201);
@@ -175,7 +175,7 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
       const antes = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
       expect(antes).toMatchObject({ estimatedIncome: null, population: null, availability: null });
 
-      // Solo el Administrador.
+      // Solo el Analista comercial.
       expect((await http('PUT', `/v1/zones/${id}/indicators`, auditor, carga)).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/indicators`, proveedor, carga)).estado).toBe(403);
 
