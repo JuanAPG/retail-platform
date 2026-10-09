@@ -26,6 +26,7 @@ import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { EditarPropuestaProductoDto } from './dto/editar-propuesta-producto.dto';
+import { ProductListFilterDto } from './dto/product-list-filter.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -97,7 +98,7 @@ export class ProductsController {
   })
   @ApiRespuesta(200, 'Página de productos con sus presentaciones.', pagina([muestras.producto]), 'productListResponse')
   @ApiErrores(400, 401, 403)
-  findAll(@CurrentUser() usuario: SesionUsuario, @Query() filtros: ProductFilterDto) {
+  findAll(@CurrentUser() usuario: SesionUsuario, @Query() filtros: ProductListFilterDto) {
     return this.productsService.findAll(usuario, filtros);
   }
 
@@ -189,6 +190,7 @@ export class ProductsController {
       'Elimina el producto (204). Si alguna presentación tiene historial (precios, inventario, ventas) NO se borra: queda inactivo y responde 200 con el producto.',
   })
   @ApiSinCuerpo(204, 'Eliminado, sin cuerpo (no tenía historial).')
+  @ApiRespuesta(200, 'Tenía historial: no se borra, queda inactivo con sus presentaciones desactivadas.', { ...muestras.producto, estatus: 'inactivo' }, 'productResponse')
   @ApiErrores(400, 401, 403, 404)
   async remove(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
     const resultado = await this.productsService.remove(id);
@@ -261,6 +263,7 @@ export class ProductsController {
       'Elimina una presentación (204). Si tiene historial (precios, inventario, ventas) NO se borra: queda inactiva y responde 200 con la presentación.',
   })
   @ApiSinCuerpo(204, 'Eliminada, sin cuerpo (no tenía historial).')
+  @ApiRespuesta(200, 'Tenía historial: no se borra, queda inactiva.', { ...muestras.presentacion, activo: false }, 'presentationResponse')
   @ApiErrores(400, 401, 403, 404)
   async removePresentation(@Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) res: Response) {
     const resultado = await this.productsService.removePresentation(id);

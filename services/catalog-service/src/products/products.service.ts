@@ -25,6 +25,7 @@ import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { EditarPropuestaProductoDto } from './dto/editar-propuesta-producto.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
+import { ProductListFilterDto } from './dto/product-list-filter.dto';
 import { RechazarProductoDto } from './dto/rechazar-producto.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -35,6 +36,32 @@ export const ESTATUS_PRODUCTO = {
   RECHAZADO: 'rechazado',
   INACTIVO: 'inactivo',
 } as const;
+
+/** Relaciones que arman la forma completa del producto (categoría y proveedor son parte del XSD). */
+const RELACIONES_PRODUCTO = { categoria: true, proveedor: true, presentaciones: true } as const;
+
+/**
+ * Forma única del producto en la API: las llaves salen en el orden del XSD (`xs:sequence`), con
+ * `presentaciones` al final. Lecturas y escrituras pasan por aquí para que el XML valide siempre.
+ */
+export function armarProducto(producto: ProductoEntity) {
+  return {
+    id: producto.id,
+    sku: producto.sku,
+    nombre: producto.nombre,
+    descripcion: producto.descripcion,
+    categoriaId: producto.categoriaId,
+    esCanastaBasica: producto.esCanastaBasica,
+    estatus: producto.estatus,
+    proveedorId: producto.proveedorId,
+    createdAt: producto.createdAt,
+    updatedAt: producto.updatedAt,
+    categoria: producto.categoria,
+    proveedor: producto.proveedor,
+    presentaciones: producto.presentaciones,
+  };
+}
+export type ProductoRespuesta = ReturnType<typeof armarProducto>;
 
 function codigoSql(err: unknown): string | undefined {
   return err instanceof QueryFailedError ? (err as unknown as { code?: string }).code : undefined;
@@ -97,12 +124,18 @@ export class ProductsService {
    * el catálogo de todos los proveedores y bastaría abrir la pestaña de
    * red para verlo.
    */
-  async findAll(solicitante: SesionUsuario, filtros: ProductFilterDto): Promise<Pagina<ProductoEntity>> {
+  async findAll(solicitante: SesionUsuario, filtros: ProductListFilterDto): Promise<Pagina<ProductoEntity>> {
     const qb = this.consultaProductos().orderBy('p.nombre', 'ASC').addOrderBy('p.id', 'ASC');
 
     if (solicitante.rol === ROL.PROVEEDOR) {
       const proveedor = await this.proveedorDe(solicitante);
       qb.where('p.proveedorId = :proveedorId', { proveedorId: proveedor.id });
+    } else if (filtros.estatus && filtros.estatus !== ESTATUS_PRODUCTO.ACTIVO) {
+      // Quien revisa (Gerente, Administrador, Auditor) puede buscar rechazados, pendientes o inactivos.
+      if (!(VEN_NO_ACTIVOS as readonly string[]).includes(solicitante.rol)) {
+        throw new ForbiddenException('Tu perfil solo puede consultar productos activos.');
+      }
+      qb.where('p.estatus = :estatus', { estatus: filtros.estatus });
     } else {
       // D-08: para el resto del equipo un producto pendiente o rechazado no
       // existe hasta aprobarse. Los pendientes solo viven en /products/pending.
@@ -125,7 +158,7 @@ export class ProductsService {
    * queda amarrada a la empresa del token: el proveedor no elige de
    * quién es el producto que da de alta, ni si es canasta básica (RN-04).
    */
-  async createProposal(dto: CrearPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+  async createProposal(dto: CrearPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoRespuesta> {
     const proveedor = await this.proveedorDe(solicitante);
     if (!proveedor.activo) {
       throw new ForbiddenException(
@@ -155,7 +188,7 @@ export class ProductsService {
    * CAT-14 / D-11: el Proveedor corrige SU propuesta mientras está pendiente. Una propuesta ya resuelta
    * no se edita: si se rechazó, hace una nueva. La de otro proveedor es un 404 (no se confirma que exista).
    */
-  async editProposal(id: string, dto: EditarPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+  async editProposal(id: string, dto: EditarPropuestaProductoDto, solicitante: SesionUsuario): Promise<ProductoRespuesta> {
     const proveedor = await this.proveedorDe(solicitante);
     const producto = await this.productosRepo.findOne({ where: { id }, relations: { presentaciones: true } });
     if (!producto || producto.proveedorId !== proveedor.id) {
@@ -171,15 +204,15 @@ export class ProductsService {
 
     await this.dataSource.transaction(async (manager) => {
       // La condición `estatus = pendiente` va en el propio UPDATE: si el Gerente la resolvió justo ahora, no se pisa.
+      // `updatedAt` explícito: aunque solo cambie la presentación, el UPDATE condicionado siempre se ejecuta.
       const cambios = {
+        updatedAt: new Date(),
         ...(dto.nombre !== undefined && { nombre: dto.nombre }),
         ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
         ...(dto.categoriaId !== undefined && { categoriaId: dto.categoriaId }),
       };
-      if (Object.keys(cambios).length > 0) {
-        const r = await manager.update(ProductoEntity, { id, estatus: ESTATUS_PRODUCTO.PENDIENTE }, cambios);
-        if (!r.affected) throw new ConflictException('Esta propuesta ya fue resuelta; no se puede editar.');
-      }
+      const r = await manager.update(ProductoEntity, { id, estatus: ESTATUS_PRODUCTO.PENDIENTE }, cambios);
+      if (!r.affected) throw new ConflictException('Esta propuesta ya fue resuelta; no se puede editar.');
       const predeterminada = producto.presentaciones.find((p) => p.esPredeterminada) ?? producto.presentaciones[0];
       const presentacion = {
         ...(dto.presentacion !== undefined && { nombre: dto.presentacion }),
@@ -190,14 +223,14 @@ export class ProductsService {
         await manager.update(ProductoPresentacionEntity, { id: predeterminada.id }, presentacion);
       }
     });
-    return this.findOne(id);
+    return armarProducto(await this.findOne(id));
   }
 
-  approve(id: string, solicitante: SesionUsuario): Promise<ProductoEntity> {
+  approve(id: string, solicitante: SesionUsuario): Promise<ProductoRespuesta> {
     return this.resolver(id, ESTATUS_PRODUCTO.ACTIVO, null, solicitante);
   }
 
-  reject(id: string, dto: RechazarProductoDto, solicitante: SesionUsuario): Promise<ProductoEntity> {
+  reject(id: string, dto: RechazarProductoDto, solicitante: SesionUsuario): Promise<ProductoRespuesta> {
     return this.resolver(id, ESTATUS_PRODUCTO.RECHAZADO, dto.motivoRechazo, solicitante);
   }
 
@@ -217,27 +250,13 @@ export class ProductsService {
     } else if (producto.estatus !== ESTATUS_PRODUCTO.ACTIVO && !veNoActivos) {
       throw new NotFoundException('El producto no existe.');
     }
-    return {
-      id: producto.id,
-      sku: producto.sku,
-      nombre: producto.nombre,
-      descripcion: producto.descripcion,
-      categoriaId: producto.categoriaId,
-      esCanastaBasica: producto.esCanastaBasica,
-      estatus: producto.estatus,
-      proveedorId: producto.proveedorId,
-      createdAt: producto.createdAt,
-      updatedAt: producto.updatedAt,
-      categoria: producto.categoria,
-      proveedor: producto.proveedor,
-      presentaciones: producto.presentaciones,
-    };
+    return armarProducto(producto);
   }
 
   async findOne(id: string): Promise<ProductoEntity> {
     const producto = await this.productosRepo.findOne({
       where: { id },
-      relations: { presentaciones: true },
+      relations: RELACIONES_PRODUCTO,
     });
     if (!producto) {
       throw new NotFoundException('El producto no existe.');
@@ -250,7 +269,7 @@ export class ProductsService {
    * sin pasar por la bandeja de aprobación (esa es solo para lo que
    * propone un Proveedor externo) y sin proveedor asociado.
    */
-  async create(dto: CreateProductDto): Promise<ProductoEntity> {
+  async create(dto: CreateProductDto): Promise<ProductoRespuesta> {
     await this.exigirCategoria(dto.categoriaId);
     await this.rechazarSkuRepetido(dto.sku);
     const unidad = await this.exigirUnidad(dto.unidadMedida);
@@ -269,7 +288,7 @@ export class ProductsService {
     );
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<ProductoEntity> {
+  async update(id: string, dto: UpdateProductDto): Promise<ProductoRespuesta> {
     await this.findOne(id);
     if (dto.categoriaId !== undefined) await this.exigirCategoria(dto.categoriaId);
 
@@ -284,7 +303,7 @@ export class ProductsService {
     if (Object.keys(cambios).length > 0) {
       await this.productosRepo.update({ id }, cambios);
     }
-    return this.findOne(id);
+    return armarProducto(await this.findOne(id));
   }
 
   /**
@@ -292,7 +311,7 @@ export class ProductsService {
    * ventas, propuestas) el producto NO se borra: pasa a 'inactivo', con
    * sus presentaciones desactivadas. Solo se borra lo que no tiene nada.
    */
-  async remove(id: string): Promise<ResultadoBaja<ProductoEntity>> {
+  async remove(id: string): Promise<ResultadoBaja<ProductoRespuesta>> {
     const producto = await this.findOne(id);
     return this.dataSource.transaction(async (manager) => {
       let conHistorial = false;
@@ -305,8 +324,8 @@ export class ProductsService {
       if (conHistorial) {
         await manager.update(ProductoEntity, { id }, { estatus: ESTATUS_PRODUCTO.INACTIVO });
         await manager.update(ProductoPresentacionEntity, { productoId: id }, { activo: false });
-        const entidad = await manager.findOneOrFail(ProductoEntity, { where: { id }, relations: { presentaciones: true } });
-        return { eliminado: false as const, entidad };
+        const entidad = await manager.findOneOrFail(ProductoEntity, { where: { id }, relations: RELACIONES_PRODUCTO });
+        return { eliminado: false as const, entidad: armarProducto(entidad) };
       }
       await manager.remove(producto);
       return { eliminado: true as const };
@@ -416,7 +435,7 @@ export class ProductsService {
     estatus: string,
     motivo: string | null,
     solicitante: SesionUsuario,
-  ): Promise<ProductoEntity> {
+  ): Promise<ProductoRespuesta> {
     const producto = await this.productosRepo.findOne({ where: { id } });
     if (!producto) {
       throw new NotFoundException('El producto no existe.');
@@ -449,7 +468,7 @@ export class ProductsService {
         }),
       );
 
-      return manager.findOneOrFail(ProductoEntity, { where: { id }, relations: { presentaciones: true } });
+      return armarProducto(await manager.findOneOrFail(ProductoEntity, { where: { id }, relations: RELACIONES_PRODUCTO }));
     });
   }
 
@@ -473,7 +492,7 @@ export class ProductsService {
   private crearConPresentacion(
     datos: Partial<ProductoEntity>,
     primera: { nombre: string; contenido: number; unidadMedidaId: number },
-  ): Promise<ProductoEntity> {
+  ): Promise<ProductoRespuesta> {
     return this.dataSource.transaction(async (manager) => {
       const guardado = await manager.save(manager.create(ProductoEntity, datos));
       await manager.save(
@@ -486,10 +505,9 @@ export class ProductsService {
           activo: true,
         }),
       );
-      return manager.findOneOrFail(ProductoEntity, {
-        where: { id: guardado.id },
-        relations: { presentaciones: true },
-      });
+      return armarProducto(
+        await manager.findOneOrFail(ProductoEntity, { where: { id: guardado.id }, relations: RELACIONES_PRODUCTO }),
+      );
     });
   }
 

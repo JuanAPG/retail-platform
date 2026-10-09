@@ -68,8 +68,10 @@ export class AuditarInterceptor implements NestInterceptor {
     respuesta: unknown,
   ) {
     try {
-      const resp = respuesta as { id?: string; entidad?: { id?: string } } | undefined;
-      const id = idRuta ?? resp?.id ?? resp?.entidad?.id;
+      const resp = respuesta as { id?: string | number; entidad?: { id?: string | number } } | undefined;
+      // segmentos_ingreso.id es SMALLINT: en el alta el id sale de la respuesta y es numérico, y audit-service exige texto.
+      const crudo = idRuta ?? resp?.id ?? resp?.entidad?.id;
+      const id = crudo === undefined || crudo === null ? undefined : String(crudo);
       const despues = await this.fila(meta.tabla, id);
 
       let accion: string = meta.accion;

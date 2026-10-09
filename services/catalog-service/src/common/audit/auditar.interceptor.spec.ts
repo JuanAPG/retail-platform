@@ -71,6 +71,14 @@ describe('AuditarInterceptor (CAT-08)', () => {
     expect(evento.cambios).toContainEqual({ campo: 'nombre', previo: null, posterior: 'Nueva' });
   });
 
+  it('un id numérico (segmentos_ingreso.id SMALLINT) viaja como texto: audit-service exige string', async () => {
+    const { ctx, interceptor, audit } = armar({ tabla: 'segmentos_ingreso', accion: 'insert', idDe: 'ruta' }, req(), [{ id: 7, nombre: 'Medio' }]);
+
+    await correr(interceptor, ctx, { handle: () => of({ id: 7 }) });
+
+    expect(audit.reportar.mock.calls[0][0].registroId).toBe('7');
+  });
+
   it('un alta anidada (presentación de un producto) usa el id de la RESPUESTA, no el :id de la ruta', async () => {
     const { ctx, interceptor, audit } = armar(
       { tabla: 'producto_presentaciones', accion: 'insert', idDe: 'respuesta' },

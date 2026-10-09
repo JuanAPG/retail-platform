@@ -8,7 +8,7 @@ import { ProductoPresentacionEntity } from '../entities/producto-presentacion.en
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
 import { CreateProductDto } from './dto/create-product.dto';
-import { ProductsService } from './products.service';
+import { armarProducto, ProductsService } from './products.service';
 
 const dto: CreateProductDto = {
   sku: 'ABA-ARR-001',
@@ -268,8 +268,19 @@ describe('ProductsService — editar la propuesta (CAT-14, D-11)', () => {
 
     await servicio.editProposal('p-1', { nombre: 'Nuevo', presentacion: '450 g', contenido: 450, unidadMedida: 'g' }, prov);
 
-    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, { nombre: 'Nuevo' });
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, { nombre: 'Nuevo', updatedAt: expect.any(Date) });
     expect(manager.update).toHaveBeenCalledWith(ProductoPresentacionEntity, { id: 'pres-1' }, { nombre: '450 g', contenido: '450', unidadMedidaId: 2 });
+  });
+
+  it('un PATCH que solo cambia la presentación también lleva el candado `estatus = pendiente` en el UPDATE', async () => {
+    const { proveedores, productos, manager, servicio } = crearServicio();
+    proveedores.findOne.mockResolvedValue({ id: 'prov-1' });
+    productos.findOne.mockResolvedValue(propia());
+    manager.update.mockResolvedValueOnce({ affected: 0 });
+
+    await expect(servicio.editProposal('p-1', { presentacion: '2 kg' }, prov)).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.update).toHaveBeenCalledWith(ProductoEntity, { id: 'p-1', estatus: 'pendiente_aprobacion' }, expect.any(Object));
+    expect(manager.update).toHaveBeenCalledTimes(1); // no llegó a tocar la presentación
   });
 
   it('la propuesta de otro proveedor o inexistente es 404, no 403', async () => {
@@ -315,7 +326,62 @@ describe('ProductsService — editar la propuesta (CAT-14, D-11)', () => {
   });
 });
 
+describe('armarProducto — forma de las respuestas (CAT-01 / CAT-15)', () => {
+  it('saca las llaves en el orden del XSD, con categoría y proveedor antes de presentaciones', () => {
+    const entidad = {
+      presentaciones: [],
+      proveedor: null,
+      categoria: { id: 1 },
+      updatedAt: 'u',
+      createdAt: 'c',
+      proveedorId: null,
+      estatus: 'activo',
+      esCanastaBasica: false,
+      categoriaId: 1,
+      descripcion: null,
+      nombre: 'n',
+      sku: 's',
+      id: 'i',
+    } as unknown as ProductoEntity;
+
+    expect(Object.keys(armarProducto(entidad))).toEqual([
+      'id', 'sku', 'nombre', 'descripcion', 'categoriaId', 'esCanastaBasica', 'estatus',
+      'proveedorId', 'createdAt', 'updatedAt', 'categoria', 'proveedor', 'presentaciones',
+    ]);
+  });
+
+  it('las escrituras (alta directa, propuesta y aprobación) devuelven esa misma forma, no la entidad cruda', async () => {
+    const { categorias, productos, unidades, manager, servicio } = crearServicio();
+    categorias.findOne.mockResolvedValue({ id: 1 });
+    productos.findOne.mockResolvedValue(null);
+    unidades.findOne.mockResolvedValue({ id: 1, clave: 'kg' });
+    manager.findOneOrFail.mockResolvedValue({ presentaciones: [], categoria: { id: 1 }, proveedor: null, id: 'nuevo-id' });
+
+    const creado = await servicio.create(dto);
+
+    expect(Object.keys(creado).slice(-3)).toEqual(['categoria', 'proveedor', 'presentaciones']);
+    expect(manager.findOneOrFail).toHaveBeenCalledWith(
+      ProductoEntity,
+      expect.objectContaining({ relations: { categoria: true, proveedor: true, presentaciones: true } }),
+    );
+  });
+});
+
 describe('ProductsService — lectura según el perfil', () => {
+  const gerente: SesionUsuario = { id: 'u3', email: 'gerente@retail.mx', rol: 'Gerente de categoría', rolId: 3 };
+  const analista: SesionUsuario = { id: 'u4', email: 'analista@retail.mx', rol: 'Analista comercial', rolId: 2 };
+
+  it('el Gerente puede listar los rechazados con ?estatus=rechazado; el Analista recibe 403', async () => {
+    const { productos, servicio } = crearServicio();
+    const qb = crearQb();
+    productos.createQueryBuilder.mockReturnValue(qb);
+
+    await servicio.findAll(gerente, { estatus: 'rechazado' });
+    expect(qb.where).toHaveBeenCalledWith('p.estatus = :estatus', { estatus: 'rechazado' });
+
+    await expect(servicio.findAll(analista, { estatus: 'rechazado' })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   const interno: SesionUsuario = { id: 'u1', email: 'admin@retail.mx', rol: 'Administrador', rolId: 1 };
   const proveedor: SesionUsuario = { id: 'u2', email: 'ventas@lacteos.mx', rol: 'Proveedor', rolId: 7 };
 
