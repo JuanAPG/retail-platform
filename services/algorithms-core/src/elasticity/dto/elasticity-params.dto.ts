@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { IsFechaCalendario } from '../../common/validators/fecha-calendario.validator';
 
 export const GRANULARITIES = ['day', 'week'] as const;
 export type Granularity = (typeof GRANULARITIES)[number];
@@ -17,14 +18,14 @@ export class ElasticityParamsDto {
   @IsUUID('4', { message: 'presentationId debe ser un UUID válido.' })
   presentationId?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-01' })
+  @ApiPropertyOptional({ example: '2026-08-01', description: 'Fecha sin hora, aaaa-mm-dd.' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateFrom debe ser una fecha ISO válida.' })
+  @IsFechaCalendario()
   dateFrom?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-31', description: 'Inclusivo: abarca el día completo.' })
+  @ApiPropertyOptional({ example: '2026-08-31', description: 'Fecha sin hora, aaaa-mm-dd. Inclusivo: abarca el día completo.' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateTo debe ser una fecha ISO válida.' })
+  @IsFechaCalendario()
   dateTo?: string;
 
   @ApiPropertyOptional({

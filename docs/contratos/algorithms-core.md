@@ -129,7 +129,7 @@ Request JSON:
 | `maxItemsetSize` | opcional, entero entre 2 y 4; default 3 |
 | `storeId`, `zoneId` | opcionales, UUID |
 | `segmentId` | opcional, entero ≥ 1. Segmento de la ZONA de la compra (RN-02) |
-| `dateFrom`, `dateTo` | opcionales, fecha ISO. `dateTo` abarca el día completo |
+| `dateFrom`, `dateTo` | opcionales, fecha sin hora `aaaa-mm-dd` que exista (`2026-02-30`, `2026-09` o `2026-W40-1` → `400`). `dateTo` abarca el día completo |
 
 Campos no listados → `400` (`forbidNonWhitelisted`).
 
@@ -285,7 +285,7 @@ Request JSON (todo opcional):
 | Campo | Regla |
 |---|---|
 | `presentationId` | opcional, UUID. Sin ella, todas las presentaciones con ventas en el periodo |
-| `dateFrom`, `dateTo` | opcionales, fecha ISO. `dateTo` abarca el día completo |
+| `dateFrom`, `dateTo` | opcionales, fecha sin hora `aaaa-mm-dd` que exista (`2026-02-30`, `2026-09` o `2026-W40-1` → `400`). `dateTo` abarca el día completo |
 | `granularity` | `day` (default) o `week` (semana ISO, empieza en lunes): cómo se agrupan las ventas en observaciones zona × periodo |
 
 La elasticidad se calcula siempre **por cada zona más el agregado nacional**;

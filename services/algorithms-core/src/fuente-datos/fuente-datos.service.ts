@@ -114,7 +114,7 @@ const LINEAS_DE_CANASTA_SQL = `
   WHERE ($1::uuid IS NULL OR k.zona_id = $1::uuid)
     AND ($2::smallint IS NULL OR k.segmento_ingreso_id = $2::smallint)
     AND ($3::uuid IS NULL OR t.tienda_id = $3::uuid)
-    AND ($4::timestamptz IS NULL OR k.fecha >= $4::timestamptz)
+    AND ($4::date IS NULL OR k.fecha >= $4::date)
     AND ($5::date IS NULL OR k.fecha < $5::date + 1)`;
 
 /**

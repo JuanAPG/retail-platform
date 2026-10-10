@@ -88,7 +88,8 @@ export class AssociationService {
    * corrida registrada como `fallida`.
    */
   async runApriori(params: AprioriParamsDto, user: SesionUsuario): Promise<ReglaConProductos[]> {
-    if (params.dateFrom && params.dateTo && params.dateTo.slice(0, 10) < params.dateFrom.slice(0, 10)) {
+    // El DTO solo deja pasar fechas reales 'aaaa-mm-dd': comparar el texto es comparar las fechas.
+    if (params.dateFrom && params.dateTo && params.dateTo < params.dateFrom) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
 
@@ -255,8 +256,8 @@ export class AssociationService {
   private periodOf(params: AprioriParamsDto, lines: BasketLine[]): Period {
     const days = lines.map((l) => l.day).sort();
     return {
-      start: params.dateFrom?.slice(0, 10) ?? days[0],
-      end: params.dateTo?.slice(0, 10) ?? days[days.length - 1],
+      start: params.dateFrom ?? days[0],
+      end: params.dateTo ?? days[days.length - 1],
     };
   }
 

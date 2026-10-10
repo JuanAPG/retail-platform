@@ -152,7 +152,8 @@ export class ElasticityService {
    */
   async calculate(params: ElasticityParamsDto, user: SesionUsuario): Promise<ElasticityResult> {
     const granularity = params.granularity ?? 'day';
-    if (params.dateFrom && params.dateTo && params.dateTo.slice(0, 10) < params.dateFrom.slice(0, 10)) {
+    // El DTO solo deja pasar fechas reales 'aaaa-mm-dd': comparar el texto es comparar las fechas.
+    if (params.dateFrom && params.dateTo && params.dateTo < params.dateFrom) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
     if (params.presentationId && (await this.fuente.nombresDePresentaciones([params.presentationId])).size === 0) {
@@ -165,8 +166,8 @@ export class ElasticityService {
     }
     const period: Period = {
       // Con ventas siempre hay primer y último día.
-      start: params.dateFrom?.slice(0, 10) ?? firstDay!,
-      end: params.dateTo?.slice(0, 10) ?? lastDay!,
+      start: params.dateFrom ?? firstDay!,
+      end: params.dateTo ?? lastDay!,
     };
     const assumptions = ASSUMPTIONS(granularity);
 
