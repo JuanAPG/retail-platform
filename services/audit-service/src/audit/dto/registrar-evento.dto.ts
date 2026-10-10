@@ -7,7 +7,11 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  Validate,
   ValidateNested,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { AccionAuditoria } from '../../entities/auditoria.entity';
 
@@ -49,6 +53,33 @@ export const LARGO = {
   /** Valor de un campo auditado, no un archivo. */
   VALOR: 2000,
 } as const;
+
+/**
+ * `auditoria_cambios` tiene `PRIMARY KEY (auditoria_id, campo)`: un evento
+ * registra UN antes/después por campo. Dos entradas del mismo campo en el
+ * mismo evento son un error del emisor, y aceptarlas no es opción —
+ * `save()` intentaría dos INSERT con la misma clave y Postgres responde
+ * `duplicate key`, que el cliente ve como 500. Se rechaza con 400 y un
+ * mensaje que dice qué campo viene repetido.
+ */
+@ValidatorConstraint({ name: 'camposUnicos' })
+export class CamposUnicosConstraint implements ValidatorConstraintInterface {
+  validate(cambios: unknown): boolean {
+    if (!Array.isArray(cambios)) return true;
+    const campos = cambios
+      .map((cambio) => (cambio as CambioDto | null)?.campo)
+      .filter((campo): campo is string => typeof campo === 'string');
+    return new Set(campos).size === campos.length;
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    const campos = Array.isArray(args.value)
+      ? (args.value as CambioDto[]).map((cambio) => cambio?.campo)
+      : [];
+    const repetidos = [...new Set(campos.filter((campo, i) => campos.indexOf(campo) !== i))];
+    return `cambios no puede repetir el mismo campo en un evento (repetido: ${repetidos.join(', ')}). Un evento registra un antes/después por campo; si hubo dos cambios, son dos eventos.`;
+  }
+}
 
 export class CambioDto {
   @IsString()
@@ -107,6 +138,7 @@ export class RegistrarEventoDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
+  @Validate(CamposUnicosConstraint)
   @ValidateNested({ each: true })
   @Type(() => CambioDto)
   cambios?: CambioDto[];

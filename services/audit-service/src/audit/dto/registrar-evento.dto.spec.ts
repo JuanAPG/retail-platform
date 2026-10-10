@@ -137,5 +137,36 @@ describe('RegistrarEventoDto', () => {
     });
   });
 
+  // --- DEFECTO-B: PRIMARY KEY (auditoria_id, campo) ---
+  describe('un evento no puede traer el mismo campo dos veces', () => {
+    it('rechaza cambios con el campo repetido, nombrando el repetido', async () => {
+      const dto = plainToInstance(RegistrarEventoDto, {
+        tabla: 'precios',
+        servicio: 'pricing-service',
+        accion: 'update',
+        cambios: [
+          { campo: 'precio', previo: '10', posterior: '20' },
+          { campo: 'precio', previo: '20', posterior: '30' },
+        ],
+      });
+      const errores = await validate(dto);
+      const error = errores.find((e) => e.property === 'cambios');
+      expect(error).toBeDefined();
+      expect(Object.values(error!.constraints ?? {}).join(' ')).toContain('precio');
+    });
+
+    it('acepta varios cambios de campos distintos en el mismo evento', async () => {
+      const dto = plainToInstance(RegistrarEventoDto, {
+        tabla: 'precios',
+        servicio: 'pricing-service',
+        accion: 'update',
+        cambios: [
+          { campo: 'precio', previo: '10', posterior: '20' },
+          { campo: 'vigencia_desde', previo: null, posterior: '2026-10-13' },
+        ],
+      });
+      expect(await validate(dto)).toHaveLength(0);
+    });
+  });
 
 });
