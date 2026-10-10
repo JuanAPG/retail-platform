@@ -116,12 +116,15 @@ cada uno traiga varios `cambios`.
 inclusivos.** No se admite hora (`2026-10-10T15:00:00Z` es 400): antes
 entraba y cada extremo la interpretaba distinto —`dateFrom` respetaba la
 hora y `dateTo` la tiraba, incluyendo el día entero—, así que un rango de
-horas devolvía días. El día se resuelve en el **huso de Postgres**, que en
-`infra/docker-compose.yml` es UTC: en Monterrey (UTC-6) los eventos de
-después de las 18:00 locales caen en el día UTC siguiente. Para el
-Parcial 2 se deja así y documentado; si el equipo quiere días locales, es
-una decisión de contrato (un parámetro de huso o fijar
-`America/Monterrey` en la sesión de la base), no un parche en el filtro.
+horas devolvía días.
+
+El día es el **día local de `America/Monterrey`**, de 00:00 a 23:59:59
+hora local, no el día UTC. Los límites se construyen con `AT TIME ZONE`
+en la consulta, así que no dependen del huso de la sesión de Postgres (en
+el compose es UTC): `?dateTo=2026-10-10` incluye un evento de las 21:00
+del 10 en Monterrey, que en UTC ya es el 11. Si el despliegue de GCP
+queda en otra zona, se cambia con `AUDIT_TIMEZONE`; el valor por omisión
+es el que lee el equipo.
 
 Historial por entidad: `GET /v1/auditoria?tabla=precios&registroId=<id>`.
 Eventos de un emisor: `GET /v1/auditoria?servicio=pricing-service`.

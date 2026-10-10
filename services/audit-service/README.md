@@ -30,8 +30,10 @@ IP válida (columna `INET`), `servicio` uno de los 10 microservicios,
 mismo evento (`PRIMARY KEY (auditoria_id, campo)`). El evento y sus
 cambios se guardan en una transacción: no hay eventos a medias.
 
-`dateFrom`/`dateTo` son días completos `YYYY-MM-DD` (inclusivos, en huso
-UTC); con hora dan 400.
+`dateFrom`/`dateTo` son días completos `YYYY-MM-DD`, los dos inclusivos y
+en el día local de **`America/Monterrey`** (no el día UTC: un evento de
+las 21:00 del día 10 entra al filtrar `dateTo=2026-10-10`, aunque en UTC
+ya sea el 11). Con hora dan 400. Se cambia con `AUDIT_TIMEZONE`.
 
 ## Correr y probar
 

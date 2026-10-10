@@ -23,6 +23,17 @@ export interface AuditEventoInput {
   cambios?: AuditCambioInput[];
 }
 
+/**
+ * Huso en el que se resuelven los días de `dateFrom`/`dateTo`. La
+ * bitácora la leen personas en Monterrey, así que "el 10 de octubre" es
+ * el 10 de octubre local, de 00:00 a 23:59:59 hora de Monterrey, no el
+ * día UTC: con el huso de Postgres (UTC) todo lo posterior a las 18:00
+ * locales caía en el día siguiente y un evento de las 21:00 no aparecía
+ * al filtrar por su propia fecha. Configurable por si el despliegue de
+ * GCP queda en otra zona.
+ */
+export const ZONA_HORARIA = process.env.AUDIT_TIMEZONE ?? 'America/Monterrey';
+
 export interface AuditPage {
   data: Auditoria[];
   total: number;
@@ -93,9 +104,11 @@ export class AuditService {
    * `dateFrom`/`dateTo` son días completos (`YYYY-MM-DD`, lo valida el
    * DTO) y los DOS se comparan como fecha, no como instante: `dateFrom`
    * desde las 00:00 de ese día y `dateTo` hasta el final del día, como
-   * dice el contrato. `fecha` es TIMESTAMPTZ y el CAST usa el huso de la
-   * sesión de Postgres (UTC en el contenedor), así que el día es un día
-   * UTC — está documentado en docs/contratos/audit-service.md.
+   * dice el contrato. Los límites se construyen con `AT TIME ZONE`
+   * (`ZONA_HORARIA`) y no con el huso de la sesión de Postgres: así el
+   * día es el día local de quien lee la bitácora, corra la base donde
+   * corra. `fecha` es TIMESTAMPTZ, o sea un instante, y Postgres hace la
+   * conversión.
    *
    * `skip`/`take` (no `offset`/`limit`) es obligatorio con el
    * `leftJoinAndSelect` de `cambios`: TypeORM pagina por entidad con una
@@ -131,10 +144,16 @@ export class AuditService {
       qb.andWhere('evento.accion = :accion', { accion: filters.accion });
     }
     if (filters.dateFrom) {
-      qb.andWhere('evento.fecha >= CAST(:dateFrom AS date)', { dateFrom: filters.dateFrom });
+      qb.andWhere("evento.fecha >= CAST(:dateFrom AS date)::timestamp AT TIME ZONE :zona", {
+        dateFrom: filters.dateFrom,
+        zona: ZONA_HORARIA,
+      });
     }
     if (filters.dateTo) {
-      qb.andWhere('evento.fecha < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
+      qb.andWhere("evento.fecha < (CAST(:dateTo AS date) + 1)::timestamp AT TIME ZONE :zona", {
+        dateTo: filters.dateTo,
+        zona: ZONA_HORARIA,
+      });
     }
 
     const [data, total] = await qb.getManyAndCount();

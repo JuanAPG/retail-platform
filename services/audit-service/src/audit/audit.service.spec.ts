@@ -1,4 +1,4 @@
-import { AuditService } from './audit.service';
+import { AuditService, ZONA_HORARIA } from './audit.service';
 
 /**
  * Repositorio falso: guarda en memoria sin Postgres. `registrar()` escribe
@@ -121,5 +121,77 @@ describe('AuditService.registrar', () => {
     ).rejects.toThrow('duplicate key');
     // El fallo ocurrió DENTRO de la transacción: Postgres revierte el evento.
     expect(repo.transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Query builder falso: no ejecuta SQL, solo anota las condiciones y los
+ * parámetros con los que se armó la consulta. Alcanza para fijar que los
+ * dos extremos del rango de fechas se resuelven en el huso de quien lee
+ * la bitácora y no en el de la base.
+ */
+function qbFalso() {
+  const condiciones: { sql: string; params: Record<string, unknown> }[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const qb: any = {
+    leftJoinAndSelect: jest.fn(() => qb),
+    orderBy: jest.fn(() => qb),
+    addOrderBy: jest.fn(() => qb),
+    skip: jest.fn(() => qb),
+    take: jest.fn(() => qb),
+    andWhere: jest.fn((sql: string, params: Record<string, unknown>) => {
+      condiciones.push({ sql, params });
+      return qb;
+    }),
+    getManyAndCount: jest.fn(async () => [[], 0]),
+  };
+  return { qb, condiciones };
+}
+
+describe('AuditService.find — el día es el día local, no el día UTC', () => {
+  function servicioConQb() {
+    const { qb, condiciones } = qbFalso();
+    const repo = { createQueryBuilder: jest.fn(() => qb), manager: { transaction: jest.fn() } };
+    return { servicio: new AuditService(repo as never), condiciones, qb };
+  }
+
+  it('el huso fijado es America/Monterrey', () => {
+    expect(ZONA_HORARIA).toBe('America/Monterrey');
+  });
+
+  it('los dos extremos se construyen con AT TIME ZONE y el mismo huso', async () => {
+    const { servicio, condiciones } = servicioConQb();
+    await servicio.find({ dateFrom: '2026-10-01', dateTo: '2026-10-10' });
+
+    const desde = condiciones.find((c) => 'dateFrom' in c.params);
+    const hasta = condiciones.find((c) => 'dateTo' in c.params);
+    expect(desde!.sql).toContain('AT TIME ZONE :zona');
+    expect(hasta!.sql).toContain('AT TIME ZONE :zona');
+    expect(desde!.params.zona).toBe(ZONA_HORARIA);
+    expect(hasta!.params.zona).toBe(ZONA_HORARIA);
+    // `dateTo` es inclusivo: hasta el final del día, o sea < el día siguiente.
+    expect(hasta!.sql).toContain('+ 1');
+    expect(hasta!.sql).toContain('<');
+    expect(desde!.sql).toContain('>=');
+  });
+
+  it('sin filtros de fecha no se agrega ninguna condición de fecha', async () => {
+    const { servicio, condiciones } = servicioConQb();
+    await servicio.find({});
+    expect(condiciones.filter((c) => c.sql.includes('fecha'))).toHaveLength(0);
+  });
+
+  it('pagina por entidad (skip/take), no por filas del JOIN', async () => {
+    const { servicio, qb } = servicioConQb();
+    await servicio.find({ page: 3, limit: 20 });
+    expect(qb.skip).toHaveBeenCalledWith(40);
+    expect(qb.take).toHaveBeenCalledWith(20);
+  });
+
+  it('limit se tope a 100', async () => {
+    const { servicio, qb } = servicioConQb();
+    const pagina = await servicio.find({ limit: 500 });
+    expect(qb.take).toHaveBeenCalledWith(100);
+    expect(pagina.limit).toBe(100);
   });
 });
