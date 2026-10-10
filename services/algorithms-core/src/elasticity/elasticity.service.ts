@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
 import { fechaLocal } from '../config/zona-horaria';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { AnalysisRun } from '../entities/analysis-run.entity';
@@ -152,8 +153,9 @@ export class ElasticityService {
    */
   async calculate(params: ElasticityParamsDto, user: SesionUsuario): Promise<ElasticityResult> {
     const granularity = params.granularity ?? 'day';
-    // El DTO solo deja pasar fechas reales 'aaaa-mm-dd': comparar el texto es comparar las fechas.
-    if (params.dateFrom && params.dateTo && params.dateTo < params.dateFrom) {
+    // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
+    // comparar ese texto es comparar las fechas.
+    if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
     if (params.presentationId && (await this.fuente.nombresDePresentaciones([params.presentationId])).size === 0) {
@@ -166,8 +168,8 @@ export class ElasticityService {
     }
     const period: Period = {
       // Con ventas siempre hay primer y último día.
-      start: params.dateFrom ?? firstDay!,
-      end: params.dateTo ?? lastDay!,
+      start: diaDelFiltro(params.dateFrom) ?? firstDay!,
+      end: diaDelFiltro(params.dateTo) ?? lastDay!,
     };
     const assumptions = ASSUMPTIONS(granularity);
 

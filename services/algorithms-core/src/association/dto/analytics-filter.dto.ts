@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
-import { IsFechaCalendario } from '../../common/validators/fecha-calendario.validator';
+import { IsInt, IsOptional, IsUUID, Min, Validate } from 'class-validator';
+import { EsFiltroDeFecha } from '../../common/validators/filtro-de-fecha';
 
 /**
  * M09 — Filtros comunes a todos los indicadores descriptivos. Todos
@@ -31,13 +31,16 @@ export class AnalyticsFilterDto {
   @Min(1, { message: 'segmentId debe ser mayor a 0.' })
   segmentId?: number;
 
-  @ApiPropertyOptional({ example: '2026-09-01', description: 'Fecha sin hora, aaaa-mm-dd.' })
+  @ApiPropertyOptional({ example: '2026-09-01', description: 'Día YYYY-MM-DD; si trae hora, solo se usa el día.' })
   @IsOptional()
-  @IsFechaCalendario()
+  @Validate(EsFiltroDeFecha)
   dateFrom?: string;
 
-  @ApiPropertyOptional({ example: '2026-09-30', description: 'Fecha sin hora, aaaa-mm-dd. Inclusivo: abarca el día completo.' })
+  @ApiPropertyOptional({
+    example: '2026-09-30',
+    description: 'Día YYYY-MM-DD; si trae hora, solo se usa el día. Inclusivo: abarca el día completo.',
+  })
   @IsOptional()
-  @IsFechaCalendario()
+  @Validate(EsFiltroDeFecha)
   dateTo?: string;
 }

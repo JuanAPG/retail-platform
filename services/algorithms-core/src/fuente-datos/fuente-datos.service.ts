@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
 
 /** Filtros de canastas: mismos nombres que `AnalyticsFilterDto` (M09). */
 export interface FiltrosCanastas {
@@ -135,8 +136,9 @@ export class FuenteDatos {
       filtros.zoneId ?? null,
       filtros.segmentId ?? null,
       filtros.storeId ?? null,
-      filtros.dateFrom ?? null,
-      filtros.dateTo ?? null,
+      // Solo el día: si el filtro trajo hora, se ignora (mismo criterio que core-process).
+      diaDelFiltro(filtros.dateFrom) ?? null,
+      diaDelFiltro(filtros.dateTo) ?? null,
     ]);
     return rows.map((row) => ({ ...row, categoryId: Number(row.categoryId) }));
   }
@@ -168,7 +170,7 @@ export class FuenteDatos {
    * canastas y el rango de días que respaldan el cálculo.
    */
   async ventasParaElasticidad(filtros: FiltrosVentas, granularidad: Granularidad): Promise<VentasElasticidad> {
-    const args = [filtros.presentationId ?? null, filtros.dateFrom ?? null, filtros.dateTo ?? null];
+    const args = [filtros.presentationId ?? null, diaDelFiltro(filtros.dateFrom) ?? null, diaDelFiltro(filtros.dateTo) ?? null];
     const [rows, [resumen]] = await Promise.all([
       this.dataSource.query(
         `WITH lineas AS (${LINEAS_VENTA_SQL})

@@ -11,6 +11,7 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { Pagina, PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
@@ -88,8 +89,9 @@ export class AssociationService {
    * corrida registrada como `fallida`.
    */
   async runApriori(params: AprioriParamsDto, user: SesionUsuario): Promise<ReglaConProductos[]> {
-    // El DTO solo deja pasar fechas reales 'aaaa-mm-dd': comparar el texto es comparar las fechas.
-    if (params.dateFrom && params.dateTo && params.dateTo < params.dateFrom) {
+    // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
+    // comparar ese texto es comparar las fechas.
+    if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
 
@@ -256,8 +258,8 @@ export class AssociationService {
   private periodOf(params: AprioriParamsDto, lines: BasketLine[]): Period {
     const days = lines.map((l) => l.day).sort();
     return {
-      start: params.dateFrom ?? days[0],
-      end: params.dateTo ?? days[days.length - 1],
+      start: diaDelFiltro(params.dateFrom) ?? days[0],
+      end: diaDelFiltro(params.dateTo) ?? days[days.length - 1],
     };
   }
 

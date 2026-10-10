@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
-import { IsFechaCalendario } from '../../common/validators/fecha-calendario.validator';
+import { IsIn, IsOptional, IsUUID, Validate } from 'class-validator';
+import { EsFiltroDeFecha } from '../../common/validators/filtro-de-fecha';
 
 export const GRANULARITIES = ['day', 'week'] as const;
 export type Granularity = (typeof GRANULARITIES)[number];
@@ -18,14 +18,17 @@ export class ElasticityParamsDto {
   @IsUUID('4', { message: 'presentationId debe ser un UUID válido.' })
   presentationId?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-01', description: 'Fecha sin hora, aaaa-mm-dd.' })
+  @ApiPropertyOptional({ example: '2026-08-01', description: 'Día YYYY-MM-DD; si trae hora, solo se usa el día.' })
   @IsOptional()
-  @IsFechaCalendario()
+  @Validate(EsFiltroDeFecha)
   dateFrom?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-31', description: 'Fecha sin hora, aaaa-mm-dd. Inclusivo: abarca el día completo.' })
+  @ApiPropertyOptional({
+    example: '2026-08-31',
+    description: 'Día YYYY-MM-DD; si trae hora, solo se usa el día. Inclusivo: abarca el día completo.',
+  })
   @IsOptional()
-  @IsFechaCalendario()
+  @Validate(EsFiltroDeFecha)
   dateTo?: string;
 
   @ApiPropertyOptional({
