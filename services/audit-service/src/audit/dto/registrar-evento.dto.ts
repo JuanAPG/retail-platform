@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsIP,
   IsOptional,
   IsString,
   MaxLength,
@@ -25,16 +26,43 @@ export const ACCIONES: AccionAuditoria[] = [
   'exportar',
 ];
 
+/**
+ * Topes de longitud. Los de 80 NO son un criterio estético: son el ancho
+ * exacto de `auditoria.tabla_afectada` y `auditoria_cambios.campo`
+ * (`VARCHAR(80)` en db/schema.sql §15). Sin ellos el valor pasa la
+ * validación y revienta en Postgres, y el emisor recibe un 500 en vez del
+ * 400 que le corresponde.
+ *
+ * `descripcion`, `registro_id`, `valor_previo` y `valor_posterior` son
+ * TEXT (sin tope en la base), así que el tope lo pone la API: la bitácora
+ * es append-only y no hay forma de borrar lo que se escriba de más.
+ */
+export const LARGO = {
+  /** Ancho de la columna `tabla_afectada`. */
+  TABLA: 80,
+  /** Ancho de la columna `campo`. */
+  CAMPO: 80,
+  /** UUID (36), ObjectId de Mongo (24) o id numérico caben de sobra. */
+  REGISTRO_ID: 200,
+  /** Una descripción de bitácora es una frase, no un documento. */
+  DESCRIPCION: 1000,
+  /** Valor de un campo auditado, no un archivo. */
+  VALOR: 2000,
+} as const;
+
 export class CambioDto {
   @IsString()
+  @MaxLength(LARGO.CAMPO, { message: `campo no puede tener más de ${LARGO.CAMPO} caracteres.` })
   campo: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(LARGO.VALOR, { message: `previo no puede tener más de ${LARGO.VALOR} caracteres.` })
   previo?: string | null;
 
   @IsOptional()
   @IsString()
+  @MaxLength(LARGO.VALOR, { message: `posterior no puede tener más de ${LARGO.VALOR} caracteres.` })
   posterior?: string | null;
 }
 
@@ -49,10 +77,14 @@ export class CambioDto {
  */
 export class RegistrarEventoDto {
   @IsString()
+  @MaxLength(LARGO.TABLA, { message: `tabla no puede tener más de ${LARGO.TABLA} caracteres.` })
   tabla: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(LARGO.REGISTRO_ID, {
+    message: `registroId no puede tener más de ${LARGO.REGISTRO_ID} caracteres.`,
+  })
   registroId?: string;
 
   /** Nombre del microservicio emisor, p. ej. `pricing-service`. */
@@ -67,6 +99,9 @@ export class RegistrarEventoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(LARGO.DESCRIPCION, {
+    message: `descripcion no puede tener más de ${LARGO.DESCRIPCION} caracteres.`,
+  })
   descripcion?: string;
 
   @IsOptional()
@@ -76,7 +111,13 @@ export class RegistrarEventoDto {
   @Type(() => CambioDto)
   cambios?: CambioDto[];
 
+  /**
+   * `direccion_ip` es `INET`: un texto que no sea una IP revienta en
+   * Postgres (`invalid input syntax for type inet`) y el emisor recibe un
+   * 500. `@IsIP()` acepta IPv4, IPv6 y la forma IPv4 mapeada que mandan
+   * los reporteros detrás de Docker (`::ffff:172.18.0.1`).
+   */
   @IsOptional()
-  @IsString()
+  @IsIP(undefined, { message: 'ip debe ser una dirección IPv4 o IPv6 válida.' })
   ip?: string;
 }
