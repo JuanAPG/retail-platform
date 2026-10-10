@@ -38,6 +38,13 @@ equivalente en XML a `<lift/>`— en los campos que el XSD exige presentes
 omite en los demás. Los errores con `Accept: application/xml` salen como
 `<error>` con la misma forma que el JSON.
 
+**Días en hora local.** Todo lo que se agrupa o filtra por día —`dateFrom` y
+`dateTo` (fecha sin hora), los días y semanas de elasticidad y el periodo de cada
+corrida— se corta a medianoche de `America/Monterrey` (configurable con
+`ZONA_HORARIA`), no de UTC: una compra a las 18:40 del 5 de agosto cuenta en el 5,
+aunque en UTC ya sea día 6. Las fechas-hora (`date`, `executedAt`) siguen siendo
+instantes en ISO 8601 UTC.
+
 `503 SERVICE_UNAVAILABLE`, hoy y a futuro:
 
 - **Hoy:** en todas las rutas, cuando Redis (sesiones) no responde: `SessionGuard`

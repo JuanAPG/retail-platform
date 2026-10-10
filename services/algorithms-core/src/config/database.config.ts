@@ -1,5 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { ZONA_HORARIA } from './zona-horaria';
 
 export default registerAs(
   'database',
@@ -18,5 +19,9 @@ export default registerAs(
     autoLoadEntities: true,
     // db/schema.sql es la fuente de verdad: TypeORM nunca altera el esquema.
     synchronize: false,
+    // Cada conexión arranca en la zona del negocio: `to_char`, `date_trunc`
+    // y las comparaciones contra una fecha cortan el día a medianoche local,
+    // no UTC. Los instantes (timestamptz) no cambian.
+    extra: { options: `-c timezone=${ZONA_HORARIA}` },
   }),
 );

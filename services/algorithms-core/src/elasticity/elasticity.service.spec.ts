@@ -123,7 +123,8 @@ describe('ElasticityService (base simulada)', () => {
     id: 'corrida-1',
     periodStart: '2026-08-02',
     periodEnd: '2026-09-20',
-    executedAt: new Date('2026-10-08T21:58:12.402Z'),
+    // 19:30 del 8 de octubre en Monterrey: en UTC ya es día 9.
+    executedAt: new Date('2026-10-09T01:30:00.000Z'),
     granularity: 'day',
   };
 
@@ -149,7 +150,7 @@ describe('ElasticityService (base simulada)', () => {
     );
   });
 
-  it('chart marca atypical en barras y nacional, y la nota trae la fecha ISO', async () => {
+  it('chart marca atypical en barras y nacional, y la nota trae la fecha ISO del día local', async () => {
     const service = servicio([
       [corrida],
       [

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { fechaLocal } from '../config/zona-horaria';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
@@ -243,7 +244,7 @@ export class ElasticityService {
 
     let bars: ElasticityChartBar[];
     let note: string;
-    const basis = `análisis del ${isoDate(run.executedAt)}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
+    const basis = `análisis del ${fechaLocal(run.executedAt)}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
     if (groupBy === 'zone') {
       bars = zones.map((z) => {
         const found = zoneValues.find((v) => v.zoneId === z.id);
@@ -616,13 +617,6 @@ export function estimateElasticities(
   return { results, insufficient };
 }
 
-/**
- * Fecha 'yyyy-mm-dd' de un instante, como en el contrato. Hoy es el día
- * en UTC, igual que el agrupamiento de ventas.
- */
-function isoDate(instant: Date): string {
-  return instant.toISOString().slice(0, 10);
-}
 
 /**
  * Parámetros de entrada de la corrida. La presentación va aquí y no como

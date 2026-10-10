@@ -70,7 +70,12 @@ export interface Segmento {
   nombre: string;
 }
 
-/** Periodo de cada observación; la semana es ISO (empieza en lunes). */
+/**
+ * Periodo de cada observación; la semana es ISO (empieza en lunes). El día
+ * y la semana se cortan en la zona del negocio porque la sesión de
+ * Postgres corre en ella (`database.config.ts`), igual que los filtros
+ * por fecha de este archivo.
+ */
 const PERIODO_SQL: Record<Granularidad, string> = {
   day: `to_char(fecha, 'YYYY-MM-DD')`,
   week: `to_char(date_trunc('week', fecha), 'YYYY-MM-DD')`,
