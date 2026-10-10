@@ -19,7 +19,7 @@ import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
 import { FuenteDatos, ResumenProducto } from '../fuente-datos/fuente-datos.service';
-import { apriori, AprioriRule } from './apriori';
+import { apriori, AprioriRule, compareItems } from './apriori';
 import { AprioriParamsDto } from './dto/apriori-params.dto';
 
 const DEFAULT_MAX_ITEMSET_SIZE = 3;
@@ -348,17 +348,19 @@ export class AssociationService {
     }
   }
 
-  /** Reglas de una corrida con sus productos, de la más confiable a la menos. */
+  /**
+   * Reglas de una corrida con sus productos, en el orden de `compararReglas`
+   * (de la más confiable a la menos). Se ordena aquí y no en SQL: el
+   * desempate es por los productos de cada lado, que viven en otra tabla.
+   */
   private async findRulesOfRun(runId: string): Promise<ReglaConProductos[]> {
-    const rules = await this.rulesRepo
-      .createQueryBuilder('rule')
-      .leftJoinAndSelect('rule.items', 'item')
-      .where('rule.runId = :runId', { runId })
-      .orderBy('rule.confidence', 'DESC')
-      .addOrderBy('rule.lift', 'DESC', 'NULLS LAST')
-      .addOrderBy('rule.support', 'DESC')
-      .addOrderBy('rule.id', 'ASC')
-      .getMany();
+    const rules = (
+      await this.rulesRepo
+        .createQueryBuilder('rule')
+        .leftJoinAndSelect('rule.items', 'item')
+        .where('rule.runId = :runId', { runId })
+        .getMany()
+    ).sort(compararReglas);
 
     // Productos de catalog: solo el resumen que muestra el contrato.
     const productos = await this.fuente.resumenDeProductos(rules.flatMap((r) => r.items.map((i) => i.productId)));
@@ -369,10 +371,42 @@ export class AssociationService {
         .sort(
           (a, b) =>
             (a.side === b.side ? 0 : a.side === 'antecedente' ? -1 : 1) ||
-            (a.product?.nombre ?? '').localeCompare(b.product?.nombre ?? '', 'es'),
+            (a.product?.nombre ?? '').localeCompare(b.product?.nombre ?? '', 'es') ||
+            // Dos productos con el mismo nombre: el id fija el orden.
+            compareItems([a.productId], [b.productId]),
         ),
     }));
   }
+}
+
+/** Lo que `compararReglas` necesita de una regla guardada. */
+export type ReglaParaOrdenar = Pick<AssociationRule, 'confidence' | 'lift' | 'support'> & {
+  items: Pick<AssociationRuleItem, 'productId' | 'side'>[];
+};
+
+/**
+ * Orden de las reglas de una corrida (ALG-06), el mismo que usa `apriori()`:
+ * confianza, lift (nulos al final) y soporte, de mayor a menor. Los empates
+ * se rompen por CONTENIDO —ids del antecedente y luego del consecuente,
+ * como conjuntos ordenados— y nunca por el id de la regla, que es un UUID
+ * aleatorio: así dos corridas idénticas devuelven las reglas en el mismo
+ * orden. Al guardarse, las métricas se redondean (numeric(6,5) y (10,4)) y
+ * pueden aparecer empates que en memoria no había; el desempate los cubre.
+ */
+export function compararReglas(a: ReglaParaOrdenar, b: ReglaParaOrdenar): number {
+  const lado = (regla: ReglaParaOrdenar, side: AssociationRuleItem['side']) =>
+    regla.items
+      .filter((item) => item.side === side)
+      .map((item) => item.productId)
+      .sort();
+  return (
+    b.confidence - a.confidence ||
+    Number(a.lift === null) - Number(b.lift === null) ||
+    (b.lift ?? 0) - (a.lift ?? 0) ||
+    b.support - a.support ||
+    compareItems(lado(a, 'antecedente'), lado(b, 'antecedente')) ||
+    compareItems(lado(a, 'consecuente'), lado(b, 'consecuente'))
+  );
 }
 
 function groupByBasket(lines: BasketLine[]): { baskets: string[][]; categoryOf: Map<string, number> } {

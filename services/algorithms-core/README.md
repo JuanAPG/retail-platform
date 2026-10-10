@@ -77,7 +77,11 @@ ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
 
 - `src/association/apriori.spec.ts`: ejemplo de libro calculado a mano, antecedente como
   conjunto, corrida reproducible y validación de soporte.
+- `src/association/association.service.spec.ts`: orden de reglas determinista (ALG-06),
+  el mismo que `apriori()`, sin depender del id aleatorio de la regla.
 - `test/swagger.spec.ts`: cada ruta publica ejemplo JSON y XML y sus errores estándar.
+- `test/apriori.spec.ts`: corridas idénticas devuelven las reglas empatadas en el mismo
+  orden. Busca sola un rango de fechas con empate en las ventas cargadas; borra sus corridas.
 
 ## Datos
 

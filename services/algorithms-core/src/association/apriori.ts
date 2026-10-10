@@ -185,7 +185,7 @@ function key(items: string[]): string {
 }
 
 /** Orden lexicográfico de listas de ids; base del determinismo. */
-function compareItems(a: string[], b: string[]): number {
+export function compareItems(a: string[], b: string[]): number {
   for (let n = 0; n < Math.min(a.length, b.length); n++) {
     if (a[n] !== b[n]) return a[n] < b[n] ? -1 : 1;
   }

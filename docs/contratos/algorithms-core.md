@@ -85,9 +85,12 @@ uuid de tienda o zona, número de segmento).
 | `transactionCount` | int \| null | Canastas que contienen la regla completa |
 | `items` | `[{ ruleId, productId, side, product }]` | `side`: `antecedente` \| `consecuente`; `product`: `{ id, sku, nombre, categoriaId }` |
 
-Las reglas se ordenan por `confidence` desc, `lift` desc, `support` desc. En
-cada regla, primero los ítems del antecedente y luego los del consecuente, por
-nombre de producto. Los ítems apuntan a **producto**, no a presentación:
+Las reglas se ordenan por `confidence` desc, `lift` desc (sin lift al final),
+`support` desc; los empates se rompen por los productos —ids del antecedente y
+luego del consecuente, como conjuntos ordenados—, nunca por el `id` de la regla,
+que es aleatorio. Así dos corridas idénticas devuelven el mismo orden (ALG-06,
+D-15). En cada regla, primero los ítems del antecedente y luego los del
+consecuente, por nombre de producto (y por id si dos se llaman igual). Los ítems apuntan a **producto**, no a presentación:
 comprar leche de 1 L o de 500 ml es el mismo comportamiento de compra.
 
 ### POST /v1/association/apriori/run
