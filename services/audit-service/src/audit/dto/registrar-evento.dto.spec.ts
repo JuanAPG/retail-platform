@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { LARGO, RegistrarEventoDto } from './registrar-evento.dto';
+import { SERVICIOS } from '../../common/servicios';
 
 describe('RegistrarEventoDto', () => {
   it('acepta un evento completo', async () => {
@@ -169,4 +170,29 @@ describe('RegistrarEventoDto', () => {
     });
   });
 
+  // --- DEFECTO-C: servicio contra la lista cerrada de los 10 ---
+  describe('servicio emisor acotado a los 10 microservicios', () => {
+    it('acepta los 10 nombres reales', async () => {
+      for (const servicio of SERVICIOS) {
+        const dto = plainToInstance(RegistrarEventoDto, {
+          tabla: 'precios',
+          servicio,
+          accion: 'insert',
+        });
+        expect(await validate(dto)).toHaveLength(0);
+      }
+    });
+
+    it('rechaza un servicio inventado (antes cualquier sesión podía firmar como quisiera)', async () => {
+      for (const servicio of ['servicio-que-no-existe', 'auth-servicio', 'AUTH-SERVICE', '']) {
+        const dto = plainToInstance(RegistrarEventoDto, {
+          tabla: 'precios',
+          servicio,
+          accion: 'insert',
+        });
+        const errores = await validate(dto);
+        expect(errores.some((e) => e.property === 'servicio')).toBe(true);
+      }
+    });
+  });
 });

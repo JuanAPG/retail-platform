@@ -72,7 +72,7 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
       {
         tabla: 'prueba',
         registroId: marca,
-        servicio: 'audit-service-test',
+        servicio: 'audit-service',
         accion: 'insert',
         descripcion: 'Evento de prueba.',
         cambios: [{ campo: 'estado', previo: null, posterior: 'nuevo' }],
@@ -85,7 +85,7 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
     const bitacora = await getBitacora(`?tabla=prueba&registroId=${marca}`);
     expect(bitacora.estado).toBe(200);
     expect(bitacora.cuerpo.total).toBeGreaterThanOrEqual(1);
-    expect(bitacora.cuerpo.data[0]).toMatchObject({ tablaAfectada: 'prueba', servicio: 'audit-service-test' });
+    expect(bitacora.cuerpo.data[0]).toMatchObject({ tablaAfectada: 'prueba', servicio: 'audit-service' });
     // El actor es el del token, no uno inventado por el cliente.
     expect(bitacora.cuerpo.data[0].usuarioId).toBeDefined();
   });
@@ -93,7 +93,7 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
   it('sin token el POST es 401: no existe forma de registrar un evento sin sesión', async () => {
     const respuesta = await postEvento({
       tabla: 'prueba',
-      servicio: 'audit-service-test',
+      servicio: 'audit-service',
       accion: 'insert',
     });
     expect(respuesta.estado).toBe(401);
@@ -103,7 +103,7 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
     const respuesta = await postEvento(
       {
         tabla: 'prueba',
-        servicio: 'audit-service-test',
+        servicio: 'audit-service',
         accion: 'insert',
         usuarioId: '00000000-0000-4000-8000-000000000000',
       },
@@ -152,7 +152,7 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
       {
         tabla: 'xsd-check',
         registroId: marca,
-        servicio: 'audit-service-test',
+        servicio: 'audit-service',
         accion: 'update',
         cambios: [{ campo: 'estado', previo: 'activo', posterior: 'inactivo' }],
       },

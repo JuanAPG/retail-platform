@@ -14,6 +14,7 @@ import {
   ValidatorConstraintInterface,
 } from 'class-validator';
 import { AccionAuditoria } from '../../entities/auditoria.entity';
+import { SERVICIOS } from '../../common/servicios';
 
 export const ACCIONES: AccionAuditoria[] = [
   'insert',
@@ -105,6 +106,13 @@ export class CambioDto {
  * del token verificado por `SessionGuard` en el controller, nunca del
  * cuerpo (`forbidNonWhitelisted` responde 400 si alguien los manda,
  * para no poder falsificar quién hizo qué).
+ *
+ * Todo lo demás que el emisor declara (`servicio`, `tabla`, `accion`) va
+ * acotado contra una lista cerrada o el ancho de su columna: el `POST` no
+ * exige rol (un Proveedor debe poder dejar rastro de sus acciones), así
+ * que la validación es lo único que separa un evento de bitácora de un
+ * texto libre escrito por cualquier sesión. Ver la limitación conocida de
+ * `servicio` en docs/contratos/audit-service.md.
  */
 export class RegistrarEventoDto {
   @IsString()
@@ -119,8 +127,9 @@ export class RegistrarEventoDto {
   registroId?: string;
 
   /** Nombre del microservicio emisor, p. ej. `pricing-service`. */
-  @IsString()
-  @MaxLength(40, { message: 'servicio no puede tener más de 40 caracteres.' })
+  @IsIn(SERVICIOS, {
+    message: `servicio debe ser uno de los 10 microservicios: ${SERVICIOS.join(', ')}.`,
+  })
   servicio: string;
 
   @IsIn(ACCIONES, {

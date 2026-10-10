@@ -44,6 +44,43 @@ Request JSON:
 400 (el actor siempre sale del token, nunca de lo que mande el cliente).
 Todo campo salvo `tabla`, `servicio` y `accion` puede ser `null`.
 
+`servicio` admite **solo los 10 microservicios** de la plataforma
+(`auth-service`, `catalog-service`, `pricing-service`,
+`core-process-service`, `algorithms-core`, `analytics-stats`,
+`decision-service`, `documents-service`, `notifications-service`,
+`audit-service`); cualquier otro valor es 400, igual que una `accion`
+fuera del catálogo. Es el mismo valor que el `AuditReporter` de cada
+servicio manda como constante y que `SERVICE_NAME` fija en
+`infra/docker-compose.yml`. Si se agrega un microservicio, se agrega aquí
+y en `src/common/servicios.ts`.
+
+Topes de longitud (400 si se pasan): `tabla` y `cambios[].campo` 80
+caracteres —el ancho real de sus columnas—, `registroId` 200,
+`descripcion` 1000, `previo`/`posterior` 2000 y `cambios` 50 entradas.
+`ip` debe ser una IP válida (la columna es `INET`).
+
+**Un evento no puede repetir el mismo `cambios[].campo`**: 400. La tabla
+tiene `PRIMARY KEY (auditoria_id, campo)` porque un evento registra un
+antes/después por campo; dos cambios al mismo campo son dos eventos. El
+evento y sus `cambios` se escriben en una sola transacción: no existe un
+evento guardado sin los campos que declaró.
+
+### Limitación conocida: `servicio` lo declara quien reporta
+
+El `POST` no exige rol a propósito, así que **cualquier sesión válida
+puede reportar en nombre de cualquiera de los 10 servicios**: la lista
+cerrada impide inventar un emisor, no impide que un Proveedor firme un
+evento como `auth-service`. Acotarlo de verdad exige autenticación
+servicio-a-servicio (token de servicio o red privada con mTLS), que es
+trabajo del Parcial 3.
+
+Mientras tanto la bitácora conserva con qué identidad se escribió cada
+evento: `usuarioId` y `rolId` salen SIEMPRE del token verificado, nunca
+del cuerpo. Un evento que dice `servicio: "auth-service"` con
+`rolId` = Proveedor es exactamente eso, un evento no confiable, y así se
+detecta. Al leer la bitácora como evidencia (RF-30), el `servicio` es una
+declaración del emisor; el actor es el dato duro.
+
 `accion` admite:
 
 | Acción | Cuándo usarla |

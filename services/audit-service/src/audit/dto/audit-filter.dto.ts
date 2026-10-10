@@ -3,6 +3,7 @@ import { IsDateString, IsIn, IsOptional, IsString, IsUUID } from 'class-validato
 import { AccionAuditoria } from '../../entities/auditoria.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ACCIONES } from './registrar-evento.dto';
+import { SERVICIOS } from '../../common/servicios';
 
 /**
  * Filtros de `GET /v1/auditoria`. Todos opcionales: sin filtros trae
@@ -20,9 +21,9 @@ export class AuditFilterDto extends PaginationDto {
   @IsString()
   registroId?: string;
 
-  @ApiPropertyOptional({ description: 'Solo eventos reportados por este microservicio.' })
+  @ApiPropertyOptional({ description: 'Solo eventos reportados por este microservicio.', enum: SERVICIOS })
   @IsOptional()
-  @IsString()
+  @IsIn(SERVICIOS, { message: `servicio debe ser uno de los 10 microservicios: ${SERVICIOS.join(', ')}.` })
   servicio?: string;
 
   @ApiPropertyOptional({ description: 'Solo eventos de este usuario.' })
