@@ -52,14 +52,28 @@ const ASSUMPTIONS = (granularity: Granularity) => [
 /** Corridas graficables: solo de elasticidad y completadas. Quien la use agrega `AND …`. */
 const CHART_RUN_SQL = `
   SELECT c.id, c.periodo_inicio::text AS "periodStart", c.periodo_fin::text AS "periodEnd",
-         c.ejecutada_en AS "executedAt", to_char(c.ejecutada_en, 'DD/MM/YYYY') AS "executedOn",
+         c.ejecutada_en AS "executedAt",
          (SELECT p.valor FROM analisis_corrida_parametros p
            WHERE p.corrida_id = c.id AND p.clave = 'granularidad') AS "granularity"
   FROM analisis_corridas c
   WHERE c.tipo = 'elasticidad' AND c.estado = 'completada'`;
 
 /** Barra de una zona o segmento sin datos suficientes. */
-const EMPTY_VALUE: ElasticityChartValue = { value: null, classification: null, observations: 0, rSquared: null };
+const EMPTY_VALUE: ElasticityChartValue = {
+  value: null,
+  classification: null,
+  observations: 0,
+  rSquared: null,
+  atypical: null,
+};
+
+/**
+ * `elasticidades.valor` es numeric(10,4): lo que pase de aquí no se puede
+ * guardar y tumbaría la transacción de TODA la corrida. Solo sale con
+ * datos extremos (p. ej. dos precios casi iguales con cantidades muy
+ * distintas), y un valor así no se puede interpretar.
+ */
+export const MAX_STORABLE_ELASTICITY = 999_999.9999;
 
 const REASONS: Record<InsufficientReason, (observations: number) => string> = {
   'single-price': () => 'Un solo precio en el periodo: no se puede medir cómo reacciona la demanda al precio.',
@@ -67,8 +81,12 @@ const REASONS: Record<InsufficientReason, (observations: number) => string> = {
   'invalid-values': () => 'Hay precios o cantidades no positivos.',
 };
 
+const OUT_OF_RANGE_REASON = (value: number) =>
+  `El valor calculado (E = ${value}) excede el máximo que se puede guardar (±${MAX_STORABLE_ELASTICITY}): ` +
+  'los datos son extremos y el valor no se puede interpretar.';
+
 /** Ventas agregadas de una presentación en una zona y un periodo. */
-interface SalesRow {
+export interface SalesRow {
   presentationId: string;
   zoneId: string;
   period: string;
@@ -82,7 +100,7 @@ interface Period {
   end: string;
 }
 
-interface Names {
+export interface Names {
   product: string;
   presentation: string;
 }
@@ -101,7 +119,6 @@ interface ChartRun {
   periodStart: string;
   periodEnd: string;
   executedAt: Date;
-  executedOn: string;
   granularity: string | null;
 }
 
@@ -158,7 +175,7 @@ export class ElasticityService {
           .zonas([...new Set(rows.map((r) => r.zoneId))])
           .then((lista) => new Map(lista.map((z) => [z.id, z.nombre]))),
       ]);
-      const { results, insufficient } = this.estimate(rows, names, zones);
+      const { results, insufficient } = estimateElasticities(rows, names, zones);
 
       const runId = await this.saveElasticityRun({
         user,
@@ -203,6 +220,13 @@ export class ElasticityService {
          FROM elasticidades WHERE corrida_id = $1 AND presentacion_id = $2`,
         [run.id, filters.presentationId],
       );
+    if (rows.length === 0) {
+      // Solo pasa con `runId`: sin él, latestRunWithResults ya exige filas.
+      throw new NotFoundException(
+        `La corrida ${run.id} no tiene elasticidades calculadas para ${name.product} ${name.presentation} ` +
+          '(no la incluyó o no tuvo datos suficientes).',
+      );
+    }
     const nationalRow = rows.find((r) => r.zoneId === null);
     const zoneRows = rows.filter((r) => r.zoneId !== null);
 
@@ -218,7 +242,7 @@ export class ElasticityService {
 
     let bars: ElasticityChartBar[];
     let note: string;
-    const basis = `análisis del ${run.executedOn}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
+    const basis = `análisis del ${isoDate(run.executedAt)}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
     if (groupBy === 'zone') {
       bars = zones.map((z) => {
         const found = zoneValues.find((v) => v.zoneId === z.id);
@@ -267,6 +291,7 @@ export class ElasticityService {
       classification: this.classify(v.value),
       observations: v.observations,
       rSquared: v.rSquared,
+      atypical: v.value > 0,
     };
   }
 
@@ -296,77 +321,6 @@ export class ElasticityService {
       );
     }
     return run;
-  }
-
-  /**
-   * Una regresión por presentación a nivel nacional y otra por cada zona
-   * con ventas. Lo que no alcanza el mínimo va a `insufficient` con su
-   * motivo, en lugar de un número que no significa nada.
-   */
-  private estimate(
-    rows: SalesRow[],
-    names: Map<string, Names>,
-    zones: Map<string, string>,
-  ): { results: ElasticityResultItem[]; insufficient: InsufficientElasticity[] } {
-    const byPresentation = new Map<string, SalesRow[]>();
-    for (const row of rows) {
-      const list = byPresentation.get(row.presentationId) ?? [];
-      list.push(row);
-      byPresentation.set(row.presentationId, list);
-    }
-
-    const results: ElasticityResultItem[] = [];
-    const insufficient: InsufficientElasticity[] = [];
-
-    for (const [presentationId, presentationRows] of byPresentation) {
-      const name = names.get(presentationId)!;
-      const zoneIds = [...new Set(presentationRows.map((r) => r.zoneId))].sort((a, b) =>
-        (zones.get(a) ?? a).localeCompare(zones.get(b) ?? b, 'es'),
-      );
-      const targets: { zoneId: string | null; zoneName: string; rows: SalesRow[] }[] = [
-        { zoneId: null, zoneName: NATIONAL, rows: presentationRows },
-        ...zoneIds.map((zoneId) => ({
-          zoneId,
-          zoneName: zones.get(zoneId) ?? zoneId,
-          rows: presentationRows.filter((r) => r.zoneId === zoneId),
-        })),
-      ];
-
-      for (const target of targets) {
-        const outcome = logLogRegression(observationsOf(target.rows));
-        const base = {
-          presentationId,
-          productName: name.product,
-          presentationName: name.presentation,
-          zoneId: target.zoneId,
-          zoneName: target.zoneName,
-          observations: outcome.observations,
-        };
-        if (outcome.ok) {
-          // El mismo redondeo que se guarda y con el que clasifica la base.
-          const value = roundTo(outcome.elasticity, ELASTICITY_DECIMALS);
-          results.push({
-            ...base,
-            value,
-            classification: this.classify(value),
-            rSquared: outcome.rSquared === null ? null : roundTo(outcome.rSquared, 5),
-            atypical: value > 0,
-          });
-        } else {
-          insufficient.push({
-            ...base,
-            distinctPrices: outcome.distinctPrices,
-            reason: REASONS[outcome.reason](outcome.observations),
-          });
-        }
-      }
-    }
-
-    const order = (a: { productName: string; presentationName: string }, b: typeof a) =>
-      a.productName.localeCompare(b.productName, 'es') || a.presentationName.localeCompare(b.presentationName, 'es');
-    results.sort(order);
-    insufficient.sort(order);
-    return { results, insufficient };
   }
 
   /**
@@ -423,6 +377,7 @@ export class ElasticityService {
         classification: this.classify(value),
         rSquared: r.rSquared === null ? null : Number(r.rSquared),
         observations: Number(r.observations),
+        atypical: value > 0,
         runId: r.runId,
         executedAt: r.executedAt.toISOString(),
       };
@@ -578,9 +533,94 @@ export function aggregateBySegment(
       classification: classifyElasticity(value),
       observations,
       rSquared: null,
+      atypical: value > 0,
       zones: zones.map((z) => z.zoneName).sort((a, b) => a.localeCompare(b, 'es')),
     };
   });
+}
+
+/**
+ * Una regresión por presentación a nivel nacional y otra por cada zona
+ * con ventas. Lo que no alcanza el mínimo, o da un valor que no se puede
+ * guardar, va a `insufficient` con su motivo, en lugar de un número que
+ * no significa nada o de tumbar la corrida completa.
+ */
+export function estimateElasticities(
+  rows: SalesRow[],
+  names: Map<string, Names>,
+  zones: Map<string, string>,
+): { results: ElasticityResultItem[]; insufficient: InsufficientElasticity[] } {
+  const byPresentation = new Map<string, SalesRow[]>();
+  for (const row of rows) {
+    const list = byPresentation.get(row.presentationId) ?? [];
+    list.push(row);
+    byPresentation.set(row.presentationId, list);
+  }
+
+  const results: ElasticityResultItem[] = [];
+  const insufficient: InsufficientElasticity[] = [];
+
+  for (const [presentationId, presentationRows] of byPresentation) {
+    const name = names.get(presentationId)!;
+    const zoneIds = [...new Set(presentationRows.map((r) => r.zoneId))].sort((a, b) =>
+      (zones.get(a) ?? a).localeCompare(zones.get(b) ?? b, 'es'),
+    );
+    const targets: { zoneId: string | null; zoneName: string; rows: SalesRow[] }[] = [
+      { zoneId: null, zoneName: NATIONAL, rows: presentationRows },
+      ...zoneIds.map((zoneId) => ({
+        zoneId,
+        zoneName: zones.get(zoneId) ?? zoneId,
+        rows: presentationRows.filter((r) => r.zoneId === zoneId),
+      })),
+    ];
+
+    for (const target of targets) {
+      const outcome = logLogRegression(observationsOf(target.rows));
+      const base = {
+        presentationId,
+        productName: name.product,
+        presentationName: name.presentation,
+        zoneId: target.zoneId,
+        zoneName: target.zoneName,
+        observations: outcome.observations,
+      };
+      if (!outcome.ok) {
+        insufficient.push({
+          ...base,
+          distinctPrices: outcome.distinctPrices,
+          reason: REASONS[outcome.reason](outcome.observations),
+        });
+        continue;
+      }
+      // El mismo redondeo que se guarda y con el que clasifica la base.
+      const value = roundTo(outcome.elasticity, ELASTICITY_DECIMALS);
+      if (Math.abs(value) > MAX_STORABLE_ELASTICITY) {
+        insufficient.push({ ...base, distinctPrices: outcome.distinctPrices, reason: OUT_OF_RANGE_REASON(value) });
+        continue;
+      }
+      results.push({
+        ...base,
+        value,
+        classification: classifyElasticity(value),
+        rSquared: outcome.rSquared === null ? null : roundTo(outcome.rSquared, 5),
+        atypical: value > 0,
+      });
+    }
+  }
+
+  const order = (a: { productName: string; presentationName: string }, b: typeof a) =>
+    a.productName.localeCompare(b.productName, 'es') || a.presentationName.localeCompare(b.presentationName, 'es');
+  results.sort(order);
+  insufficient.sort(order);
+  return { results, insufficient };
+}
+
+/**
+ * Fecha 'yyyy-mm-dd' de un instante, como en el contrato. Hoy es el día
+ * en UTC, igual que el agrupamiento de ventas.
+ */
+function isoDate(instant: Date): string {
+  return instant.toISOString().slice(0, 10);
 }
 
 /**

@@ -31,6 +31,10 @@
     <xs:union memberTypes="xs:integer alg:empty"/>
   </xs:simpleType>
 
+  <xs:simpleType name="booleanOrEmpty">
+    <xs:union memberTypes="xs:boolean alg:empty"/>
+  </xs:simpleType>
+
   <xs:simpleType name="runStatus">
     <xs:restriction base="xs:string">
       <xs:enumeration value="completada"/>
@@ -351,6 +355,8 @@
       <xs:element name="classification" type="alg:elasticityClassOrEmpty"/>
       <xs:element name="observations" type="xs:integer"/>
       <xs:element name="rSquared" type="alg:decimalOrEmpty"/>
+      <!-- true si E > 0; vacío sin datos suficientes. -->
+      <xs:element name="atypical" type="alg:booleanOrEmpty"/>
       <!-- Solo con groupBy=segment: zonas que se promediaron. -->
       <xs:element name="zones" type="alg:stringList" minOccurs="0"/>
     </xs:all>
@@ -369,6 +375,7 @@
       <xs:element name="classification" type="alg:elasticityClassOrEmpty" minOccurs="0"/>
       <xs:element name="observations" type="xs:integer" minOccurs="0"/>
       <xs:element name="rSquared" type="alg:decimalOrEmpty" minOccurs="0"/>
+      <xs:element name="atypical" type="alg:booleanOrEmpty" minOccurs="0"/>
     </xs:all>
   </xs:complexType>
 
@@ -404,6 +411,8 @@
       <xs:element name="classification" type="alg:elasticityClass"/>
       <xs:element name="rSquared" type="alg:decimalOrEmpty"/>
       <xs:element name="observations" type="xs:integer"/>
+      <!-- true si E > 0: la demanda sube con el precio. -->
+      <xs:element name="atypical" type="xs:boolean"/>
       <xs:element name="runId" type="xs:string"/>
       <xs:element name="executedAt" type="xs:dateTime"/>
     </xs:all>

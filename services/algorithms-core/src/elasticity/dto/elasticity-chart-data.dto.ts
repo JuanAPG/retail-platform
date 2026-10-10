@@ -16,6 +16,13 @@ export class ElasticityChartValue {
 
   @ApiProperty({ nullable: true, type: Number })
   rSquared: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Boolean,
+    description: 'true si E > 0: la demanda sube con el precio; no se lee como una elasticidad normal. null sin datos.',
+  })
+  atypical: boolean | null;
 }
 
 /** Una barra del gráfico: una zona o un segmento. */

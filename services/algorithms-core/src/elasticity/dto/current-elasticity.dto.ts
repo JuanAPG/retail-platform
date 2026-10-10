@@ -30,6 +30,8 @@ export interface CurrentElasticity {
   classification: ElasticityClass;
   rSquared: number | null;
   observations: number;
+  /** true si E > 0: la demanda sube con el precio; no se lee como una elasticidad normal. */
+  atypical: boolean;
   /** Corrida completada más reciente que calculó este valor. */
   runId: string;
   /** Cuándo se ejecutó esa corrida (ISO 8601). */

@@ -51,7 +51,7 @@ export class ElasticityController {
     'Una barra por zona o segmento (vacía si no tuvo datos suficientes) y el agregado nacional.',
     muestras.graficoElasticidad,
     'elasticityChartResponse',
-    { siemprePresentes: ['value', 'classification', 'rSquared', 'national'] },
+    { siemprePresentes: ['value', 'classification', 'rSquared', 'atypical', 'national'] },
   )
   @ApiErrores(400, 401, 403, 404, 503)
   getComparativeChart(@Query() filters: ElasticityFilterDto) {

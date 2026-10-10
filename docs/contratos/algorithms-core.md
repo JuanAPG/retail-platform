@@ -339,7 +339,9 @@ Response `201`:
 
 `insufficient[]` lista las combinaciones presentación–zona sin datos
 suficientes, con uno de estos `reason`: un solo precio en el periodo; menos de
-3 observaciones; precios o cantidades no positivos.
+3 observaciones; precios o cantidades no positivos; o un valor que excede el
+máximo que se puede guardar (±999 999.9999, datos extremos). Una combinación así
+no detiene la corrida: las demás se calculan y se guardan.
 
 XML: elementos `elasticityCalculateRequest` y `elasticityCalculateResponse`.
 
@@ -372,10 +374,10 @@ Response `200`:
   "periodStart": "2026-08-05",
   "periodEnd": "2026-08-15",
   "bars": [
-    { "key": "uuid", "label": "Zona Valle", "value": -1.2, "classification": "elastic", "observations": 4, "rSquared": 0.7 },
-    { "key": "uuid", "label": "Zona Centro", "value": null, "classification": null, "observations": 0, "rSquared": null }
+    { "key": "uuid", "label": "Zona Valle", "value": -1.2, "classification": "elastic", "observations": 4, "rSquared": 0.7, "atypical": false },
+    { "key": "uuid", "label": "Zona Centro", "value": null, "classification": null, "observations": 0, "rSquared": null, "atypical": null }
   ],
-  "national": { "value": -1.35, "classification": "elastic", "observations": 4, "rSquared": 0.62 },
+  "national": { "value": -1.35, "classification": "elastic", "observations": 4, "rSquared": 0.62, "atypical": false },
   "note": "Elasticidad de cada zona (análisis del 2026-10-01, observaciones por día). Barras vacías: sin datos suficientes."
 }
 ```
@@ -386,10 +388,13 @@ Response `200`:
   ponderado por observaciones (RN-02), y trae `zones` (zonas promediadas). Es
   una aproximación, y `note` lo dice.
 - `national` es `null` si el agregado nacional no tuvo datos suficientes.
+- `atypical` es `true` si E > 0 (igual que en `calculate`), `false` si no, y
+  `null` en una barra sin datos. Por segmento se evalúa sobre el promedio.
 
 XML: elemento `elasticityChartResponse`. Presentación inexistente, `runId` que
-no es una corrida de elasticidad completada, o ninguna corrida con resultados
-para la presentación → `404`.
+no es una corrida de elasticidad completada, `runId` sin elasticidades
+calculadas para esa presentación (no la incluyó o no tuvo datos suficientes), o
+ninguna corrida con resultados para la presentación → `404`.
 
 ### GET /v1/elasticity/current
 
@@ -423,6 +428,7 @@ Response `200`:
       "classification": "elastic",
       "rSquared": 0.7,
       "observations": 4,
+      "atypical": false,
       "runId": "uuid",
       "executedAt": "2026-10-01T15:30:00.000Z"
     },
@@ -436,6 +442,7 @@ Response `200`:
       "classification": "elastic",
       "rSquared": 0.62,
       "observations": 4,
+      "atypical": false,
       "runId": "uuid",
       "executedAt": "2026-10-01T15:30:00.000Z"
     }
@@ -445,6 +452,9 @@ Response `200`:
   "limit": 20
 }
 ```
+
+`atypical` es `true` si E > 0 (la demanda sube con el precio): quien simula no
+debe usarla como una elasticidad normal.
 
 Sin elasticidades calculadas → `data: []` (no es error; quien la consume decide
 si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResponse`.
@@ -456,7 +466,7 @@ si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResp
 | 400 | Cuerpo o query inválidos; `granularity` o `groupBy` fuera de catálogo; fechas invertidas; ninguna venta con los filtros |
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso (p. ej. Planeador calculando, o Proveedor) |
-| 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; ninguna corrida con resultados para graficar |
+| 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; `runId` sin elasticidades para esa presentación; ninguna corrida con resultados para graficar |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
 | 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 

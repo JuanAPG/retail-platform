@@ -129,15 +129,36 @@ const graficoElasticidad = {
   periodStart: '2026-08-02',
   periodEnd: '2026-09-20',
   bars: [
-    { key: 'f2670df2-94bd-494e-b4ac-04f7e7c02476', label: 'Zona Centro', value: null, classification: null, observations: 0, rSquared: null },
-    { key: ZONA_ORIENTE.id, label: ZONA_ORIENTE.nombre, value: -12.5959, classification: 'elastic', observations: 28, rSquared: 0.95082 },
+    {
+      key: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+      label: 'Zona Centro',
+      value: null,
+      classification: null,
+      observations: 0,
+      rSquared: null,
+      atypical: null,
+    },
+    {
+      key: ZONA_ORIENTE.id,
+      label: ZONA_ORIENTE.nombre,
+      value: -12.5959,
+      classification: 'elastic',
+      observations: 28,
+      rSquared: 0.95082,
+      atypical: false,
+    },
   ],
-  national: { value: -2.5558, classification: 'elastic', observations: 40, rSquared: 0.064 },
-  note: 'Elasticidad de cada zona (análisis del 08/10/2026, observaciones por día). Barras vacías: sin datos suficientes.',
+  national: { value: -2.5558, classification: 'elastic', observations: 40, rSquared: 0.064, atypical: false },
+  note: 'Elasticidad de cada zona (análisis del 2026-10-08, observaciones por día). Barras vacías: sin datos suficientes.',
 };
 
 /** Fila de GET /v1/elasticity/current. */
-const vigente = (e: ReturnType<typeof elasticidad>) => ({ ...e, runId: CORRIDA_ELASTICIDAD, executedAt: FECHA_ELASTICIDAD });
+const vigente = (e: ReturnType<typeof elasticidad>) => ({
+  ...e,
+  atypical: false,
+  runId: CORRIDA_ELASTICIDAD,
+  executedAt: FECHA_ELASTICIDAD,
+});
 
 export const muestras = {
   reglas: [reglaQuesoLeche, reglaLecheQueso],
