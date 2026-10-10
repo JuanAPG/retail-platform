@@ -2,15 +2,16 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsDateString,
   IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsUUID,
   Min,
+  Validate,
 } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { EsFiltroDeFecha } from '../../common/zona-horaria';
 
 /** Tamaños de compra de RN-05 (catálogo `tamanos_compra`). */
 export const TAMANOS_COMPRA = ['chica', 'mediana', 'grande'] as const;
@@ -46,12 +47,12 @@ export class BasketFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({ example: '2026-09-01', description: 'Desde esta fecha, inclusive.' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateFrom debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateFrom?: string;
 
   @ApiPropertyOptional({ example: '2026-09-30', description: 'Hasta esta fecha, inclusive (día completo).' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateTo debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateTo?: string;
 
   @ApiPropertyOptional({ example: 100, description: 'Valor total mínimo de la canasta.' })

@@ -22,6 +22,8 @@ function qbFalso(crudo: { uno?: object | null; varios?: object[] } = {}) {
     'addGroupBy',
     'orderBy',
     'addOrderBy',
+    // El periodo de la frecuencia liga el huso como parámetro.
+    'setParameter',
   ]) {
     cadena[metodo] = jest.fn((...args: unknown[]) => {
       llamadas.push({ metodo, args });
@@ -126,9 +128,9 @@ describe('AnalyticsService — filtros (se aplican de verdad)', () => {
 
       expect(sql).toContain('basket.zoneId = :zoneId');
       expect(sql).toContain('basket.segmentId = :segmentId');
-      expect(sql).toContain('basket.date >= :dateFrom');
-      // Día completo, igual que M06 y M07.
-      expect(sql).toContain('basket.date < CAST(:dateTo AS date) + 1');
+      // Días completos LOCALES en los dos extremos, igual que M06 y M07.
+      expect(sql).toContain('basket.date >= CAST(:dateFrom AS date)::timestamp AT TIME ZONE :zona');
+      expect(sql).toContain('basket.date < (CAST(:dateTo AS date) + 1)::timestamp AT TIME ZONE :zona');
       expect(sql).toContain('transaction.storeId = :storeId');
     }
   });
