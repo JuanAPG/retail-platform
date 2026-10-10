@@ -9,9 +9,9 @@ import {
   SalesRow,
 } from './elasticity.service';
 
-const venta = (presentationId: string, period: string, quantity: number, price: number): SalesRow => ({
+const venta = (presentationId: string, period: string, quantity: number, price: number, zoneId = 'zona-a'): SalesRow => ({
   presentationId,
-  zoneId: 'zona-a',
+  zoneId,
   period,
   quantity,
   revenue: quantity * price,
@@ -21,7 +21,53 @@ const NOMBRES = new Map([
   ['extrema', { product: 'Extremo', presentation: '1 u' }],
   ['normal', { product: 'Normal', presentation: '1 u' }],
 ]);
-const ZONAS = new Map([['zona-a', 'Zona A']]);
+const ZONAS = new Map([
+  ['zona-a', 'Zona A'],
+  ['zona-b', 'Zona B'],
+]);
+const nacional = (rows: SalesRow[]) => {
+  const { results, insufficient } = estimateElasticities(rows, NOMBRES, ZONAS);
+  return {
+    calculado: results.find((r) => r.zoneId === null),
+    insuficiente: insufficient.find((r) => r.zoneId === null),
+  };
+};
+
+describe('estimateElasticities: agregado nacional', () => {
+  it('es una sola regresión sobre las observaciones zona × periodo, sin sumar las zonas de un mismo día', () => {
+    // Las dos zonas siguen q = 400 · p^-2 (E = −2). El día 04 solo vende la
+    // zona B: sumar las zonas por día sacaría ese punto de la curva.
+    const { calculado } = nacional([
+      venta('normal', '2026-09-01', 100, 2),
+      venta('normal', '2026-09-02', 25, 4),
+      venta('normal', '2026-09-03', 16, 5),
+      venta('normal', '2026-09-02', 25, 4, 'zona-b'),
+      venta('normal', '2026-09-04', 64, 2.5, 'zona-b'),
+    ]);
+
+    expect(calculado?.value).toBe(-2);
+    expect(calculado?.observations).toBe(5);
+    expect(calculado?.rSquared).toBe(1);
+  });
+
+  it('se calcula aunque las zonas muevan sus precios en sentido contrario', () => {
+    // q = 14 400 · p^-2. Cada día una zona cobra $10 y la otra $12: el
+    // promedio por día es siempre el mismo, y sumando las zonas daría
+    // "un solo precio".
+    const { calculado, insuficiente } = nacional([
+      venta('normal', '2026-09-01', 144, 10),
+      venta('normal', '2026-09-02', 100, 12),
+      venta('normal', '2026-09-03', 144, 10),
+      venta('normal', '2026-09-01', 100, 12, 'zona-b'),
+      venta('normal', '2026-09-02', 144, 10, 'zona-b'),
+      venta('normal', '2026-09-03', 100, 12, 'zona-b'),
+    ]);
+
+    expect(insuficiente).toBeUndefined();
+    expect(calculado?.value).toBe(-2);
+    expect(calculado?.observations).toBe(6);
+  });
+});
 
 describe('estimateElasticities', () => {
   it('un valor que no cabe en numeric(10,4) va a insufficient y no tumba a las demás presentaciones', () => {

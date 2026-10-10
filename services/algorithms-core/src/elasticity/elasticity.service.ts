@@ -45,7 +45,8 @@ const ASSUMPTIONS = (granularity: Granularity) => [
   'Los periodos sin ventas no se observan: no se registra la demanda cero.',
   'No se controlan otros factores que mueven la demanda (promociones, temporada, ingreso, precio de otros productos).',
   'Una elasticidad positiva (la demanda sube con el precio) se marca como atípica.',
-  'El agregado nacional junta las ventas de todas las zonas por periodo.',
+  'El agregado nacional junta las observaciones zona × periodo de todas las zonas en una sola regresión.',
+  'El agregado nacional no separa las diferencias entre zonas (tamaño, ingreso): si la zona que más vende también cobra menos, esa diferencia se lee como efecto del precio.',
   `Indicador analítico: se exigen al menos ${MIN_OBSERVATIONS} observaciones y ${MIN_DISTINCT_PRICES} precios distintos; con muestras chicas, leer junto con el R² y el número de observaciones.`,
 ];
 
@@ -638,16 +639,23 @@ function baseParameters(params: ElasticityParamsDto, granularity: Granularity): 
   ];
 }
 
-/** Suma las zonas de un mismo periodo: precio promedio ponderado por unidades. */
+/**
+ * Una observación por zona × periodo, con el precio promedio ponderado por
+ * unidades. Para una zona es su propia serie; para el nacional son las de
+ * todas las zonas en una sola regresión. NO se suman las zonas de un mismo
+ * periodo: un día en que solo vende una zona se leería como una caída de
+ * la demanda provocada por el precio.
+ */
 function observationsOf(rows: SalesRow[]): PriceQuantity[] {
-  const byPeriod = new Map<string, { quantity: number; revenue: number }>();
+  const byZonePeriod = new Map<string, { quantity: number; revenue: number }>();
   for (const row of rows) {
-    const acc = byPeriod.get(row.period) ?? { quantity: 0, revenue: 0 };
+    const key = `${row.period}|${row.zoneId}`;
+    const acc = byZonePeriod.get(key) ?? { quantity: 0, revenue: 0 };
     acc.quantity += Number(row.quantity);
     acc.revenue += Number(row.revenue);
-    byPeriod.set(row.period, acc);
+    byZonePeriod.set(key, acc);
   }
-  return [...byPeriod.entries()]
+  return [...byZonePeriod.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([, { quantity, revenue }]) => ({ price: revenue / quantity, quantity }));
 }

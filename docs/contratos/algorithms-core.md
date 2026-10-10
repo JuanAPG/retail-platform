@@ -280,7 +280,9 @@ Request JSON (todo opcional):
 | `granularity` | `day` (default) o `week` (semana ISO, empieza en lunes): cómo se agrupan las ventas en observaciones zona × periodo |
 
 La elasticidad se calcula siempre **por cada zona más el agregado nacional**;
-la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`.
+la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`. El
+nacional es una sola regresión sobre las observaciones zona × periodo de todas
+las zonas: no suma las zonas de un mismo periodo.
 
 Claves de `parameters` guardadas: `metodo` (`regresion_log_log`),
 `granularidad`, `observaciones_minimas` (3), `precios_distintos_minimos` (2),
