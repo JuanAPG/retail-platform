@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SessionGuard } from '../common/auth/session.guard';
 import { PriceProposal } from '../entities/price-proposal.entity';
+import { PriceAlertsModule } from '../price-alerts/price-alerts.module';
 import { PricesModule } from '../prices/prices.module';
 import { PriceProposalsController } from './price-proposals.controller';
 import { PriceProposalsService } from './price-proposals.service';
@@ -14,7 +15,7 @@ import { PriceProposalsService } from './price-proposals.service';
  * directa cierren el precio vigente exactamente igual.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([PriceProposal]), JwtModule.register({}), PricesModule],
+  imports: [TypeOrmModule.forFeature([PriceProposal]), JwtModule.register({}), PricesModule, PriceAlertsModule],
   controllers: [PriceProposalsController],
   providers: [PriceProposalsService, SessionGuard, AuditReporter],
 })

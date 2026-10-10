@@ -317,6 +317,49 @@ INSERT INTO indicadores (clave, nombre, descripcion, unidad, ambito, formula) VA
     ('ingreso_estimado_venta', 'Ingreso estimado de venta', 'Ingreso estimado por ventas en el escenario.',               'MXN',         'zona',     'demanda x precio simulado')
 ON CONFLICT (clave) DO NOTHING;
 
+-- --------------------------------------------------------------- 9b. INDICADORES DE ZONA
+-- Ingreso estimado, población y disponibilidad de las tres zonas (CAT-13). No vienen en el CSV de
+-- canastas (que solo trae ventas): son datos de contexto de la zona. Sin ellos `/v1/zones/compare`
+-- devolvía null y la accesibilidad tomaba disponibilidad 0. Se cargan igual que
+-- `PUT /v1/zones/:id/indicators`: una corrida `descriptiva` de carga manual con su fuente y periodo, y
+-- un valor por indicador ligado a ella. `disponibilidad` es una proporción entre 0 y 1. Idempotente.
+DO $$
+DECLARE
+    v_corrida UUID;
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM analisis_corrida_parametros
+        WHERE clave = 'fuente' AND valor = 'Seed de demostración (valores ilustrativos)'
+    ) THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO analisis_corridas (tipo, estado, ejecutada_por, periodo_inicio, periodo_fin)
+    SELECT 'descriptiva', 'completada', u.id, DATE '2026-01-01', DATE '2026-09-30'
+    FROM usuarios u WHERE u.email = 'admin@retail.mx'
+    RETURNING id INTO v_corrida;
+
+    INSERT INTO analisis_corrida_parametros (corrida_id, clave, valor) VALUES
+        (v_corrida, 'origen', 'carga_manual'),
+        (v_corrida, 'fuente', 'Seed de demostración (valores ilustrativos)');
+
+    INSERT INTO indicador_valores (indicador_id, corrida_id, zona_id, periodo_inicio, periodo_fin, valor)
+    SELECT i.id, v_corrida, z.id, DATE '2026-01-01', DATE '2026-09-30', v.valor
+    FROM (VALUES
+        ('Zona Valle',   'ingreso_estimado', 65000),
+        ('Zona Valle',   'poblacion',        85000),
+        ('Zona Valle',   'disponibilidad',   0.95),
+        ('Zona Centro',  'ingreso_estimado', 28000),
+        ('Zona Centro',  'poblacion',        120000),
+        ('Zona Centro',  'disponibilidad',   0.85),
+        ('Zona Oriente', 'ingreso_estimado', 12000),
+        ('Zona Oriente', 'poblacion',        150000),
+        ('Zona Oriente', 'disponibilidad',   0.65)
+    ) AS v(zona, clave, valor)
+    JOIN zonas z ON z.nombre = v.zona
+    JOIN indicadores i ON i.clave = v.clave;
+END $$;
+
 -- --------------------------------------------------------------- 10. TRANSACCIONES
 -- Seis transacciones repartidas entre las tres zonas, para que el
 -- dashboard tenga algo que mostrar desde el primer arranque.

@@ -24,6 +24,8 @@
       <xs:enumeration value="proveedor.solicitud"/>
       <xs:enumeration value="proveedor.resuelto"/>
       <xs:enumeration value="precio.umbral"/>
+      <xs:enumeration value="precio.observado"/>
+      <xs:enumeration value="observacion.resuelta"/>
       <xs:enumeration value="escenario.generado"/>
       <xs:enumeration value="recomendacion.generada"/>
       <xs:enumeration value="recomendacion.resuelta"/>

@@ -5,6 +5,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { NotificationsModule } from './common/notifications/notifications-reporter.service';
+import { PriceAlertsModule } from './price-alerts/price-alerts.module';
+import { PriceObservationsModule } from './price-observations/price-observations.module';
 import { PricesModule } from './prices/prices.module';
 import { PriceProposalsModule } from './price-proposals/price-proposals.module';
 
@@ -22,8 +25,11 @@ import { PriceProposalsModule } from './price-proposals/price-proposals.module';
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    NotificationsModule,
+    PriceAlertsModule,
     PricesModule,
     PriceProposalsModule,
+    PriceObservationsModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],

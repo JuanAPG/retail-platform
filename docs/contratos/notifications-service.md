@@ -20,14 +20,28 @@ ese rol se valida contra la tabla de `notification.types.ts`:
 | Evento | Puede originarlo | Le llega a |
 |---|---|---|
 | `producto.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
-| `precio.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
-| `propuesta.resuelta` | Administrador, Gerente de categoría | el usuario que propuso |
+| `precio.propuesto` | Proveedor | rol Responsable de precios (fijo) |
+| `propuesta.resuelta` | Administrador, Gerente de categoría, Responsable de precios | el usuario que propuso |
 | `precio.umbral` | Administrador, Responsable de precios | rol Responsable de precios (fijo) |
+| `precio.observado` | Analista comercial, Responsable de precios | rol Responsable de precios (fijo) |
+| `observacion.resuelta` | Responsable de precios | el usuario que la capturó |
 | `escenario.generado` | Administrador, Analista comercial | el usuario que lo generó |
 | `recomendacion.generada` | Administrador, Analista comercial | rol Planeador (fijo) |
 | `recomendacion.resuelta` | Gerente de categoría | rol Analista comercial (fijo) |
 | `proveedor.solicitud` | **sin regla: nadie** | — |
 | `proveedor.resuelto` | **sin regla: nadie** | — |
+
+**Agregado 2026-10-09** (PRI-09/D-16, precios observados en tienda vía
+app móvil): `precio.observado` se emite al capturar (`POST
+/v1/price-observations`, roles `CAPTURAN_OBSERVACIONES` = Analista
+comercial o Responsable de precios) y avisa a la bandeja del Responsable
+de precios, que es quien resuelve. `observacion.resuelta` se emite al
+aprobar o rechazar (`PATCH /v1/price-observations/:id/approve|reject`,
+`APRUEBAN_PRECIOS` = únicamente Responsable de precios, mismo D1 de
+arriba) y vuelve a quien la capturó (`recipientUserId`). Antes de este
+cambio `PriceObservationsService` no inyectaba `NotificationsReporter`:
+no emitía ninguno de los dos, y tampoco existían en este catálogo
+cerrado.
 
 Destinos fijados por el equipo el 2026-10-08 (antes estaban "pendiente":
 el origen ya se validaba, pero el emisor todavía elegía el destinatario).
@@ -116,7 +130,6 @@ Raíz por endpoint, declarada con `@XmlRoot` en el controller:
 | `GET /v1/notifications` | `notificationListResponse` |
 | `GET /v1/notifications/unread-count` | `unreadCountResponse` |
 
-`eventType` es un `xs:enumeration` cerrado con los 9 eventos de la tabla de
-permisos de arriba — el mismo catálogo, no uno nuevo. Un `eventType` fuera
-de él responde `400` (`VALIDATION_ERROR`), igual en JSON y en XML (raíz
-`error`).
+`eventType` es un `xs:enumeration` cerrado con los 11 eventos de la tabla
+de permisos de arriba. Un `eventType` fuera de él responde `400`
+(`VALIDATION_ERROR`), igual en JSON y en XML (raíz `error`).

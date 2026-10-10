@@ -9,7 +9,7 @@ import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { CreatePriceDto } from './dto/create-price.dto';
-import { PriceComparisonQueryDto, PriceHistoryQueryDto } from './dto/price-queries.dto';
+import { PriceComparisonQueryDto, PriceCurrentQueryDto, PriceHistoryQueryDto, PriceSeriesQueryDto } from './dto/price-queries.dto';
 import { PricesService } from './prices.service';
 
 /**
@@ -25,12 +25,13 @@ export class PricesController {
   constructor(private readonly pricesService: PricesService) {}
 
   @Post()
-  @Roles(ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS)
+  @XmlRoot('priceResponse')
+  @Roles(ROL.RESPONSABLE_PRECIOS)
   @ApiOperation({
     summary:
       'Registra un precio por presentación y tienda. Si había uno vigente, lo cierra el día anterior (el histórico no se sobrescribe).',
   })
-  @ApiRespuesta(201, 'Precio registrado, ya vigente.', muestras.precio)
+  @ApiRespuesta(201, 'Precio registrado, ya vigente.', muestras.precio, 'priceResponse')
   @ApiErrores(400, 401, 403, 409)
   create(
     @Body() dto: CreatePriceDto,
@@ -47,21 +48,48 @@ export class PricesController {
   @ApiOperation({
     summary: 'Histórico de precios de un producto (o de una presentación), paginado, lo más reciente primero.',
   })
-  @ApiRespuesta(200, 'Página del histórico.', pagina([muestras.precio, muestras.precioCerrado]))
+  @ApiRespuesta(200, 'Página del histórico.', pagina([muestras.precio, muestras.precioCerrado]), 'priceListResponse')
   @ApiErrores(400, 401, 403, 404)
   findHistory(@Query() filtros: PriceHistoryQueryDto) {
     return this.pricesService.findHistory(filtros);
   }
 
-  @Get('compare-zones')
-  @XmlRoot('priceComparisonResponse')
+  @Get('current')
+  @XmlRoot('priceListResponse')
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({
-    summary: 'Compara el precio vigente de un producto entre zonas (agregado para gráficas, sin paginar).',
+    summary:
+      'Precio ACTUAL (por fecha, no por la bandera vigente) de una presentación, uno por tienda; filtra por zona o tienda. Un precio programado a futuro no aparece hasta su fecha.',
   })
-  @ApiRespuesta(200, 'Promedio, mínimo, máximo y número de tiendas por zona.', muestras.comparacion)
+  @ApiRespuesta(200, 'Página de precios actuales.', pagina([muestras.precio]), 'priceListResponse')
   @ApiErrores(400, 401, 403, 404)
-  compareAcrossZones(@Query() filtros: PriceComparisonQueryDto) {
-    return this.pricesService.compareAcrossZones(filtros.productId);
+  findCurrent(@Query() filtros: PriceCurrentQueryDto) {
+    return this.pricesService.findCurrent(filtros);
+  }
+
+  @Get('series')
+  @XmlRoot('priceSeriesResponse')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({
+    summary:
+      'Serie completa de precios de una presentación (todas las tiendas, con zona y rango de vigencia), SIN paginar. Para elasticidad y simulación.',
+  })
+  @ApiRespuesta(200, 'Todos los precios del periodo.', { data: [muestras.precio, muestras.precioCerrado], total: 2 }, 'priceSeriesResponse')
+  @ApiErrores(400, 401, 403, 404)
+  findSeries(@Query() filtros: PriceSeriesQueryDto) {
+    return this.pricesService.findSeries(filtros);
+  }
+
+  @Get('compare-zones')
+  @XmlRoot('priceComparisonResponse')
+  @Roles(...PERFILES_INTERNOS, ROL.PROVEEDOR)
+  @ApiOperation({
+    summary:
+      'Compara el precio vigente de un producto entre zonas (agregado para gráficas, sin paginar). Un Proveedor solo puede consultar productos suyos.',
+  })
+  @ApiRespuesta(200, 'Promedio, mínimo, máximo y número de tiendas por zona.', muestras.comparacion, 'priceComparisonResponse')
+  @ApiErrores(400, 401, 403, 404)
+  compareAcrossZones(@Query() filtros: PriceComparisonQueryDto, @CurrentUser() usuario: SesionUsuario) {
+    return this.pricesService.compareAcrossZones(filtros.productId, usuario);
   }
 }
