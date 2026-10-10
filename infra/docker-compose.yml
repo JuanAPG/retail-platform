@@ -539,6 +539,9 @@ services:
       PORT: 3110
       SERVICE_NAME: audit-service
       SERVICE_VERSION: 1.0.0
+      # El dia de dateFrom/dateTo es el dia LOCAL de quien lee la
+      # bitacora, no el dia UTC de la base.
+      AUDIT_TIMEZONE: America/Monterrey
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: audit/v1

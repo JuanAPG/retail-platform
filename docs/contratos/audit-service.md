@@ -44,6 +44,43 @@ Request JSON:
 400 (el actor siempre sale del token, nunca de lo que mande el cliente).
 Todo campo salvo `tabla`, `servicio` y `accion` puede ser `null`.
 
+`servicio` admite **solo los 10 microservicios** de la plataforma
+(`auth-service`, `catalog-service`, `pricing-service`,
+`core-process-service`, `algorithms-core`, `analytics-stats`,
+`decision-service`, `documents-service`, `notifications-service`,
+`audit-service`); cualquier otro valor es 400, igual que una `accion`
+fuera del catálogo. Es el mismo valor que el `AuditReporter` de cada
+servicio manda como constante y que `SERVICE_NAME` fija en
+`infra/docker-compose.yml`. Si se agrega un microservicio, se agrega aquí
+y en `src/common/servicios.ts`.
+
+Topes de longitud (400 si se pasan): `tabla` y `cambios[].campo` 80
+caracteres —el ancho real de sus columnas—, `registroId` 200,
+`descripcion` 1000, `previo`/`posterior` 2000 y `cambios` 50 entradas.
+`ip` debe ser una IP válida (la columna es `INET`).
+
+**Un evento no puede repetir el mismo `cambios[].campo`**: 400. La tabla
+tiene `PRIMARY KEY (auditoria_id, campo)` porque un evento registra un
+antes/después por campo; dos cambios al mismo campo son dos eventos. El
+evento y sus `cambios` se escriben en una sola transacción: no existe un
+evento guardado sin los campos que declaró.
+
+### Limitación conocida: `servicio` lo declara quien reporta
+
+El `POST` no exige rol a propósito, así que **cualquier sesión válida
+puede reportar en nombre de cualquiera de los 10 servicios**: la lista
+cerrada impide inventar un emisor, no impide que un Proveedor firme un
+evento como `auth-service`. Acotarlo de verdad exige autenticación
+servicio-a-servicio (token de servicio o red privada con mTLS), que es
+trabajo del Parcial 3.
+
+Mientras tanto la bitácora conserva con qué identidad se escribió cada
+evento: `usuarioId` y `rolId` salen SIEMPRE del token verificado, nunca
+del cuerpo. Un evento que dice `servicio: "auth-service"` con
+`rolId` = Proveedor es exactamente eso, un evento no confiable, y así se
+detecta. Al leer la bitácora como evidencia (RF-30), el `servicio` es una
+declaración del emisor; el actor es el dato duro.
+
 `accion` admite:
 
 | Acción | Cuándo usarla |
@@ -67,10 +104,53 @@ Response `201`: `{ "id": "123" }` (id numérico del evento).
 
 Bitácora paginada `{data, total, page, limit}`, de la más reciente a la
 más antigua. Filtros (todos opcionales): `tabla`, `registroId`,
-`servicio`, `usuarioId`, `accion`, `dateFrom`, `dateTo` (inclusivo, día
-completo), `page` (default 1), `limit` (default 20, máx 100).
+`servicio` (uno de los 10), `usuarioId` (UUID), `accion` (del catálogo),
+`dateFrom`, `dateTo`, `page` (default 1), `limit` (default 20, máx 100).
+Un filtro que no existe o un valor fuera de catálogo es 400, no una lista
+vacía.
+
+`total` cuenta EVENTOS, no filas: una página de 20 trae 20 eventos aunque
+cada uno traiga varios `cambios`.
+
+**`dateFrom` y `dateTo` son días completos, formato `YYYY-MM-DD`, los dos
+inclusivos.** No se admite hora (`2026-10-10T15:00:00Z` es 400): antes
+entraba y cada extremo la interpretaba distinto —`dateFrom` respetaba la
+hora y `dateTo` la tiraba, incluyendo el día entero—, así que un rango de
+horas devolvía días.
+
+El día es el **día local de `America/Monterrey`**, de 00:00 a 23:59:59
+hora local, no el día UTC. Los límites se construyen con `AT TIME ZONE`
+en la consulta, así que no dependen del huso de la sesión de Postgres (en
+el compose es UTC): `?dateTo=2026-10-10` incluye un evento de las 21:00
+del 10 en Monterrey, que en UTC ya es el 11. Si el despliegue de GCP
+queda en otra zona, se cambia con `AUDIT_TIMEZONE`; el valor por omisión
+es el que lee el equipo.
 
 Historial por entidad: `GET /v1/auditoria?tabla=precios&registroId=<id>`.
 Eventos de un emisor: `GET /v1/auditoria?servicio=pricing-service`.
 
+> **`registroId` siempre va con `tabla`.** La columna es TEXT y recibe
+> UUID (catálogo, usuarios), ObjectId de Mongo (reportes, notificaciones)
+> e ids numéricos (precios, transacciones), así que `?registroId=42` sin
+> `tabla` puede mezclar el precio 42 con la transacción 42. El índice
+> `idx_auditoria_tabla_registro` es `(tabla_afectada, registro_id)`, en
+> ese orden, justo porque la consulta útil lleva las dos.
+
 Cada evento trae `cambios[]` (`campo`, `valorPrevio`, `valorPosterior`).
+
+## GET /v1/auditoria/:id (SessionGuard, Administrador y Auditor)
+
+Detalle de un evento, con sus `cambios[]`. `404` si no existe —incluido un
+id que no es numérico (el id es `BIGSERIAL`), para no devolver un 500 de
+Postgres. Raíz XML `auditEventResponse`.
+
+## Historial por entidad: no hay `GET /v1/auditoria/entity/:tipo/:id`
+
+El requerimiento original de la rama pedía
+`AuditService.findByEntity(entityType, entityId)` y
+`GET /audit/entity/:type/:id`. **No existen, y es deliberado:** este
+contrato resuelve el historial por entidad con los filtros
+`?tabla=&registroId=`, que es lo mismo con un endpoint menos y además
+compone con los otros filtros (`accion`, rango de fechas, emisor). Si
+alguien compara el requerimiento con el código, no falta una función:
+sobra una línea en el requerimiento, que queda cerrada aquí.
