@@ -438,8 +438,11 @@ Response `200`:
       "rSquared": 0.7,
       "observations": 4,
       "atypical": false,
+      "outdated": false,
       "runId": "uuid",
-      "executedAt": "2026-10-01T15:30:00.000Z"
+      "executedAt": "2026-10-01T15:30:00.000Z",
+      "periodStart": "2026-08-05",
+      "periodEnd": "2026-08-15"
     },
     {
       "presentationId": "uuid",
@@ -452,8 +455,11 @@ Response `200`:
       "rSquared": 0.62,
       "observations": 4,
       "atypical": false,
+      "outdated": false,
       "runId": "uuid",
-      "executedAt": "2026-10-01T15:30:00.000Z"
+      "executedAt": "2026-10-01T15:30:00.000Z",
+      "periodStart": "2026-08-05",
+      "periodEnd": "2026-08-15"
     }
   ],
   "total": 2,
@@ -464,6 +470,15 @@ Response `200`:
 
 `atypical` es `true` si E > 0 (la demanda sube con el precio): quien simula no
 debe usarla como una elasticidad normal.
+
+`periodStart` y `periodEnd` son el periodo de ventas de la corrida de cada fila:
+la zona y el nacional pueden venir de corridas distintas. `outdated` es `true` si
+una corrida de elasticidad completada **posterior**, que abarcaba la presentación
+(sin filtro de presentación, o con esta), no obtuvo valor para esa zona —datos
+insuficientes o sin ventas en su periodo—. La fila se conserva con su valor
+anterior para que la simulación no se quede sin dato; quien la consume decide qué
+hacer con el aviso. No detecta ventas llegadas después de la corrida (eso es el
+snapshot de datos, D-15), y una corrida semanal posterior también cuenta.
 
 Sin elasticidades calculadas → `data: []` (no es error; quien la consume decide
 si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResponse`.

@@ -336,6 +336,13 @@ export class ElasticityService {
    * presentación y zona, con la nacional al final de cada presentación,
    * así la primera fila de una presentación es "la de la zona, si no la
    * nacional". Son pocas filas (presentaciones × zonas+1): se pagina en memoria.
+   *
+   * Cada fila dice de qué periodo sale (la zona y el nacional pueden venir
+   * de corridas distintas) y si está `outdated`: una corrida completada
+   * POSTERIOR que abarcaba la presentación (sin filtro de presentación, o
+   * con esta) no obtuvo valor para esa zona. Esa corrida no tiene fila
+   * para la combinación —si la tuviera, sería la vigente—, así que basta
+   * con que exista.
    */
   async current(filtros: CurrentElasticityFilterDto): Promise<Pagina<CurrentElasticity>> {
     const rows: {
@@ -346,17 +353,37 @@ export class ElasticityService {
       observations: number;
       runId: string;
       executedAt: Date;
+      periodStart: string;
+      periodEnd: string;
+      outdated: boolean;
     }[] = await this.dataSource.query(
-      `SELECT DISTINCT ON (e.presentacion_id, e.zona_id)
-              e.presentacion_id AS "presentationId", e.zona_id AS "zoneId", e.valor AS "value",
-              e.r_cuadrada AS "rSquared", e.observaciones AS "observations",
-              c.id AS "runId", c.ejecutada_en AS "executedAt"
-       FROM elasticidades e
-       JOIN analisis_corridas c ON c.id = e.corrida_id
-       WHERE c.tipo = 'elasticidad' AND c.estado = 'completada'
-         AND ($1::uuid IS NULL OR e.presentacion_id = $1::uuid)
-         AND ($2::uuid IS NULL OR e.zona_id = $2::uuid OR e.zona_id IS NULL)
-       ORDER BY e.presentacion_id, e.zona_id, c.ejecutada_en DESC`,
+      `WITH vigente AS (
+         SELECT DISTINCT ON (e.presentacion_id, e.zona_id)
+                e.presentacion_id, e.zona_id, e.valor, e.r_cuadrada, e.observaciones,
+                c.id AS corrida_id, c.ejecutada_en, c.periodo_inicio, c.periodo_fin
+         FROM elasticidades e
+         JOIN analisis_corridas c ON c.id = e.corrida_id
+         WHERE c.tipo = 'elasticidad' AND c.estado = 'completada'
+           AND ($1::uuid IS NULL OR e.presentacion_id = $1::uuid)
+           AND ($2::uuid IS NULL OR e.zona_id = $2::uuid OR e.zona_id IS NULL)
+         ORDER BY e.presentacion_id, e.zona_id, c.ejecutada_en DESC
+       )
+       SELECT v.presentacion_id AS "presentationId", v.zona_id AS "zoneId", v.valor AS "value",
+              v.r_cuadrada AS "rSquared", v.observaciones AS "observations",
+              v.corrida_id AS "runId", v.ejecutada_en AS "executedAt",
+              v.periodo_inicio::text AS "periodStart", v.periodo_fin::text AS "periodEnd",
+              EXISTS (
+                SELECT 1 FROM analisis_corridas posterior
+                WHERE posterior.tipo = 'elasticidad' AND posterior.estado = 'completada'
+                  AND posterior.ejecutada_en > v.ejecutada_en
+                  -- Filtrada a OTRA presentación no la abarcaba.
+                  AND NOT EXISTS (
+                    SELECT 1 FROM analisis_corrida_parametros p
+                    WHERE p.corrida_id = posterior.id AND p.clave = 'presentacion_id'
+                      AND lower(p.valor) <> v.presentacion_id::text
+                  )
+              ) AS "outdated"
+       FROM vigente v`,
       [filtros.presentationId ?? null, filtros.zoneId ?? null],
     );
 
@@ -380,8 +407,11 @@ export class ElasticityService {
         rSquared: r.rSquared === null ? null : Number(r.rSquared),
         observations: Number(r.observations),
         atypical: value > 0,
+        outdated: r.outdated,
         runId: r.runId,
         executedAt: r.executedAt.toISOString(),
+        periodStart: r.periodStart,
+        periodEnd: r.periodEnd,
       };
     });
     todas.sort(

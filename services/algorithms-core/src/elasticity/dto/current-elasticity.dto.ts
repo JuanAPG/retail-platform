@@ -32,8 +32,16 @@ export interface CurrentElasticity {
   observations: number;
   /** true si E > 0: la demanda sube con el precio; no se lee como una elasticidad normal. */
   atypical: boolean;
+  /**
+   * true si una corrida posterior que abarcaba esta presentación no obtuvo
+   * valor para esta zona (datos insuficientes o sin ventas en su periodo).
+   */
+  outdated: boolean;
   /** Corrida completada más reciente que calculó este valor. */
   runId: string;
   /** Cuándo se ejecutó esa corrida (ISO 8601). */
   executedAt: string;
+  /** Periodo de ventas de esa corrida ('yyyy-mm-dd'). */
+  periodStart: string;
+  periodEnd: string;
 }

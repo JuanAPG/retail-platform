@@ -413,8 +413,12 @@
       <xs:element name="observations" type="xs:integer"/>
       <!-- true si E > 0: la demanda sube con el precio. -->
       <xs:element name="atypical" type="xs:boolean"/>
+      <!-- true si una corrida posterior que abarcaba la presentación no obtuvo valor para esta zona. -->
+      <xs:element name="outdated" type="xs:boolean"/>
       <xs:element name="runId" type="xs:string"/>
       <xs:element name="executedAt" type="xs:dateTime"/>
+      <xs:element name="periodStart" type="xs:date"/>
+      <xs:element name="periodEnd" type="xs:date"/>
     </xs:all>
   </xs:complexType>
 

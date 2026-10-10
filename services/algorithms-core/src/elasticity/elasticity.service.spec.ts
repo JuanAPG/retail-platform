@@ -172,7 +172,16 @@ describe('ElasticityService (base simulada)', () => {
   });
 
   it('current marca atypical solo cuando E > 0', async () => {
-    const fila = { presentationId: 'pres-1', rSquared: null, observations: 10, runId: 'corrida-1', executedAt: corrida.executedAt };
+    const fila = {
+      presentationId: 'pres-1',
+      rSquared: null,
+      observations: 10,
+      runId: 'corrida-1',
+      executedAt: corrida.executedAt,
+      periodStart: '2026-08-02',
+      periodEnd: '2026-09-20',
+      outdated: false,
+    };
     const service = servicio([
       [
         { ...fila, zoneId: 'z-oriente', value: '36.1100' },
@@ -185,6 +194,24 @@ describe('ElasticityService (base simulada)', () => {
     expect(data.map((e) => [e.zoneName, e.value, e.atypical])).toEqual([
       ['Zona Oriente', 36.11, true],
       ['Nacional', -4.0319, false],
+    ]);
+  });
+
+  it('current dice de qué periodo sale cada fila y si una corrida posterior no la pudo recalcular', async () => {
+    const fila = { presentationId: 'pres-1', rSquared: null, observations: 10, value: '-2.0000', executedAt: corrida.executedAt };
+    const service = servicio([
+      [
+        // La zona se quedó con la corrida vieja; el nacional ya es de la nueva.
+        { ...fila, zoneId: 'z-oriente', runId: 'vieja', periodStart: '2026-08-02', periodEnd: '2026-09-20', outdated: true },
+        { ...fila, zoneId: null, runId: 'nueva', periodStart: '2026-08-05', periodEnd: '2026-08-10', outdated: false },
+      ],
+    ]);
+
+    const { data } = await service.current({});
+
+    expect(data.map((e) => [e.zoneName, e.runId, e.periodStart, e.periodEnd, e.outdated])).toEqual([
+      ['Zona Oriente', 'vieja', '2026-08-02', '2026-09-20', true],
+      ['Nacional', 'nueva', '2026-08-05', '2026-08-10', false],
     ]);
   });
 });
