@@ -60,6 +60,10 @@ export function apriori(baskets: string[][], params: AprioriParams): AprioriResu
     // Con soporte 0 toda combinación sería frecuente y el cálculo explota.
     throw new RangeError('minSupport debe estar en (0, 1].');
   }
+  if (!(minConfidence > 0 && minConfidence <= 1)) {
+    // Mismo rango que el soporte (D-17): la regla no depende solo del DTO.
+    throw new RangeError('minConfidence debe estar en (0, 1].');
+  }
 
   const total = baskets.length;
   if (total === 0) return { itemsets: [], rules: [] };

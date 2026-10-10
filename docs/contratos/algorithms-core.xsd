@@ -89,16 +89,17 @@
   </xs:simpleType>
 
   <!-- Mismos rangos que AprioriParamsDto. -->
+  <!-- D-17: soporte y confianza, mayores a 0 y hasta 1. -->
   <xs:simpleType name="minSupport">
     <xs:restriction base="xs:decimal">
-      <xs:minInclusive value="0.01"/>
+      <xs:minExclusive value="0"/>
       <xs:maxInclusive value="1"/>
     </xs:restriction>
   </xs:simpleType>
 
   <xs:simpleType name="minConfidence">
     <xs:restriction base="xs:decimal">
-      <xs:minInclusive value="0"/>
+      <xs:minExclusive value="0"/>
       <xs:maxInclusive value="1"/>
     </xs:restriction>
   </xs:simpleType>

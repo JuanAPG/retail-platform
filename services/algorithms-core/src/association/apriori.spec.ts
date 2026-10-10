@@ -58,4 +58,15 @@ describe('apriori (trasladado de M10 sin cambios)', () => {
       rules: [],
     });
   });
+
+  it('soporte y confianza: mayores a 0 y hasta 1 (D-17)', () => {
+    const correr = (minSupport: number, minConfidence: number) => () =>
+      apriori(CANASTAS, { minSupport, minConfidence, maxItemsetSize: 3 });
+
+    expect(correr(0.001, 0.001)).not.toThrow();
+    expect(correr(1, 1)).not.toThrow();
+    expect(correr(1.01, 0.5)).toThrow(RangeError);
+    expect(correr(0.5, 0)).toThrow(RangeError);
+    expect(correr(0.5, 1.01)).toThrow(RangeError);
+  });
 });

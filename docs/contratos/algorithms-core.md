@@ -110,8 +110,8 @@ Request JSON:
 
 | Campo | Regla |
 |---|---|
-| `minSupport` | **obligatorio**, número entre 0.01 y 1. Sin default oculto |
-| `minConfidence` | **obligatorio**, número entre 0 y 1 |
+| `minSupport` | **obligatorio**, número mayor a 0 y hasta 1 (D-17). Sin default oculto |
+| `minConfidence` | **obligatorio**, número mayor a 0 y hasta 1 (D-17) |
 | `maxItemsetSize` | opcional, entero entre 2 y 4; default 3 |
 | `storeId`, `zoneId` | opcionales, UUID |
 | `segmentId` | opcional, entero ≥ 1. Segmento de la ZONA de la compra (RN-02) |
