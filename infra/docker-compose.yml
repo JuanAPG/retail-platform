@@ -335,6 +335,9 @@ services:
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: algorithms/v1
+      # Dia de negocio: los dias y semanas de elasticidad, dateFrom/dateTo y el
+      # periodo de las corridas se cortan a medianoche local, no UTC.
+      ZONA_HORARIA: America/Monterrey
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
