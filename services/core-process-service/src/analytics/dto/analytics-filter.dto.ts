@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsInt, IsOptional, IsUUID, Min, Validate } from 'class-validator';
+import { EsFiltroDeFecha } from '../../common/zona-horaria';
 
 /**
  * M09 — Filtros comunes a todos los indicadores descriptivos. Todos
@@ -32,11 +33,11 @@ export class AnalyticsFilterDto {
 
   @ApiPropertyOptional({ example: '2026-09-01' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateFrom debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateFrom?: string;
 
   @ApiPropertyOptional({ example: '2026-09-30' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateTo debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateTo?: string;
 }

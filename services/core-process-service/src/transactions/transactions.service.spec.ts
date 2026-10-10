@@ -276,16 +276,19 @@ describe('TransactionsService — preview CSV', () => {
     expect(codigos).toContain('PRECIO_INVALIDO');
   });
 
-  it('detecta la fecha futura aunque no venga en formato ISO', async () => {
+  it('rechaza una fecha que no viene en formato ISO', async () => {
     // Antes se comparaban cadenas: "12/31/2099" > "2026-10-06" era false
-    // porque "1" < "2", y la fila pasaba como válida.
+    // porque "1" < "2", y la fila pasaba como válida. Siguió rechazándose
+    // como FECHA_FUTURA mientras `new Date()` la interpretaba; hoy el
+    // código es FECHA_INVALIDA, que es lo que de verdad es: un formato que
+    // esta API no acepta. Lo que importa es que no entre.
     const { svc } = servicio();
     const r = await svc.previewCsvImport(
       archivo(['T1,12/31/2099,Super Valle Centro,P-001-001,1 kg,2,42.5']),
       USUARIO as never,
     );
     expect(r.filasValidas).toBe(0);
-    expect(r.errores.map((e) => e.codigo)).toContain('FECHA_FUTURA');
+    expect(r.errores.map((e) => e.codigo)).toContain('FECHA_INVALIDA');
   });
 
   it('rechaza notaciones que no son decimales planos', async () => {
@@ -904,9 +907,9 @@ describe('TransactionsService — findAll', () => {
     expect(r).toEqual({ data: [], total: 0, page: 3, limit: 10 });
     expect(condiciones).toEqual([
       't.storeId = :storeId',
-      't.fecha >= :dateFrom',
-      // Día completo, igual que M07 y M09.
-      't.fecha < CAST(:dateTo AS date) + 1',
+      // Días completos locales en los dos extremos, igual que M07 y M09.
+      't.fecha >= CAST(:dateFrom AS date)::timestamp AT TIME ZONE :zona',
+      't.fecha < (CAST(:dateTo AS date) + 1)::timestamp AT TIME ZONE :zona',
     ]);
   });
 });
