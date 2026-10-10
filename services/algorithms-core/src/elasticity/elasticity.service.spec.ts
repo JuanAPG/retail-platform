@@ -102,15 +102,27 @@ describe('estimateElasticities', () => {
   const deZonaA = (rows: SalesRow[]) =>
     estimateElasticities(rows, NOMBRES, ZONAS).results.find((r) => r.zoneId === 'zona-a');
 
-  it('caso A de QA por el camino del cálculo: guarda −2.3412 exacto, el redondeo que va a la base', () => {
-    // 10 → 11 con 100 → 80, más un tercer punto sobre la misma recta.
+  it('caso A del plan de QA por el camino del cálculo: guarda −2.3624 y R² 0.99997, el redondeo que va a la base', () => {
+    // Día 1 con dos ventas (60 + 40 a $10): se suman en una sola observación.
     expect(
       deZonaA([
-        venta('normal', '2026-09-01', 100, 10),
+        venta('normal', '2026-09-01', 60, 10),
+        venta('normal', '2026-09-01', 40, 10),
         venta('normal', '2026-09-02', 80, 11),
-        venta('normal', '2026-09-03', 64, 12.1),
+        venta('normal', '2026-09-03', 65, 12),
       ]),
-    ).toMatchObject({ value: -2.3412, classification: 'elastic', rSquared: 1, observations: 3, atypical: false });
+    ).toMatchObject({ value: -2.3624, classification: 'elastic', rSquared: 0.99997, observations: 3, atypical: false });
+  });
+
+  it('caso B de QA: el día 1 (10 u a $10 + 30 u a $12) vale $11.5, no el promedio simple ni la última venta', () => {
+    expect(
+      deZonaA([
+        venta('normal', '2026-09-01', 10, 10),
+        venta('normal', '2026-09-01', 30, 12),
+        venta('normal', '2026-09-02', 30, 13),
+        venta('normal', '2026-09-03', 25, 14),
+      ]),
+    ).toMatchObject({ value: -2.385, rSquared: 0.99984, observations: 3 });
   });
 
   it('una E positiva (la demanda sube con el precio) sale atypical en el cálculo', () => {

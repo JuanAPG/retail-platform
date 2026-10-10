@@ -4,6 +4,11 @@
  * líneas de venta crudas → zona × día local → regresión de ln q contra ln p.
  * Así sirve con cualquier carga de ventas (p. ej. db/datos_prueba_100_canastas.csv).
  *
+ * La referencia aplica las mismas reglas que el servicio, incluido el tope
+ * de la columna (QA-ALG56-16), y corta los días en America/Monterrey ESCRITA
+ * AQUÍ, no leída de `ZONA_HORARIA`: si el servicio corre con otra zona, la
+ * prueba falla en vez de equivocarse igual que él (QA-ALG56-10).
+ *
  * Crea corridas y las borra al terminar, aunque la prueba falle.
  *
  *   docker compose -f infra/docker-compose.yml up -d postgres redis auth-service algorithms-core
@@ -11,11 +16,14 @@
  */
 import { DataSource } from 'typeorm';
 import databaseConfig from '../src/config/database.config';
-import { ZONA_HORARIA } from '../src/config/zona-horaria';
 
 const BASE = process.env.ALGORITHMS_BASE_URL ?? 'http://localhost:3105';
 const AUTH = process.env.AUTH_BASE_URL ?? 'http://localhost:3101';
 const TOLERANCIA = 1e-4;
+/** Día de negocio (regla, no configuración): el servicio debe cortar igual. */
+const DIA_DE_NEGOCIO = 'America/Monterrey';
+/** `elasticidades.valor` es numeric(10,4): lo que no cabe va a `insufficient`. */
+const MAXIMO_GUARDABLE = 999_999.9999;
 
 interface Resultado {
   presentationId: string;
@@ -42,7 +50,10 @@ interface Barra {
   observations: number;
 }
 
-/** Regresión simple, escrita aparte de elasticity.math, con los mismos mínimos. */
+/**
+ * Regresión simple, escrita aparte de elasticity.math, con los mismos
+ * mínimos y el mismo tope. `null` = el servicio debe mandarla a `insufficient`.
+ */
 function referencia(puntos: { precio: number; cantidad: number }[]): { e: number; r2: number | null; n: number } | null {
   const n = puntos.length;
   const precios = new Set(puntos.map((p) => Math.round(p.precio * 1e4) / 1e4));
@@ -59,7 +70,9 @@ function referencia(puntos: { precio: number; cantidad: number }[]): { e: number
     sxx += (xs[i] - mx) ** 2;
     syy += (ys[i] - my) ** 2;
   }
-  return { e: syy < 1e-12 ? 0 : sxy / sxx, r2: syy < 1e-12 ? null : (sxy * sxy) / (sxx * syy), n };
+  const e = syy < 1e-12 ? 0 : sxy / sxx;
+  if (Math.abs(Math.round(e * 1e4) / 1e4) > MAXIMO_GUARDABLE) return null;
+  return { e, r2: syy < 1e-12 ? null : (sxy * sxy) / (sxx * syy), n };
 }
 
 describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
@@ -94,6 +107,19 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
     return json;
   }
 
+  /** Observaciones zona × día cortando los días en `zona`. */
+  async function observaciones(zona: string) {
+    const rows: { p: string; z: string; cantidad: number; ingreso: number }[] = await db.query(
+      `SELECT d.presentacion_id AS p, k.zona_id AS z,
+              SUM(d.cantidad)::float8 AS cantidad, SUM(d.cantidad * d.precio_unitario)::float8 AS ingreso
+       FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
+       GROUP BY 1, 2, to_char(k.fecha AT TIME ZONE $1, 'YYYY-MM-DD')`,
+      [zona],
+    );
+    const puntos = rows.map((r) => ({ ...r, precio: r.ingreso / r.cantidad }));
+    return (p: string, z: string | null) => referencia(puntos.filter((x) => x.p === p && (z === null || x.z === z)));
+  }
+
   const vigentes = async (filtro = '') =>
     (await http<{ data: Vigente[] }>('GET', `/v1/elasticity/current?limit=100${filtro}`)).json.data;
 
@@ -117,20 +143,22 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
   });
 
   it('calculate coincide con la referencia; chart y current muestran lo mismo; una corrida posterior marca outdated', async () => {
-    // Referencia: zona × día en la zona del negocio, precio ponderado por unidades.
-    const rows: { p: string; z: string; cantidad: number; ingreso: number }[] = await db.query(
-      `SELECT d.presentacion_id AS p, k.zona_id AS z,
-              SUM(d.cantidad)::float8 AS cantidad, SUM(d.cantidad * d.precio_unitario)::float8 AS ingreso
-       FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
-       GROUP BY 1, 2, to_char(k.fecha AT TIME ZONE $1, 'YYYY-MM-DD')`,
-      [ZONA_HORARIA],
-    );
-    const puntos = rows.map((r) => ({ ...r, precio: r.ingreso / r.cantidad }));
-    const esperado = (p: string, z: string | null) =>
-      referencia(puntos.filter((x) => x.p === p && (z === null || x.z === z)));
+    // Referencia: zona × día de negocio, precio ponderado por unidades.
+    const esperado = await observaciones(DIA_DE_NEGOCIO);
+    const conDiaUtc = await observaciones('UTC');
 
     // 1. calculate: cada resultado coincide, y no falta ninguno que la referencia sí calcule.
     const calculo = await calcular({});
+    // Para que la zona horaria quede probada, algún resultado debe cambiar si
+    // los días se cortaran en UTC (hace falta alguna venta entre las 18:00 y
+    // las 24:00 locales). Si no, la prueba no distinguiría las dos zonas.
+    const distingueZona = calculo.results.some((r) => {
+      const [local, utc] = [esperado(r.presentationId, r.zoneId), conDiaUtc(r.presentationId, r.zoneId)];
+      return !utc || local!.n !== utc.n || Math.abs(local!.e - utc.e) >= TOLERANCIA;
+    });
+    if (!distingueZona) {
+      throw new Error('Ningún resultado cambia entre el día UTC y el de Monterrey: hacen falta ventas nocturnas (18:00–24:00 locales) para probar la zona horaria.');
+    }
     for (const r of calculo.results) {
       const ref = esperado(r.presentationId, r.zoneId);
       expect(ref).not.toBeNull();
@@ -139,9 +167,13 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
       if (ref!.r2 === null) expect(r.rSquared).toBeNull();
       else expect(Math.abs(r.rSquared! - ref!.r2)).toBeLessThan(TOLERANCIA);
     }
-    const combinaciones = [...new Set(puntos.map((x) => x.p))].flatMap((p) => [
+    const lineas: { p: string; z: string }[] = await db.query(
+      `SELECT DISTINCT d.presentacion_id AS p, k.zona_id AS z
+       FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id`,
+    );
+    const combinaciones = [...new Set(lineas.map((x) => x.p))].flatMap((p) => [
       [p, null] as const,
-      ...[...new Set(puntos.filter((x) => x.p === p).map((x) => x.z))].map((z) => [p, z] as const),
+      ...lineas.filter((x) => x.p === p).map((x) => [p, x.z] as const),
     ]);
     const calculables = combinaciones.filter(([p, z]) => esperado(p, z) !== null);
     expect(calculo.results.length).toBe(calculables.length);
@@ -188,7 +220,7 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
       `SELECT to_char(MIN(k.fecha AT TIME ZONE $2), 'YYYY-MM-DD') AS primero
        FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
        WHERE d.presentacion_id = $1`,
-      [presentacion, ZONA_HORARIA],
+      [presentacion, DIA_DE_NEGOCIO],
     );
     const posterior = await calcular({ presentationId: presentacion, dateTo: primero });
     for (const fila of await vigentes(`&presentationId=${presentacion}`)) {
@@ -199,5 +231,25 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
     expect(otrasDespues.map((f) => [f.presentationId, f.zoneId, f.runId, f.outdated])).toEqual(
       otrasAntes.map((f) => [f.presentationId, f.zoneId, f.runId, f.outdated]),
     );
+  });
+
+  it('solo el Responsable de precios calcula: el Analista recibe 403 y no se crea corrida (Matriz §3, M11)', async () => {
+    const login = await fetch(`${AUTH}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'analista@retail.mx', password: process.env.ALGORITHMS_TEST_PASSWORD ?? 'Passw0rd123!' }),
+    });
+    const analista = ((await login.json()) as { accessToken: string }).accessToken;
+    const [{ antes }]: { antes: number }[] = await db.query('SELECT count(*)::int AS antes FROM analisis_corridas');
+
+    const r = await fetch(`${BASE}/v1/elasticity/calculate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${analista}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(r.status).toBe(403);
+    const [{ despues }]: { despues: number }[] = await db.query('SELECT count(*)::int AS despues FROM analisis_corridas');
+    expect(despues).toBe(antes);
   });
 });
