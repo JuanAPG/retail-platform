@@ -90,6 +90,13 @@ export class AuditService {
   /**
    * Bitácora paginada, de la más reciente a la más antigua.
    *
+   * `dateFrom`/`dateTo` son días completos (`YYYY-MM-DD`, lo valida el
+   * DTO) y los DOS se comparan como fecha, no como instante: `dateFrom`
+   * desde las 00:00 de ese día y `dateTo` hasta el final del día, como
+   * dice el contrato. `fecha` es TIMESTAMPTZ y el CAST usa el huso de la
+   * sesión de Postgres (UTC en el contenedor), así que el día es un día
+   * UTC — está documentado en docs/contratos/audit-service.md.
+   *
    * `skip`/`take` (no `offset`/`limit`) es obligatorio con el
    * `leftJoinAndSelect` de `cambios`: TypeORM pagina por entidad con una
    * subconsulta de ids, así que `total` cuenta EVENTOS y una página de 20
@@ -124,7 +131,7 @@ export class AuditService {
       qb.andWhere('evento.accion = :accion', { accion: filters.accion });
     }
     if (filters.dateFrom) {
-      qb.andWhere('evento.fecha >= :dateFrom', { dateFrom: filters.dateFrom });
+      qb.andWhere('evento.fecha >= CAST(:dateFrom AS date)', { dateFrom: filters.dateFrom });
     }
     if (filters.dateTo) {
       qb.andWhere('evento.fecha < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
