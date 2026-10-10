@@ -13,9 +13,11 @@ import { ElasticityParamsDto } from './dto/elasticity-params.dto';
 import { ElasticityService } from './elasticity.service';
 
 /**
- * M11 — Elasticidad precio-demanda. Calcular crea una corrida, así que
- * queda para Administrador y Analista (mismo criterio que M10); el
- * gráfico y la elasticidad vigente son lectura para cualquier perfil interno.
+ * M11 — Elasticidad precio-demanda. Según la Matriz (§3, M11), solo el
+ * Responsable de precios tiene Total: es el único que calcula (crea una
+ * corrida). El resto de los perfiles internos tiene Lectura: gráfico y
+ * elasticidad vigente. Si el Analista calcula desde el escritorio está
+ * PENDIENTE (P-04): no se asume.
  * SessionGuard va primero: valida JWT + sesión en Redis y deja `request.user`.
  */
 @ApiTags('M11 Elasticity')
@@ -26,9 +28,10 @@ export class ElasticityController {
   constructor(private readonly elasticityService: ElasticityService) {}
 
   @Post('calculate')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.RESPONSABLE_PRECIOS)
   @ApiOperation({
-    summary: 'Calcula y clasifica la elasticidad precio-demanda (por zona y nacional) y guarda la corrida.',
+    summary:
+      'Calcula y clasifica la elasticidad precio-demanda (por zona y nacional) y guarda la corrida. Solo Responsable de precios.',
   })
   @RespuestaXml(
     201,

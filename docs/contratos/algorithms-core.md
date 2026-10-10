@@ -22,13 +22,15 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 | POST | `/v1/association/apriori/run` | Administrador, Analista comercial |
 | GET | `/v1/association/runs` | Los 6 perfiles internos |
 | GET | `/v1/association/runs/:id` | Los 6 perfiles internos |
-| POST | `/v1/elasticity/calculate` | Administrador, Analista comercial |
+| POST | `/v1/elasticity/calculate` | Responsable de precios |
 | GET | `/v1/elasticity/chart` | Los 6 perfiles internos |
 | GET | `/v1/elasticity/current` | Los 6 perfiles internos |
 | GET | `/v1/substitution/patterns` | Los 6 perfiles internos |
 
-Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo
-Administrador y Analista. El Proveedor no tiene acceso a ninguna ruta.
+Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo lo hace
+quien tiene Total en ese módulo según la Matriz (§3); los demás perfiles internos
+leen. Si el Analista calcula elasticidad desde el escritorio está PENDIENTE
+(P-04). El Proveedor no tiene acceso a ninguna ruta.
 
 En XML, la raíz es el elemento de cada endpoint (p. ej. `<runListResponse
 xmlns="algorithms/v1">`) y las fechas-hora van en ISO 8601 UTC. Un `null` sale
@@ -489,7 +491,7 @@ si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResp
 |---|---|
 | 400 | Cuerpo o query inválidos; `granularity` o `groupBy` fuera de catálogo; fechas invertidas; ninguna venta con los filtros |
 | 401 | Sin token, token revocado o sin sesión en Redis |
-| 403 | Rol sin permiso (p. ej. Planeador calculando, o Proveedor) |
+| 403 | Rol sin permiso (p. ej. cualquiera que no sea Responsable de precios calculando, o Proveedor) |
 | 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; `runId` sin elasticidades para esa presentación; ninguna corrida con resultados para graficar |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
 | 503 | Redis (sesiones) no responde: no se puede verificar la sesión |

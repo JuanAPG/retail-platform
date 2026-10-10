@@ -103,7 +103,8 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: process.env.ALGORITHMS_TEST_EMAIL ?? 'analista@retail.mx',
+        // Solo el Responsable de precios calcula (Matriz §3, M11).
+        email: process.env.ELASTICIDAD_TEST_EMAIL ?? 'precios@retail.mx',
         password: process.env.ALGORITHMS_TEST_PASSWORD ?? 'Passw0rd123!',
       }),
     });
