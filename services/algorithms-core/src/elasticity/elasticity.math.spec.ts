@@ -13,7 +13,9 @@ describe('elasticity.math (trasladado de M11 sin cambios)', () => {
 
     expect(resultado.ok).toBe(true);
     if (!resultado.ok) return;
-    expect(resultado.elasticity).toBeCloseTo(-2.341, 3);
+    // Tolerancia acordada con QA: 1e-4 contra el valor exacto, no ±5e-4.
+    const exacto = Math.log(80 / 100) / Math.log(11 / 10);
+    expect(Math.abs(resultado.elasticity - exacto)).toBeLessThan(1e-4);
     expect(resultado.rSquared).toBeCloseTo(1, 6);
     expect(classifyElasticity(resultado.elasticity)).toBe('elastic');
   });

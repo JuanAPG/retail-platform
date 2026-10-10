@@ -98,6 +98,61 @@ describe('estimateElasticities', () => {
       expect(item.reason).toContain(String(MAX_STORABLE_ELASTICITY));
     }
   });
+
+  const deZonaA = (rows: SalesRow[]) =>
+    estimateElasticities(rows, NOMBRES, ZONAS).results.find((r) => r.zoneId === 'zona-a');
+
+  it('caso A de QA por el camino del cálculo: guarda −2.3412 exacto, el redondeo que va a la base', () => {
+    // 10 → 11 con 100 → 80, más un tercer punto sobre la misma recta.
+    expect(
+      deZonaA([
+        venta('normal', '2026-09-01', 100, 10),
+        venta('normal', '2026-09-02', 80, 11),
+        venta('normal', '2026-09-03', 64, 12.1),
+      ]),
+    ).toMatchObject({ value: -2.3412, classification: 'elastic', rSquared: 1, observations: 3, atypical: false });
+  });
+
+  it('una E positiva (la demanda sube con el precio) sale atypical en el cálculo', () => {
+    // q = 4 · p² → E = +2.
+    expect(
+      deZonaA([
+        venta('normal', '2026-09-01', 16, 2),
+        venta('normal', '2026-09-02', 64, 4),
+        venta('normal', '2026-09-03', 100, 5),
+      ]),
+    ).toMatchObject({ value: 2, classification: 'elastic', atypical: true });
+  });
+
+  it('cantidad 0 (la base la prohíbe) va a insufficient con su motivo, nunca como NaN', () => {
+    const { results, insufficient } = estimateElasticities(
+      [venta('normal', '2026-09-01', 100, 2), venta('normal', '2026-09-02', 0, 4), venta('normal', '2026-09-03', 16, 5)],
+      NOMBRES,
+      ZONAS,
+    );
+
+    expect(results).toEqual([]);
+    expect(insufficient.map((r) => [r.zoneName, r.reason])).toEqual([
+      ['Nacional', 'Hay precios o cantidades no positivos.'],
+      ['Zona A', 'Hay precios o cantidades no positivos.'],
+    ]);
+    for (const r of insufficient) {
+      expect(Number.isFinite(r.observations) && Number.isFinite(r.distinctPrices)).toBe(true);
+    }
+  });
+
+  it('el precio de cada observación es el promedio ponderado por unidades (ingreso entre unidades)', () => {
+    // q = 36 · p^-2 → E = −2. El día 01 se vendieron 3 u a $2 y 1 u a $6:
+    // su precio es $3 (12 / 4), no $4 (promedio simple). Solo así cae en la curva.
+    expect(
+      deZonaA([
+        venta('normal', '2026-09-01', 3, 2),
+        venta('normal', '2026-09-01', 1, 6),
+        venta('normal', '2026-09-02', 9, 2),
+        venta('normal', '2026-09-03', 1, 6),
+      ]),
+    ).toMatchObject({ value: -2, rSquared: 1, observations: 3 });
+  });
 });
 
 describe('aggregateBySegment', () => {
@@ -114,6 +169,41 @@ describe('aggregateBySegment', () => {
     expect(barras.map((b) => [b.label, b.value, b.atypical])).toEqual([
       ['Bajo', 3, true],
       ['Alto', null, null],
+    ]);
+  });
+
+  it('promedia las zonas de cada segmento ponderando por observaciones, sin R², y solo las que le pertenecen', () => {
+    const barras = aggregateBySegment(
+      [
+        { id: 1, name: 'Bajo' },
+        { id: 2, name: 'Alto' },
+      ],
+      [
+        { zoneId: 'z-valle', zoneName: 'Zona Valle', value: -4, rSquared: 0.9, observations: 4 },
+        { zoneId: 'z-centro', zoneName: 'Zona Centro', value: -1, rSquared: 0.8, observations: 2 },
+        // Sin clasificación vigente: no entra en ningún segmento.
+        { zoneId: 'z-sin', zoneName: 'Zona sin segmento', value: -10, rSquared: 0.7, observations: 50 },
+      ],
+      new Map<string, number | null>([
+        ['z-valle', 1],
+        ['z-centro', 1],
+        ['z-sin', null],
+      ]),
+    );
+
+    // (−4 · 4 + −1 · 2) / 6 = −3; el promedio simple daría −2.5.
+    expect(barras).toEqual([
+      {
+        key: '1',
+        label: 'Bajo',
+        value: -3,
+        classification: 'elastic',
+        observations: 6,
+        rSquared: null,
+        atypical: false,
+        zones: ['Zona Centro', 'Zona Valle'],
+      },
+      { key: '2', label: 'Alto', value: null, classification: null, observations: 0, rSquared: null, atypical: null, zones: [] },
     ]);
   });
 });
