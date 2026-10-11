@@ -9,8 +9,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { ContextoPeticion, ReporteDeCorridas } from '../common/reportes/reporte-de-corridas.service';
 import { Pagina, PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
 import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
@@ -75,6 +77,8 @@ export class AssociationService {
     private readonly dataSource: DataSource,
     /** Canastas, productos y usuarios: datos de otros servicios. */
     private readonly fuente: FuenteDatos,
+    /** Bitácora y aviso de cada corrida (ALG-10). */
+    private readonly reporte: ReporteDeCorridas,
   ) {}
 
   /**
@@ -87,8 +91,10 @@ export class AssociationService {
    * no generan corrida. Una falla después de leer los datos deja la
    * corrida registrada como `fallida`.
    */
-  async runApriori(params: AprioriParamsDto, user: SesionUsuario): Promise<ReglaConProductos[]> {
-    if (params.dateFrom && params.dateTo && params.dateTo.slice(0, 10) < params.dateFrom.slice(0, 10)) {
+  async runApriori(params: AprioriParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ReglaConProductos[]> {
+    // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
+    // comparar ese texto es comparar las fechas.
+    if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
 
@@ -99,8 +105,10 @@ export class AssociationService {
 
     const period = this.periodOf(params, lines);
     const maxItemsetSize = params.maxItemsetSize ?? DEFAULT_MAX_ITEMSET_SIZE;
+    const corrida = { tipo: 'asociacion' as const, nombre: 'Apriori', periodo: period };
 
     let runId: string;
+    let resumen: string;
     try {
       const { baskets, categoryOf } = groupByBasket(lines);
       const { rules } = apriori(baskets, {
@@ -118,13 +126,24 @@ export class AssociationService {
         rules: kept,
       });
       runId = (await this.saveRun(run)).id;
+      resumen =
+        `${kept.length} regla(s) con soporte ≥ ${params.minSupport} y confianza ≥ ${params.minConfidence}, ` +
+        `sobre ${baskets.length} canasta(s).`;
     } catch (error) {
-      await this.recordFailedRun(params, user, period, maxItemsetSize, error);
+      const fallidaId = await this.recordFailedRun(params, user, period, maxItemsetSize, error);
+      await this.reporte.terminada(
+        { ...corrida, runId: fallidaId, estado: 'fallida', resumen: 'No se pudo completar la corrida; quedó registrada como fallida.' },
+        user.id,
+        contexto,
+      );
       throw new InternalServerErrorException(
         'No se pudo completar la corrida de Apriori; quedó registrada como fallida.',
       );
     }
 
+    // Fuera del try: el reporte nunca lanza, pero si lo hiciera no debe
+    // convertir una corrida ya guardada en "fallida".
+    await this.reporte.terminada({ ...corrida, runId, estado: 'completada', resumen }, user.id, contexto);
     return this.findRulesOfRun(runId);
   }
 
@@ -255,8 +274,8 @@ export class AssociationService {
   private periodOf(params: AprioriParamsDto, lines: BasketLine[]): Period {
     const days = lines.map((l) => l.day).sort();
     return {
-      start: params.dateFrom?.slice(0, 10) ?? days[0],
-      end: params.dateTo?.slice(0, 10) ?? days[days.length - 1],
+      start: diaDelFiltro(params.dateFrom) ?? days[0],
+      end: diaDelFiltro(params.dateTo) ?? days[days.length - 1],
     };
   }
 
@@ -328,7 +347,7 @@ export class AssociationService {
     period: Period,
     maxItemsetSize: number,
     error: unknown,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const message = error instanceof Error ? error.message : String(error);
     this.logger.error(`Corrida de Apriori fallida: ${message}`, error instanceof Error ? error.stack : undefined);
     try {
@@ -342,9 +361,10 @@ export class AssociationService {
       run.basketsConsidered = null;
       run.errorMessage = message;
       run.parameters = algorithmParameters(params, maxItemsetSize);
-      await this.saveRun(run);
+      return (await this.saveRun(run)).id;
     } catch (recordError) {
       this.logger.error(`No se pudo registrar la corrida fallida: ${String(recordError)}`);
+      return null;
     }
   }
 

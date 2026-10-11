@@ -1,11 +1,16 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 /** Defaults congelados en `docs/contratos/paginacion.md`. */
 export const PAGINA_DEFAULT = 1;
 export const LIMITE_DEFAULT = 20;
 export const LIMITE_MAXIMO = 100;
+/**
+ * Tope de `page` (paginacion.md, QA-ALG56-14): más allá, el OFFSET desborda
+ * el bigint de Postgres y daba 500. Mismo valor que pricing-service.
+ */
+export const PAGINA_MAXIMA = 1_000_000;
 
 /**
  * Paginación estándar — NO CAMBIAR sus nombres ni defaults.
@@ -14,11 +19,12 @@ export const LIMITE_MAXIMO = 100;
  * como excepción en su contrato.
  */
 export class PaginationDto {
-  @ApiPropertyOptional({ default: PAGINA_DEFAULT, description: 'Página, desde 1.' })
+  @ApiPropertyOptional({ default: PAGINA_DEFAULT, description: 'Página, de 1 a 1 000 000.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'page debe ser un número entero.' })
   @Min(1, { message: 'page debe ser mayor a 0.' })
+  @Max(PAGINA_MAXIMA, { message: `page no puede pasar de ${PAGINA_MAXIMA}.` })
   page?: number;
 
   @ApiPropertyOptional({ default: LIMITE_DEFAULT, description: 'Filas por página (mayor a 100 se recorta a 100).' })

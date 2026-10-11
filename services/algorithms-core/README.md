@@ -42,7 +42,8 @@ y `@ApiErrores(...)`; la prueba `test/swagger.spec.ts` falla si falta alguna.
 
 Para probar rutas protegidas: **Authorize** con el `accessToken` de
 `POST http://localhost:3101/v1/auth/login` (correr Apriori: Administrador o Analista
-comercial; consultar: cualquier perfil interno).
+comercial; calcular elasticidad: Responsable de precios, `precios@retail.mx`;
+consultar: cualquier perfil interno).
 
 ## Docker
 
@@ -69,15 +70,28 @@ comercial; consultar: cualquier perfil interno).
 ## Pruebas
 
 ```bash
-npm test                 # unitarias (*.spec.ts dentro de src/): RolesGuard y Apriori; las corre el CI
-npm run test:integracion # integración (test/): requiere el servicio arriba; NO las corre el CI
+npm test                 # unitarias (*.spec.ts dentro de src/); las corre el CI
+npm run test:integracion # integración (test/): requiere el stack arriba y ventas cargadas; NO las corre el CI
 # contra otro host/puerto (p. ej. la imagen de producción):
 ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
 ```
 
 - `src/association/apriori.spec.ts`: ejemplo de libro calculado a mano, antecedente como
   conjunto, corrida reproducible y validación de soporte.
+- `src/elasticity/elasticity.math.spec.ts` y `elasticity.service.spec.ts`: caso A de QA a
+  1e-4, límites de D-18, nacional sobre zona × periodo, precio ponderado, atípica,
+  cantidad 0, desborde de la columna, segmento ponderado, `/chart` y `/current`.
+- `src/config/zona-horaria.spec.ts`: los días se cortan a medianoche de Monterrey.
 - `test/swagger.spec.ts`: cada ruta publica ejemplo JSON y XML y sus errores estándar.
+- `test/elasticidad.spec.ts`: calculate → chart → current contra una regresión calculada
+  aparte desde las ventas crudas (con el tope de la columna y el día de Monterrey fijo en la
+  prueba, no leído de `ZONA_HORARIA`), `outdated` tras una corrida posterior, y 403 para el
+  Analista. Necesita `postgres`, `redis`, `auth-service` y este servicio arriba, y ventas
+  cargadas con alguna entre las 18:00 y las 24:00 locales (p. ej.
+  `db/datos_prueba_100_canastas.csv` importado por core-process). Borra las corridas que crea.
+- `test/corridas.spec.ts`: cada corrida deja `ejecutar_corrida` en la bitácora y avisa
+  `corrida.terminada` (ALG-10). Necesita además `audit-service`, `notifications-service` y
+  `mongodb`. Los eventos de la bitácora se quedan (es append-only).
 
 ## Datos
 
