@@ -18,6 +18,7 @@ import { NuevaSimulacionPanel } from './planeador/NuevaSimulacionPanel';
 import { HistorialSimulacionesPanel } from './planeador/HistorialSimulacionesPanel';
 import { ResultadosSimulacionPanel } from './planeador/ResultadosSimulacionPanel';
 import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab =
   | 'nueva-simulacion'
@@ -118,7 +119,7 @@ function ProductosLectura({ estado }: { estado: UseFetchState<Producto[]> }) {
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {estado.data.map((p) => (
@@ -165,7 +166,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && estado.data.length === 0 && (
         <PlaceholderHonesto
           titulo="Aún no hay transacciones registradas"

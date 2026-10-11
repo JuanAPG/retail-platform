@@ -13,6 +13,8 @@ import { Switch } from '../../components/ui/Switch';
 import { IconCerrar as IconEliminar, IconOjo, IconTiendas } from '../../components/ui/icons';
 import { TiendaFormModal } from './TiendaFormModal';
 import { ConfirmarEliminarTiendaModal } from './ConfirmarEliminarTiendaModal';
+import { EstadoError } from '../../components/EstadoError';
+import { Cargando } from '../../components/Cargando';
 
 interface TiendasPanelProps {
   estado: UseFetchState<Tienda[]>;
@@ -146,10 +148,9 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {estado.loading && !estado.data && <Cargando etiqueta="Cargando tiendas…" />}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar las tiendas: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar las tiendas: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       {estado.data && tiendas.length === 0 && (

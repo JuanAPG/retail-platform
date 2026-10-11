@@ -75,6 +75,11 @@ export function mensajeDeError(
   const propio = Array.isArray(cuerpo?.message) ? cuerpo?.message.join(' ') : cuerpo?.message;
   const detalle = cuerpo?.details?.length ? ` ${cuerpo.details.join(' ')}` : '';
 
+  // Ruta que el servicio todavía no implementa (Nest: "Cannot GET /v1/..."): no se le enseña eso al usuario.
+  if (clase === 'no-encontrado' && /^Cannot (GET|POST|PUT|PATCH|DELETE) /.test(propio ?? '')) {
+    return 'Esta función aún no está disponible en el servicio. Avisa al equipo.';
+  }
+
   switch (clase) {
     case 'red':
       return 'No se pudo conectar con el sistema. Verifica tu conexión e intenta de nuevo en unos minutos.';

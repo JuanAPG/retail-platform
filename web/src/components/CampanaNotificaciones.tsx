@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getNoLeidas, getNotificaciones, marcarLeida, Notificacion } from '../api/notificaciones';
 import { IconCampana } from './ui/icons';
+import { listaSegura } from '../api/seguro';
 
 const REFRESCO_MS = 60000;
 
@@ -21,7 +22,9 @@ export function CampanaNotificaciones({ userId }: { userId: string }) {
   const [error, setError] = useState(false);
 
   const contar = useCallback(() => {
-    getNoLeidas().then(setNoLeidas).catch(() => undefined);
+    getNoLeidas()
+      .then((n) => setNoLeidas(Number.isFinite(Number(n)) ? Number(n) : 0))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export function CampanaNotificaciones({ userId }: { userId: string }) {
     if (!nueva) return;
     setError(false);
     getNotificaciones(10)
-      .then((p) => setLista(p.data))
+      .then((p) => setLista(listaSegura<Notificacion>(p?.data)))
       .catch(() => setError(true));
   }
 
@@ -45,7 +48,7 @@ export function CampanaNotificaciones({ userId }: { userId: string }) {
       await marcarLeida(n.id);
       setLista(
         (l) =>
-          l?.map((x) => (x.id === n.id ? { ...x, readBy: [...x.readBy, { userId, readAt: new Date().toISOString() }] } : x)) ??
+          l?.map((x) => (x.id === n.id ? { ...x, readBy: [...(x.readBy ?? []), { userId, readAt: new Date().toISOString() }] } : x)) ??
           null,
       );
       contar();
@@ -54,7 +57,7 @@ export function CampanaNotificaciones({ userId }: { userId: string }) {
     }
   }
 
-  const leida = (n: Notificacion) => n.readBy.some((r) => r.userId === userId);
+  const leida = (n: Notificacion) => (n.readBy ?? []).some((r) => r.userId === userId);
 
   return (
     <div className="relative ml-auto">

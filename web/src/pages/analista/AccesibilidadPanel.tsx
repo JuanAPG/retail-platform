@@ -7,6 +7,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { calcularAccesibilidad, getHistorialAccesibilidad, IndiceAccesibilidad } from '../../api/accesibilidad';
 import { mensajeDeError } from '../../api/errores';
 import { IncomeSegment, Zona } from '../../types';
+import { EstadoError } from '../../components/EstadoError';
 
 const formatoPorcentaje = new Intl.NumberFormat('es-MX', { style: 'percent', maximumFractionDigits: 1 });
 const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -112,7 +113,7 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
       <div className="flex flex-col gap-2">
         <h2 className="px-1 text-xs font-bold uppercase tracking-wide text-teal/70">Historial de la zona</h2>
         {!zonaId && <p className="px-1 text-sm text-teal/70">Elige una zona para ver sus análisis anteriores.</p>}
-        {historial.error && <ErrorText>{historial.error}</ErrorText>}
+        {historial.error && <EstadoError mensaje={historial.error} onReintentar={historial.reintentable ? historial.refetch : undefined} />}
         {zonaId && historial.data && historial.data.length === 0 && (
           <p className="px-1 text-sm text-teal/70">Esta zona no tiene análisis de accesibilidad todavía.</p>
         )}

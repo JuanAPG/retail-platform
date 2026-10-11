@@ -17,6 +17,7 @@ import {
 import { ProductoFormModal } from './ProductoFormModal';
 import { ConfirmarEliminarProductoModal } from './ConfirmarEliminarProductoModal';
 import { PresentacionesModal } from './PresentacionesModal';
+import { EstadoError } from '../../components/EstadoError';
 
 interface ProductosPanelProps {
   estado: UseFetchState<Producto[]>;
@@ -170,9 +171,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
         </div>
       )}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar los productos: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar los productos: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       <div className="flex items-center justify-between px-1">

@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 import { CtaButton } from '../../components/ui/CtaButton';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { StatusPill } from '../../components/ui/StatusPill';
+import { listaSegura } from '../../api/seguro';
 
 const moneda = (v: string | number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
 
@@ -15,7 +16,7 @@ const inputClass =
   'h-14 rounded-full border-2 border-transparent bg-arena px-5 text-[15px] text-tinta outline-none transition focus:border-vino focus:bg-marfil hover:border-salvia/60 disabled:opacity-50';
 const labelClass = 'flex flex-col gap-1.5 text-[13px] font-semibold text-teal';
 
-const ESTATUS: Record<PropuestaPrecio['status'], { tono: 'ok' | 'warn' | 'neutral'; texto: string }> = {
+const ESTATUS: Record<string, { tono: 'ok' | 'warn' | 'neutral'; texto: string }> = {
   pendiente: { tono: 'neutral', texto: 'En revisión' },
   aprobado: { tono: 'ok', texto: 'Aprobada' },
   rechazado: { tono: 'warn', texto: 'Rechazada' },
@@ -28,6 +29,7 @@ const ESTATUS: Record<PropuestaPrecio['status'], { tono: 'ok' | 'warn' | 'neutra
  */
 export function CambioPrecioPanel({ productos, puedeProponer }: { productos: Producto[]; puedeProponer: boolean }) {
   const propuestas = useFetch(() => getPropuestasPrecio({ limit: 50 }), []);
+  const filas = listaSegura<PropuestaPrecio>(propuestas.data?.data);
 
   const [presentacionId, setPresentacionId] = useState('');
   const [precio, setPrecio] = useState('');
@@ -36,9 +38,9 @@ export function CambioPrecioPanel({ productos, puedeProponer }: { productos: Pro
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const opciones = productos
+  const opciones = listaSegura<Producto>(productos)
     .filter((p) => p.estatus === 'activo')
-    .flatMap((p) => p.presentaciones.filter((pr) => pr.activo).map((pr) => ({ id: pr.id, texto: `${p.nombre} — ${pr.nombre}` })));
+    .flatMap((p) => (p.presentaciones ?? []).filter((pr) => pr.activo).map((pr) => ({ id: pr.id, texto: `${p.nombre} — ${pr.nombre}` })));
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -67,7 +69,7 @@ export function CambioPrecioPanel({ productos, puedeProponer }: { productos: Pro
       <h1 className="font-display text-4xl text-vino">Cambio de precio</h1>
 
       {puedeProponer ? (
-        <form onSubmit={enviar} className="flex flex-wrap items-end gap-4">
+        <form noValidate onSubmit={enviar} className="flex flex-wrap items-end gap-4">
           <label className={labelClass}>
             Presentación
             <select className={inputClass} value={presentacionId} onChange={(e) => setPresentacionId(e.target.value)}>
@@ -104,14 +106,14 @@ export function CambioPrecioPanel({ productos, puedeProponer }: { productos: Pro
         <h2 className="font-display text-2xl text-vino">Mis propuestas</h2>
         {propuestas.loading && <p className="text-sm text-teal/70">Cargando…</p>}
         {propuestas.error && <EstadoError mensaje={propuestas.error} onReintentar={propuestas.reintentable ? propuestas.refetch : undefined} />}
-        {propuestas.data?.data.length === 0 && <p className="text-sm text-teal/70">Todavía no has enviado propuestas de precio.</p>}
-        {propuestas.data?.data.map((p) => (
+        {propuestas.data && filas.length === 0 && <p className="text-sm text-teal/70">Todavía no has enviado propuestas de precio.</p>}
+        {filas.map((p) => (
           <Card key={p.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-tinta">
                 {p.presentation?.producto?.nombre ?? 'Producto'} — {p.presentation?.nombre}
               </span>
-              <StatusPill tone={ESTATUS[p.status].tono}>{ESTATUS[p.status].texto}</StatusPill>
+              <StatusPill tone={(ESTATUS[p.status] ?? ESTATUS.pendiente).tono}>{(ESTATUS[p.status] ?? ESTATUS.pendiente).texto}</StatusPill>
             </div>
             <span className="font-data text-sm text-teal">{moneda(p.proposedPrice)}</span>
             {p.status === 'rechazado' && p.rejectionReason && <span className="text-xs text-vino">Motivo: {p.rejectionReason}</span>}

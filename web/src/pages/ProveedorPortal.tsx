@@ -16,6 +16,7 @@ import { Select } from '../components/ui/Select';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ErrorText } from '../components/ui/ErrorText';
 import { IconCanastas, IconCheck, IconFlecha, IconPrecios, IconProductos } from '../components/ui/icons';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab = 'mis-productos' | 'proponer-alta' | 'mis-solicitudes' | 'cambio-precio' | 'mi-perfil';
 
@@ -179,7 +180,7 @@ export function ProveedorPortal() {
             }
           />
 
-          {productos.error && <ErrorText>{productos.error}</ErrorText>}
+          {productos.error && <EstadoError mensaje={productos.error} onReintentar={productos.reintentable ? productos.refetch : undefined} />}
 
           {productos.data && enCatalogo.length === 0 && (
             <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

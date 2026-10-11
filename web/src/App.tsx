@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
@@ -5,12 +6,12 @@ import { portalDelRol } from './routes/portalPorRol';
 import { PantallaCargando } from './components/PantallaCargando';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterProveedorPage } from './pages/RegisterProveedorPage';
-import { AdminPortal } from './pages/AdminPortal';
-import { CatalogoPortal } from './pages/CatalogoPortal';
-import { AnalistaPortal } from './pages/AnalistaPortal';
-import { AuditorPortal } from './pages/AuditorPortal';
-import { PlaneadorPortal } from './pages/PlaneadorPortal';
-import { ProveedorPortal } from './pages/ProveedorPortal';
+const AdminPortal = lazy(() => import('./pages/AdminPortal').then((m) => ({ default: m.AdminPortal })));
+const CatalogoPortal = lazy(() => import('./pages/CatalogoPortal').then((m) => ({ default: m.CatalogoPortal })));
+const AnalistaPortal = lazy(() => import('./pages/AnalistaPortal').then((m) => ({ default: m.AnalistaPortal })));
+const AuditorPortal = lazy(() => import('./pages/AuditorPortal').then((m) => ({ default: m.AuditorPortal })));
+const PlaneadorPortal = lazy(() => import('./pages/PlaneadorPortal').then((m) => ({ default: m.PlaneadorPortal })));
+const ProveedorPortal = lazy(() => import('./pages/ProveedorPortal').then((m) => ({ default: m.ProveedorPortal })));
 import { NotAuthorizedPage } from './pages/NotAuthorizedPage';
 
 function RaizAutenticada() {
@@ -31,6 +32,7 @@ function AppRoutes() {
   }
 
   return (
+    <Suspense fallback={<PantallaCargando />}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro-proveedor" element={<RegisterProveedorPage />} />
@@ -88,6 +90,7 @@ function AppRoutes() {
       <Route path="/" element={<RaizAutenticada />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 

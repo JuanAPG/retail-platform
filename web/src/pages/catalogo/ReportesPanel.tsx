@@ -18,6 +18,7 @@ import { Card } from '../../components/ui/Card';
 import { CtaButton } from '../../components/ui/CtaButton';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { StatusPill } from '../../components/ui/StatusPill';
+import { listaSegura } from '../../api/seguro';
 
 const GERENTE = 'Gerente de categoría';
 
@@ -66,13 +67,14 @@ function DetalleValor({ valor }: { valor: unknown }) {
 function DetalleReporte({ reporte, alExportado }: { reporte: Reporte; alExportado: () => void }) {
   const [exportando, setExportando] = useState<'pdf' | 'xlsx' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const noDisponibles = reporte.secciones.filter((s) => !s.disponible).length;
+  const secciones = listaSegura<IndicadorReporte>(reporte.secciones);
+  const noDisponibles = secciones.filter((s) => !s.disponible).length;
 
   async function exportar(formato: 'pdf' | 'xlsx') {
     setError(null);
     setExportando(formato);
     try {
-      await exportarReporte(reporte.id, formato);
+      await exportarReporte(reporte.id, formato, reporte.creadoEn);
       alExportado();
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudo exportar el reporte.'));
@@ -89,7 +91,7 @@ function DetalleReporte({ reporte, alExportado }: { reporte: Reporte; alExportad
         </StatusPill>
         {noDisponibles > 0 && <StatusPill tone="warn">{`${noDisponibles} indicador(es) no disponible(s)`}</StatusPill>}
         <span className="text-xs text-teal/70">
-          {reporte.parametros.dateFrom} a {reporte.parametros.dateTo} · {fechaHora(reporte.creadoEn)}
+          {reporte.parametros?.dateFrom ?? '—'} a {reporte.parametros?.dateTo ?? '—'} · {fechaHora(reporte.creadoEn)}
         </span>
       </div>
 
@@ -101,7 +103,7 @@ function DetalleReporte({ reporte, alExportado }: { reporte: Reporte; alExportad
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {reporte.secciones.map((s) => (
+        {secciones.map((s) => (
           <Card key={s.clave}>
             <span className="text-[13px] font-semibold text-teal">{s.nombre}</span>
             <span className={`font-data text-lg ${s.disponible ? 'text-tinta' : 'text-vino'}`}>{formatearValor(s)}</span>
@@ -135,6 +137,7 @@ export function ReportesPanel() {
 
   const historial = useFetch(() => getReportes({ limit: 20 }), []);
   const zonas = useFetch(getZonas, []);
+  const filas = listaSegura<Reporte>(historial.data?.data);
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState(hoyISO());
@@ -186,7 +189,7 @@ export function ReportesPanel() {
       <SectionHeader title="Reportes ejecutivos" description="16 indicadores del análisis comercial, guardados en el historial y exportables." />
 
       {puedeGenerar && (
-        <form onSubmit={generar} className="flex flex-wrap items-end gap-4 px-6">
+        <form noValidate onSubmit={generar} className="flex flex-wrap items-end gap-4 px-6">
           <label className={labelClass}>
             Desde
             <input type="date" className={inputClass} value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
@@ -199,7 +202,7 @@ export function ReportesPanel() {
             Zona (opcional)
             <select className={inputClass} value={zoneId} onChange={(e) => setZoneId(e.target.value)} disabled={zonas.loading}>
               <option value="">Todas las zonas</option>
-              {(zonas.data ?? []).map((z) => (
+              {listaSegura<{ id: string; nombre: string }>(zonas.data).map((z) => (
                 <option key={z.id} value={z.id}>
                   {z.nombre}
                 </option>
@@ -231,22 +234,22 @@ export function ReportesPanel() {
         <h2 className="font-display text-2xl text-vino">Historial</h2>
         {historial.loading && <p className="text-sm text-teal/70">Cargando historial…</p>}
         {historial.error && <EstadoError mensaje={historial.error} onReintentar={historial.reintentable ? historial.refetch : undefined} />}
-        {historial.data && historial.data.data.length === 0 && (
+        {historial.data && filas.length === 0 && (
           <EmptyState title="Aún no se ha generado ningún reporte" description="Genera un reporte ejecutivo con los hallazgos del análisis comercial." />
         )}
-        {historial.data?.data.map((r) => (
+        {filas.map((r) => (
           <Card key={r.id} onClick={() => abrir(r.id)}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-tinta">
-                {r.parametros.dateFrom} a {r.parametros.dateTo}
+                {r.parametros?.dateFrom ?? '—'} a {r.parametros?.dateTo ?? '—'}
               </span>
               <StatusPill tone={r.estado === 'exportado' ? 'ok' : 'neutral'}>{r.estado === 'exportado' ? 'Exportado' : 'Generado'}</StatusPill>
             </div>
             <span className="text-xs text-teal/70">{abriendo === r.id ? 'Abriendo…' : fechaHora(r.creadoEn)}</span>
           </Card>
         ))}
-        {historial.data && historial.data.total > historial.data.data.length && (
-          <p className="text-xs text-teal/60">Mostrando los {historial.data.data.length} más recientes de {historial.data.total}.</p>
+        {historial.data && Number(historial.data.total) > filas.length && (
+          <p className="text-xs text-teal/60">Mostrando los {filas.length} más recientes de {historial.data.total}.</p>
         )}
       </div>
     </section>

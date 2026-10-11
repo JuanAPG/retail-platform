@@ -1,4 +1,4 @@
-import { authApi, leerToken, leerUsuarioGuardado } from './client';
+import { authApi, leerToken, leerUsuarioGuardado, renovarSesion } from './client';
 import { AuthUser, LoginResponse } from '../types';
 
 export interface RegisterProveedorPayload {
@@ -22,12 +22,22 @@ export async function login(email: string, password: string): Promise<LoginRespo
  * y rol, y el nombre se conserva del usuario guardado al iniciar sesión.
  */
 export async function me(): Promise<AuthUser> {
-  const token = leerToken();
+  const validar = async (token: string) =>
+    (
+      await authApi.post<{ active: boolean; user: { id: string; email: string; rol: string } | null }>(
+        '/auth/validate',
+        { token },
+      )
+    ).data;
+
+  let token = leerToken();
   if (!token) throw new Error('Sin token');
-  const { data } = await authApi.post<{
-    active: boolean;
-    user: { id: string; email: string; rol: string } | null;
-  }>('/auth/validate', { token });
+  let data = await validar(token);
+  // El access token dura poco: al recargar con uno vencido se intenta renovar antes de dar la sesión por muerta.
+  if (!data.active && (await renovarSesion())) {
+    token = leerToken();
+    if (token) data = await validar(token);
+  }
   if (!data.active || !data.user) throw new Error('Sesión inactiva');
   const guardado = leerUsuarioGuardado();
   return {

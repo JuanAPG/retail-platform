@@ -10,6 +10,7 @@ import { IconAsociacion } from '../../components/ui/icons';
 import { CorridaAprioriForm } from './CorridaAprioriForm';
 import { CorridaDetalle } from './CorridaDetalle';
 import { EstadoCorridaBadge, formatearFechaHora, porcentaje } from './corridaFormato';
+import { EstadoError } from '../../components/EstadoError';
 
 /** M10 — Reglas de asociación: correr Apriori, consultar el historial de corridas y abrir una con sus parámetros, supuestos y reglas. */
 export function ReglasAsociacionPanel() {
@@ -75,7 +76,7 @@ export function ReglasAsociacionPanel() {
         </div>
       )}
 
-      {corridas.error && <ErrorText>{corridas.error}</ErrorText>}
+      {corridas.error && <EstadoError mensaje={corridas.error} onReintentar={corridas.reintentable ? corridas.refetch : undefined} />}
 
       {!corridas.loading && !corridas.error && lista.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

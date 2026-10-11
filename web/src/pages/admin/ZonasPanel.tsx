@@ -12,6 +12,8 @@ import { Switch } from '../../components/ui/Switch';
 import { IconCerrar as IconEliminar, IconOjo, IconZonas } from '../../components/ui/icons';
 import { ZonaFormModal } from './ZonaFormModal';
 import { ConfirmarEliminarZonaModal } from './ConfirmarEliminarZonaModal';
+import { EstadoError } from '../../components/EstadoError';
+import { Cargando } from '../../components/Cargando';
 
 interface ZonasPanelProps {
   estado: UseFetchState<Zona[]>;
@@ -116,10 +118,9 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {estado.loading && !estado.data && <Cargando etiqueta="Cargando zonas…" />}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar las zonas: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar las zonas: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       {estado.data && zonas.length === 0 && (

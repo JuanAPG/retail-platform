@@ -10,6 +10,7 @@ import { ErrorText } from '../../components/ui/ErrorText';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { TextArea } from '../../components/ui/TextArea';
 import { IconPrecios } from '../../components/ui/icons';
+import { listaSegura } from '../../api/seguro';
 
 const moneda = (v: string | number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
 
@@ -81,7 +82,7 @@ export function AprobacionesPrecioPanel() {
     }
   }
 
-  const items: ApprovalItem[] = (pendientes.data?.data ?? []).map((p) => ({
+  const items: ApprovalItem[] = listaSegura<PropuestaPrecio>(pendientes.data?.data).map((p) => ({
     id: p.id,
     avatar: <IconPrecios className="h-[18px] w-[18px]" />,
     title: `${p.presentation?.producto?.nombre ?? 'Producto'} — ${p.presentation?.nombre ?? ''}`.trim(),
@@ -118,7 +119,7 @@ export function AprobacionesPrecioPanel() {
             {tiendas.loading && <p className="text-sm text-teal/70">Cargando tiendas…</p>}
             {tiendas.error && <EstadoError mensaje={tiendas.error} onReintentar={tiendas.reintentable ? tiendas.refetch : undefined} />}
             <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-              {(tiendas.data ?? []).map((t) => (
+              {listaSegura<{ id: string; nombre: string }>(tiendas.data).map((t) => (
                 <label key={t.id} className="flex items-center gap-2.5 rounded-full bg-arena px-4 py-2 text-sm text-tinta">
                   <input
                     type="checkbox"

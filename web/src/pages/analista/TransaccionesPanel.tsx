@@ -8,6 +8,7 @@ import { ErrorText } from '../../components/ui/ErrorText';
 import { IconTransacciones } from '../../components/ui/icons';
 import { TransaccionFormModal } from './TransaccionFormModal';
 import { ImportarCsvPanel } from './ImportarCsvPanel';
+import { EstadoError } from '../../components/EstadoError';
 
 interface TransaccionesPanelProps {
   busqueda: string;
@@ -101,7 +102,7 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
         </div>
       )}
 
-      {transacciones.error && <ErrorText>{transacciones.error}</ErrorText>}
+      {transacciones.error && <EstadoError mensaje={transacciones.error} onReintentar={transacciones.reintentable ? transacciones.refetch : undefined} />}
 
       {!transacciones.loading && !transacciones.error && todas.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

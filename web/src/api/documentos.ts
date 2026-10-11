@@ -46,10 +46,12 @@ export const getReportes = (params: { page?: number; limit?: number } = {}) =>
 export const getReporte = (id: string) => documentsApi.get<Reporte>(`/reports/${id}`).then((r) => r.data);
 
 /** Descarga el PDF o Excel como archivo; el nombre lo manda el servicio en Content-Disposition. */
-export async function exportarReporte(id: string, format: 'pdf' | 'xlsx'): Promise<void> {
+export async function exportarReporte(id: string, format: 'pdf' | 'xlsx', creadoEn?: string): Promise<void> {
   const r = await documentsApi.get<Blob>(`/reports/${id}/export`, { params: { format }, responseType: 'blob' });
   const disposicion = String(r.headers['content-disposition'] ?? '');
-  const nombre = /filename="?([^"]+)"?/.exec(disposicion)?.[1] ?? `reporte.${format}`;
+  // Sin el header (CORS no lo expone si el servicio no lo declara) se arma el mismo nombre que da el servicio.
+  const fecha = creadoEn ? creadoEn.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const nombre = /filename="?([^"]+)"?/.exec(disposicion)?.[1] ?? `reporte-ejecutivo-${fecha}.${format}`;
   const url = URL.createObjectURL(r.data);
   const a = document.createElement('a');
   a.href = url;

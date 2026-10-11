@@ -17,6 +17,7 @@ import { StatusPill } from '../components/ui/StatusPill';
 import { ErrorText } from '../components/ui/ErrorText';
 import { IconAuditoria, IconCandado, IconFlecha } from '../components/ui/icons';
 import { AccionAuditoria, Producto, Proveedor, Tienda, Transaction, Usuario, Zona } from '../types';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab = 'bitacora' | 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'productos' | 'precios' | 'transacciones';
 
@@ -204,7 +205,7 @@ function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
       </div>
 
       {bitacora.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {bitacora.error && <ErrorText>{bitacora.error}</ErrorText>}
+      {bitacora.error && <EstadoError mensaje={bitacora.error} onReintentar={bitacora.reintentable ? bitacora.refetch : undefined} />}
 
       {bitacora.data && eventos.length === 0 && (
         <Placeholder
@@ -274,7 +275,7 @@ function UsuariosLectura({ estado }: { estado: UseFetchState<Usuario[]> }) {
     <div className="flex flex-col gap-6">
       <EncabezadoLectura titulo="Usuarios" />
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {estado.data.map((u) => (
@@ -381,7 +382,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
     <div className="flex flex-col gap-6">
       <EncabezadoLectura titulo="Transacciones" />
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && estado.data.length === 0 && (
         <Placeholder titulo="Aún no hay transacciones registradas" descripcion="Las registra el Analista comercial; aquí solo se consultan." />
       )}

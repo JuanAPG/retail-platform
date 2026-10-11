@@ -7,6 +7,7 @@ import { mensajeDeError } from '../../api/errores';
 import { agregarPresentacion, eliminarPresentacion, getPresentaciones } from '../../api/catalogo';
 import { useFetch } from '../../hooks/useFetch';
 import { Producto, UnidadMedida } from '../../types';
+import { EstadoError } from '../../components/EstadoError';
 
 interface PresentacionesModalProps {
   producto: Producto;
@@ -78,7 +79,7 @@ export function PresentacionesModal({ producto, unidadesMedida, onCerrar }: Pres
       onCerrar={onCerrar}
     >
       {presentaciones.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {presentaciones.error && <ErrorText>{presentaciones.error}</ErrorText>}
+      {presentaciones.error && <EstadoError mensaje={presentaciones.error} onReintentar={presentaciones.reintentable ? presentaciones.refetch : undefined} />}
 
       {presentaciones.data && presentaciones.data.length > 0 && (
         <ul className="mb-4 divide-y divide-salvia/20 rounded-card border-2 border-arena">

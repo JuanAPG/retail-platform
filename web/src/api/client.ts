@@ -87,7 +87,7 @@ interface ReintentableConfig extends InternalAxiosRequestConfig {
 let renovando: Promise<boolean> | null = null;
 
 /** Rota el par de tokens una sola vez aunque fallen varias peticiones a la vez. */
-function renovarSesion(): Promise<boolean> {
+export function renovarSesion(): Promise<boolean> {
   const refreshToken = leerRefresh();
   if (!refreshToken) return Promise.resolve(false);
   if (!renovando) {

@@ -4,6 +4,8 @@ import { Hero } from '../../components/ui/Hero';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { IconProveedores } from '../../components/ui/icons';
+import { EstadoError } from '../../components/EstadoError';
+import { Cargando } from '../../components/Cargando';
 
 interface ProveedoresPanelProps {
   estado: UseFetchState<Proveedor[]>;
@@ -30,10 +32,9 @@ export function ProveedoresPanel({ estado }: ProveedoresPanelProps) {
         }
       />
 
+      {estado.loading && !estado.data && <Cargando etiqueta="Cargando proveedores…" />}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar los proveedores: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar los proveedores: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       {estado.data && proveedores.length === 0 && (

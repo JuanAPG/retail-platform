@@ -9,6 +9,7 @@ import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
 import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
 import { ReportesPanel } from './catalogo/ReportesPanel';
+import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
@@ -18,6 +19,7 @@ import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ApprovalQueue } from '../components/ui/ApprovalQueue';
 import { Producto } from '../types';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab =
   | 'catalogo-productos'
@@ -128,7 +130,7 @@ export function CatalogoPortal() {
         <div className="flex flex-col gap-6">
           <h1 className="font-display text-4xl text-vino">Categorías</h1>
           {categorias.loading && <p className="text-sm text-teal/70">Cargando categorías…</p>}
-          {categorias.error && <p className="text-sm text-vino">{categorias.error}</p>}
+          {categorias.error && <EstadoError mensaje={categorias.error} onReintentar={categorias.reintentable ? categorias.refetch : undefined} />}
           {categorias.data && categorias.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {categorias.data.map((c) => (
@@ -153,15 +155,7 @@ export function CatalogoPortal() {
 
       {tab === 'gestion-precios' && <PreciosPanel />}
 
-      {tab === 'elasticidad' && (
-        <section>
-          <SectionHeader title="Elasticidad precio-demanda" />
-          <EmptyState
-            title="Aún no hay cálculos de elasticidad"
-            description="Ejecuta un cálculo por producto y zona para ver los resultados aquí."
-          />
-        </section>
-      )}
+      {tab === 'elasticidad' && <ElasticidadPanel />}
 
       {(tab === 'reportes' || tab === 'reportes-precios') && <ReportesPanel />}
 
@@ -172,7 +166,7 @@ export function CatalogoPortal() {
             <StatusPill tone="neutral">Lectura</StatusPill>
           </div>
           {tiendas.loading && <p className="text-sm text-teal/70">Cargando tiendas…</p>}
-          {tiendas.error && <p className="text-sm text-vino">{tiendas.error}</p>}
+          {tiendas.error && <EstadoError mensaje={tiendas.error} onReintentar={tiendas.reintentable ? tiendas.refetch : undefined} />}
           {tiendas.data && tiendas.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {tiendas.data.map((t) => (
@@ -202,7 +196,7 @@ export function CatalogoPortal() {
             <StatusPill tone="neutral">Lectura</StatusPill>
           </div>
           {proveedores.loading && <p className="text-sm text-teal/70">Cargando proveedores…</p>}
-          {proveedores.error && <p className="text-sm text-vino">{proveedores.error}</p>}
+          {proveedores.error && <EstadoError mensaje={proveedores.error} onReintentar={proveedores.reintentable ? proveedores.refetch : undefined} />}
           {proveedores.data && proveedores.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {proveedores.data.map((p) => (
