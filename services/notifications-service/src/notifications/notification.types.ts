@@ -252,21 +252,26 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
       'pricing PATCH price-observations/:id/approve|reject es D1 APRUEBAN_PRECIOS = [Responsable de precios]. El aviso va a quien capturó la observación (recipientUserId).',
   },
 
-  // ALG-10: algorithms-core POST /v1/association/run ->
+  // ALG-10: algorithms-core POST /v1/association/apriori/run ->
   // @Roles(Administrador, Analista comercial). De ~40 corridas medidas,
   // ninguna llegó a audit-service ni emitió notificación — el emisor de
   // auditoría y el de este evento se agregan en algorithms-core; aquí
   // solo se abre el catálogo para que no lo rechace con 403/400. Vuelve a
   // quien lanzó la corrida (dinámico, igual que escenario.generado):
-  // es un resultado suyo, no de un área. `analytics-stats` (clustering,
-  // RF-16) todavía no tiene endpoints propios (solo scaffolding), así que
-  // no se agrega a `origenes` hasta que exista el `@Roles` real que lo
-  // respalde. Agregado 2026-10-10.
+  // es un resultado suyo, no de un área. Corregido 2026-10-11: cubre
+  // TANTO corridas de asociación COMO de elasticidad (el precio-demanda
+  // también la lanza el Responsable de precios, no solo Administrador y
+  // Analista), aunque algorithms-core todavía no tiene módulo de
+  // elasticidad — cuando exista, su `@Roles` real es el que manda, no
+  // este comentario. `analytics-stats` (clustering, RF-16) todavía no
+  // tiene endpoints propios (solo scaffolding), así que no se agrega a
+  // `origenes` hasta que exista el `@Roles` real que lo respalde.
+  // Agregado 2026-10-10, corregido 2026-10-11.
   'corrida.terminada': {
-    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
+    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
     fundamento:
-      'algorithms-core POST association/run es de Administrador y Analista comercial. Destino: quien lanzó la corrida (recipientUserId), igual criterio que escenario.generado.',
+      'algorithms-core POST association/apriori/run es de Administrador y Analista comercial; una futura corrida de elasticidad la lanza también el Responsable de precios. Destino: quien lanzó la corrida (recipientUserId), igual criterio que escenario.generado.',
   },
 
   // decision: POST /v1/simulation/price|presentation -> @Roles(Administrador, Analista).
