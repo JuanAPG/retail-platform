@@ -1,4 +1,6 @@
-import { IconBuscar, IconCampana } from './icons';
+import { useAuth } from '../../context/AuthContext';
+import { CampanaNotificaciones } from '../CampanaNotificaciones';
+import { IconBuscar } from './icons';
 
 interface HeaderBuscador {
   placeholder: string;
@@ -15,7 +17,8 @@ interface HeaderProps {
 }
 
 /** DESIGN.md §4/§5 — Header: rol + saludo, buscador y campana. */
-export function Header({ rolLabel, nombre, buscador, onNotificaciones, notificacionesPendientes }: HeaderProps) {
+export function Header({ rolLabel, nombre, buscador }: HeaderProps) {
+  const { usuario } = useAuth();
   return (
     <header className="flex flex-wrap items-center gap-4">
       <div className="flex min-w-0 flex-shrink-0 flex-col sm:min-w-[260px]">
@@ -37,17 +40,7 @@ export function Header({ rolLabel, nombre, buscador, onNotificaciones, notificac
         </label>
       )}
 
-      <button
-        type="button"
-        onClick={onNotificaciones}
-        aria-label="Notificaciones"
-        className="relative ml-auto flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-arena text-teal transition hover:-rotate-[8deg] hover:bg-teal hover:text-arena"
-      >
-        <IconCampana />
-        {notificacionesPendientes && (
-          <span className="absolute right-3.5 top-3 h-2.5 w-2.5 rounded-full border-2 border-arena bg-vino" />
-        )}
-      </button>
+      {usuario && <CampanaNotificaciones userId={usuario.id} />}
     </header>
   );
 }

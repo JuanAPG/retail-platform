@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { login as loginRequest, me as meRequest } from '../api/auth';
+import { login as loginRequest, logoutRemoto, me as meRequest } from '../api/auth';
 import { guardarSesion, guardarUsuario, leerToken, limpiarSesion } from '../api/client';
 import { AuthUser } from '../types';
 
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    void logoutRemoto();
     limpiarSesion();
     setUsuario(null);
   }

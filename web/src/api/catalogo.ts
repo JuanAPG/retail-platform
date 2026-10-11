@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { catalogApi, traerTodo } from './client';
 import {
   Tienda,
   Zona,
@@ -14,9 +14,9 @@ import {
 
 // Los usuarios viven en api/usuarios.ts junto con su CRUD.
 
-export const getTiendas = () => apiClient.get<Tienda[]>('/stores').then((r) => r.data);
-export const getZonas = () => apiClient.get<Zona[]>('/zones').then((r) => r.data);
-export const getMunicipios = () => apiClient.get<Municipio[]>('/municipalities').then((r) => r.data);
+export const getTiendas = () => traerTodo<Tienda>(catalogApi, '/stores');
+export const getZonas = () => traerTodo<Zona>(catalogApi, '/zones');
+export const getMunicipios = () => catalogApi.get<Municipio[]>('/municipalities').then((r) => r.data);
 
 // --- M03 Zonas: CRUD + comparación --------------------------------------
 
@@ -29,13 +29,13 @@ export interface CrearZonaPayload {
 export type ActualizarZonaPayload = Partial<CrearZonaPayload> & { activo?: boolean };
 
 export const crearZona = (payload: CrearZonaPayload) =>
-  apiClient.post<Zona>('/zones', payload).then((r) => r.data);
+  catalogApi.post<Zona>('/zones', payload).then((r) => r.data);
 
 export const actualizarZona = (id: string, payload: ActualizarZonaPayload) =>
-  apiClient.patch<Zona>(`/zones/${id}`, payload).then((r) => r.data);
+  catalogApi.patch<Zona>(`/zones/${id}`, payload).then((r) => r.data);
 
 export const eliminarZona = (id: string) =>
-  apiClient.delete<void>(`/zones/${id}`).then((r) => r.data);
+  catalogApi.delete<void>(`/zones/${id}`).then((r) => r.data);
 
 export interface ZoneComparisonRow {
   zoneId: string;
@@ -48,7 +48,7 @@ export interface ZoneComparisonRow {
 }
 
 export const compararZonas = (zoneIds: string[]) =>
-  apiClient
+  catalogApi
     .get<ZoneComparisonRow[]>('/zones/compare', { params: { ids: zoneIds.join(',') } })
     .then((r) => r.data);
 
@@ -75,23 +75,23 @@ export type ActualizarTiendaPayload = Partial<CrearTiendaPayload> & { activo?: b
 
 /** Catálogo para el selector de CP del formulario de alta/edición de tienda. */
 export const getCodigosPostales = () =>
-  apiClient.get<CodigoPostal[]>('/stores/catalog/postal-codes').then((r) => r.data);
+  catalogApi.get<CodigoPostal[]>('/stores/catalog/postal-codes').then((r) => r.data);
 
 export const crearTienda = (payload: CrearTiendaPayload) =>
-  apiClient.post<Tienda>('/stores', payload).then((r) => r.data);
+  catalogApi.post<Tienda>('/stores', payload).then((r) => r.data);
 
 export const actualizarTienda = (id: string, payload: ActualizarTiendaPayload) =>
-  apiClient.patch<Tienda>(`/stores/${id}`, payload).then((r) => r.data);
+  catalogApi.patch<Tienda>(`/stores/${id}`, payload).then((r) => r.data);
 
 export const eliminarTienda = (id: string) =>
-  apiClient.delete<void>(`/stores/${id}`).then((r) => r.data);
+  catalogApi.delete<void>(`/stores/${id}`).then((r) => r.data);
 export const getCategorias = () =>
-  apiClient.get<CategoriaProducto[]>('/product-categories').then((r) => r.data);
+  catalogApi.get<CategoriaProducto[]>('/product-categories').then((r) => r.data);
 export const getUnidadesMedida = () =>
-  apiClient.get<UnidadMedida[]>('/units').then((r) => r.data);
-export const getProductos = () => apiClient.get<Producto[]>('/products').then((r) => r.data);
+  catalogApi.get<UnidadMedida[]>('/units').then((r) => r.data);
+export const getProductos = () => traerTodo<Producto>(catalogApi, '/products');
 export const getProveedores = () =>
-  apiClient.get<Proveedor[]>('/providers').then((r) => r.data);
+  traerTodo<Proveedor>(catalogApi, '/providers');
 
 // --- Flujo de alta de producto propuesta por un Proveedor ------------
 // El backend decide qué devuelve `getProductos` según el rol del token:
@@ -99,7 +99,7 @@ export const getProveedores = () =>
 
 /** Bandeja de revisión del Gerente de categoría (403 para otros roles). */
 export const getProductosPendientes = () =>
-  apiClient.get<Producto[]>('/products/pending').then((r) => r.data);
+  traerTodo<Producto>(catalogApi, '/products/pending');
 
 /**
  * Solo Proveedor. El backend asigna la empresa a partir del token.
@@ -108,13 +108,13 @@ export const getProductosPendientes = () =>
  * endpoint comportándose diferente según quién llama.
  */
 export const proponerProducto = (datos: NuevaPropuestaProducto) =>
-  apiClient.post<Producto>('/products/proposals', datos).then((r) => r.data);
+  catalogApi.post<Producto>('/products/proposals', datos).then((r) => r.data);
 
 export const aprobarProducto = (id: string) =>
-  apiClient.patch<Producto>(`/products/${id}/approve`).then((r) => r.data);
+  catalogApi.patch<Producto>(`/products/${id}/approve`).then((r) => r.data);
 
 export const rechazarProducto = (id: string, motivoRechazo: string) =>
-  apiClient
+  catalogApi
     .patch<Producto>(`/products/${id}/reject`, { motivoRechazo })
     .then((r) => r.data);
 
@@ -139,13 +139,13 @@ export interface ActualizarProductoPayload {
 }
 
 export const crearProductoDirecto = (payload: CrearProductoDirectoPayload) =>
-  apiClient.post<Producto>('/products', payload).then((r) => r.data);
+  catalogApi.post<Producto>('/products', payload).then((r) => r.data);
 
 export const actualizarProducto = (id: string, payload: ActualizarProductoPayload) =>
-  apiClient.patch<Producto>(`/products/${id}`, payload).then((r) => r.data);
+  catalogApi.patch<Producto>(`/products/${id}`, payload).then((r) => r.data);
 
 export const eliminarProducto = (id: string) =>
-  apiClient.delete<void>(`/products/${id}`).then((r) => r.data);
+  catalogApi.delete<void>(`/products/${id}`).then((r) => r.data);
 
 export interface CrearPresentacionPayload {
   nombre: string;
@@ -156,14 +156,14 @@ export interface CrearPresentacionPayload {
 }
 
 export const getPresentaciones = (productoId: string) =>
-  apiClient
+  catalogApi
     .get<ProductoPresentacion[]>(`/products/${productoId}/presentations`)
     .then((r) => r.data);
 
 export const agregarPresentacion = (productoId: string, payload: CrearPresentacionPayload) =>
-  apiClient
+  catalogApi
     .post<ProductoPresentacion>(`/products/${productoId}/presentations`, payload)
     .then((r) => r.data);
 
 export const eliminarPresentacion = (id: string) =>
-  apiClient.delete<void>(`/presentations/${id}`).then((r) => r.data);
+  catalogApi.delete<void>(`/presentations/${id}`).then((r) => r.data);

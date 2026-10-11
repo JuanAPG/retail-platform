@@ -8,6 +8,7 @@ import { EstatusProducto, Producto, UnidadMedida } from '../types';
 import { MODULOS_POR_ROL } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
 import { RailModule } from '../components/ui/Rail';
+import { CambioPrecioPanel } from './proveedor/CambioPrecioPanel';
 import { Hero } from '../components/ui/Hero';
 import { Chip } from '../components/ui/Chip';
 import { Card } from '../components/ui/Card';
@@ -248,18 +249,7 @@ export function ProveedorPortal() {
         </div>
       )}
 
-      {tab === 'cambio-precio' && (
-        <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-salvia text-tinta">
-            <IconPrecios className="h-6 w-6" />
-          </span>
-          <p className="font-display text-2xl text-teal">Aún no disponible</p>
-          <p className="max-w-sm text-sm text-teal/70">
-            Proponer un cambio de precio directamente todavía no está construido. Mientras tanto, contacta a
-            Responsable de Precios.
-          </p>
-        </div>
-      )}
+      {tab === 'cambio-precio' && <CambioPrecioPanel productos={misProductos} puedeProponer={esProveedor} />}
 
       {tab === 'mi-perfil' && (
         <div className="flex flex-col gap-6">

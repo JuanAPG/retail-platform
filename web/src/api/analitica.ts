@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { coreApi } from './client';
 import { AnalyticsFilters, CategorySpend } from '../types';
 
 /**
@@ -17,7 +17,7 @@ function limpiarFiltros(filtros: AnalyticsFilters = {}): AnalyticsFilters {
 }
 
 const getIndicador = (ruta: string, filtros?: AnalyticsFilters) =>
-  apiClient.get<number>(`/analytics/${ruta}`, { params: limpiarFiltros(filtros) }).then((r) => r.data);
+  coreApi.get<number>(`/analytics/${ruta}`, { params: limpiarFiltros(filtros) }).then((r) => r.data);
 
 export const getTicketPromedio = (filtros?: AnalyticsFilters) => getIndicador('average-ticket', filtros);
 
@@ -30,7 +30,7 @@ export const getUnidadesPorTransaccion = (filtros?: AnalyticsFilters) =>
   getIndicador('units-per-transaction', filtros);
 
 export const getGastoPorCategoria = (filtros?: AnalyticsFilters) =>
-  apiClient
+  coreApi
     .get<CategorySpend[]>('/analytics/spend-by-category', { params: limpiarFiltros(filtros) })
     .then((r) => r.data);
 

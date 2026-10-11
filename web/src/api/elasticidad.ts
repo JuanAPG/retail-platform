@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { algorithmsApi } from './client';
 import {
   ElasticityChartData,
   ElasticityFilters,
@@ -25,14 +25,14 @@ function limpiar<T extends object>(datos: T): T {
 
 /** Calcula, clasifica y guarda la corrida. */
 export const calcularElasticidad = (params: ElasticityParams) =>
-  apiClient.post<ElasticityResult>('/elasticity/calculate', limpiar(params)).then((r) => r.data);
+  algorithmsApi.post<ElasticityResult>('/elasticity/calculate', limpiar(params)).then((r) => r.data);
 
 /** Una presentación comparada entre zonas o segmentos. */
 export const getGraficoElasticidad = (filtros: ElasticityFilters) =>
-  apiClient.get<ElasticityChartData>('/elasticity/chart', { params: limpiar(filtros) }).then((r) => r.data);
+  algorithmsApi.get<ElasticityChartData>('/elasticity/chart', { params: limpiar(filtros) }).then((r) => r.data);
 
 /** Pares sustitutos de una categoría. Se calcula al vuelo en el backend. */
 export const getPatronesSustitucion = (categoryId: string) =>
-  apiClient
+  algorithmsApi
     .get<SubstitutionPattern[]>('/substitution/patterns', { params: { categoryId } })
     .then((r) => r.data);

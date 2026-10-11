@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { decisionApi } from './client';
 
 /** M12 — Índice de accesibilidad de una zona (GET /accessibility/index y /accessibility/by-zone/:zoneId). */
 export interface IndiceAccesibilidad {
@@ -12,7 +12,7 @@ export interface IndiceAccesibilidad {
 
 /** Calcula el índice AHORA MISMO: crea un análisis nuevo cada vez, no pisa el anterior. */
 export const calcularAccesibilidad = (zoneId: string, segmentId: string) =>
-  apiClient.get<IndiceAccesibilidad>('/accessibility/index', { params: { zoneId, segmentId } }).then((r) => r.data);
+  decisionApi.get<IndiceAccesibilidad>('/accessibility/index', { params: { zoneId, segmentId } }).then((r) => r.data);
 
 export const getHistorialAccesibilidad = (zoneId: string) =>
-  apiClient.get<IndiceAccesibilidad[]>(`/accessibility/by-zone/${zoneId}`).then((r) => r.data);
+  decisionApi.get<IndiceAccesibilidad[]>(`/accessibility/by-zone/${zoneId}`).then((r) => r.data);

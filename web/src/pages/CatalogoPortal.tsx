@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
 import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
+import { ReportesPanel } from './catalogo/ReportesPanel';
+import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
 import { MODULOS_POR_ROL, ModuloDefinicion } from '../routes/modulosPorRol';
@@ -147,16 +149,7 @@ export function CatalogoPortal() {
         </div>
       )}
 
-      {tab === 'aprobaciones-precio' && (
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-4xl text-vino">Aprobaciones de precio</h1>
-            <StatusPill tone="neutral">Aprueba</StatusPill>
-          </div>
-          {/* No existe todavía un flujo de propuesta de precio por proveedor en el backend. */}
-          <ApprovalQueue items={[]} emptyLabel="Todo al día" />
-        </div>
-      )}
+      {tab === 'aprobaciones-precio' && <AprobacionesPrecioPanel />}
 
       {tab === 'gestion-precios' && <PreciosPanel />}
 
@@ -170,15 +163,7 @@ export function CatalogoPortal() {
         </section>
       )}
 
-      {(tab === 'reportes' || tab === 'reportes-precios') && (
-        <section>
-          <SectionHeader title="Reportes ejecutivos" />
-          <EmptyState
-            title="Aún no se ha generado ningún reporte"
-            description="Genera un reporte ejecutivo con los hallazgos del análisis comercial."
-          />
-        </section>
-      )}
+      {(tab === 'reportes' || tab === 'reportes-precios') && <ReportesPanel />}
 
       {tab === 'tiendas' && (
         <div className="flex flex-col gap-6">

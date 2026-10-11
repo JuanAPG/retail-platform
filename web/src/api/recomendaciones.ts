@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { decisionApi } from './client';
 
 /** M14 — Una recomendación ya generada y guardada. */
 export interface Recomendacion {
@@ -34,7 +34,7 @@ export interface ExplicacionRecomendacion {
 
 /** Evalúa las 4 reglas (accesibilidad, elasticidad, simulación, asociación) y guarda lo que encuentre. */
 export const generarRecomendaciones = (zoneId?: string) =>
-  apiClient.post<Recomendacion[]>('/recommendations/generate', { zoneId }).then((r) => r.data);
+  decisionApi.post<Recomendacion[]>('/recommendations/generate', { zoneId }).then((r) => r.data);
 
 export const explicarRecomendacion = (id: string) =>
-  apiClient.get<ExplicacionRecomendacion>(`/recommendations/${id}/explain`).then((r) => r.data);
+  decisionApi.get<ExplicacionRecomendacion>(`/recommendations/${id}/explain`).then((r) => r.data);

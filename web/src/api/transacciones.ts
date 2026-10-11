@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { coreApi, traerTodo } from './client';
 import { CsvImportResult, CsvPreview, Transaction } from '../types';
 
 export interface CrearTransaccionLinea {
@@ -16,24 +16,24 @@ export interface CrearTransaccionPayload {
 }
 
 export const getTransacciones = (filtros?: { storeId?: string; dateFrom?: string; dateTo?: string }) =>
-  apiClient.get<Transaction[]>('/transactions', { params: filtros }).then((r) => r.data);
+  traerTodo<Transaction>(coreApi, '/transactions', { ...filtros });
 
 export const getTransaccion = (id: string) =>
-  apiClient.get<Transaction>(`/transactions/${id}`).then((r) => r.data);
+  coreApi.get<Transaction>(`/transactions/${id}`).then((r) => r.data);
 
 export const crearTransaccion = (payload: CrearTransaccionPayload) =>
-  apiClient.post<Transaction>('/transactions', payload).then((r) => r.data);
+  coreApi.post<Transaction>('/transactions', payload).then((r) => r.data);
 
 /** Sube el CSV y devuelve el preview validado (nada se inserta todavía). */
 export const previsualizarCsv = (archivo: File) => {
   const forma = new FormData();
   forma.append('file', archivo);
-  return apiClient.post<CsvPreview>('/transactions/import/preview', forma).then((r) => r.data);
+  return coreApi.post<CsvPreview>('/transactions/import/preview', forma).then((r) => r.data);
 };
 
 /** Inserta las filas válidas del preview y construye sus canastas. */
 export const confirmarCsv = (previewId: string) =>
-  apiClient.post<CsvImportResult>('/transactions/import/confirm', { previewId }).then((r) => r.data);
+  coreApi.post<CsvImportResult>('/transactions/import/confirm', { previewId }).then((r) => r.data);
 
 /** M06 — Una importación ya validada (preview) que nadie confirmó todavía. */
 export interface ImportacionPendiente {
@@ -48,4 +48,4 @@ export interface ImportacionPendiente {
 
 /** Para retomar una importación validada sin volver a subir el archivo. */
 export const getImportacionesPendientes = () =>
-  apiClient.get<ImportacionPendiente[]>('/transactions/import/pending').then((r) => r.data);
+  coreApi.get<ImportacionPendiente[]>('/transactions/import/pending').then((r) => r.data);
