@@ -98,11 +98,12 @@ export class IndicatorsService {
 
       // --- algorithms-core ---
       def('asociaciones_principales', 'Asociaciones principales (última corrida)', 'algorithms-core', async () => {
-        const corridas = await get<{ data: Array<{ id: string }> }>('algorithms-core', u.algorithms, '/v1/association/runs', { limit: 1 });
-        if (!corridas.data.length) return { corrida: null, reglas: [] };
-        const corrida = await get<{ id: string; results?: Array<Record<string, any>> }>(
-          'algorithms-core', u.algorithms, `/v1/association/runs/${corridas.data[0].id}`,
+        const corridas = await this.opcional(get<{ data: Array<{ id: string }> }>('algorithms-core', u.algorithms, '/v1/association/runs', { limit: 1 }));
+        if (!corridas?.data.length) return { corrida: null, reglas: [] };
+        const corrida = await this.opcional(
+          get<{ id: string; results?: Array<Record<string, any>> }>('algorithms-core', u.algorithms, `/v1/association/runs/${corridas.data[0].id}`),
         );
+        if (!corrida) return { corrida: null, reglas: [] };
         const nombres = (r: Record<string, any>, lado: string) =>
           (r.items ?? []).filter((i: any) => i.side === lado).map((i: any) => i.product?.nombre);
         return {
@@ -123,7 +124,8 @@ export class IndicatorsService {
           try {
             patrones.push(...(await get<Array<Record<string, any>>>('algorithms-core', u.algorithms, '/v1/substitution/patterns', { categoryId: c.id })));
           } catch (err) {
-            // Una categoría sin datos suficientes no invalida al resto; un servicio caído sí.
+            // Una categoría sin datos suficientes (404, 4xx) no invalida al resto; un servicio caído sí.
+            if (err instanceof SinDatos) continue;
             if (err instanceof ServicioNoDisponible && /HTTP 4\d\d/.test(err.message)) continue;
             throw err;
           }
@@ -150,9 +152,12 @@ export class IndicatorsService {
         const productos = (await this.todos<{ id: string }>('catalog-service', u.catalog, '/v1/products', authorization)).slice(0, 10);
         const cambios: number[] = [];
         for (const prod of productos) {
-          const h = await get<{ data: Array<{ presentationId: string; storeId: string; price: string; effectiveDate: string }> }>(
-            'pricing-service', u.pricing, '/v1/prices/history', { productId: prod.id, limit: 100 },
+          const h = await this.opcional(
+            get<{ data: Array<{ presentationId: string; storeId: string; price: string; effectiveDate: string }> }>(
+              'pricing-service', u.pricing, '/v1/prices/history', { productId: prod.id, limit: 100 },
+            ),
           );
+          if (!h) continue; // un producto sin histórico no invalida a los demás
           const grupos = new Map<string, Array<{ price: number; fecha: string }>>();
           for (const x of h.data) {
             if (x.effectiveDate < p.dateFrom || x.effectiveDate > p.dateTo) continue;
@@ -179,14 +184,12 @@ export class IndicatorsService {
           : (await this.todos<{ id: string; nombre: string }>('catalog-service', u.catalog, '/v1/zones', authorization));
         const filas: Array<Record<string, unknown>> = [];
         for (const z of zonas) {
-          let hist: Array<Record<string, any>>;
-          try {
-            hist = await get<Array<Record<string, any>>>('decision-service', u.decision, `/v1/accessibility/by-zone/${z.id}`);
-          } catch (err) {
-            if (err instanceof SinDatos) continue; // esa zona aún no tiene corrida: las demás sí cuentan
-            throw err;
-          }
-          if (hist.length) filas.push({ zonaId: z.id, zona: z.nombre, indice: hist[0].indexValue, calculadoEn: hist[0].calculatedAt });
+          // by-zone responde UN objeto (la corrida vigente de la zona); sin corrida, 404 → se omite esa zona.
+          const vigente = await this.opcional(
+            get<Record<string, any> | Array<Record<string, any>>>('decision-service', u.decision, `/v1/accessibility/by-zone/${z.id}`),
+          );
+          const fila = Array.isArray(vigente) ? vigente[0] : vigente;
+          if (fila) filas.push({ zonaId: z.id, zona: z.nombre, indice: fila.indexValue, calculadoEn: fila.calculatedAt });
         }
         return filas;
       }),
@@ -205,6 +208,16 @@ export class IndicatorsService {
         return fila ? ids.map((id) => ({ escenario: cmp.scenarioNames?.[id] ?? id, ingresoEstimado: fila.valuesByScenario[id] ?? null })) : [];
       }),
     ]);
+  }
+
+  /** Una consulta cuyo 404 significa "no hay datos": devuelve null en vez de abortar el indicador entero. */
+  private async opcional<T>(consulta: Promise<T>): Promise<T | null> {
+    try {
+      return await consulta;
+    } catch (err) {
+      if (err instanceof SinDatos) return null;
+      throw err;
+    }
   }
 
   /** Envuelve un cálculo: éxito → `disponible: true`; cualquier fallo → `disponible: false` + motivo. */

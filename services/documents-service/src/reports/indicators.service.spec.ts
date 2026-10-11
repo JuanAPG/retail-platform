@@ -61,7 +61,7 @@ describe('IndicatorsService.reunir', () => {
     });
     const r = await new IndicatorsService().reunir(params, 'Bearer t');
 
-    expect(porClave(r, 'accesibilidad_por_zona')).toMatchObject({ disponible: true, motivo: null });
+    expect(porClave(r, 'accesibilidad_por_zona')).toMatchObject({ disponible: true, valor: [], motivo: null });
     expect(porClave(r, 'escenarios_creados')).toMatchObject({ disponible: false, valor: null });
   });
 
@@ -137,7 +137,7 @@ describe('IndicatorsService.reunir', () => {
   it('la accesibilidad lee el historial por zona y NO el cálculo (que crearía una corrida nueva)', async () => {
     const llamadas = simular({
       '/v1/zones': () => ok({ data: [{ id: 'z1', nombre: 'Centro' }], total: 1 }),
-      '/v1/accessibility/by-zone/z1': () => ok([{ indexValue: 0.62, calculatedAt: '2026-09-20T12:00:00.000Z' }]),
+      '/v1/accessibility/by-zone/z1': () => ok({ indexValue: 0.62, calculatedAt: '2026-09-20T12:00:00.000Z' }),
     });
     const r = await new IndicatorsService().reunir(params, 't');
 
@@ -145,5 +145,55 @@ describe('IndicatorsService.reunir', () => {
       { zonaId: 'z1', zona: 'Centro', indice: 0.62, calculadoEn: '2026-09-20T12:00:00.000Z' },
     ]);
     expect(llamadas.some((u) => u.includes('/v1/accessibility/index'))).toBe(false);
+  });
+
+  it('accesibilidad con varias zonas: la que no tiene corrida (404) se omite y las demás entregan su valor (QA-DOC54-02)', async () => {
+    simular({
+      '/v1/zones': () => ok({ data: [{ id: 'z1', nombre: 'Centro' }, { id: 'z2', nombre: 'Oriente' }, { id: 'z3', nombre: 'Valle' }], total: 3 }),
+      '/v1/accessibility/by-zone/z1': () => ok({ indexValue: 0.5468, calculatedAt: '2026-09-20T12:00:00.000Z' }),
+      '/v1/accessibility/by-zone/z2': () => http(404),
+      '/v1/accessibility/by-zone/z3': () => ok({ indexValue: 0.6667, calculatedAt: '2026-09-21T12:00:00.000Z' }),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    expect(porClave(r, 'accesibilidad_por_zona')).toMatchObject({ disponible: true, motivo: null });
+    expect(porClave(r, 'accesibilidad_por_zona').valor).toEqual([
+      { zonaId: 'z1', zona: 'Centro', indice: 0.5468, calculadoEn: '2026-09-20T12:00:00.000Z' },
+      { zonaId: 'z3', zona: 'Valle', indice: 0.6667, calculadoEn: '2026-09-21T12:00:00.000Z' },
+    ]);
+  });
+
+  it('sustituciones: una categoría sin patrones (404) no aborta el recorrido ni pierde lo acumulado', async () => {
+    simular({
+      '/v1/product-categories': () => ok([{ id: 1 }, { id: 2 }, { id: 3 }]),
+      'categoryId=1': () => ok([{ originProductName: 'A', targetProductName: 'B', type: 'directa' }]),
+      'categoryId=2': () => http(404),
+      'categoryId=3': () => ok([{ originProductName: 'C', targetProductName: 'D', type: 'directa' }]),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    expect(porClave(r, 'sustituciones')).toMatchObject({ disponible: true, valor: { total: 2 } });
+  });
+
+  it('un servicio caído en sustituciones (5xx) sí marca el indicador como no disponible', async () => {
+    simular({
+      '/v1/product-categories': () => ok([{ id: 1 }]),
+      'categoryId=1': () => http(503),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    expect(porClave(r, 'sustituciones')).toMatchObject({ disponible: false, valor: null });
+  });
+
+  it('asociaciones y variación de precios con 404 no tumban el indicador entero', async () => {
+    simular({
+      '/v1/association/runs': () => http(404),
+      '/v1/products': () => ok({ data: [{ id: 'p1' }, { id: 'p2' }], total: 2 }),
+      '/v1/prices/history': () => http(404),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    expect(porClave(r, 'asociaciones_principales')).toMatchObject({ disponible: true, valor: { corrida: null, reglas: [] } });
+    expect(porClave(r, 'variacion_precios')).toMatchObject({ disponible: true, motivo: null });
   });
 });
