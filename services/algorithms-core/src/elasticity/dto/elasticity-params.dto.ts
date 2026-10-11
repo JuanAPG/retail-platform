@@ -2,7 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID, Validate } from 'class-validator';
 import { EsFiltroDeFecha } from '../../common/validators/filtro-de-fecha';
 
-export const GRANULARITIES = ['day', 'week'] as const;
+export const GRANULARITIES = ['day', 'week', 'month'] as const;
 export type Granularity = (typeof GRANULARITIES)[number];
 
 /**
@@ -33,11 +33,13 @@ export class ElasticityParamsDto {
 
   @ApiPropertyOptional({
     enum: GRANULARITIES,
-    default: 'day',
+    default: 'week',
     description:
-      'Cómo se agrupan las ventas en observaciones (zona × periodo). Por día aprovecha mejor pocos datos; por semana es lo usual con más historia.',
+      'Cómo se agrupan las ventas en observaciones (zona × periodo). Semana es el default: promedia el ruido de ' +
+      'entre-semana/fin-de-semana sin diluir los cambios de precio (D-21). Día da más resolución pero más ruido; ' +
+      'mes queda para historias largas, porque con pocos meses da muy pocos puntos.',
   })
   @IsOptional()
-  @IsIn(GRANULARITIES, { message: "granularity debe ser 'day' o 'week'." })
-  granularity?: Granularity = 'day';
+  @IsIn(GRANULARITIES, { message: "granularity debe ser 'day', 'week' o 'month'." })
+  granularity?: Granularity = 'week';
 }

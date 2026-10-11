@@ -75,6 +75,7 @@
     <xs:restriction base="xs:string">
       <xs:enumeration value="day"/>
       <xs:enumeration value="week"/>
+      <xs:enumeration value="month"/>
     </xs:restriction>
   </xs:simpleType>
 
