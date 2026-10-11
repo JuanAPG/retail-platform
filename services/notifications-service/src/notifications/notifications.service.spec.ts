@@ -102,9 +102,9 @@ describe('Tabla de permisos por evento', () => {
     });
   });
 
-  it('corrida.terminada (ALG-10, agregado 2026-10-10)', () => {
+  it('corrida.terminada aplica a asociación y elasticidad: incluye al Responsable de precios (ALG-10, corregido 2026-10-11)', () => {
     expect(permisoDe('corrida.terminada')).toMatchObject({
-      origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
+      origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
       destino: { tipo: 'usuario' },
     });
   });
@@ -359,6 +359,15 @@ describe('create: corrida.terminada (ALG-10)', () => {
     );
     expect(data.recipientUserId).toBe('analista-9');
     expect(data.recipientRole).toBeNull();
+  });
+
+  it('el Responsable de precios también puede emitirla (corrida de elasticidad)', async () => {
+    const { servicio } = servicioFresco();
+    const { creada } = await servicio.create(
+      { ...CORRIDA, relatedEntityId: 'run-4', recipientUserId: 'resp-precios-1' },
+      { usuarioId: 'resp-precios-1', rol: ROL.RESPONSABLE_PRECIOS, rolId: 4 },
+    );
+    expect(creada).toBe(true);
   });
 
   it('exige recipientUserId (destino dinámico): sin él, 400', async () => {
