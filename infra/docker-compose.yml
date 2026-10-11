@@ -342,6 +342,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
+      # Bitacora (ejecutar_corrida) y aviso corrida.terminada de cada corrida
+      # (ALG-10). Si no responden, la corrida igual se completa.
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
