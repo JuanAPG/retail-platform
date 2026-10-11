@@ -1,13 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
-import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
+import { ApiErrores, pagina, RespuestaXml } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { AssociationService } from './association.service';
 import { AprioriParamsDto } from './dto/apriori-params.dto';
@@ -26,38 +25,47 @@ export class AssociationController {
   constructor(private readonly associationService: AssociationService) {}
 
   @Post('apriori/run')
-  @XmlRoot('aprioriRunResponse', { siemprePresentes: ['lift', 'transactionCount'] })
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary: 'Corre Apriori con el soporte y la confianza dados y guarda la corrida (Administrador, Analista comercial).',
   })
-  @ApiRespuesta(201, 'Reglas de la corrida, cada una con su runId y sus productos (antecedente como conjunto).', muestras.reglas)
-  @ApiErrores(400, 401, 403, 500)
-  runApriori(@Body() params: AprioriParamsDto, @CurrentUser() user: SesionUsuario) {
-    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar.
-    return this.associationService.runApriori(params, user);
+  @RespuestaXml(
+    201,
+    'Reglas de la corrida, cada una con su runId y sus productos (antecedente como conjunto).',
+    muestras.reglas,
+    'aprioriRunResponse',
+    { siemprePresentes: ['lift', 'transactionCount'] },
+  )
+  @ApiErrores(400, 401, 403, 500, 503)
+  runApriori(
+    @Body() params: AprioriParamsDto,
+    @CurrentUser() user: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar. El
+    // token y la IP van a la bitácora y al aviso de la corrida (ALG-10).
+    return this.associationService.runApriori(params, user, { token, ip });
   }
 
   @Get('runs')
-  @XmlRoot('runListResponse', {
-    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage'],
-  })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Historial de corridas de Apriori, de la más reciente a la más antigua (paginado).' })
-  @ApiRespuesta(200, 'Página de corridas con sus parámetros, sin reglas.', pagina([muestras.corrida], 5))
-  @ApiErrores(400, 401, 403)
+  @RespuestaXml(200, 'Página de corridas con sus parámetros, sin reglas.', pagina([muestras.corrida], 5), 'runListResponse', {
+    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage'],
+  })
+  @ApiErrores(400, 401, 403, 503)
   findAllRuns(@Query() paginacion: PaginationDto) {
     return this.associationService.findAllRuns(paginacion);
   }
 
   @Get('runs/:id')
-  @XmlRoot('runResponse', {
-    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'],
-  })
   @Roles(...PERFILES_INTERNOS)
   @ApiOperation({ summary: 'Una corrida completa: parámetros, supuestos, filtros y reglas.' })
-  @ApiRespuesta(200, 'La corrida con sus supuestos, filtros y reglas en `results`.', muestras.corridaCompleta)
-  @ApiErrores(400, 401, 403, 404)
+  @RespuestaXml(200, 'La corrida con sus supuestos, filtros y reglas en `results`.', muestras.corridaCompleta, 'runResponse', {
+    siemprePresentes: ['userId', 'user', 'transactionsConsidered', 'basketsConsidered', 'errorMessage', 'lift', 'transactionCount'],
+  })
+  @ApiErrores(400, 401, 403, 404, 503)
   findRun(@Param('id', ParseUUIDPipe) id: string) {
     return this.associationService.findRun(id);
   }
