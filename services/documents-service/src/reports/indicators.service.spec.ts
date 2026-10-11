@@ -53,6 +53,18 @@ describe('IndicatorsService.reunir', () => {
     expect(caido.motivo).toMatch(/core-process-service respondió HTTP 503/);
   });
 
+  it('un 404 de negocio (zona sin accesibilidad calculada) es disponible con valor null, no una caída (QA-DOC54-02)', async () => {
+    simular({
+      '/v1/zones': () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'z1', nombre: 'Norte' }], total: 1 }) }) as Response,
+      '/v1/accessibility/by-zone/z1': () => http(404),
+      '/v1/simulation/scenarios': () => http(503),
+    });
+    const r = await new IndicatorsService().reunir(params, 'Bearer t');
+
+    expect(porClave(r, 'accesibilidad_por_zona')).toMatchObject({ disponible: true, motivo: null });
+    expect(porClave(r, 'escenarios_creados')).toMatchObject({ disponible: false, valor: null });
+  });
+
   it('un timeout de 3 s marca el indicador como no disponible, no como 0', async () => {
     global.fetch = jest.fn((_url: unknown, init?: RequestInit) =>
       new Promise((_resolve, reject) => {

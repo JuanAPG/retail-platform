@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -126,6 +127,10 @@ export class ReportsService {
 
   async actualizarEstado(id: string, dto: ActualizarReporteDto, usuario: SesionUsuario): Promise<ReporteDto> {
     const doc = await this.buscar(id, usuario);
+    // QA-DOC54-03: la exportación ya quedó en auditoría; regresar a "generado" la contradeciría.
+    if (doc.estado === ESTADO_REPORTE.EXPORTADO && dto.estado === ESTADO_REPORTE.GENERADO) {
+      throw new ConflictException('Un reporte exportado no puede volver a "generado": la exportación ya quedó registrada en la auditoría.');
+    }
     doc.estado = dto.estado as ReporteDocument['estado'];
     await doc.save();
     return this.aDto(doc);

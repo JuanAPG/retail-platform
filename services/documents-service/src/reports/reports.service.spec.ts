@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { ReportsService } from './reports.service';
@@ -114,6 +114,16 @@ describe('ReportsService', () => {
 
     expect(d.save).toHaveBeenCalled();
     expect(r.estado).toBe('exportado');
+  });
+
+  it('PATCH no permite regresar un reporte exportado a generado: 409 (QA-DOC54-03)', async () => {
+    const { servicio, modelo } = crear();
+    const d = doc();
+    d.estado = 'exportado';
+    modelo.findById.mockResolvedValue(d);
+
+    await expect(servicio.actualizarEstado(idValido, { estado: 'generado' }, gerente)).rejects.toBeInstanceOf(ConflictException);
+    expect(d.save).not.toHaveBeenCalled();
   });
 
   it('exportar genera el PDF del documento guardado, marca exportado y audita', async () => {

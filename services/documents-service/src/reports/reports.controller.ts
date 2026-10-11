@@ -72,9 +72,9 @@ export class ReportsController {
   @Patch(':id')
   @XmlRoot('reportResponse')
   @Roles(...GENERAN_REPORTES)
-  @ApiOperation({ summary: 'Cambia el estado del reporte (generado o exportado).' })
+  @ApiOperation({ summary: 'Cambia el estado del reporte. Un reporte exportado no puede volver a generado (409).' })
   @ApiRespuesta(200, 'Reporte actualizado.', { ...muestras.reporte, estado: 'exportado' }, 'reportResponse')
-  @ApiErrores(400, 401, 403, 404)
+  @ApiErrores(400, 401, 403, 404, 409)
   actualizar(@Param('id') id: string, @Body() dto: ActualizarReporteDto, @CurrentUser() usuario: SesionUsuario) {
     return this.reportes.actualizarEstado(id, dto, usuario);
   }

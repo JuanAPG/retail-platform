@@ -18,6 +18,12 @@ type Servicio = 'core-process-service' | 'catalog-service' | 'pricing-service' |
 /** Error al consultar otro servicio; su mensaje es el `motivo` que ve el lector del reporte. */
 class ServicioNoDisponible extends Error {}
 
+/**
+ * 404 de negocio de un servicio que SÍ respondió (p. ej. "la zona no tiene accesibilidad
+ * calculada"): no es una caída. El indicador sale `disponible: true, valor: null` (D-20).
+ */
+class SinDatos extends Error {}
+
 const redondear = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const promedio = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -173,7 +179,13 @@ export class IndicatorsService {
           : (await this.todos<{ id: string; nombre: string }>('catalog-service', u.catalog, '/v1/zones', authorization));
         const filas: Array<Record<string, unknown>> = [];
         for (const z of zonas) {
-          const hist = await get<Array<Record<string, any>>>('decision-service', u.decision, `/v1/accessibility/by-zone/${z.id}`);
+          let hist: Array<Record<string, any>>;
+          try {
+            hist = await get<Array<Record<string, any>>>('decision-service', u.decision, `/v1/accessibility/by-zone/${z.id}`);
+          } catch (err) {
+            if (err instanceof SinDatos) continue; // esa zona aún no tiene corrida: las demás sí cuentan
+            throw err;
+          }
           if (hist.length) filas.push({ zonaId: z.id, zona: z.nombre, indice: hist[0].indexValue, calculadoEn: hist[0].calculatedAt });
         }
         return filas;
@@ -200,6 +212,10 @@ export class IndicatorsService {
     try {
       return { clave, nombre, servicio, disponible: true, valor: await calcular(), motivo: null };
     } catch (err) {
+      if (err instanceof SinDatos) {
+        this.logger.log(`Indicador ${clave} sin datos: ${err.message}`);
+        return { clave, nombre, servicio, disponible: true, valor: null, motivo: null };
+      }
       const motivo = err instanceof ServicioNoDisponible ? err.message : `Error al calcular el indicador: ${(err as Error).message}`;
       this.logger.warn(`Indicador ${clave} no disponible: ${motivo}`);
       return { clave, nombre, servicio, disponible: false, valor: null, motivo };
@@ -219,10 +235,12 @@ export class IndicatorsService {
         headers: { Accept: 'application/json', ...(authorization ? { Authorization: authorization } : {}) },
         signal: control.signal,
       });
+      // 404 = el servicio contestó que no hay datos; solo timeout, 5xx o red caída cuentan como caída.
+      if (r.status === 404) throw new SinDatos(`${servicio} no tiene datos para este indicador.`);
       if (!r.ok) throw new ServicioNoDisponible(`${servicio} respondió HTTP ${r.status}.`);
       return (await r.json()) as T;
     } catch (err) {
-      if (err instanceof ServicioNoDisponible) throw err;
+      if (err instanceof ServicioNoDisponible || err instanceof SinDatos) throw err;
       if ((err as Error).name === 'AbortError') {
         throw new ServicioNoDisponible(`${servicio} no respondió en ${TIMEOUT_SERVICIOS_MS / 1000} s.`);
       }
