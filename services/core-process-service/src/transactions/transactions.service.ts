@@ -183,6 +183,27 @@ export class TransactionsService {
       .leftJoinAndSelect('presentation.producto', 'producto');
 
     if (filters.storeId) qb.andWhere('t.storeId = :storeId', { storeId: filters.storeId });
+    // La zona no está en `transacciones`: es la de su tienda, y el join a
+    // `store` ya está arriba porque la respuesta la necesita.
+    if (filters.zoneId) qb.andWhere('store.zonaId = :zoneId', { zoneId: filters.zoneId });
+    // El segmento tampoco: a diferencia de las canastas (M07), que lo
+    // congelan al construirse, una transacción solo tiene tienda → zona.
+    // Se resuelve contra `v_zona_segmento`, la vista que el esquema designa
+    // como fuente única del segmento vigente (misma que usa
+    // BasketsService.findSegmentId): replicar aquí su COALESCE o su regla
+    // de vigencia dejaría la misma regla escrita en dos lugares.
+    //
+    // RN-02: es el segmento agregado de la zona, nunca el ingreso de la
+    // persona que compró.
+    if (filters.segmentId) {
+      qb.andWhere(
+        `store.zonaId IN (
+           SELECT zona_id FROM v_zona_segmento
+           WHERE segmento_ingreso_id = :segmentId AND vigente
+         )`,
+        { segmentId: filters.segmentId },
+      );
+    }
     // Días completos locales: `fecha` es timestamptz (mismo criterio que
     // M07 y M09, y el mismo que audit-service).
     filtrarDiasLocales(qb, 't.fecha', filters);
