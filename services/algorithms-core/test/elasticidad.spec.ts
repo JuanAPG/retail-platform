@@ -223,19 +223,17 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
     }
     for (const fila of actuales.filter((f) => f.runId !== calculo.runId)) expect(fila.outdated).toBe(true);
 
-    // 4. D-22: una corrida con dateTo (ventana parcial, aunque sea posterior
-    // y de la MISMA presentación) nunca se vuelve vigente ni marca nada
-    // outdated — es exploratoria, se consulta por su runId en /chart. Las
-    // demás presentaciones tampoco cambian.
+    // 4. D-22: una corrida con dateTo nunca se vuelve vigente ni marca nada
+    // outdated, aunque sea posterior y de la MISMA presentación — es
+    // exploratoria, se consulta por su runId en /chart. `dateTo` se fija al
+    // propio `periodEnd` de la corrida de arriba: abarca EXACTAMENTE los
+    // mismos datos (mismos resultados garantizados, para que /chart no
+    // 404 por falta de elasticidades), y lo único que cambia es que el
+    // parámetro queda presente — que es justo lo que D-22 mira, no si la
+    // ventana de verdad recorta algo. Las demás presentaciones no cambian.
     const antesDeExploratoria = await vigentes(`&presentationId=${presentacion}`);
     const otrasAntes = (await vigentes()).filter((f) => f.presentationId !== presentacion);
-    const [{ primero }]: { primero: string }[] = await db.query(
-      `SELECT to_char(MIN(k.fecha AT TIME ZONE $2), 'YYYY-MM-DD') AS primero
-       FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
-       WHERE d.presentacion_id = $1`,
-      [presentacion, DIA_DE_NEGOCIO],
-    );
-    const exploratoria = await calcular({ presentationId: presentacion, dateTo: primero });
+    const exploratoria = await calcular({ presentationId: presentacion, dateTo: calculo.periodEnd });
 
     const despuesDeExploratoria = await vigentes(`&presentationId=${presentacion}`);
     // Ni una fila cambia de runId, valor ni outdated: /current ignora
