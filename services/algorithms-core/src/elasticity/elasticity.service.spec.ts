@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { ReporteDeCorridas } from '../common/reportes/reporte-de-corridas.service';
 import { FuenteDatos } from '../fuente-datos/fuente-datos.service';
 import {
   aggregateBySegment,
@@ -241,7 +242,12 @@ describe('ElasticityService (base simulada)', () => {
         { id: 'z-valle', nombre: 'Zona Valle' },
       ]),
     };
-    return new ElasticityService({ query } as unknown as DataSource, fuente as unknown as FuenteDatos);
+    const reporte = { terminada: jest.fn() };
+    return new ElasticityService(
+      { query } as unknown as DataSource,
+      fuente as unknown as FuenteDatos,
+      reporte as unknown as ReporteDeCorridas,
+    );
   }
 
   it('chart con un runId que no tiene la presentación responde 404', async () => {

@@ -9,6 +9,7 @@ import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity'
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { Elasticity } from '../entities/elasticity.entity';
+import { ReportesModule } from '../common/reportes/reportes.module';
 import { FuenteDatosModule } from '../fuente-datos/fuente-datos.module';
 import { ElasticityController } from './elasticity.controller';
 import { ElasticityService } from './elasticity.service';
@@ -38,6 +39,7 @@ import { ElasticityService } from './elasticity.service';
       AssociationRuleItem,
     ]),
     FuenteDatosModule,
+    ReportesModule,
     JwtModule.register({}),
   ],
   controllers: [ElasticityController],

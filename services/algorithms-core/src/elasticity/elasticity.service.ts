@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { ContextoPeticion, ReporteDeCorridas } from '../common/reportes/reporte-de-corridas.service';
 import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
 import { fechaLocal } from '../config/zona-horaria';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
@@ -139,6 +140,8 @@ export class ElasticityService {
     private readonly dataSource: DataSource,
     /** Ventas, presentaciones, zonas y segmentos: datos de otros servicios. */
     private readonly fuente: FuenteDatos,
+    /** Bitácora y aviso de cada corrida (ALG-10). */
+    private readonly reporte: ReporteDeCorridas,
   ) {}
 
   /** Misma clasificación que la columna generada de la base. */
@@ -151,7 +154,7 @@ export class ElasticityService {
    * quién la ejecutó y solo el controlador conoce el JWT (mismo patrón que
    * AssociationService.runApriori).
    */
-  async calculate(params: ElasticityParamsDto, user: SesionUsuario): Promise<ElasticityResult> {
+  async calculate(params: ElasticityParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ElasticityResult> {
     const granularity = params.granularity ?? 'day';
     // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
     // comparar ese texto es comparar las fechas.
@@ -172,7 +175,9 @@ export class ElasticityService {
       end: diaDelFiltro(params.dateTo) ?? lastDay!,
     };
     const assumptions = ASSUMPTIONS(granularity);
+    const corrida = { tipo: 'elasticidad' as const, nombre: 'Elasticidad', periodo: period };
 
+    let resultado: ElasticityResult;
     try {
       const [names, zones] = await Promise.all([
         this.fuente.nombresDePresentaciones([...new Set(rows.map((r) => r.presentationId))]),
@@ -195,13 +200,34 @@ export class ElasticityService {
         results,
       });
 
-      return { runId, periodStart: period.start, periodEnd: period.end, granularity, results, insufficient, assumptions };
+      resultado = { runId, periodStart: period.start, periodEnd: period.end, granularity, results, insufficient, assumptions };
     } catch (error) {
-      await this.recordFailedRun(params, granularity, user, period, error);
+      const fallidaId = await this.recordFailedRun(params, granularity, user, period, assumptions, error);
+      await this.reporte.terminada(
+        { ...corrida, runId: fallidaId, estado: 'fallida', resumen: 'No se pudo completar el cálculo; quedó registrado como corrida fallida.' },
+        user.id,
+        contexto,
+      );
       throw new InternalServerErrorException(
         'No se pudo completar el cálculo de elasticidad; quedó registrado como corrida fallida.',
       );
     }
+
+    // Fuera del try: el reporte nunca lanza, pero si lo hiciera no debe
+    // convertir una corrida ya guardada en "fallida".
+    await this.reporte.terminada(
+      {
+        ...corrida,
+        runId: resultado.runId,
+        estado: 'completada',
+        resumen:
+          `${resultado.results.length} resultado(s) y ${resultado.insufficient.length} combinación(es) sin datos ` +
+          `suficientes; observaciones por ${granularity === 'week' ? 'semana' : 'día'}.`,
+      },
+      user.id,
+      contexto,
+    );
+    return resultado;
   }
 
   /**
@@ -517,17 +543,19 @@ export class ElasticityService {
    * mensaje). Si esto también falla solo se registra en el log, para no
    * ocultar el error original.
    */
+  /** Devuelve el id de la corrida fallida, o null si tampoco se pudo guardar. */
   private async recordFailedRun(
     params: ElasticityParamsDto,
     granularity: Granularity,
     user: SesionUsuario,
     period: Period,
+    assumptions: string[],
     error: unknown,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const message = error instanceof Error ? error.message : String(error);
     this.logger.error(`Cálculo de elasticidad fallido: ${message}`, error instanceof Error ? error.stack : undefined);
     try {
-      await this.dataSource.transaction((manager) =>
+      const saved = await this.dataSource.transaction((manager) =>
         this.saveHeader(manager, {
           status: 'fallida',
           userId: user.id,
@@ -535,11 +563,14 @@ export class ElasticityService {
           baskets: null,
           errorMessage: message,
           parameters: baseParameters(params, granularity),
-          assumptions: [],
+          // Con qué supuestos se intentó (QA-ALG56-04): antes quedaban 0.
+          assumptions,
         }),
       );
+      return saved.id;
     } catch (recordError) {
       this.logger.error(`No se pudo registrar la corrida fallida: ${String(recordError)}`);
+      return null;
     }
   }
 }

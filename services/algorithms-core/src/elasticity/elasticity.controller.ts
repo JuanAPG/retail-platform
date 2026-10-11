@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -41,9 +41,15 @@ export class ElasticityController {
     { siemprePresentes: ['zoneId', 'rSquared'] },
   )
   @ApiErrores(400, 401, 403, 404, 500, 503)
-  calculate(@Body() params: ElasticityParamsDto, @CurrentUser() user: SesionUsuario) {
-    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar.
-    return this.elasticityService.calculate(params, user);
+  calculate(
+    @Body() params: ElasticityParamsDto,
+    @CurrentUser() user: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar. El
+    // token y la IP van a la bitácora y al aviso de la corrida (ALG-10).
+    return this.elasticityService.calculate(params, user, { token, ip });
   }
 
   @Get('chart')

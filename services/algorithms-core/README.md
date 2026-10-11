@@ -89,6 +89,9 @@ ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
   Analista. Necesita `postgres`, `redis`, `auth-service` y este servicio arriba, y ventas
   cargadas con alguna entre las 18:00 y las 24:00 locales (p. ej.
   `db/datos_prueba_100_canastas.csv` importado por core-process). Borra las corridas que crea.
+- `test/corridas.spec.ts`: cada corrida deja `ejecutar_corrida` en la bitácora y avisa
+  `corrida.terminada` (ALG-10). Necesita además `audit-service`, `notifications-service` y
+  `mongodb`. Los eventos de la bitácora se quedan (es append-only).
 
 ## Datos
 

@@ -561,6 +561,22 @@ XML: elemento `substitutionPatternListResponse`.
 
 ---
 
+## Bitácora y aviso de cada corrida (ALG-10)
+
+Toda corrida que se guarda —de Apriori o de elasticidad, **completada o
+fallida**— deja un evento en audit-service y avisa a quien la lanzó. Un `400`
+(datos inválidos, sin ventas) no crea corrida y no se reporta.
+
+| A dónde | Qué |
+|---|---|
+| audit-service `POST /v1/auditoria` | `tabla: analisis_corridas`, `registroId: runId`, `accion: ejecutar_corrida`, `servicio: algorithms-core`, descripción con el resumen y `cambios` de `tipo`, `estado` y `periodo` |
+| notifications-service `POST /v1/notifications` | `corrida.terminada` con `relatedEntityType: corrida`, `relatedEntityId: runId` y `recipientUserId` = quien la lanzó; prioridad `info` si se completó, `warning` si falló |
+
+Los dos reenvían el `Authorization` del usuario (el actor sale del token) y van
+en paralelo con un límite de 1.5 s cada uno. **Nunca cambian la respuesta de la
+corrida:** si audit o notifications no responden o rechazan el evento, solo
+queda un aviso en el log, y la respuesta tarda a lo más eso de más.
+
 ## Lo que consume algorithms-core
 
 Fase B: lectura por SQL de solo lectura en el Postgres compartido, aislada en

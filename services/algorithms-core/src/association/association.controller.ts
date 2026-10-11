@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -37,9 +37,15 @@ export class AssociationController {
     { siemprePresentes: ['lift', 'transactionCount'] },
   )
   @ApiErrores(400, 401, 403, 500, 503)
-  runApriori(@Body() params: AprioriParamsDto, @CurrentUser() user: SesionUsuario) {
-    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar.
-    return this.associationService.runApriori(params, user);
+  runApriori(
+    @Body() params: AprioriParamsDto,
+    @CurrentUser() user: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar. El
+    // token y la IP van a la bitácora y al aviso de la corrida (ALG-10).
+    return this.associationService.runApriori(params, user, { token, ip });
   }
 
   @Get('runs')
