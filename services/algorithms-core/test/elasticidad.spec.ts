@@ -107,13 +107,22 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
     return json;
   }
 
-  /** Observaciones zona × día cortando los días en `zona`. */
-  async function observaciones(zona: string) {
+  /**
+   * Observaciones zona × periodo cortando los días en `zona`. `periodo`
+   * es 'day' (default), 'week' o 'month' (D-21): mismo `date_trunc` que
+   * `PERIODO_SQL` de FuenteDatos.
+   */
+  async function observaciones(zona: string, periodo: 'day' | 'week' | 'month' = 'day') {
+    // Primero se pasa fecha a la hora local de `zona` (timestamp sin tz) y
+    // SOBRE ESO se trunca: así no importa qué zona tenga la sesión de la
+    // conexión de la prueba, igual que hace el servicio con la suya.
+    const corte =
+      periodo === 'day' ? '(k.fecha AT TIME ZONE $1)' : `date_trunc('${periodo}', k.fecha AT TIME ZONE $1)`;
     const rows: { p: string; z: string; cantidad: number; ingreso: number }[] = await db.query(
       `SELECT d.presentacion_id AS p, k.zona_id AS z,
               SUM(d.cantidad)::float8 AS cantidad, SUM(d.cantidad * d.precio_unitario)::float8 AS ingreso
        FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
-       GROUP BY 1, 2, to_char(k.fecha AT TIME ZONE $1, 'YYYY-MM-DD')`,
+       GROUP BY 1, 2, to_char(${corte}, 'YYYY-MM-DD')`,
       [zona],
     );
     const puntos = rows.map((r) => ({ ...r, precio: r.ingreso / r.cantidad }));
@@ -144,11 +153,13 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
 
   it('calculate coincide con la referencia; chart y current muestran lo mismo; una corrida posterior marca outdated', async () => {
     // Referencia: zona × día de negocio, precio ponderado por unidades.
-    const esperado = await observaciones(DIA_DE_NEGOCIO);
-    const conDiaUtc = await observaciones('UTC');
+    // granularity explícito: el default cambió a 'week' (D-21) y la prueba
+    // de zona horaria que sigue necesita el corte más fino, por día.
+    const esperado = await observaciones(DIA_DE_NEGOCIO, 'day');
+    const conDiaUtc = await observaciones('UTC', 'day');
 
     // 1. calculate: cada resultado coincide, y no falta ninguno que la referencia sí calcule.
-    const calculo = await calcular({});
+    const calculo = await calcular({ granularity: 'day' });
     // Para que la zona horaria quede probada, algún resultado debe cambiar si
     // los días se cortaran en UTC (hace falta alguna venta entre las 18:00 y
     // las 24:00 locales). Si no, la prueba no distinguiría las dos zonas.
@@ -212,25 +223,63 @@ describe('Elasticidad (integración, requiere stack y ventas cargadas)', () => {
     }
     for (const fila of actuales.filter((f) => f.runId !== calculo.runId)) expect(fila.outdated).toBe(true);
 
-    // 4. Corrida posterior SOLO de esa presentación y solo su primer día: no
-    // alcanza a recalcular. Cada fila queda con la corrida nueva o outdated;
-    // las demás presentaciones no cambian.
+    // 4. D-22: una corrida con dateTo nunca se vuelve vigente ni marca nada
+    // outdated, aunque sea posterior y de la MISMA presentación — es
+    // exploratoria, se consulta por su runId en /chart. `dateTo` se fija al
+    // propio `periodEnd` de la corrida de arriba: abarca EXACTAMENTE los
+    // mismos datos (mismos resultados garantizados, para que /chart no
+    // 404 por falta de elasticidades), y lo único que cambia es que el
+    // parámetro queda presente — que es justo lo que D-22 mira, no si la
+    // ventana de verdad recorta algo. Las demás presentaciones no cambian.
+    const antesDeExploratoria = await vigentes(`&presentationId=${presentacion}`);
     const otrasAntes = (await vigentes()).filter((f) => f.presentationId !== presentacion);
-    const [{ primero }]: { primero: string }[] = await db.query(
-      `SELECT to_char(MIN(k.fecha AT TIME ZONE $2), 'YYYY-MM-DD') AS primero
-       FROM transacciones_detalle d JOIN canastas k ON k.transaccion_id = d.transaccion_id
-       WHERE d.presentacion_id = $1`,
-      [presentacion, DIA_DE_NEGOCIO],
-    );
-    const posterior = await calcular({ presentationId: presentacion, dateTo: primero });
-    for (const fila of await vigentes(`&presentationId=${presentacion}`)) {
-      if (fila.runId === posterior.runId) expect(fila.outdated).toBe(false);
-      else expect(fila.outdated).toBe(true);
-    }
+    const exploratoria = await calcular({ presentationId: presentacion, dateTo: calculo.periodEnd });
+
+    const despuesDeExploratoria = await vigentes(`&presentationId=${presentacion}`);
+    // Ni una fila cambia de runId, valor ni outdated: /current ignora
+    // por completo la corrida con dateTo, sin importar que sea más nueva.
+    expect(despuesDeExploratoria).toEqual(antesDeExploratoria);
+    expect(despuesDeExploratoria.map((f) => f.runId)).not.toContain(exploratoria.runId);
+
     const otrasDespues = (await vigentes()).filter((f) => f.presentationId !== presentacion);
     expect(otrasDespues.map((f) => [f.presentationId, f.zoneId, f.runId, f.outdated])).toEqual(
       otrasAntes.map((f) => [f.presentationId, f.zoneId, f.runId, f.outdated]),
     );
+
+    // La corrida exploratoria SIGUE pudiéndose consultar por su runId:
+    // D-22 la saca de /current, no la esconde de /chart.
+    const { status: statusExploratoria } = await http(
+      'GET',
+      `/v1/elasticity/chart?presentationId=${presentacion}&runId=${exploratoria.runId}`,
+    );
+    expect(statusExploratoria).toBe(200);
+  });
+
+  it('granularity=month agrupa las ventas por mes (D-21) y coincide con una referencia agrupada igual', async () => {
+    const esperadoPorMes = await observaciones(DIA_DE_NEGOCIO, 'month');
+
+    const calculo = await calcular({ granularity: 'month' });
+
+    expect(calculo.results.length).toBeGreaterThan(0);
+    for (const r of calculo.results) {
+      const ref = esperadoPorMes(r.presentationId, r.zoneId);
+      expect(ref).not.toBeNull();
+      expect(Math.abs(r.value - ref!.e)).toBeLessThan(TOLERANCIA);
+      expect(r.observations).toBe(ref!.n);
+    }
+  });
+
+  it('sin granularity, el default es semana: coincide con la referencia agrupada por semana ISO', async () => {
+    const esperadoPorSemana = await observaciones(DIA_DE_NEGOCIO, 'week');
+
+    const calculo = await calcular({});
+
+    for (const r of calculo.results) {
+      const ref = esperadoPorSemana(r.presentationId, r.zoneId);
+      expect(ref).not.toBeNull();
+      expect(Math.abs(r.value - ref!.e)).toBeLessThan(TOLERANCIA);
+      expect(r.observations).toBe(ref!.n);
+    }
   });
 
   it('solo el Responsable de precios calcula: el Analista recibe 403 y no se crea corrida (Matriz §3, M11)', async () => {
