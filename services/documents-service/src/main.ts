@@ -15,7 +15,7 @@ import { XmlInterceptor } from './common/interceptors/xml.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  app.enableCors({ exposedHeaders: ['Content-Disposition'] }); // el web lee el nombre del archivo exportado
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });
