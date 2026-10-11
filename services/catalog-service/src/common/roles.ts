@@ -25,4 +25,11 @@ export const PERFILES_INTERNOS = [
 ] as const;
 
 /** Quién resuelve las propuestas de alta de producto (RF-12). */
-export const APRUEBAN_PRODUCTOS = [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA] as const;
+export const APRUEBAN_PRODUCTOS = [ROL.GERENTE_CATEGORIA] as const;
+
+/**
+ * Quién ve productos que aún no están activos (pendientes o rechazados).
+ * El Gerente los resuelve; Administrador y Auditor solo los leen (CAT-05).
+ * Para el resto del equipo un producto no activo no existe (D-08).
+ */
+export const VEN_NO_ACTIVOS = [ROL.GERENTE_CATEGORIA, ROL.ADMINISTRADOR, ROL.AUDITOR] as const;

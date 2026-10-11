@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsUUID, Validate } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { EsFiltroDeFecha } from '../../common/zona-horaria';
 
 /**
  * M06 — Filtros de consulta de transacciones. Todos opcionales y
@@ -14,11 +15,11 @@ export class TransactionFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({ example: '2026-09-01', description: 'Desde esta fecha, inclusive.' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateFrom debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateFrom?: string;
 
   @ApiPropertyOptional({ example: '2026-09-30', description: 'Hasta esta fecha, inclusive (día completo).' })
   @IsOptional()
-  @IsDateString({}, { message: 'dateTo debe ser una fecha ISO válida.' })
+  @Validate(EsFiltroDeFecha)
   dateTo?: string;
 }

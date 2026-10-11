@@ -20,9 +20,10 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 3 de precios (POST, history, compare-zones) + 4 de propuestas (POST, GET, approve, reject).
+    // 5 de precios (POST, history, current, series, compare-zones) + 2 de alertas (GET, PUT) + 4 de propuestas
+    // (POST, GET, approve, reject) + 4 de observaciones (POST, GET, approve, reject).
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(7);
+    expect(operaciones).toBe(15);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
@@ -38,7 +39,10 @@ describe('Swagger (integración, requiere stack)', () => {
           const contenido = respuesta.content ?? {};
           if (contenido['application/json']?.example === undefined) fallas.push(`${etiqueta} ${estado}: sin ejemplo JSON`);
           const xml = contenido['application/xml']?.example;
-          if (typeof xml !== 'string' || !xml.includes('<response>')) fallas.push(`${etiqueta} ${estado}: sin ejemplo XML`);
+          // El ejemplo trae la raíz con nombre y el namespace reales, nunca un <response> genérico.
+          if (typeof xml !== 'string' || xml.includes('<response>') || !xml.includes('xmlns="pricing/v1"')) {
+            fallas.push(`${etiqueta} ${estado}: el ejemplo XML no es el que emite el servicio (raíz con namespace pricing/v1)`);
+          }
         }
       }
     }
@@ -58,9 +62,17 @@ describe('Swagger (integración, requiere stack)', () => {
     const ejemplo = paths['/v1/prices/history'].get.responses?.['200']?.content?.['application/xml']?.example as string;
 
     // Misma estructura que `GET /v1/segments` con Accept: application/xml.
-    for (const etiqueta of ['<response>', '<data>', '<item>', '<total>', '<page>', '<limit>']) {
+    expect(ejemplo).toContain('<priceListResponse xmlns="pricing/v1">');
+    for (const etiqueta of ['<data>', '<item>', '<total>', '<page>', '<limit>']) {
       expect(ejemplo).toContain(etiqueta);
     }
     expect(ejemplo.match(/<data>/g)).toHaveLength(1);
+  });
+
+  it('los errores documentan también su ejemplo en XML (<error>), incluido el 413 de PRI-12 donde aplica', async () => {
+    const { paths } = await documentacion();
+    const xml = paths['/v1/prices/history'].get.responses?.['401']?.content?.['application/xml']?.example as string;
+    expect(xml).toContain('<error xmlns="pricing/v1">');
+    expect(xml).toContain('<statusCode>401</statusCode>');
   });
 });

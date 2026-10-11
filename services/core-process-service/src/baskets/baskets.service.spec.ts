@@ -251,7 +251,7 @@ describe('BasketsService.findAll (filtros y paginación)', () => {
     const sql = condiciones.map((c) => c.sql).join(' | ');
     expect(sql).toContain('basket.zoneId = :zoneId');
     expect(sql).toContain('basket.segmentId = :segmentId');
-    expect(sql).toContain('basket.date >= :dateFrom');
+    expect(sql).toContain('basket.date >= CAST(:dateFrom AS date)::timestamp AT TIME ZONE :zona');
     expect(sql).toContain('transaction.storeId = :storeId');
     expect(sql).toContain('basket.totalValue >= :minTotalValue');
     expect(sql).toContain('basket.totalValue <= :maxTotalValue');
@@ -264,10 +264,14 @@ describe('BasketsService.findAll (filtros y paginación)', () => {
     expect(sql).not.toContain('orWhere');
   });
 
-  it('dateTo toma el día completo, igual que M09', async () => {
+  it('dateTo toma el día completo LOCAL, igual que M09', async () => {
     const { svc, condiciones } = conQueryBuilder({});
     await svc.findAll({ dateTo: '2026-09-30' } as never);
-    expect(condiciones[0].sql).toBe('basket.date < CAST(:dateTo AS date) + 1');
+    expect(condiciones[0].sql).toBe(
+      'basket.date < (CAST(:dateTo AS date) + 1)::timestamp AT TIME ZONE :zona',
+    );
+    // El día es el día local, no el día UTC del servidor de base de datos.
+    expect(condiciones[0].params).toMatchObject({ zona: 'America/Monterrey' });
   });
 
   it('hasBasicProducts=false filtra las que no traen ninguno', async () => {
