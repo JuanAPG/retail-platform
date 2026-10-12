@@ -1,5 +1,4 @@
-import { algorithmsApi, monolitoApi } from './client';
-import { statusDe } from './errores';
+import { algorithmsApi } from './client';
 import {
   ElasticityChartData,
   ElasticityFilters,
@@ -33,16 +32,10 @@ export const getGraficoElasticidad = (filtros: ElasticityFilters) =>
   algorithmsApi.get<ElasticityChartData>('/elasticity/chart', { params: limpiar(filtros) }).then((r) => r.data);
 
 /**
- * Pares sustitutos de una categoría. Se calcula al vuelo en el backend.
- * algorithms-core todavía no tiene este endpoint (RF-17): mientras responda 404
- * se usa el del monolito congelado, que acepta el mismo token. Cuando el
- * microservicio lo implemente, esta función deja de caer al respaldo sola.
+ * Indicios de sustitución de una categoría (D-23): se calcula al vuelo, no se guarda.
+ * Un patrón describe cómo se compró; no prueba que el precio cause el cambio.
  */
-export async function getPatronesSustitucion(categoryId: string): Promise<SubstitutionPattern[]> {
-  try {
-    return (await algorithmsApi.get<SubstitutionPattern[]>('/substitution/patterns', { params: { categoryId } })).data;
-  } catch (err) {
-    if (statusDe(err) !== 404) throw err;
-    return (await monolitoApi.get<SubstitutionPattern[]>('/substitution/patterns', { params: { categoryId } })).data;
-  }
-}
+export const getPatronesSustitucion = (categoryId: string) =>
+  algorithmsApi
+    .get<SubstitutionPattern[]>('/substitution/patterns', { params: { categoryId } })
+    .then((r) => r.data);

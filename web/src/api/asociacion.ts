@@ -17,9 +17,16 @@ function limpiarFiltros(params: AprioriParams): AprioriParams {
   ) as unknown as AprioriParams;
 }
 
-/** Corre Apriori y guarda la corrida; cada regla trae su `runId`. */
-export const correrApriori = (params: AprioriParams) =>
-  algorithmsApi.post<AssociationRule[]>('/association/apriori/run', limpiarFiltros(params)).then((r) => r.data);
+export type AlgoritmoAsociacion = 'apriori' | 'fpgrowth';
+
+/**
+ * Corre Apriori o FP-Growth (RF-13/14: mismas reglas con los mismos parámetros) y guarda la corrida;
+ * cada regla trae su `runId`. Solo el Analista comercial puede (algorithms-core).
+ */
+export const correrAsociacion = (algoritmo: AlgoritmoAsociacion, params: AprioriParams) =>
+  algorithmsApi.post<AssociationRule[]>(`/association/${algoritmo}/run`, limpiarFiltros(params)).then((r) => r.data);
+
+export const correrApriori = (params: AprioriParams) => correrAsociacion('apriori', params);
 
 /** Historial, de la más reciente a la más antigua. Sin reglas. */
 export const getCorridas = () => traerTodo<AnalysisRun>(algorithmsApi, '/association/runs');

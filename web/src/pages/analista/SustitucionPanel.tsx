@@ -106,6 +106,7 @@ export function SustitucionPanel() {
                       {p.priceCorrelation === null ? '—' : p.priceCorrelation.toLocaleString('es-MX', dosDecimales)} ·{' '}
                       {p.observations} canastas
                     </p>
+                    {p.summary && <p className="mt-1 max-w-xl text-xs text-teal/80">{p.summary}</p>}
                   </div>
                 ),
               },

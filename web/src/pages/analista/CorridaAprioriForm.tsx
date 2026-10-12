@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AxiosError } from 'axios';
-import { correrApriori } from '../../api/asociacion';
+import { AlgoritmoAsociacion, correrAsociacion } from '../../api/asociacion';
+import { useAuth } from '../../context/AuthContext';
 import { mensajeDeError } from '../../api/errores';
 import { AnalyticsFilters, AssociationRule, IncomeSegment, Tienda, Zona } from '../../types';
 import { Select } from '../../components/ui/Select';
@@ -27,6 +28,10 @@ interface CorridaAprioriFormProps {
  * explícitos: el backend no aplica defaults ocultos.
  */
 export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onFallida }: CorridaAprioriFormProps) {
+  const { usuario } = useAuth();
+  // algorithms-core: solo el Analista comercial corre asociaciones; al resto no se le ofrece lo que daría 403.
+  const puedeCorrer = usuario?.rol === 'Analista comercial';
+  const [algoritmo, setAlgoritmo] = useState<AlgoritmoAsociacion>('apriori');
   const [soporte, setSoporte] = useState('20');
   const [confianza, setConfianza] = useState('50');
   const [tamanoMaximo, setTamanoMaximo] = useState(3);
@@ -61,7 +66,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
     setCorriendo(true);
     setError(null);
     try {
-      const reglas = await correrApriori({
+      const reglas = await correrAsociacion(algoritmo, {
         ...filtros,
         minSupport: Number((soporteNum / 100).toFixed(4)),
         minConfidence: Number((confianzaNum / 100).toFixed(4)),
@@ -76,9 +81,25 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
     }
   }
 
+  if (!puedeCorrer) {
+    return (
+      <p className="rounded-full bg-arena px-5 py-3 text-sm text-teal">
+        Solo el Analista comercial corre análisis de asociación; aquí consultas los ya guardados.
+      </p>
+    );
+  }
+
   return (
     <form onSubmit={correr} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
       <h2 className="font-slab text-[22px] text-vino">Nuevo análisis</h2>
+
+      <div className="flex flex-col gap-1.5 sm:max-w-xs">
+        <Select id="apr-algoritmo" label="Algoritmo" value={algoritmo} onChange={(e) => setAlgoritmo(e.target.value as AlgoritmoAsociacion)}>
+          <option value="apriori">Apriori</option>
+          <option value="fpgrowth">FP-Growth</option>
+        </Select>
+        <span className="text-xs text-teal/70">Con los mismos parámetros dan las mismas reglas; FP-Growth es más rápido con muchas canastas.</span>
+      </div>
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <label className={labelClass} htmlFor="apr-soporte">
