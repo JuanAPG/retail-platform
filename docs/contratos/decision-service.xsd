@@ -58,8 +58,9 @@
     </xs:complexType>
   </xs:element>
 
-  <!-- GET /v1/recommendations/:id/explain. `xs:all`: no depende del orden
-       en que el servicio arme los campos. -->
+  <!-- GET /v1/recommendations/:id/explain y la respuesta de PATCH
+       /v1/recommendations/:id/approve|reject (con el status nuevo).
+       `xs:all`: no depende del orden en que el servicio arme los campos. -->
   <xs:element name="recomendacion">
     <xs:complexType>
       <xs:all>
@@ -114,6 +115,66 @@
               <xs:element name="generadaEn" type="xs:dateTime"/>
             </xs:all>
           </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/recommendations. Paginación estándar, misma envoltura que
+       `simulacionEscenariosResponse`. Los tres ids son opcionales porque un
+       nulo se omite en el XML. -->
+  <xs:complexType name="RecomendacionResumen">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="whatRecommends" type="xs:string"/>
+      <xs:element name="why" type="xs:string"/>
+      <xs:element name="estimatedImpact" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="scenarioId" type="xs:string" minOccurs="0"/>
+      <xs:element name="runId" type="xs:string" minOccurs="0"/>
+      <xs:element name="status" type="dec:EstatusRecomendacion"/>
+      <xs:element name="generatedAt" type="xs:dateTime"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:simpleType name="EstatusRecomendacion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="propuesta"/>
+      <xs:enumeration value="aceptada"/>
+      <xs:enumeration value="descartada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="ListaRecomendaciones">
+    <xs:sequence>
+      <xs:element name="item" type="dec:RecomendacionResumen" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="recomendacionesPageResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data" type="dec:ListaRecomendaciones" minOccurs="0"/>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Body de PATCH /v1/recommendations/:id/reject. La respuesta de approve
+       y reject es `recomendacion` (misma forma que explain, status nuevo). -->
+  <xs:element name="recomendacionRechazoRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="motivo">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="10"/>
+              <xs:maxLength value="500"/>
+            </xs:restriction>
+          </xs:simpleType>
         </xs:element>
       </xs:sequence>
     </xs:complexType>

@@ -37,3 +37,51 @@ export class RecommendationExplanation {
   @ApiProperty()
   generatedAt: Date;
 }
+
+/** Elemento de `GET /v1/recommendations` (mismos nombres que `explain`, sin evidencia). */
+export class RecommendationSummary {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  title: string;
+
+  @ApiProperty()
+  whatRecommends: string;
+
+  @ApiProperty()
+  why: string;
+
+  @ApiProperty()
+  estimatedImpact: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  zoneId: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  scenarioId: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  runId: string | null;
+
+  @ApiProperty({ enum: ['propuesta', 'aceptada', 'descartada'] })
+  status: string;
+
+  @ApiProperty()
+  generatedAt: Date;
+}
+
+/** Envoltura de la paginación estándar, solo para documentarla en Swagger. */
+export class RecommendationPage {
+  @ApiProperty({ type: [RecommendationSummary] })
+  data: RecommendationSummary[];
+
+  @ApiProperty()
+  total: number;
+
+  @ApiProperty()
+  page: number;
+
+  @ApiProperty()
+  limit: number;
+}
