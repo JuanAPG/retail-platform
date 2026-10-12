@@ -226,7 +226,15 @@ export function ReportesPanel() {
 
       {seleccionado && (
         <div className="px-6">
-          <DetalleReporte reporte={seleccionado} alExportado={() => { historial.refetch(); setSeleccionado((s) => (s ? { ...s, estado: 'exportado' } : s)); }} />
+          <DetalleReporte reporte={seleccionado} alExportado={async () => {
+              // El servicio decide si el estado cambia (solo el Gerente lo marca exportado): se relee, no se supone.
+              historial.refetch();
+              try {
+                setSeleccionado(await getReporte(seleccionado.id));
+              } catch {
+                // Si falla la relectura, se deja lo que ya se mostraba.
+              }
+            }} />
         </div>
       )}
 
