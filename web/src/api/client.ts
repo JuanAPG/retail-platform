@@ -20,6 +20,9 @@ export const SERVICIOS = {
   documents: { etiqueta: 'documents-service', puerto: 3108, env: 'VITE_DOCUMENTS_URL' },
   notifications: { etiqueta: 'notifications-service', puerto: 3109, env: 'VITE_NOTIFICATIONS_URL' },
   audit: { etiqueta: 'audit-service', puerto: 3110, env: 'VITE_AUDIT_URL' },
+  // RESPALDO TEMPORAL: el monolito (congelado) solo se consulta para lo que un microservicio aún no implementa.
+  // Acepta los mismos tokens (mismo secreto JWT) y no lleva prefijo /v1.
+  monolito: { etiqueta: 'api (monolito)', puerto: 3001, env: 'VITE_MONOLITO_URL' },
 } as const;
 
 type NombreServicio = keyof typeof SERVICIOS;
@@ -30,7 +33,8 @@ const TIMEOUT_MS = 15000;
 function urlBase(nombre: NombreServicio): string {
   const { puerto, env } = SERVICIOS[nombre];
   const configurada = (import.meta.env as Record<string, string | undefined>)[env];
-  return `${(configurada ?? `http://localhost:${puerto}`).replace(/\/$/, '')}/v1`;
+  const base = (configurada ?? `http://localhost:${puerto}`).replace(/\/$/, '');
+  return nombre === 'monolito' ? base : `${base}/v1`;
 }
 
 // --- Almacenamiento de la sesión -------------------------------------
@@ -193,3 +197,4 @@ export const decisionApi = crearCliente('decision');
 export const documentsApi = crearCliente('documents');
 export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
+export const monolitoApi = crearCliente('monolito');
