@@ -77,7 +77,14 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
     await db.destroy();
   });
 
-  it('una corrida de elasticidad deja ejecutar_corrida con el Responsable de precios como actor', async () => {
+  /** Aviso de la corrida en la bandeja de quien la lanzó. */
+  async function aviso(token: string, runId: string) {
+    const r = await fetch(`${NOTIFICACIONES}/v1/notifications?limit=100`, { headers: { Authorization: `Bearer ${token}` } });
+    const bandeja = (await r.json()) as { data: { eventType: string; relatedEntityId: string; sourceService: string; title: string }[] };
+    return bandeja.data.find((n) => n.relatedEntityId === runId);
+  }
+
+  it('una corrida de elasticidad deja su evento y avisa corrida.terminada al Responsable de precios', async () => {
     const precios = await entrar(process.env.ELASTICIDAD_TEST_EMAIL ?? 'precios@retail.mx');
 
     const runId = await correr('/v1/elasticity/calculate', precios.token, {});
@@ -88,23 +95,27 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
       usuarioId: precios.id,
       cambios: { tipo: 'elasticidad', estado: 'completada' },
     });
+    // Desde #61 notifications-service acepta al Responsable de precios como origen.
+    expect(await aviso(precios.token, runId)).toMatchObject({ eventType: 'corrida.terminada', sourceService: 'algorithms-core' });
   });
 
-  it('una corrida de Apriori deja su evento y avisa corrida.terminada a quien la lanzó', async () => {
+  it.each([
+    ['Apriori', '/v1/association/apriori/run'],
+    ['FP-Growth', '/v1/association/fpgrowth/run'],
+  ])('una corrida de %s deja su evento y avisa corrida.terminada a quien la lanzó', async (nombre, ruta) => {
     const analista = await entrar(process.env.ALGORITHMS_TEST_EMAIL ?? 'analista@retail.mx');
 
-    const runId = await correr('/v1/association/apriori/run', analista.token, { minSupport: 0.01, minConfidence: 0.01 });
+    const runId = await correr(ruta, analista.token, { minSupport: 0.01, minConfidence: 0.01 });
 
     expect(await evento(runId)).toMatchObject({
       servicio: 'algorithms-core',
       usuarioId: analista.id,
       cambios: { tipo: 'asociacion', estado: 'completada' },
     });
-    const r = await fetch(`${NOTIFICACIONES}/v1/notifications?limit=100`, { headers: { Authorization: `Bearer ${analista.token}` } });
-    const bandeja = (await r.json()) as { data: { eventType: string; relatedEntityId: string; sourceService: string }[] };
-    expect(bandeja.data.find((n) => n.relatedEntityId === runId)).toMatchObject({
+    expect(await aviso(analista.token, runId)).toMatchObject({
       eventType: 'corrida.terminada',
       sourceService: 'algorithms-core',
+      title: `${nombre}: corrida terminada`,
     });
   });
 });

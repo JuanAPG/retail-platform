@@ -101,6 +101,14 @@ try:
     d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
 except Exception: print("")' 2>/dev/null)"
 
+# Una categoria real del catalogo, para los patrones de sustitucion.
+CATEGORIA_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
+  "http://$HOST:3102/v1/product-categories" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
 # servicio|puerto|xsd|ruta[|admin]
 # Solo endpoints de LECTURA: el script no muta nada.
 # `admin` marca los que exigen un rol que el Analista no tiene.
@@ -130,6 +138,7 @@ ENDPOINTS=(
   "algorithms|3105|algorithms-core|/v1/elasticity/current?limit=2"
   "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=PRES_ELASTICIDAD_ID"
   "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=PRES_ELASTICIDAD_ID&groupBy=segment"
+  "algorithms|3105|algorithms-core|/v1/substitution/patterns?categoryId=CATEGORIA_ID"
   "decision|3107|decision-service|/v1/accessibility/index"
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
   "notifications|3109|notifications-service|/v1/notifications?limit=2"
@@ -149,6 +158,7 @@ ERRORES=(
   "algorithms|3105|algorithms-core|/v1/elasticity/current|401"
   "algorithms|3105|algorithms-core|/v1/elasticity/current?page=1000001|400"
   "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=00000000-0000-4000-8000-000000000000|404"
+  "algorithms|3105|algorithms-core|/v1/substitution/patterns?categoryId=999999|404"
   "notifications|3109|notifications-service|/v1/notifications|401"
   "audit|3110|audit-service|/v1/auditoria|401"
 )
@@ -194,6 +204,7 @@ for fila in "${ENDPOINTS[@]}"; do
   ruta="${ruta//AUDITORIA_ID/$AUDITORIA_ID}"
   ruta="${ruta//PRES_ELASTICIDAD_ID/$PRES_ELASTICIDAD_ID}"
   ruta="${ruta//CORRIDA_ID/$CORRIDA_ID}"
+  ruta="${ruta//CATEGORIA_ID/$CATEGORIA_ID}"
   token="$CORE_TOKEN"
   [[ "$rol" == "admin" ]] && token="${CORE_TOKEN_ADMIN:-$CORE_TOKEN}"
   archivo="$TMP/$svc$(echo "$ruta" | tr '/?=&' '____').xml"
