@@ -238,24 +238,30 @@
     </xs:all>
   </xs:complexType>
 
+  <!-- Cuerpo de apriori/run y fpgrowth/run: los mismos parámetros. -->
+  <xs:complexType name="associationRunRequest">
+    <xs:all>
+      <xs:element name="minSupport" type="alg:minSupport"/>
+      <xs:element name="minConfidence" type="alg:minConfidence"/>
+      <xs:element name="maxItemsetSize" type="alg:maxItemsetSize" minOccurs="0"/>
+      <xs:element name="storeId" type="xs:string" minOccurs="0"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="segmentId" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
+      <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
   <!-- POST /v1/association/apriori/run -->
-  <xs:element name="aprioriRunRequest">
-    <xs:complexType>
-      <xs:all>
-        <xs:element name="minSupport" type="alg:minSupport"/>
-        <xs:element name="minConfidence" type="alg:minConfidence"/>
-        <xs:element name="maxItemsetSize" type="alg:maxItemsetSize" minOccurs="0"/>
-        <xs:element name="storeId" type="xs:string" minOccurs="0"/>
-        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
-        <xs:element name="segmentId" type="xs:positiveInteger" minOccurs="0"/>
-        <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
-        <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
-      </xs:all>
-    </xs:complexType>
-  </xs:element>
+  <xs:element name="aprioriRunRequest" type="alg:associationRunRequest"/>
 
   <!-- Arreglo plano de reglas (sin paginar). -->
   <xs:element name="aprioriRunResponse" type="alg:ruleList"/>
+
+  <!-- POST /v1/association/fpgrowth/run (D2, RF-14): mismo cuerpo y misma
+       respuesta que apriori/run; solo cambia la raíz. -->
+  <xs:element name="fpgrowthRunRequest" type="alg:associationRunRequest"/>
+  <xs:element name="fpgrowthRunResponse" type="alg:ruleList"/>
 
   <!-- GET /v1/association/runs (paginado) -->
   <xs:element name="runListResponse">

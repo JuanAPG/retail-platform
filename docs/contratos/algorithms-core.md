@@ -20,6 +20,7 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 | Método | Ruta | Roles |
 |---|---|---|
 | POST | `/v1/association/apriori/run` | Analista comercial |
+| POST | `/v1/association/fpgrowth/run` | Analista comercial |
 | GET | `/v1/association/runs` | Los 6 perfiles internos |
 | GET | `/v1/association/runs/:id` | Los 6 perfiles internos |
 | POST | `/v1/elasticity/calculate` | Responsable de precios |
@@ -27,7 +28,7 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 | GET | `/v1/elasticity/current` | Los 6 perfiles internos |
 | GET | `/v1/substitution/patterns` | Los 6 perfiles internos |
 
-Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo lo hace
+Correr Apriori o FP-Growth, o calcular elasticidad, **crea una corrida**, por eso solo lo hace
 quien tiene Total en ese módulo según la Matriz (§3); los demás perfiles internos
 leen. Si el Analista calcula elasticidad desde el escritorio está PENDIENTE
 (P-04). El Proveedor no tiene acceso a ninguna ruta.
@@ -62,7 +63,7 @@ instantes en ISO 8601 UTC.
 
 ## /v1/association — Reglas de asociación (M10)
 
-Toda corrida de Apriori queda guardada con sus parámetros, supuestos y filtros
+Toda corrida de Apriori o FP-Growth (D2) queda guardada con sus parámetros, supuestos y filtros
 para poder reproducirla y explicarla (RF-15). El antecedente de una regla es un
 **conjunto** de productos (`items` con `side: "antecedente"`), nunca un texto.
 
@@ -84,7 +85,8 @@ para poder reproducirla y explicarla (RF-15). El antecedente de una regla es un
 | `filters` | `[{ runId, dimension, referenceId }]` | Solo en `GET /runs/:id`. Sin filas = todo el periodo |
 | `results` | `Rule[]` | Solo en `GET /runs/:id` |
 
-Claves de `parameters`: `algoritmo` (`apriori`), `soporte_minimo`,
+Claves de `parameters`: `algoritmo` (`apriori` o `fpgrowth`; es el
+`AnalysisRun.algorithm` de D2, sin columna aparte), `soporte_minimo`,
 `confianza_minima`, `tamano_maximo_itemset` y, en corridas completadas,
 `reglas_generadas` y `reglas_excluidas_rn10`.
 
@@ -196,6 +198,23 @@ Errores de entrada (fechas invertidas, ninguna canasta con esos filtros) → `40
 y **no** se crea corrida. Si falla después de leer los datos → `500` y la
 corrida queda registrada como `fallida` con su `errorMessage`.
 
+### POST /v1/association/fpgrowth/run
+
+FP-Growth (D2, RF-14). **Mismo cuerpo, mismas validaciones, mismos errores y
+misma respuesta** que `apriori/run`: con los mismos datos y umbrales devuelve las
+mismas reglas, con las mismas métricas y en el mismo orden. Solo cambia:
+
+- la corrida guarda `algoritmo = fpgrowth` en `parameters`; así se distingue en
+  `/runs` y `/runs/:id`;
+- en XML, la raíz de la respuesta es `fpgrowthRunResponse` (y la del cuerpo,
+  `fpgrowthRunRequest`), del mismo tipo que las de Apriori;
+- el aviso y la bitácora de la corrida (ALG-10) la llaman `FP-Growth`.
+
+Encuentra los itemsets frecuentes con un árbol FP en lugar de generar
+candidatos; las reglas y su orden salen del mismo código que en Apriori. Con
+frecuencias empatadas, el árbol ordena los productos por id, así que también es
+determinista (D-15).
+
 ### GET /v1/association/runs
 
 Query: `page`, `limit` (ver `paginacion.md`). Orden: más reciente primero.
@@ -263,7 +282,7 @@ otro tipo** (p. ej. de elasticidad) → `404`.
 |---|---|
 | 400 | Cuerpo inválido o campo no permitido; umbrales fuera de rango; fechas invertidas; ninguna canasta con los filtros; `:id` no UUID |
 | 401 | Sin token, token revocado o sin sesión en Redis |
-| 403 | Rol sin permiso (p. ej. cualquiera que no sea Analista comercial corriendo Apriori, o Proveedor) |
+| 403 | Rol sin permiso (p. ej. cualquiera que no sea Analista comercial corriendo Apriori o FP-Growth, o Proveedor) |
 | 404 | Corrida inexistente o que no es de asociación |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
 | 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
@@ -587,7 +606,7 @@ XML: elemento `substitutionPatternListResponse`.
 
 ## Bitácora y aviso de cada corrida (ALG-10)
 
-Toda corrida que se guarda —de Apriori o de elasticidad, **completada o
+Toda corrida que se guarda —de Apriori, FP-Growth o elasticidad, **completada o
 fallida**— deja un evento en audit-service y avisa a quien la lanzó. Un `400`
 (datos inválidos, sin ventas) no crea corrida y no se reporta.
 
@@ -612,7 +631,7 @@ SERVICE_UNAVAILABLE` en menos de 4 s; hasta entonces, un fallo de lectura es
 
 | Servicio | Qué necesita | Para qué |
 |---|---|---|
-| core-process-service | Líneas de canasta: `basketId`, `storeId`, `zoneId`, `segmentId`, `date`, `presentationId`, `quantity`, `unitPrice`. Filtrables por tienda, zona, segmento y rango de fechas, **sin paginar** (una corrida procesa todas las líneas del periodo) | Apriori, elasticidad, sustitución |
+| core-process-service | Líneas de canasta: `basketId`, `storeId`, `zoneId`, `segmentId`, `date`, `presentationId`, `quantity`, `unitPrice`. Filtrables por tienda, zona, segmento y rango de fechas, **sin paginar** (una corrida procesa todas las líneas del periodo) | Apriori, FP-Growth, elasticidad, sustitución |
 | catalog-service | Presentación → producto → categoría; nombres de producto y presentación; zonas; segmentos; productos de una categoría | Agrupar presentaciones en producto, nombres en respuestas, barras del gráfico |
 | pricing-service | Histórico de precios por presentación: `presentationId`, `storeId`, `price`, `validFrom`, `validUntil` | Sustitución (precio vigente de A en cada canasta) |
 | auth-service | Nombre del usuario que ejecutó la corrida (`user.nombre`) | Historial de corridas |
