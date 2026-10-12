@@ -6,8 +6,9 @@ import { SubstitutionPattern } from './dto/substitution-pattern.dto';
  * `api/src/elasticity/substitution.service.ts` sin cambiar la detección.
  * Funciones puras: sin base de datos, se prueban con canastas armadas a mano.
  *
- * El método (correlación simple del Sprint 1) es el que fija el contrato;
- * RN-11 deja PENDIENTE (PR-5) si se cambia a elasticidad cruzada.
+ * El método es el de D-23 (Matriz §4): indicio por coocurrencia y
+ * correlación de precio, no elasticidad cruzada; sin historial de
+ * inventario no se detecta desabasto.
  */
 
 /** Con menos canastas, "nunca juntos" sería casualidad: lift 0 con 2 compras. */

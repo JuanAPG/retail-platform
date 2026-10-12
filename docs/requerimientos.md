@@ -50,7 +50,7 @@
 | RF-14 | El sistema debe generar reglas de asociación entre productos (FP-Growth). | algorithms-core | D2. Mismas reglas que Apriori con los mismos datos. |
 | RF-15 | El sistema deberá permitir configurar los parámetros mínimos de soporte y confianza antes de ejecutar los algoritmos de asociación. | algorithms-core | D-17: (0, 1], umbral `>=`. |
 | RF-16 | El sistema deberá permitir agrupar zonas o segmentos mediante algoritmos de clustering según patrones de consumo similares. | analytics-stats | D3. Nunca agrupar personas. |
-| RF-17 | El sistema deberá identificar patrones de sustitución entre productos dentro de una misma categoría. | algorithms-core | Método: ver RN-11 (PENDIENTE). |
+| RF-17 | El sistema deberá identificar patrones de sustitución entre productos dentro de una misma categoría. | algorithms-core | Método: D-23 (indicio por coocurrencia y correlación de precio). |
 | RF-18 | El sistema debe calcular la elasticidad precio-demanda. | algorithms-core | D-18: unitaria si 0.95 ≤ \|E\| ≤ 1.05. |
 | RF-19 | El sistema deberá permitir visualizar la elasticidad calculada mediante gráficos comparativos por zona o segmento. | algorithms-core + web | Highcharts en web. |
 | RF-20 | El sistema deberá ejecutar pruebas de hipótesis para validar diferencias de comportamiento de compra entre segmentos. | analytics-stats | |

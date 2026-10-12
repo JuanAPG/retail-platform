@@ -114,7 +114,7 @@ Notas:
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-20)
+### 4.2 Reglas de negocio (D-01 a D-23)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -140,6 +140,7 @@ Notas:
 | D-20 | Reportes | El reporte ejecutivo trae **los 16 indicadores** de la retroalimentación. Si un servicio no responde en 3 s, su indicador sale `disponible:false` con motivo, **nunca 0**. | Ver contrato de documents-service. |
 | D-21 | Elasticidad | `POST /v1/elasticity/calculate` agrupa las ventas por **día, semana o mes** (`granularity`); default **semana**. RN-03 pide mes, pero queda **fuera del Parcial 2**, así que no es una regla vigente que cumplir todavía: semana se eligió porque promedia el ruido de entre-semana/fin-de-semana sin diluir los cambios de precio (día es más ruidoso; mes da muy pocos puntos con poca historia). | Sin `granularity`, la corrida sale con `granularity: "week"`. |
 | D-22 | Elasticidad | `GET /v1/elasticity/current` solo cuenta como **vigente** la corrida completada más reciente **sin** `dateFrom`/`dateTo` (ventana completa). Una corrida con esos filtros es exploratoria: nunca se promueve aquí aunque sea la más reciente; se consulta por su `runId` en `GET /v1/elasticity/chart`. | Una corrida filtrada por fecha no cambia lo que devuelve `/current`, aunque sea posterior a la vigente. |
+| D-23 | Sustitución | `GET /v1/substitution/patterns` detecta **indicios** de sustitución dentro de una misma categoría por **coocurrencia** (lift < 1 sobre las canastas que compraron la categoría, con al menos 1 coocurrencia esperada y al menos 2 canastas por producto) y **correlación de precio** (Pearson entre el precio vigente de A y "la canasta llevó B": `precio` si r ≥ 0.3, si no `preferencia`). **No es elasticidad cruzada.** El disparador por **desabasto no aplica**: no hay historial de inventario. Cada par trae su evidencia: `priceVariation` = (máximo − mínimo) / mínimo del precio de A; `originFrequencyChange` y `targetFrequencyChange` = proporción de canastas con A (o con B) cuando A está caro menos cuando está barato, con el corte en el punto medio entre el precio mínimo y el máximo de A. Es un indicio, nunca una causa. Resuelve el **método** de PR-5; el disparador por umbral de precio (RN-06) sigue PENDIENTE. | 12 canastas: leche a $10 en 6 (5 llevan leche, 1 queso) y a $12 en 6 (1 leche, 5 queso) → Leche → Queso tipo `precio`, lift 0, r = 0.6667, `priceVariation` 0.2, frecuencias −0.6667 y +0.6667 (`substitution.spec.ts`). |
 
 ## 5. Flujos con estado
 
