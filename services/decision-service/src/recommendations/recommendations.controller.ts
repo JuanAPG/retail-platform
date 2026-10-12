@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -14,9 +14,9 @@ import { Recommendation } from '../entities/recommendation.entity';
  * M14 — Motor de reglas de recomendaciones (sin IA). `evaluateRules` es un
  * método interno (sin endpoint propio): `generate` lo llama y persiste
  * las recomendaciones en una sola transacción. El contrato solo expone
- * `generate` y `explain`. Mismo criterio de roles que M11/M13:
- * Administrador y Analista para lo que calcula/guarda, cualquier perfil
- * interno para consultar.
+ * `generate` y `explain`. Roles según la matriz de permisos (M14): solo
+ * el Planeador genera/guarda (T); Administrador, Analista y el resto de
+ * perfiles internos consultan (L).
  */
 @ApiTags('M14 Recommendations')
 @ApiBearerAuth()
@@ -27,13 +27,18 @@ export class RecommendationsController {
 
   @Post('generate')
   @XmlRoot('recomendacionesResponse')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.PLANEADOR)
   @ApiOperation({
     summary: 'Evalúa las 4 reglas (accesibilidad, elasticidad, simulación, asociación) y guarda las recomendaciones generadas.',
   })
   @ApiCreatedResponse({ type: [Recommendation] })
-  generate(@Body() dto: RecommendationContextDto) {
-    return this.recommendationsService.generate(dto);
+  generate(
+    @Body() dto: RecommendationContextDto,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El token y la IP van a la bitácora (audit-service exige sesión).
+    return this.recommendationsService.generate(dto, { token, ip });
   }
 
   @Get(':id/explain')

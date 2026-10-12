@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -19,9 +19,9 @@ import { ScenarioPage } from './dto/scenario-summary.dto';
 /**
  * M13 — Simulación de escenarios. Cada simulación (precio o presentación)
  * se guarda automáticamente como escenario: por eso no hay un endpoint
- * separado para "guardar", solo para simular y para consultar. Mismo
- * criterio de roles que M11/M14: Administrador y Analista para lo que
- * calcula/guarda, cualquier perfil interno para consultar.
+ * separado para "guardar", solo para simular y para consultar. Roles según
+ * la matriz de permisos (M13): solo el Planeador simula/guarda (T);
+ * Administrador, Analista y el resto de perfiles internos consultan (L).
  */
 @ApiTags('M13 Simulation')
 @ApiBearerAuth()
@@ -32,23 +32,34 @@ export class SimulationController {
 
   @Post('price')
   @XmlRoot('simulacionPrecioResponse')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.PLANEADOR)
   @ApiOperation({ summary: 'Simula un cambio de precio con la elasticidad ya calculada y guarda el escenario.' })
   @ApiCreatedResponse({ type: SimulationResult })
-  simulatePriceChange(@Body() dto: PriceSimulationDto, @CurrentUser() user: SesionUsuario) {
-    return this.simulationService.simulatePriceChange(dto, user);
+  simulatePriceChange(
+    @Body() dto: PriceSimulationDto,
+    @CurrentUser() user: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El token y la IP van a la bitácora (audit-service exige sesión).
+    return this.simulationService.simulatePriceChange(dto, user, { token, ip });
   }
 
   @Post('presentation')
   @XmlRoot('simulacionPresentacionResponse')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.PLANEADOR)
   @ApiOperation({
     summary:
       'Compara las presentaciones de un mismo producto (desembolso, precio por unidad base, demanda, accesibilidad) y guarda el escenario.',
   })
   @ApiCreatedResponse({ type: PresentationComparisonResult })
-  simulatePresentationChange(@Body() dto: PresentationSimulationDto, @CurrentUser() user: SesionUsuario) {
-    return this.simulationService.simulatePresentationChange(dto, user);
+  simulatePresentationChange(
+    @Body() dto: PresentationSimulationDto,
+    @CurrentUser() user: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    return this.simulationService.simulatePresentationChange(dto, user, { token, ip });
   }
 
   @Get('scenarios')

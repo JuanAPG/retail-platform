@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { ContextoPeticion } from '../common/audit/audit.module';
 import { Recommendation } from '../entities/recommendation.entity';
 import {
   RecommendationEvidence,
@@ -50,6 +52,8 @@ export class RecommendationsService {
     @InjectRepository(RecommendationEvidence)
     private readonly evidenceRepo: Repository<RecommendationEvidence>,
     private readonly dataSource: DataSource,
+    /** Bitácora de cada recomendación creada (acción `generar_recomendacion`). */
+    private readonly audit: AuditReporter,
   ) {}
 
   /** Corre las 4 reglas sobre el contexto dado. No escribe nada. */
@@ -63,14 +67,18 @@ export class RecommendationsService {
     return [...accesibilidad, ...elasticidad, ...simulacion, ...asociacion];
   }
 
-  /** Evalúa las reglas y persiste cada resultado (recomendación + evidencia). */
-  async generate(context: RecommendationContextDto): Promise<Recommendation[]> {
+  /**
+   * Evalúa las reglas y persiste cada resultado (recomendación + evidencia).
+   * `contexto` lleva el token y la IP para la bitácora: una entrada por
+   * recomendación creada, después de confirmar la transacción.
+   */
+  async generate(context: RecommendationContextDto, contexto: ContextoPeticion = {}): Promise<Recommendation[]> {
     const borradores = await this.evaluateRules(context);
     if (borradores.length === 0) {
       return [];
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const guardadas = await this.dataSource.transaction(async (manager) => {
       const guardadas: Recommendation[] = [];
       for (const borrador of borradores) {
         const recomendacion = await manager.save(
@@ -100,6 +108,24 @@ export class RecommendationsService {
       }
       return guardadas;
     });
+
+    // Fuera de la transacción: reportar nunca lanza, y una bitácora caída no
+    // debe deshacer recomendaciones ya guardadas.
+    await Promise.all(
+      guardadas.map((r) =>
+        this.audit.reportar(
+          {
+            tabla: 'recomendaciones',
+            registroId: r.id,
+            accion: 'generar_recomendacion',
+            descripcion: r.titulo,
+            ip: contexto.ip ?? null,
+          },
+          contexto.token,
+        ),
+      ),
+    );
+    return guardadas;
   }
 
   async explain(recommendationId: string): Promise<RecommendationExplanation> {

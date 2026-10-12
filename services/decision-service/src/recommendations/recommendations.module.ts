@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { AuditModule } from '../common/audit/audit.module';
 import { Recommendation } from '../entities/recommendation.entity';
 import { RecommendationEvidence } from '../entities/recommendation-evidence.entity';
 import { RecommendationsService } from './recommendations.service';
@@ -17,7 +18,7 @@ import { RecommendationsController } from './recommendations.controller';
  * tablas están vacías.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Recommendation, RecommendationEvidence]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Recommendation, RecommendationEvidence]), JwtModule.register({}), AuditModule],
   controllers: [RecommendationsController],
   providers: [RecommendationsService, SessionGuard],
   exports: [RecommendationsService],

@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { DataSource, In, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { ContextoPeticion } from '../common/audit/audit.module';
 import { Pagina, PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { Scenario } from '../entities/scenario.entity';
@@ -94,14 +96,21 @@ export class SimulationService {
     @InjectRepository(ScenarioResult)
     private readonly resultRepo: Repository<ScenarioResult>,
     private readonly dataSource: DataSource,
+    /** Bitácora de cada simulación (acción `simular`). */
+    private readonly audit: AuditReporter,
   ) {}
 
   /**
    * `user` no está en la firma del contrato, pero `escenarios.creado_por`
    * es NOT NULL y solo el controlador conoce el token (mismo patrón que
-   * ElasticityService.calculate en M11).
+   * ElasticityService.calculate en M11). `contexto` lleva el token y la IP
+   * para la bitácora.
    */
-  async simulatePriceChange(dto: PriceSimulationDto, user: SesionUsuario): Promise<SimulationResult> {
+  async simulatePriceChange(
+    dto: PriceSimulationDto,
+    user: SesionUsuario,
+    contexto: ContextoPeticion = {},
+  ): Promise<SimulationResult> {
     const info = await this.presentacionInfo(dto.presentationId);
     const precioActual = await this.precioPromedioZona(dto.presentationId, dto.zoneId);
     if (precioActual <= 0) {
@@ -156,6 +165,18 @@ export class SimulationService {
       },
       user,
     );
+    // Después de guardar: reportar nunca lanza, y si audit-service falla la
+    // simulación ya quedó guardada igual.
+    await this.audit.reportar(
+      {
+        tabla: 'escenarios',
+        registroId: escenario.id,
+        accion: 'simular',
+        descripcion: `Simulación de precio: ${info.productName} ${info.presentationName}, ${precioActual} -> ${dto.newPrice}.`,
+        ip: contexto.ip ?? null,
+      },
+      contexto.token,
+    );
 
     return {
       type: 'price',
@@ -184,6 +205,7 @@ export class SimulationService {
   async simulatePresentationChange(
     dto: PresentationSimulationDto,
     user: SesionUsuario,
+    contexto: ContextoPeticion = {},
   ): Promise<PresentationComparisonResult> {
     const productId = dto.productId.toLowerCase();
     const zoneId = dto.zoneId?.toLowerCase() ?? null;
@@ -364,6 +386,16 @@ export class SimulationService {
         },
       },
       user,
+    );
+    await this.audit.reportar(
+      {
+        tabla: 'escenarios',
+        registroId: escenario.id,
+        accion: 'simular',
+        descripcion: `Comparación de ${presentaciones.length} presentaciones de ${productName}.`,
+        ip: contexto.ip ?? null,
+      },
+      contexto.token,
     );
 
     return {
