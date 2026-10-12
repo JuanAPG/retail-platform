@@ -140,6 +140,20 @@ describe('ReportsService', () => {
     expect(audit.reportar).toHaveBeenCalledWith(expect.objectContaining({ accion: 'exportar' }), 'Bearer t');
   });
 
+  it('exportar con un perfil de solo lectura descarga sin cambiar el estado, y audita igual (QA-DOC54-04)', async () => {
+    const { servicio, modelo, audit } = crear();
+    const d = doc();
+    modelo.findById.mockResolvedValue(d);
+    const auditor: SesionUsuario = { id: 'u-aud', email: 'a@retail.mx', rol: 'Auditor', rolId: 6 };
+
+    const { buffer } = await servicio.exportar(idValido, 'pdf', auditor, 'Bearer t');
+
+    expect(buffer.toString()).toContain('%PDF');
+    expect(d.estado).toBe('generado');
+    expect(d.save).not.toHaveBeenCalled();
+    expect(audit.reportar).toHaveBeenCalledWith(expect.objectContaining({ accion: 'exportar' }), 'Bearer t');
+  });
+
   it('exportar a xlsx usa el servicio de Excel, nombra el archivo .xlsx y marca exportado', async () => {
     const { servicio, modelo, excel, pdf, audit } = crear();
     const d = doc();

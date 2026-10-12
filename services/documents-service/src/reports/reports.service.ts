@@ -11,7 +11,7 @@ import { Connection, isValidObjectId, Model } from 'mongoose';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
-import { ROL } from '../common/roles';
+import { GENERAN_REPORTES, ROL } from '../common/roles';
 import { ActualizarReporteDto, GenerarReporteEjecutivoDto, ListarReportesDto } from './dto/reports.dto';
 import { ExcelService } from './excel.service';
 import { IndicatorsService } from './indicators.service';
@@ -161,7 +161,10 @@ export class ReportsService {
     const dto = this.aDto(doc);
     const buffer = formato === 'xlsx' ? await this.excel.generar(dto) : await this.pdf.generar(dto);
 
-    if (doc.estado !== ESTADO_REPORTE.EXPORTADO) {
+    // QA-DOC54-04: descargar es lectura. Solo quien puede cambiar el estado (mismo rol que el PATCH)
+    // lo marca "exportado" al exportar; un perfil de solo lectura descarga sin alterar el reporte.
+    const puedeEscribir = (GENERAN_REPORTES as readonly string[]).includes(usuario.rol);
+    if (puedeEscribir && doc.estado !== ESTADO_REPORTE.EXPORTADO) {
       doc.estado = ESTADO_REPORTE.EXPORTADO;
       await doc.save();
     }

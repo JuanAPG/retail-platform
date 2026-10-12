@@ -45,7 +45,7 @@ de servicio de Docker).
 }
 ```
 
-`estado`: `generado` | `exportado` (pasa a `exportado` al exportar a PDF). En XML los
+`estado`: `generado` | `exportado` (pasa a `exportado` cuando el Gerente de categoría exporta; los demás perfiles descargan sin cambiar el estado). En XML los
 nulos (`valor`, `motivo`, `zoneId`, `segmentId`) se omiten.
 
 ## POST /v1/reports/executive
@@ -88,7 +88,7 @@ XML: `reportStatsResponse`.
 
 ## GET /v1/reports/:id/export?format=pdf|xlsx
 
-Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el reporte como `exportado` y audita `exportar`.
+Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el reporte como `exportado` solo si quien exporta es el Gerente de categoría (mismo rol que el `PATCH`); los perfiles de solo lectura descargan sin alterar el estado. En ambos casos se audita `exportar`.
 `format` ausente o distinto de `pdf` y `xlsx` → `400`.
 
 - **`pdf`** (obligatorio, D-19): `Content-Type: application/pdf` y `Content-Disposition: attachment; filename="reporte-ejecutivo-<fecha>.pdf"`.
