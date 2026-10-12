@@ -19,7 +19,7 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 
 | Método | Ruta | Roles |
 |---|---|---|
-| POST | `/v1/association/apriori/run` | Administrador, Analista comercial |
+| POST | `/v1/association/apriori/run` | Analista comercial |
 | GET | `/v1/association/runs` | Los 6 perfiles internos |
 | GET | `/v1/association/runs/:id` | Los 6 perfiles internos |
 | POST | `/v1/elasticity/calculate` | Responsable de precios |
@@ -263,7 +263,7 @@ otro tipo** (p. ej. de elasticidad) → `404`.
 |---|---|
 | 400 | Cuerpo inválido o campo no permitido; umbrales fuera de rango; fechas invertidas; ninguna canasta con los filtros; `:id` no UUID |
 | 401 | Sin token, token revocado o sin sesión en Redis |
-| 403 | Rol sin permiso (p. ej. Planeador corriendo Apriori, o Proveedor) |
+| 403 | Rol sin permiso (p. ej. cualquiera que no sea Analista comercial corriendo Apriori, o Proveedor) |
 | 404 | Corrida inexistente o que no es de asociación |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
 | 503 | Redis (sesiones) no responde: no se puede verificar la sesión |

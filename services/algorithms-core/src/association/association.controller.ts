@@ -12,9 +12,10 @@ import { AssociationService } from './association.service';
 import { AprioriParamsDto } from './dto/apriori-params.dto';
 
 /**
- * M10 — Reglas de asociación. Correr Apriori crea una corrida, así que
- * queda para Administrador y Analista (mismo criterio que M05 y M06);
- * consultar corridas es lectura para cualquier perfil interno.
+ * M10 — Reglas de asociación. Según la Matriz (§3, M10), solo el Analista
+ * comercial tiene Total: es el único que corre Apriori (crea una corrida).
+ * El Administrador y los demás perfiles internos tienen Lectura: consultan
+ * las corridas.
  * SessionGuard va primero: valida JWT + sesión en Redis y deja `request.user`.
  */
 @ApiTags('M10 Association')
@@ -25,9 +26,9 @@ export class AssociationController {
   constructor(private readonly associationService: AssociationService) {}
 
   @Post('apriori/run')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
-    summary: 'Corre Apriori con el soporte y la confianza dados y guarda la corrida (Administrador, Analista comercial).',
+    summary: 'Corre Apriori con el soporte y la confianza dados y guarda la corrida. Solo Analista comercial.',
   })
   @RespuestaXml(
     201,

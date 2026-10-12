@@ -41,8 +41,8 @@ Una ruta nueva se documenta con `@ApiOperation`, `@ApiRespuesta(status, descripc
 y `@ApiErrores(...)`; la prueba `test/swagger.spec.ts` falla si falta alguna.
 
 Para probar rutas protegidas: **Authorize** con el `accessToken` de
-`POST http://localhost:3101/v1/auth/login` (correr Apriori: Administrador o Analista
-comercial; calcular elasticidad: Responsable de precios, `precios@retail.mx`;
+`POST http://localhost:3101/v1/auth/login` (correr Apriori: Analista comercial,
+`analista@retail.mx`; calcular elasticidad: Responsable de precios, `precios@retail.mx`;
 consultar: cualquier perfil interno).
 
 ## Docker

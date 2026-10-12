@@ -127,4 +127,24 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
     const definido = firma([...primera].sort(compararReglas));
     for (const corrida of corridas) expect(firma(corrida)).toEqual(definido);
   });
+
+  it('solo el Analista corre Apriori: el Administrador recibe 403 y no se crea corrida (Matriz §3, M10)', async () => {
+    const login = await fetch(`${AUTH}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@retail.mx', password: process.env.ALGORITHMS_TEST_PASSWORD ?? 'Passw0rd123!' }),
+    });
+    const admin = ((await login.json()) as { accessToken: string }).accessToken;
+    const [{ antes }]: { antes: number }[] = await db.query('SELECT count(*)::int AS antes FROM analisis_corridas');
+
+    const r = await fetch(`${BASE}/v1/association/apriori/run`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${admin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minSupport: 0.05, minConfidence: 0.1 }),
+    });
+
+    expect(r.status).toBe(403);
+    const [{ despues }]: { despues: number }[] = await db.query('SELECT count(*)::int AS despues FROM analisis_corridas');
+    expect(despues).toBe(antes);
+  });
 });
