@@ -59,6 +59,7 @@ describe('fpGrowth (RF-14: mismas reglas que Apriori con los mismos datos)', () 
     const entre = (min: number, max: number) => min + Math.floor(azar() * (max - min + 1));
     let reglas = 0;
     let deTresOMas = 0;
+    let empatadas = 0;
 
     for (let caso = 0; caso < 300; caso++) {
       // Ids donde el orden de texto no es el numérico ('p10' < 'p2'), y
@@ -77,11 +78,15 @@ describe('fpGrowth (RF-14: mismas reglas que Apriori con los mismos datos)', () 
       expect(fpGrowth(canastas, params)).toEqual(esperado);
       reglas += esperado.rules.length;
       deTresOMas += esperado.itemsets.filter((itemset) => itemset.items.length >= 3).length;
+      const metricas = esperado.rules.map((r) => `${r.confidence}|${r.lift}|${r.support}`);
+      empatadas += metricas.length - new Set(metricas).size;
     }
 
-    // No pasa en vacío: hubo muchas reglas e itemsets de 3 o más productos.
+    // No pasa en vacío: hubo muchas reglas, itemsets de 3 o más productos y
+    // reglas empatadas (donde el orden depende del desempate por productos).
     expect(reglas).toBeGreaterThan(1000);
     expect(deTresOMas).toBeGreaterThan(100);
+    expect(empatadas).toBeGreaterThan(100);
   });
 
   it('es reproducible: las mismas canastas en otro orden dan el mismo resultado', () => {

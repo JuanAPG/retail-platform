@@ -80,7 +80,7 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
   /** Aviso de la corrida en la bandeja de quien la lanzó. */
   async function aviso(token: string, runId: string) {
     const r = await fetch(`${NOTIFICACIONES}/v1/notifications?limit=100`, { headers: { Authorization: `Bearer ${token}` } });
-    const bandeja = (await r.json()) as { data: { eventType: string; relatedEntityId: string; sourceService: string }[] };
+    const bandeja = (await r.json()) as { data: { eventType: string; relatedEntityId: string; sourceService: string; title: string }[] };
     return bandeja.data.find((n) => n.relatedEntityId === runId);
   }
 
@@ -99,16 +99,23 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
     expect(await aviso(precios.token, runId)).toMatchObject({ eventType: 'corrida.terminada', sourceService: 'algorithms-core' });
   });
 
-  it('una corrida de Apriori deja su evento y avisa corrida.terminada a quien la lanzó', async () => {
+  it.each([
+    ['Apriori', '/v1/association/apriori/run'],
+    ['FP-Growth', '/v1/association/fpgrowth/run'],
+  ])('una corrida de %s deja su evento y avisa corrida.terminada a quien la lanzó', async (nombre, ruta) => {
     const analista = await entrar(process.env.ALGORITHMS_TEST_EMAIL ?? 'analista@retail.mx');
 
-    const runId = await correr('/v1/association/apriori/run', analista.token, { minSupport: 0.01, minConfidence: 0.01 });
+    const runId = await correr(ruta, analista.token, { minSupport: 0.01, minConfidence: 0.01 });
 
     expect(await evento(runId)).toMatchObject({
       servicio: 'algorithms-core',
       usuarioId: analista.id,
       cambios: { tipo: 'asociacion', estado: 'completada' },
     });
-    expect(await aviso(analista.token, runId)).toMatchObject({ eventType: 'corrida.terminada', sourceService: 'algorithms-core' });
+    expect(await aviso(analista.token, runId)).toMatchObject({
+      eventType: 'corrida.terminada',
+      sourceService: 'algorithms-core',
+      title: `${nombre}: corrida terminada`,
+    });
   });
 });
