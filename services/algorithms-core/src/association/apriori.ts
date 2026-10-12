@@ -55,22 +55,17 @@ export interface AprioriResult {
 const EPSILON = 1e-9;
 
 export function apriori(baskets: string[][], params: AprioriParams): AprioriResult {
+  checkThresholds(params);
   const { minSupport, minConfidence, maxItemsetSize } = params;
-  if (!(minSupport > 0 && minSupport <= 1)) {
-    // Con soporte 0 toda combinación sería frecuente y el cálculo explota.
-    throw new RangeError('minSupport debe estar en (0, 1].');
-  }
 
   const total = baskets.length;
   if (total === 0) return { itemsets: [], rules: [] };
 
   // Un producto repetido en la misma canasta cuenta una sola vez.
   const transactions = baskets.map((basket) => new Set(basket));
-  // El umbral se pasa a canastas una sola vez; así no se comparan
-  // decimales en cada paso.
-  const minCount = Math.max(1, Math.ceil(minSupport * total - EPSILON));
+  const minCount = minCountOf(minSupport, total);
 
-  /** Conteo de cada itemset frecuente, por llave. Lo usan las reglas. */
+  /** Conteo de cada itemset frecuente, por llave. Lo usan los candidatos. */
   const counts = new Map<string, number>();
   const itemsets: FrequentItemset[] = [];
 
@@ -101,7 +96,43 @@ export function apriori(baskets: string[][], params: AprioriParams): AprioriResu
     });
   }
 
-  // --- Reglas ----------------------------------------------------------
+  return buildResult(itemsets, total, minConfidence);
+
+  function record(items: string[], count: number) {
+    counts.set(key(items), count);
+    itemsets.push({ items, count, support: count / total });
+  }
+}
+
+// --- Común a Apriori y FP-Growth -----------------------------------------
+
+/** Soporte y confianza en (0, 1] (D-17): la regla no depende solo del DTO. */
+export function checkThresholds({ minSupport, minConfidence }: AprioriParams): void {
+  if (!(minSupport > 0 && minSupport <= 1)) {
+    // Con soporte 0 toda combinación sería frecuente y el cálculo explota.
+    throw new RangeError('minSupport debe estar en (0, 1].');
+  }
+  if (!(minConfidence > 0 && minConfidence <= 1)) {
+    throw new RangeError('minConfidence debe estar en (0, 1].');
+  }
+}
+
+/**
+ * El soporte mínimo en canastas. Se calcula una sola vez; así no se comparan
+ * decimales en cada paso.
+ */
+export function minCountOf(minSupport: number, total: number): number {
+  return Math.max(1, Math.ceil(minSupport * total - EPSILON));
+}
+
+/**
+ * Reglas a partir de los itemsets frecuentes, y el orden final de los dos.
+ * Apriori y FP-Growth solo difieren en cómo encuentran los itemsets: esta
+ * parte es la misma, así que con los mismos datos dan las mismas reglas en
+ * el mismo orden (RF-14).
+ */
+export function buildResult(itemsets: FrequentItemset[], total: number, minConfidence: number): AprioriResult {
+  const counts = new Map(itemsets.map((itemset) => [key(itemset.items), itemset.count]));
   const rules: AprioriRule[] = [];
   for (const itemset of itemsets) {
     if (itemset.items.length < 2) continue;
@@ -132,14 +163,11 @@ export function apriori(baskets: string[][], params: AprioriParams): AprioriResu
       compareItems(a.antecedent, b.antecedent) ||
       compareItems(a.consequent, b.consequent),
   );
-  itemsets.sort((a, b) => a.items.length - b.items.length || b.count - a.count || compareItems(a.items, b.items));
+  const sorted = [...itemsets].sort(
+    (a, b) => a.items.length - b.items.length || b.count - a.count || compareItems(a.items, b.items),
+  );
 
-  return { itemsets, rules };
-
-  function record(items: string[], count: number) {
-    counts.set(key(items), count);
-    itemsets.push({ items, count, support: count / total });
-  }
+  return { itemsets: sorted, rules };
 }
 
 /**
@@ -185,7 +213,7 @@ function key(items: string[]): string {
 }
 
 /** Orden lexicográfico de listas de ids; base del determinismo. */
-function compareItems(a: string[], b: string[]): number {
+export function compareItems(a: string[], b: string[]): number {
   for (let n = 0; n < Math.min(a.length, b.length); n++) {
     if (a[n] !== b[n]) return a[n] < b[n] ? -1 : 1;
   }

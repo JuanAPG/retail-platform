@@ -26,7 +26,7 @@
 | RN-08 | Alerta de precios entre zonas | PENDIENTE PR-2 |
 | RN-09 | Parámetros de minería calibrados | **Sustituida por D-17 / RF-15** · PR-3 (lift) |
 | RN-10 | Reglas duras y límites por zona | PENDIENTE PR-4 |
-| RN-11 | Sustituibilidad | PENDIENTE PR-5 |
+| RN-11 | Sustituibilidad | Método: **D-23** · disparador por umbral PENDIENTE PR-5 |
 | RN-12 | Índice de accesibilidad | Vigente · complementada por D-02, D-03, D-04 |
 | RN-13 | Bitácora con rol y antes/después | Vigente · PR-6 (falta campo rol) |
 | RN-14 | Comparación entre proveedores y compra | PENDIENTE PR-7 |
@@ -144,8 +144,10 @@ duras de exclusión y límites de precio editados por el Administrador: PENDIENT
 > La sustitución se activa tanto por desabasto registrado en la app móvil como de forma automática cuando el precio de un producto supera el umbral de tolerancia calculado internamente en RN-06.
 
 **Estado vigente:** RF-17 exige identificar sustitución **dentro de la misma
-categoría**. Método (elasticidad cruzada vs. correlación simple del Sprint 1) y
-disparadores (desabasto en móvil, umbral de precio): PENDIENTE PR-5.
+categoría**. **D-23** fija el método: indicio por coocurrencia (lift) y
+correlación de precio, no elasticidad cruzada. El disparador por desabasto no
+aplica sin historial de inventario. El disparador por umbral de precio (RN-06):
+PENDIENTE PR-5.
 
 ### RN-12: Índice de accesibilidad económica
 
@@ -210,7 +212,7 @@ Fuera de alcance:
 | PR-2 | ¿Se implementa la alerta de desviación entre zonas (RN-08)? ¿A quién se notifica? | pricing, notifications |
 | PR-3 | ¿Se calcula y filtra por **lift** en las reglas de asociación? | algorithms-core |
 | PR-4 | Reglas duras de exclusión y límites de precio por zona: ¿existen? ¿quién las edita, si el Administrador solo tiene Lectura en Precios? | algorithms-core, pricing, Matriz |
-| PR-5 | Método de sustitución (elasticidad cruzada o correlación) y disparadores (desabasto móvil, umbral). | algorithms-core, móvil |
+| PR-5 | Disparadores de la sustitución: umbral de precio de RN-06, y desabasto en móvil (requiere historial de inventario). El método quedó en D-23. | algorithms-core, móvil |
 | PR-6 | ¿Se agrega el campo `rol` a `AuditLog`, o va en `metadata`? | audit-service y todos |
 | PR-7 | ¿Entra la comparación entre proveedores, la compra y el inventario? ¿En qué parcial? | pricing, catalog |
 | PR-8 | ¿RN-15 se descarta, o se redefine como perfil de **hogar por zona** (agregado)? | móvil, decision |
