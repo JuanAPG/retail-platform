@@ -45,6 +45,20 @@ describe('parsearFecha', () => {
     expect(parsearFecha('2026-09-01T21:00:00+02:00')!.toISOString()).toBe('2026-09-01T19:00:00.000Z');
   });
 
+  /**
+   * `datos_prueba_100_canastas.csv` trae sus 154 filas con el huso en
+   * SOLO HORAS (`-06`, sin minutos): `2026-08-02 10:15:00-06`. Es ISO
+   * 8601 válido y `new Date()` lo entiende bien, pero el regex pedía
+   * minutos obligatorios y las 154 filas daban FECHA_INVALIDA.
+   */
+  it('con huso en solo horas (sin minutos), como el CSV de 100 canastas', () => {
+    expect(parsearFecha('2026-08-02 10:15:00-06')!.toISOString()).toBe('2026-08-02T16:15:00.000Z');
+    expect(parsearFecha('2026-08-02 10:15:00+06')!.toISOString()).toBe('2026-08-02T04:15:00.000Z');
+    // -0600 (sin colon) y -06:00 deben seguir dando el mismo instante.
+    expect(parsearFecha('2026-08-02 10:15:00-0600')!.toISOString()).toBe('2026-08-02T16:15:00.000Z');
+    expect(parsearFecha('2026-08-02 10:15:00-06:00')!.toISOString()).toBe('2026-08-02T16:15:00.000Z');
+  });
+
   it('usa las reglas de la zona VIGENTES en esa fecha, no un -06:00 fijo', () => {
     // México tuvo horario de verano hasta 2022: en junio de 2021 Monterrey
     // era UTC-5, así que la medianoche local fue 05:00Z, no 06:00Z.

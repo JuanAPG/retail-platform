@@ -22,24 +22,41 @@ Rutas y campos en **inglés**, iguales a M10 y M11 del monolito
 | POST | `/v1/association/apriori/run` | Administrador, Analista comercial |
 | GET | `/v1/association/runs` | Los 6 perfiles internos |
 | GET | `/v1/association/runs/:id` | Los 6 perfiles internos |
-| POST | `/v1/elasticity/calculate` | Administrador, Analista comercial |
+| POST | `/v1/elasticity/calculate` | Responsable de precios |
 | GET | `/v1/elasticity/chart` | Los 6 perfiles internos |
 | GET | `/v1/elasticity/current` | Los 6 perfiles internos |
 | GET | `/v1/substitution/patterns` | Los 6 perfiles internos |
 
-Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo
-Administrador y Analista. El Proveedor no tiene acceso a ninguna ruta.
+Correr Apriori o calcular elasticidad **crea una corrida**, por eso solo lo hace
+quien tiene Total en ese módulo según la Matriz (§3); los demás perfiles internos
+leen. Si el Analista calcula elasticidad desde el escritorio está PENDIENTE
+(P-04). El Proveedor no tiene acceso a ninguna ruta.
 
 En XML, la raíz es el elemento de cada endpoint (p. ej. `<runListResponse
 xmlns="algorithms/v1">`) y las fechas-hora van en ISO 8601 UTC. Un `null` sale
-como elemento vacío (`<lift/>`) en los campos que el XSD exige presentes
+como elemento vacío —el servicio emite la forma larga `<lift></lift>`,
+equivalente en XML a `<lift/>`— en los campos que el XSD exige presentes
 (tipos `*OrEmpty`, declarados en `@XmlRoot(..., { siemprePresentes })`) y se
 omite en los demás. Los errores con `Accept: application/xml` salen como
 `<error>` con la misma forma que el JSON.
 
-`503 SERVICE_UNAVAILABLE`: desde Fase C, cuando un servicio del que depende
-(core-process, catalog, pricing, auth) no responde. Aplica a todas las rutas
-que leen datos de otros servicios.
+**Días en hora local.** Todo lo que se agrupa o filtra por día —`dateFrom` y
+`dateTo` (el día `YYYY-MM-DD`; si traen hora, se ignora), los días y semanas de elasticidad y el periodo de cada
+corrida— se corta a medianoche de `America/Monterrey` (configurable con
+`ZONA_HORARIA`), no de UTC: una compra a las 18:40 del 5 de agosto cuenta en el 5,
+aunque en UTC ya sea día 6. Las fechas-hora (`date`, `executedAt`) siguen siendo
+instantes en ISO 8601 UTC.
+
+`503 SERVICE_UNAVAILABLE`, hoy y a futuro:
+
+- **Hoy:** en todas las rutas, cuando Redis (sesiones) no responde: `SessionGuard`
+  no puede verificar la sesión y responde 503.
+- **Hoy:** las lecturas de otros servicios son SQL de solo lectura (Fase B). Si
+  fallan, la ruta responde `500 INTERNAL` (y un `POST` deja la corrida `fallida`),
+  igual que cualquier fallo de base de datos (`services/snippets/error-codes.md`).
+- **Con ALG-11 (Fase C):** esas lecturas pasan a HTTP; si core-process, catalog,
+  pricing o auth no responden, la ruta responderá `503` en menos de 4 s. Se
+  documentará en Swagger cuando exista.
 
 ---
 
@@ -115,7 +132,7 @@ Request JSON:
 | `maxItemsetSize` | opcional, entero entre 2 y 4; default 3 |
 | `storeId`, `zoneId` | opcionales, UUID |
 | `segmentId` | opcional, entero ≥ 1. Segmento de la ZONA de la compra (RN-02) |
-| `dateFrom`, `dateTo` | opcionales, fecha ISO. `dateTo` abarca el día completo |
+| `dateFrom`, `dateTo` | opcionales, día `YYYY-MM-DD` que exista (`2026-02-30`, `2026-09` o `2026-W40-1` → `400`); si trae hora, solo se usa el día. `dateTo` abarca el día completo. Mismo criterio que core-process (`EsFiltroDeFecha`) |
 
 Campos no listados → `400` (`forbidNonWhitelisted`).
 
@@ -249,6 +266,7 @@ otro tipo** (p. ej. de elasticidad) → `404`.
 | 403 | Rol sin permiso (p. ej. Planeador corriendo Apriori, o Proveedor) |
 | 404 | Corrida inexistente o que no es de asociación |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
 
@@ -270,15 +288,29 @@ Request JSON (todo opcional):
 | Campo | Regla |
 |---|---|
 | `presentationId` | opcional, UUID. Sin ella, todas las presentaciones con ventas en el periodo |
-| `dateFrom`, `dateTo` | opcionales, fecha ISO. `dateTo` abarca el día completo |
-| `granularity` | `day` (default) o `week` (semana ISO, empieza en lunes): cómo se agrupan las ventas en observaciones zona × periodo |
+| `dateFrom`, `dateTo` | opcionales, día `YYYY-MM-DD` que exista (`2026-02-30`, `2026-09` o `2026-W40-1` → `400`); si trae hora, solo se usa el día. `dateTo` abarca el día completo. Mismo criterio que core-process (`EsFiltroDeFecha`) |
+| `granularity` | `day`, `week` (semana ISO, empieza en lunes) o `month`. **Default: `week`** (D-21) |
+
+**Por qué semana es el default y no mes (D-21):** RN-03 queda **fuera del
+Parcial 2** (ver `reglas-negocio.md`), así que no es una regla vigente a
+cumplir todavía. Entre las tres, semana es la que mejor balancea ruido y
+cantidad de datos: por día el modelo no controla el efecto fin de
+semana/entre-semana (es una de las `assumptions` de toda corrida) y además
+quedan fuera los días sin venta; por mes, con pocos meses de historia quedan
+muy pocos puntos y un cambio de precio a media de mes se diluye en el
+promedio. `month` existe para historias largas donde sí da suficientes
+puntos.
 
 La elasticidad se calcula siempre **por cada zona más el agregado nacional**;
-la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`.
+la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`. El
+nacional es una sola regresión sobre las observaciones zona × periodo de todas
+las zonas: no suma las zonas de un mismo periodo.
 
 Claves de `parameters` guardadas: `metodo` (`regresion_log_log`),
 `granularidad`, `observaciones_minimas` (3), `precios_distintos_minimos` (2),
-`presentacion_id` (si se filtró), `resultados_calculados`,
+`presentacion_id` (si se filtró), `dateFrom` y `dateTo` (si se filtró por
+fecha — su presencia es lo que distingue una corrida exploratoria de una de
+ventana completa, ver D-22 en `GET /v1/elasticity/current`), `resultados_calculados`,
 `combinaciones_insuficientes`.
 
 Response `201`:
@@ -333,7 +365,9 @@ Response `201`:
 
 `insufficient[]` lista las combinaciones presentación–zona sin datos
 suficientes, con uno de estos `reason`: un solo precio en el periodo; menos de
-3 observaciones; precios o cantidades no positivos.
+3 observaciones; precios o cantidades no positivos; o un valor que excede el
+máximo que se puede guardar (±999 999.9999, datos extremos). Una combinación así
+no detiene la corrida: las demás se calculan y se guardan.
 
 XML: elementos `elasticityCalculateRequest` y `elasticityCalculateResponse`.
 
@@ -366,10 +400,10 @@ Response `200`:
   "periodStart": "2026-08-05",
   "periodEnd": "2026-08-15",
   "bars": [
-    { "key": "uuid", "label": "Zona Valle", "value": -1.2, "classification": "elastic", "observations": 4, "rSquared": 0.7 },
-    { "key": "uuid", "label": "Zona Centro", "value": null, "classification": null, "observations": 0, "rSquared": null }
+    { "key": "uuid", "label": "Zona Valle", "value": -1.2, "classification": "elastic", "observations": 4, "rSquared": 0.7, "atypical": false },
+    { "key": "uuid", "label": "Zona Centro", "value": null, "classification": null, "observations": 0, "rSquared": null, "atypical": null }
   ],
-  "national": { "value": -1.35, "classification": "elastic", "observations": 4, "rSquared": 0.62 },
+  "national": { "value": -1.35, "classification": "elastic", "observations": 4, "rSquared": 0.62, "atypical": false },
   "note": "Elasticidad de cada zona (análisis del 2026-10-01, observaciones por día). Barras vacías: sin datos suficientes."
 }
 ```
@@ -380,17 +414,28 @@ Response `200`:
   ponderado por observaciones (RN-02), y trae `zones` (zonas promediadas). Es
   una aproximación, y `note` lo dice.
 - `national` es `null` si el agregado nacional no tuvo datos suficientes.
+- `atypical` es `true` si E > 0 (igual que en `calculate`), `false` si no, y
+  `null` en una barra sin datos. Por segmento se evalúa sobre el promedio.
 
 XML: elemento `elasticityChartResponse`. Presentación inexistente, `runId` que
-no es una corrida de elasticidad completada, o ninguna corrida con resultados
-para la presentación → `404`.
+no es una corrida de elasticidad completada, `runId` sin elasticidades
+calculadas para esa presentación (no la incluyó o no tuvo datos suficientes), o
+ninguna corrida con resultados para la presentación → `404`.
 
 ### GET /v1/elasticity/current
 
 **Nuevo.** La elasticidad vigente: para cada par presentación–zona, el valor de
-la **corrida completada más reciente** que lo calculó. Sustituye las consultas
-SQL que `decision-service` hacía sobre `elasticidades` (simulación y
-recomendaciones).
+la **corrida completada más reciente, de ventana COMPLETA** (sin `dateFrom` ni
+`dateTo`) que lo calculó (D-22). Sustituye las consultas SQL que
+`decision-service` hacía sobre `elasticidades` (simulación y recomendaciones).
+
+**D-22 — por qué solo las corridas de ventana completa:** una corrida con
+`dateFrom`/`dateTo` es exploratoria (p. ej. "¿cómo se veía esto solo en
+agosto?") y se calculó con una fracción de los datos. Si se volviera vigente
+automáticamente por ser la más reciente, la simulación de precios podría
+terminar usando un valor calculado con muy poca información sin que nadie lo
+decidiera a propósito. Las corridas exploratorias siguen existiendo y se
+consultan por su `runId` en `GET /v1/elasticity/chart`; nunca se promueven aquí.
 
 | Query | Regla |
 |---|---|
@@ -417,8 +462,12 @@ Response `200`:
       "classification": "elastic",
       "rSquared": 0.7,
       "observations": 4,
+      "atypical": false,
+      "outdated": false,
       "runId": "uuid",
-      "executedAt": "2026-10-01T15:30:00.000Z"
+      "executedAt": "2026-10-01T15:30:00.000Z",
+      "periodStart": "2026-08-05",
+      "periodEnd": "2026-08-15"
     },
     {
       "presentationId": "uuid",
@@ -430,8 +479,12 @@ Response `200`:
       "classification": "elastic",
       "rSquared": 0.62,
       "observations": 4,
+      "atypical": false,
+      "outdated": false,
       "runId": "uuid",
-      "executedAt": "2026-10-01T15:30:00.000Z"
+      "executedAt": "2026-10-01T15:30:00.000Z",
+      "periodStart": "2026-08-05",
+      "periodEnd": "2026-08-15"
     }
   ],
   "total": 2,
@@ -439,6 +492,19 @@ Response `200`:
   "limit": 20
 }
 ```
+
+`atypical` es `true` si E > 0 (la demanda sube con el precio): quien simula no
+debe usarla como una elasticidad normal.
+
+`periodStart` y `periodEnd` son el periodo de ventas de la corrida de cada fila:
+la zona y el nacional pueden venir de corridas distintas. `outdated` es `true` si
+una corrida de elasticidad completada **posterior, también de ventana completa**
+(D-22: una exploratoria posterior no cuenta), que abarcaba la presentación
+(sin filtro de presentación, o con esta), no obtuvo valor para esa zona —datos
+insuficientes o sin ventas en su periodo—. La fila se conserva con su valor
+anterior para que la simulación no se quede sin dato; quien la consume decide qué
+hacer con el aviso. No detecta ventas llegadas después de la corrida (eso es el
+snapshot de datos, D-15), y una corrida semanal o mensual posterior también cuenta.
 
 Sin elasticidades calculadas → `data: []` (no es error; quien la consume decide
 si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResponse`.
@@ -449,9 +515,10 @@ si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResp
 |---|---|
 | 400 | Cuerpo o query inválidos; `granularity` o `groupBy` fuera de catálogo; fechas invertidas; ninguna venta con los filtros |
 | 401 | Sin token, token revocado o sin sesión en Redis |
-| 403 | Rol sin permiso (p. ej. Planeador calculando, o Proveedor) |
-| 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; ninguna corrida con resultados para graficar |
+| 403 | Rol sin permiso (p. ej. cualquiera que no sea Responsable de precios calculando, o Proveedor) |
+| 404 | Presentación inexistente; `runId` que no es corrida de elasticidad completada; `runId` sin elasticidades para esa presentación; ninguna corrida con resultados para graficar |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
 
@@ -514,15 +581,34 @@ XML: elemento `substitutionPatternListResponse`.
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso (Proveedor) |
 | 404 | Categoría inexistente |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
 
 ---
+
+## Bitácora y aviso de cada corrida (ALG-10)
+
+Toda corrida que se guarda —de Apriori o de elasticidad, **completada o
+fallida**— deja un evento en audit-service y avisa a quien la lanzó. Un `400`
+(datos inválidos, sin ventas) no crea corrida y no se reporta.
+
+| A dónde | Qué |
+|---|---|
+| audit-service `POST /v1/auditoria` | `tabla: analisis_corridas`, `registroId: runId`, `accion: ejecutar_corrida`, `servicio: algorithms-core`, descripción con el resumen y `cambios` de `tipo`, `estado` y `periodo` |
+| notifications-service `POST /v1/notifications` | `corrida.terminada` con `relatedEntityType: corrida`, `relatedEntityId: runId` y `recipientUserId` = quien la lanzó; prioridad `info` si se completó, `warning` si falló |
+
+Los dos reenvían el `Authorization` del usuario (el actor sale del token) y van
+en paralelo con un límite de 1.5 s cada uno. **Nunca cambian la respuesta de la
+corrida:** si audit o notifications no responden o rechazan el evento, solo
+queda un aviso en el log, y la respuesta tarda a lo más eso de más.
 
 ## Lo que consume algorithms-core
 
 Fase B: lectura por SQL de solo lectura en el Postgres compartido, aislada en
 una sola clase. Fase C: esa clase pasa a llamar por HTTP, reenviando el
-`Authorization` del usuario (cada servicio sigue validando JWT + Redis). Si el
-servicio llamado no responde → `503 SERVICE_UNAVAILABLE`.
+`Authorization` del usuario (cada servicio sigue validando JWT + Redis). Desde
+ese cambio (ALG-11), si el servicio llamado no responde → `503
+SERVICE_UNAVAILABLE` en menos de 4 s; hasta entonces, un fallo de lectura es
+`500 INTERNAL`.
 
 | Servicio | Qué necesita | Para qué |
 |---|---|---|

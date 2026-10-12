@@ -20,10 +20,16 @@ const SIN_DIA = /^\d{4}-\d{2}$/;
 
 /**
  * Fecha con huso EXPLÍCITO: `2026-09-01T10:00:00Z`, `...-06:00`,
- * `...+02:00`. Solo estas se delegan a `new Date()`, porque solo estas
- * dicen por sí mismas qué instante son.
+ * `...-0600`, `...-06`. Solo estas se delegan a `new Date()`, porque solo
+ * estas dicen por sí mismas qué instante son.
+ *
+ * El huso admite minutos opcionales (`-06` además de `-06:00`/`-0600`):
+ * `datos_prueba_100_canastas.csv` trae sus 154 filas así
+ * (`2026-08-02 10:15:00-06`), y es ISO 8601 válido — `new Date()` ya lo
+ * entiende bien (ver `parsearFecha`), el regex era más estricto que el
+ * motor al que delega. Sin esto las 154 filas daban FECHA_INVALIDA.
  */
-const CON_HUSO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/i;
+const CON_HUSO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
 
 /**
  * Cuánto hay que sumarle a un reloj de pared de `ZONA_HORARIA` para

@@ -25,6 +25,7 @@ ese rol se valida contra la tabla de `notification.types.ts`:
 | `precio.umbral` | Administrador, Responsable de precios | rol Responsable de precios (fijo) |
 | `precio.observado` | Analista comercial, Responsable de precios | rol Responsable de precios (fijo) |
 | `observacion.resuelta` | Responsable de precios | el usuario que la capturó |
+| `corrida.terminada` | Administrador, Analista comercial, Responsable de precios | el usuario que lanzó la corrida |
 | `escenario.generado` | Administrador, Analista comercial | el usuario que lo generó |
 | `recomendacion.generada` | Administrador, Analista comercial | rol Planeador (fijo) |
 | `recomendacion.resuelta` | Gerente de categoría | rol Analista comercial (fijo) |
@@ -42,6 +43,24 @@ arriba) y vuelve a quien la capturó (`recipientUserId`). Antes de este
 cambio `PriceObservationsService` no inyectaba `NotificationsReporter`:
 no emitía ninguno de los dos, y tampoco existían en este catálogo
 cerrado.
+
+**Agregado 2026-10-10, corregido 2026-10-11** (ALG-10): `corrida.terminada`
+aplica a corridas de **asociación y de elasticidad**, no solo asociación.
+Se emite al terminar una corrida de asociación (`POST
+/v1/association/apriori/run` en algorithms-core — ojo, NO
+`/v1/association/run`, `@Roles(Administrador, Analista comercial)`) y
+vuelve a quien la lanzó (`recipientUserId`), mismo criterio que
+`escenario.generado`. De ~40 corridas medidas, ninguna llegaba a
+audit-service ni emitía notificación porque el evento no existía en este
+catálogo cerrado — algorithms-core lo rechazaba o simplemente no lo
+intentaba. `origenes` incluye también al **Responsable de precios**: una
+corrida de elasticidad (precio-demanda) la lanza ese rol, no solo
+Administrador/Analista — algorithms-core todavía no tiene módulo de
+elasticidad, así que hoy esta regla solo se ejerce desde asociación, pero
+el catálogo ya está listo para cuando exista. `analytics-stats`
+(clustering, RF-16) aún no tiene endpoints propios, así que no entra en
+`origenes` hasta que exista el `@Roles` real que lo respalde; cuando se
+agregue, su origen se suma aquí, no se asume.
 
 Destinos fijados por el equipo el 2026-10-08 (antes estaban "pendiente":
 el origen ya se validaba, pero el emisor todavía elegía el destinatario).
@@ -130,6 +149,6 @@ Raíz por endpoint, declarada con `@XmlRoot` en el controller:
 | `GET /v1/notifications` | `notificationListResponse` |
 | `GET /v1/notifications/unread-count` | `unreadCountResponse` |
 
-`eventType` es un `xs:enumeration` cerrado con los 11 eventos de la tabla
+`eventType` es un `xs:enumeration` cerrado con los 12 eventos de la tabla
 de permisos de arriba. Un `eventType` fuera de él responde `400`
 (`VALIDATION_ERROR`), igual en JSON y en XML (raíz `error`).

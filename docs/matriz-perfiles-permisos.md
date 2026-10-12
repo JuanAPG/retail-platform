@@ -138,6 +138,8 @@ Notas:
 | D-18 | Elasticidad | Unitaria si **0.95 ≤ \|E\| ≤ 1.05**. | 0.95 y 1.05 son unitarias. |
 | D-19 | Alcance al 13-oct | Lo que se presenta incompleto si falta tiempo: **exportación a Excel** (solo PDF). | `format=xlsx` → error claro, nunca `500`. |
 | D-20 | Reportes | El reporte ejecutivo trae **los 16 indicadores** de la retroalimentación. Si un servicio no responde en 3 s, su indicador sale `disponible:false` con motivo, **nunca 0**. | Ver contrato de documents-service. |
+| D-21 | Elasticidad | `POST /v1/elasticity/calculate` agrupa las ventas por **día, semana o mes** (`granularity`); default **semana**. RN-03 pide mes, pero queda **fuera del Parcial 2**, así que no es una regla vigente que cumplir todavía: semana se eligió porque promedia el ruido de entre-semana/fin-de-semana sin diluir los cambios de precio (día es más ruidoso; mes da muy pocos puntos con poca historia). | Sin `granularity`, la corrida sale con `granularity: "week"`. |
+| D-22 | Elasticidad | `GET /v1/elasticity/current` solo cuenta como **vigente** la corrida completada más reciente **sin** `dateFrom`/`dateTo` (ventana completa). Una corrida con esos filtros es exploratoria: nunca se promueve aquí aunque sea la más reciente; se consulta por su `runId` en `GET /v1/elasticity/chart`. | Una corrida filtrada por fecha no cambia lo que devuelve `/current`, aunque sea posterior a la vigente. |
 
 ## 5. Flujos con estado
 
