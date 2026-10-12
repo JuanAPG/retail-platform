@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDefined, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsDefined, IsInt, IsNumber, IsOptional, IsPositive, Max, Min } from 'class-validator';
 import { AnalyticsFilterDto } from './analytics-filter.dto';
 
 /**
@@ -10,28 +10,34 @@ import { AnalyticsFilterDto } from './analytics-filter.dto';
  * el análisis sin saber con qué umbrales. Quedan guardados en
  * `analisis_corrida_parametros` para reproducir la corrida.
  *
+ * Rango de los dos umbrales: mayor a 0 y hasta 1 (D-17: "cualquier valor
+ * mayor a 0 y hasta 100 %"). Un soporte muy bajo vuelve frecuente casi
+ * toda combinación y la corrida tarda más con muchas canastas: el equipo lo
+ * aceptó así en D-17; que no congele el servicio es ALG-08.
+ *
  * Extiende los filtros de M09 para que "canastas de la zona X en agosto"
  * signifique lo mismo en los indicadores y en Apriori.
  */
 export class AprioriParamsDto extends AnalyticsFilterDto {
   @ApiProperty({
     example: 0.2,
-    description: 'Fracción mínima de canastas en que debe aparecer un conjunto de productos (0.01–1).',
+    description: 'Fracción mínima de canastas en que debe aparecer un conjunto de productos: mayor a 0 y hasta 1.',
   })
   @IsDefined({ message: 'minSupport es obligatorio.' })
   @IsNumber({}, { message: 'minSupport debe ser un número.' })
   // Con soporte 0 toda combinación es "frecuente" y el cálculo explota.
-  @Min(0.01, { message: 'minSupport debe ser al menos 0.01.' })
+  @IsPositive({ message: 'minSupport debe ser mayor a 0.' })
   @Max(1, { message: 'minSupport no puede ser mayor a 1.' })
   minSupport: number;
 
   @ApiProperty({
     example: 0.5,
-    description: 'Confianza mínima de una regla: P(consecuente | antecedente), 0–1.',
+    description: 'Confianza mínima de una regla, P(consecuente | antecedente): mayor a 0 y hasta 1.',
   })
   @IsDefined({ message: 'minConfidence es obligatorio.' })
   @IsNumber({}, { message: 'minConfidence debe ser un número.' })
-  @Min(0, { message: 'minConfidence no puede ser negativo.' })
+  // Con confianza 0 toda combinación frecuente sería regla, aunque nunca se cumpla.
+  @IsPositive({ message: 'minConfidence debe ser mayor a 0.' })
   @Max(1, { message: 'minConfidence no puede ser mayor a 1.' })
   minConfidence: number;
 
