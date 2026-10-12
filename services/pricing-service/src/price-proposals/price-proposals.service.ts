@@ -9,10 +9,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { hoyOperacion } from '../common/fecha';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { ROL } from '../common/roles';
 import { ESTATUS_PROPUESTA, PriceProposal } from '../entities/price-proposal.entity';
+import { PriceAlertsService } from '../price-alerts/price-alerts.service';
 import { PriceDto, PricesService } from '../prices/prices.service';
 import {
   ApprovePriceProposalDto,
@@ -61,6 +64,8 @@ export class PriceProposalsService {
     private readonly dataSource: DataSource,
     private readonly audit: AuditReporter,
     private readonly prices: PricesService,
+    private readonly alertas: PriceAlertsService,
+    private readonly notificaciones: NotificationsReporter,
   ) {}
 
   /**
@@ -117,19 +122,33 @@ export class PriceProposalsService {
       }),
     );
 
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: guardada.id,
-      accion: 'insert',
-      descripcion: `Propuesta de precio (${dto.proposedPrice}) para la presentación ${dto.presentationId}.`,
-      cambios: [
-        { campo: 'precio_propuesto', previo: null, posterior: String(dto.proposedPrice) },
-        { campo: 'estatus', previo: null, posterior: ESTATUS_PROPUESTA.PENDIENTE },
-      ],
-      ip: ip ?? null,
-    }, token);
-
-    return (await this.detallar([guardada.id]))[0];
+    const detalle = (await this.detallar([guardada.id]))[0];
+    // Auditoría y aviso (PRI-07) en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: guardada.id,
+        accion: 'insert',
+        descripcion: `Propuesta de precio (${dto.proposedPrice}) para la presentación ${dto.presentationId}.`,
+        cambios: [
+          { campo: 'precio_propuesto', previo: null, posterior: String(dto.proposedPrice) },
+          { campo: 'estatus', previo: null, posterior: ESTATUS_PROPUESTA.PENDIENTE },
+        ],
+        ip: ip ?? null,
+      }, token),
+      // El receptor fija a quién le llega según el evento.
+      this.notificaciones.emitir(
+        {
+          eventType: 'precio.propuesto',
+          relatedEntityType: 'propuesta_precio',
+          relatedEntityId: guardada.id,
+          title: 'Nueva propuesta de precio',
+          message: `${detalle.supplier.razonSocial} propuso ${Number(dto.proposedPrice).toFixed(2)} para ${detalle.presentation.producto.nombre} (${detalle.presentation.nombre}).`,
+        },
+        token,
+      ),
+    ]);
+    return detalle;
   }
 
   /**
@@ -165,6 +184,8 @@ export class PriceProposalsService {
     token?: string,
   ): Promise<ApprovalResult> {
     const propuesta = await this.buscarPendiente(id);
+    // Se valida también al aprobar: el producto pudo desactivarse después de la propuesta (D-08).
+    await this.prices.exigirProductoActivo(propuesta.presentationId);
 
     const existentes: { id: string }[] = await this.dataSource.query(
       'SELECT id FROM tiendas WHERE id = ANY($1::uuid[])',
@@ -176,7 +197,7 @@ export class PriceProposalsService {
     }
 
     // Solo la fecha: un ISO con hora se normaliza a YYYY-MM-DD.
-    const effectiveDate = (dto.effectiveDate ?? new Date().toISOString()).slice(0, 10);
+    const effectiveDate = (dto.effectiveDate ?? hoyOperacion()).slice(0, 10);
 
     let creados: { id: string; storeId: string; precioPrevio: string | null }[];
     try {
@@ -222,30 +243,47 @@ export class PriceProposalsService {
     }
 
     // Después de confirmar: auditoría (nunca rompe la operación) y caché.
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: id,
-      accion: 'update',
-      descripcion: `Propuesta de precio aprobada (${propuesta.proposedPrice}) para ${creados.length} tienda(s).`,
-      cambios: [{ campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.APROBADO }],
-      ip: ip ?? null,
-    }, token);
-    for (const c of creados) {
-      await this.audit.reportar({
-        tabla: 'precios',
-        registroId: c.id,
-        accion: 'insert',
-        descripcion: `Precio registrado (${propuesta.proposedPrice}) por aprobación de la propuesta ${id}, tienda ${c.storeId}.`,
+    // PRI-14: el precio queda con `creado_por` = quien aprueba; el proponente se rescata aquí, de la propuesta.
+    const proponente = await this.usuarioDelProveedor(propuesta.supplierId);
+    const [proposal] = await this.detallar([id]);
+    // Todo lo de afuera va en UN Promise.all: con servicios colgados la aprobación espera un timeout y no uno por tienda
+    // y por precio (QA-PRI53-06). Ninguno rompe la operación.
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: id,
+        accion: 'update',
+        descripcion: `Propuesta de precio aprobada (${propuesta.proposedPrice}) para ${creados.length} tienda(s).`,
         cambios: [
-          { campo: 'precio_anterior', previo: c.precioPrevio, posterior: null },
-          { campo: 'precio', previo: null, posterior: propuesta.proposedPrice },
+          { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.APROBADO },
+          { campo: 'propuesto_por', previo: null, posterior: proponente },
+          { campo: 'aprobado_por', previo: null, posterior: solicitante.id },
         ],
         ip: ip ?? null,
-      }, token);
-    }
-
-    const [proposal] = await this.detallar([id]);
-    await this.prices.invalidarProducto(proposal.presentation.productoId);
+      }, token),
+      ...creados.map((c) =>
+        this.audit.reportar({
+          tabla: 'precios',
+          registroId: c.id,
+          accion: 'insert',
+          descripcion: `Precio registrado (${propuesta.proposedPrice}) por aprobación de la propuesta ${id}, tienda ${c.storeId}.`,
+          cambios: [
+            { campo: 'precio_anterior', previo: c.precioPrevio, posterior: null },
+            { campo: 'precio', previo: null, posterior: propuesta.proposedPrice },
+          ],
+          ip: ip ?? null,
+        }, token),
+      ),
+      this.prices.invalidarProducto(proposal.presentation.productoId),
+      // PRI-07: aviso al usuario que propuso y alerta de cambio de precio por cada tienda afectada.
+      this.avisarResolucion(proposal, proponente, true, null, token),
+      ...creados.map((c) =>
+        this.alertas.evaluar(
+          { presentationId: propuesta.presentationId, storeId: c.storeId, nuevoPrecio: Number(propuesta.proposedPrice), effectiveDate, precioId: c.id },
+          token,
+        ),
+      ),
+    ]);
     return { proposal, prices: await this.prices.detallar(creados.map((c) => c.id)) };
   }
 
@@ -256,7 +294,8 @@ export class PriceProposalsService {
     ip?: string,
     token?: string,
   ): Promise<PriceProposalDto> {
-    await this.buscarPendiente(id);
+    const pendiente = await this.buscarPendiente(id);
+    const proponente = await this.usuarioDelProveedor(pendiente.supplierId);
 
     // Atómico: solo cambia si SIGUE pendiente (otro revisor pudo ganar en medio).
     const resultado = await this.proposalsRepo.update(
@@ -272,24 +311,66 @@ export class PriceProposalsService {
       throw new ConflictException('Esta propuesta ya fue resuelta por otro revisor.');
     }
 
-    await this.audit.reportar({
-      tabla: 'precios_propuestos_proveedor',
-      registroId: id,
-      accion: 'update',
-      descripcion: `Propuesta de precio rechazada: ${dto.rejectionReason}`,
-      cambios: [
-        { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.RECHAZADO },
-        { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
-      ],
-      ip: ip ?? null,
-    }, token);
-
-    return (await this.detallar([id]))[0];
+    const rechazada = (await this.detallar([id]))[0];
+    // Auditoría y aviso en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
+    await Promise.all([
+      this.audit.reportar({
+        tabla: 'precios_propuestos_proveedor',
+        registroId: id,
+        accion: 'update',
+        descripcion: `Propuesta de precio rechazada: ${dto.rejectionReason}`,
+        cambios: [
+          { campo: 'estatus', previo: ESTATUS_PROPUESTA.PENDIENTE, posterior: ESTATUS_PROPUESTA.RECHAZADO },
+          { campo: 'motivo_rechazo', previo: null, posterior: dto.rejectionReason },
+          { campo: 'propuesto_por', previo: null, posterior: proponente },
+          { campo: 'rechazado_por', previo: null, posterior: solicitante.id },
+        ],
+        ip: ip ?? null,
+      }, token),
+      this.avisarResolucion(rechazada, proponente, false, dto.rejectionReason, token),
+    ]);
+    return rechazada;
   }
 
   // -------------------------------------------------------------------
   // Apoyo
   // -------------------------------------------------------------------
+
+  /**
+   * Usuario de la cuenta del proveedor que propuso (el vínculo es el correo; `usuarios` y `proveedores` son
+   * de auth-service y aquí solo se leen). `null` si la empresa no tiene cuenta.
+   */
+  private async usuarioDelProveedor(supplierId: string): Promise<string | null> {
+    const [fila] = await this.dataSource.query(
+      'SELECT u.id FROM proveedores pr JOIN usuarios u ON u.email = pr.email WHERE pr.id = $1',
+      [supplierId],
+    );
+    return fila?.id ?? null;
+  }
+
+  /** `propuesta.resuelta`: le llega al usuario que propuso, con el motivo si se rechazó. No bloquea. */
+  private async avisarResolucion(
+    propuesta: PriceProposalDto,
+    proponente: string | null,
+    aprobada: boolean,
+    motivo: string | null,
+    token?: string,
+  ) {
+    if (!proponente) return;
+    const que = `${propuesta.presentation.producto.nombre} (${propuesta.presentation.nombre}) a ${propuesta.proposedPrice}`;
+    await this.notificaciones.emitir(
+      {
+        eventType: 'propuesta.resuelta',
+        relatedEntityType: 'propuesta_precio',
+        relatedEntityId: propuesta.id,
+        title: aprobada ? 'Tu propuesta de precio fue aprobada' : 'Tu propuesta de precio fue rechazada',
+        message: `${que}: ${aprobada ? 'aprobada' : `rechazada. Motivo: ${motivo}`}.`,
+        priority: aprobada ? 'info' : 'warning',
+        recipientUserId: proponente,
+      },
+      token,
+    );
+  }
 
   private async buscarPendiente(id: string): Promise<PriceProposal> {
     const propuesta = await this.proposalsRepo.findOne({ where: { id } });

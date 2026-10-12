@@ -7,6 +7,7 @@ import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { aCanastaRespuesta, CanastaRespuesta } from '../common/respuestas';
 import { BasketFilterDto } from './dto/basket-filter.dto';
+import { filtrarDiasLocales } from '../common/zona-horaria';
 
 export interface ReclasificacionResultado {
   /** Canastas que estaban sin segmento antes de la operación. */
@@ -230,13 +231,12 @@ export class BasketsService {
     if (filters.segmentId) {
       qb.andWhere('basket.segmentId = :segmentId', { segmentId: filters.segmentId });
     }
-    if (filters.dateFrom) qb.andWhere('basket.date >= :dateFrom', { dateFrom: filters.dateFrom });
-    // `fecha` es timestamptz: comparar contra '2026-09-30' a secas dejaría
-    // fuera todo lo vendido ese día después de medianoche. Mismo criterio
-    // que M09, para que los dos endpoints vean el mismo conjunto.
-    if (filters.dateTo) {
-      qb.andWhere('basket.date < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
-    }
+    // Días completos locales en los dos extremos: `fecha` es timestamptz,
+    // así que comparar contra '2026-09-30' a secas dejaría fuera lo
+    // vendido ese día, y hacerlo en UTC movería la frontera 6 horas.
+    // Mismo criterio que M06 y M09, para que los tres vean el mismo
+    // conjunto.
+    filtrarDiasLocales(qb, 'basket.date', filters);
     // La tienda no está en `canastas`: se llega por su transacción, que
     // `findAll` ya trae unida para poder devolver `storeId`.
     if (filters.storeId) {

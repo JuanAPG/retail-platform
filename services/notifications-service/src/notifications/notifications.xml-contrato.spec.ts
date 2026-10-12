@@ -96,7 +96,8 @@ describeSiHayXmllint('XML de notifications-service valida contra el XSD', () => 
       } as never,
       { usuarioId: 'proveedor-2', rol: ROL.PROVEEDOR },
     );
-    const vista = await svc.findOneForUser(data.id, { id: data.recipientUserId ?? '', rol: ROL.GERENTE_CATEGORIA });
+    // precio.propuesto va al Responsable de precios (D1), no al Gerente.
+    const vista = await svc.findOneForUser(data.id, { id: data.recipientUserId ?? '', rol: ROL.RESPONSABLE_PRECIOS });
 
     const fallo = validarContraXsd(serializarXml(vista, { raiz: 'notificationDetailResponse' }));
     expect(fallo).toBeNull();

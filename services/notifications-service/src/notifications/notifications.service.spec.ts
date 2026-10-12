@@ -80,6 +80,35 @@ describe('Tabla de permisos por evento', () => {
     expect(permisoDe('recomendacion.resuelta').origenes).toEqual([ROL.GERENTE_CATEGORIA]);
   });
 
+  it('las propuestas de precio las resuelve el Responsable de precios (D1): su aviso le llega a él y él puede originar la resolución', () => {
+    expect(permisoDe('precio.propuesto')).toMatchObject({
+      origenes: [ROL.PROVEEDOR],
+      destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    });
+    expect(permisoDe('propuesta.resuelta').origenes).toEqual(
+      expect.arrayContaining([ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS]),
+    );
+    expect(permisoDe('propuesta.resuelta').destino).toEqual({ tipo: 'usuario' });
+  });
+
+  it('precio.observado y observacion.resuelta (PRI-09/D-16, agregados 2026-10-09)', () => {
+    expect(permisoDe('precio.observado')).toMatchObject({
+      origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+      destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    });
+    expect(permisoDe('observacion.resuelta')).toMatchObject({
+      origenes: [ROL.RESPONSABLE_PRECIOS],
+      destino: { tipo: 'usuario' },
+    });
+  });
+
+  it('corrida.terminada aplica a asociación y elasticidad: incluye al Responsable de precios (ALG-10, corregido 2026-10-11)', () => {
+    expect(permisoDe('corrida.terminada')).toMatchObject({
+      origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+      destino: { tipo: 'usuario' },
+    });
+  });
+
   it('los eventos sin flujo implementado no tienen origen: nadie los emite', () => {
     // No existe endpoint de solicitud de proveedor en ningún servicio, así
     // que no hay de dónde sacar el origen. Mejor que falle a que cualquiera
@@ -243,6 +272,119 @@ describe('create: el destinatario lo fija la regla, no el emisor', () => {
     );
     expect(data.recipientUserId).toBe('analista-7');
     expect(data.recipientRole).toBeNull();
+  });
+});
+
+describe('create: precio.observado y observacion.resuelta (PRI-09/D-16)', () => {
+  const OBSERVADO = {
+    eventType: 'precio.observado' as const,
+    sourceService: 'pricing-service' as const,
+    title: 'Precio observado en tienda pendiente de revisión',
+    message: 'Presentación 500 g observada en $24.00 (zona Centro).',
+  };
+
+  it('el Analista que captura la observación la emite; le llega al Responsable de precios', async () => {
+    const { servicio } = servicioFresco();
+    const { data } = await servicio.create(
+      { ...OBSERVADO, relatedEntityId: 'obs-1' },
+      { usuarioId: 'analista-1', rol: ROL.ANALISTA, rolId: 2 },
+    );
+    expect(data.recipientRole).toBe(ROL.RESPONSABLE_PRECIOS);
+    expect(data.recipientUserId).toBeNull();
+  });
+
+  it('el Responsable de precios también puede capturar (CAPTURAN_OBSERVACIONES)', async () => {
+    const { servicio } = servicioFresco();
+    const { creada } = await servicio.create(
+      { ...OBSERVADO, relatedEntityId: 'obs-2' },
+      emisorDe('precio.observado'),
+    );
+    expect(creada).toBe(true);
+  });
+
+  it('un Proveedor NO puede emitir precio.observado (403)', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create(
+        { ...OBSERVADO, relatedEntityId: 'obs-3' },
+        { usuarioId: 'prov-1', rol: ROL.PROVEEDOR, rolId: 7 },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('observacion.resuelta: solo el Responsable de precios la origina, y vuelve a quien capturó', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create(
+        {
+          eventType: 'observacion.resuelta',
+          sourceService: 'pricing-service',
+          title: 'Tu precio observado fue resuelto',
+          message: 'Aprobado.',
+          relatedEntityId: 'obs-4',
+        } as never,
+        { usuarioId: 'analista-1', rol: ROL.ANALISTA, rolId: 2 }, // quien capturó, no quien resuelve
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const { data } = await servicio.create(
+      {
+        eventType: 'observacion.resuelta',
+        sourceService: 'pricing-service',
+        title: 'Tu precio observado fue resuelto',
+        message: 'Aprobado.',
+        relatedEntityId: 'obs-5',
+        recipientUserId: 'analista-1',
+      } as never,
+      emisorDe('observacion.resuelta'),
+    );
+    expect(data.recipientUserId).toBe('analista-1');
+    expect(data.recipientRole).toBeNull();
+  });
+});
+
+describe('create: corrida.terminada (ALG-10)', () => {
+  const CORRIDA = {
+    eventType: 'corrida.terminada' as const,
+    sourceService: 'algorithms-core' as const,
+    title: 'Corrida terminada',
+    message: 'Apriori sobre 3 zonas terminó con 42 reglas.',
+  };
+
+  it('Administrador o Analista pueden emitirla; vuelve a quien la lanzó', async () => {
+    const { servicio } = servicioFresco();
+    const { data } = await servicio.create(
+      { ...CORRIDA, relatedEntityId: 'run-1', recipientUserId: 'analista-9' },
+      emisorDe('corrida.terminada'),
+    );
+    expect(data.recipientUserId).toBe('analista-9');
+    expect(data.recipientRole).toBeNull();
+  });
+
+  it('el Responsable de precios también puede emitirla (corrida de elasticidad)', async () => {
+    const { servicio } = servicioFresco();
+    const { creada } = await servicio.create(
+      { ...CORRIDA, relatedEntityId: 'run-4', recipientUserId: 'resp-precios-1' },
+      { usuarioId: 'resp-precios-1', rol: ROL.RESPONSABLE_PRECIOS, rolId: 4 },
+    );
+    expect(creada).toBe(true);
+  });
+
+  it('exige recipientUserId (destino dinámico): sin él, 400', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create({ ...CORRIDA, relatedEntityId: 'run-2' }, emisorDe('corrida.terminada')),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('un Proveedor NO puede emitir corrida.terminada (403)', async () => {
+    const { servicio } = servicioFresco();
+    await expect(
+      servicio.create(
+        { ...CORRIDA, relatedEntityId: 'run-3', recipientUserId: 'analista-9' },
+        { usuarioId: 'prov-1', rol: ROL.PROVEEDOR, rolId: 7 },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });
 

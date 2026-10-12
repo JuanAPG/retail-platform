@@ -5,6 +5,7 @@ import { Basket } from '../entities/basket.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
 import { AnalyticsFilterDto } from './dto/analytics-filter.dto';
 import { CategorySpend } from './dto/category-spend.dto';
+import { filtrarDiasLocales, ZONA_HORARIA } from '../common/zona-horaria';
 
 /**
  * M09 — Indicadores descriptivos, según Contrato de Métodos y Endpoints.
@@ -59,8 +60,22 @@ export class AnalyticsService {
       .select('COUNT(*)', 'baskets')
       // Como texto, no como DATE: el driver convertiría DATE a Date en la
       // zona horaria del proceso y podría recorrer el día.
-      .addSelect(`to_char(date_trunc('month', MIN(basket.date)), 'YYYY-MM-DD')`, 'dataStart')
-      .addSelect(`to_char(date_trunc('month', MAX(basket.date)) + interval '1 month', 'YYYY-MM-DD')`, 'dataEnd')
+      //
+      // `AT TIME ZONE` antes del `date_trunc` porque `basket.date` es
+      // timestamptz y el truncado usaría el huso de la SESIÓN (UTC en el
+      // compose): la última canasta del 30 de septiembre a las 21:00
+      // locales ya es 1 de octubre en UTC, así que el periodo se estiraba
+      // un mes y la frecuencia salía a la mitad. El filtro de esta misma
+      // consulta ya recorta por día local; esto lo hace coherente.
+      .addSelect(
+        `to_char(date_trunc('month', MIN(basket.date) AT TIME ZONE :zonaPeriodo), 'YYYY-MM-DD')`,
+        'dataStart',
+      )
+      .addSelect(
+        `to_char(date_trunc('month', MAX(basket.date) AT TIME ZONE :zonaPeriodo) + interval '1 month', 'YYYY-MM-DD')`,
+        'dataEnd',
+      )
+      .setParameter('zonaPeriodo', ZONA_HORARIA)
       .getRawOne<{ baskets: string; dataStart: string | null; dataEnd: string | null }>();
 
     const baskets = Number(row?.baskets ?? 0);
@@ -141,11 +156,9 @@ export class AnalyticsService {
 
     if (filters.zoneId) qb.andWhere('basket.zoneId = :zoneId', { zoneId: filters.zoneId });
     if (filters.segmentId) qb.andWhere('basket.segmentId = :segmentId', { segmentId: filters.segmentId });
-    if (filters.dateFrom) qb.andWhere('basket.date >= :dateFrom', { dateFrom: filters.dateFrom });
-    // `fecha` es timestamptz: comparar contra '2026-09-30' a secas dejaría
-    // fuera todo lo vendido ese día después de medianoche. Se toma el día
-    // completo.
-    if (filters.dateTo) qb.andWhere('basket.date < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
+    // Días completos locales en los dos extremos (ver filtrarDiasLocales):
+    // `fecha` es timestamptz y la frontera del día es la de Monterrey.
+    filtrarDiasLocales(qb, 'basket.date', filters);
     // La tienda no está en `canastas`: se llega por su transacción.
     if (filters.storeId) {
       qb.innerJoin('basket.transaction', 'transaction').andWhere('transaction.storeId = :storeId', {

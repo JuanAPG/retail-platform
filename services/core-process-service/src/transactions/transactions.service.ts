@@ -33,6 +33,7 @@ import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { MapaColumnas, parsearCsv } from './csv.util';
 import { calcularTotal } from './money.util';
 import { esFechaFutura, parsearDecimal, parsearFecha } from './fecha.util';
+import { diaLocal, filtrarDiasLocales } from '../common/zona-horaria';
 
 /** Archivo que entrega `FileInterceptor` (tipo estructural: no hay @types/multer). */
 export interface ArchivoSubido {
@@ -182,9 +183,30 @@ export class TransactionsService {
       .leftJoinAndSelect('presentation.producto', 'producto');
 
     if (filters.storeId) qb.andWhere('t.storeId = :storeId', { storeId: filters.storeId });
-    if (filters.dateFrom) qb.andWhere('t.fecha >= :dateFrom', { dateFrom: filters.dateFrom });
-    // Día completo: `fecha` es timestamptz (mismo criterio que M07 y M09).
-    if (filters.dateTo) qb.andWhere('t.fecha < CAST(:dateTo AS date) + 1', { dateTo: filters.dateTo });
+    // La zona no está en `transacciones`: es la de su tienda, y el join a
+    // `store` ya está arriba porque la respuesta la necesita.
+    if (filters.zoneId) qb.andWhere('store.zonaId = :zoneId', { zoneId: filters.zoneId });
+    // El segmento tampoco: a diferencia de las canastas (M07), que lo
+    // congelan al construirse, una transacción solo tiene tienda → zona.
+    // Se resuelve contra `v_zona_segmento`, la vista que el esquema designa
+    // como fuente única del segmento vigente (misma que usa
+    // BasketsService.findSegmentId): replicar aquí su COALESCE o su regla
+    // de vigencia dejaría la misma regla escrita en dos lugares.
+    //
+    // RN-02: es el segmento agregado de la zona, nunca el ingreso de la
+    // persona que compró.
+    if (filters.segmentId) {
+      qb.andWhere(
+        `store.zonaId IN (
+           SELECT zona_id FROM v_zona_segmento
+           WHERE segmento_ingreso_id = :segmentId AND vigente
+         )`,
+        { segmentId: filters.segmentId },
+      );
+    }
+    // Días completos locales: `fecha` es timestamptz (mismo criterio que
+    // M07 y M09, y el mismo que audit-service).
+    filtrarDiasLocales(qb, 't.fecha', filters);
 
     const pagina = await paginar(
       qb.orderBy('t.fecha', 'DESC').addOrderBy('t.id', 'DESC'),
@@ -288,13 +310,21 @@ export class TransactionsService {
       dto.details.map((d) => ({ cantidad: d.quantity, precioUnitario: d.unitPrice })),
     );
 
+    // La MISMA interpretación que el CSV: una fecha sin huso es reloj de
+    // pared local. Con `new Date(dto.fecha)`, '2026-09-01' se guardaba
+    // como medianoche UTC y la venta aparecía el 31 de agosto.
+    const fecha = parsearFecha(dto.fecha);
+    if (!fecha) {
+      throw new BadRequestException('fecha debe ser una fecha ISO válida.');
+    }
+
     let guardadaId: string;
     try {
       guardadaId = await this.dataSource.transaction(async (manager) => {
         const transaction = await manager.save(Transaction, {
           folio: dto.folio,
           storeId: dto.storeId,
-          fecha: new Date(dto.fecha),
+          fecha,
           total,
           canal: 'punto_venta',
           importacionId: null,
@@ -1119,7 +1149,9 @@ export class TransactionsService {
         folio: v.folio as string,
         tienda: v.tiendaNombre as string,
         tiendaId: v.tiendaId as string,
-        fecha: (v.fecha as Date).toISOString().slice(0, 10),
+        // El día LOCAL, no el UTC: con `toISOString()` una venta de las
+        // 21:00 del 30 de septiembre se mostraría como 1 de octubre.
+        fecha: diaLocal(v.fecha as Date),
         lineas: 0,
         totalEstimado: 0,
       };

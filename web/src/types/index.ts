@@ -175,15 +175,29 @@ export interface PriceHistoryEntry {
 export interface ZonePriceComparison {
   zoneId: string;
   zoneName: string;
+  presentationId: string;
+  presentationName: string;
   averagePrice: number;
   minPrice: number;
   maxPrice: number;
   storeCount: number;
 }
 
+/** Precio normalizado por unidad base (kg, l, pza): hace comparables presentaciones de distinto tamaño. */
+export interface ZoneUnitPriceComparison {
+  zoneId: string;
+  zoneName: string;
+  baseUnit: string;
+  averagePricePerBaseUnit: number;
+  minPricePerBaseUnit: number;
+  maxPricePerBaseUnit: number;
+  storeCount: number;
+}
+
 export interface PriceComparisonResult {
   productId: string;
   zones: ZonePriceComparison[];
+  perUnit: ZoneUnitPriceComparison[];
 }
 
 /**

@@ -197,6 +197,9 @@ services:
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: catalog/v1
+      # Auditoría (CAT-08) y notificaciones del alta de producto (CAT-09): no bloqueantes.
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -244,6 +247,8 @@ services:
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
       AUDIT_SERVICE_URL: http://audit-service:3110
+      # Avisos de propuestas, resoluciones y alertas de cambio de precio (PRI-07): no bloqueantes.
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
@@ -278,6 +283,9 @@ services:
     environment:
       PORT: 3104
       SERVICE_NAME: core-process-service
+      # Una fecha sin huso (CSV o alta manual) es hora local de aqui, y el
+      # dia de dateFrom/dateTo es el dia local, no el dia UTC de la base.
+      CORE_PROCESS_TIMEZONE: America/Monterrey
       SERVICE_VERSION: 1.0.0
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
@@ -327,10 +335,17 @@ services:
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: algorithms/v1
+      # Dia de negocio: los dias y semanas de elasticidad, dateFrom/dateTo y el
+      # periodo de las corridas se cortan a medianoche local, no UTC.
+      ZONA_HORARIA: America/Monterrey
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
+      # Bitacora (ejecutar_corrida) y aviso corrida.terminada de cada corrida
+      # (ALG-10). Si no responden, la corrida igual se completa.
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
@@ -444,6 +459,8 @@ services:
       PORT: 3108
       SERVICE_NAME: documents-service
       SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: documents/v1
+      AUDIT_SERVICE_URL: http://audit-service:3110
       # Mongo con operacion real: historial de reportes
       # (documents-service) y notificaciones (notifications-service).
       # `authSource=admin` porque el usuario se crea en la base admin.
@@ -534,6 +551,9 @@ services:
       PORT: 3110
       SERVICE_NAME: audit-service
       SERVICE_VERSION: 1.0.0
+      # El dia de dateFrom/dateTo es el dia LOCAL de quien lee la
+      # bitacora, no el dia UTC de la base.
+      AUDIT_TIMEZONE: America/Monterrey
       # targetNamespace de su XSD: el XmlInterceptor lo pone como
       # xmlns en la raiz para que el XML valide contra docs/contratos/.
       XML_NAMESPACE: audit/v1

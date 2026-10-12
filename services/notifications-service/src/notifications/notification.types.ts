@@ -34,6 +34,9 @@ export type EventType =
   | 'proveedor.solicitud'
   | 'proveedor.resuelto'
   | 'precio.umbral'
+  | 'precio.observado'
+  | 'observacion.resuelta'
+  | 'corrida.terminada'
   | 'escenario.generado'
   | 'recomendacion.generada'
   | 'recomendacion.resuelta';
@@ -108,6 +111,21 @@ const MATRIZ: Record<EventType, AtributosEvento> = {
     priority: 'warning',
     title: 'Precio fuera de rango',
     relatedEntityType: 'presentacion',
+  },
+  'precio.observado': {
+    priority: 'info',
+    title: 'Precio observado en tienda pendiente de revisión',
+    relatedEntityType: 'precio_observado',
+  },
+  'observacion.resuelta': {
+    priority: 'info',
+    title: 'Tu precio observado fue resuelto',
+    relatedEntityType: 'precio_observado',
+  },
+  'corrida.terminada': {
+    priority: 'info',
+    title: 'Corrida terminada',
+    relatedEntityType: 'corrida',
   },
   'escenario.generado': {
     priority: 'info',
@@ -185,20 +203,20 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
   },
 
   // pricing: POST /v1/price-proposals -> @Roles(PROVEEDOR);
-  // lo resuelve APRUEBAN_PRECIOS = [Administrador, Gerente de categoría].
+  // lo resuelve APRUEBAN_PRECIOS = [Responsable de precios] (decisión D1).
   'precio.propuesto': {
     origenes: [ROL.PROVEEDOR],
-    destino: { tipo: 'rol', rol: ROL.GERENTE_CATEGORIA },
-    fundamento: 'pricing POST price-proposals es solo del Proveedor; lo aprueba APRUEBAN_PRECIOS, cuya bandeja es el Gerente de categoría.',
+    destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    fundamento: 'pricing POST price-proposals es solo del Proveedor; la aprueba ÚNICAMENTE el Responsable de precios (D1), así que su bandeja es la de ese rol y no la del Gerente de categoría.',
   },
 
-  // catalog: PATCH products/:id/approve|reject y pricing: PATCH
-  // price-proposals/:id/approve|reject -> @Roles(Administrador, Gerente).
+  // catalog: PATCH products/:id/approve|reject -> @Roles(Gerente de categoría) y pricing: PATCH
+  // price-proposals/:id/approve|reject -> @Roles(Responsable de precios).
   // Le llega al proveedor que propuso: solo el emisor sabe quién es.
   'propuesta.resuelta': {
-    origenes: [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA],
+    origenes: [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
-    fundamento: 'Quien aprueba o rechaza una propuesta es Administrador o Gerente; el aviso va al proveedor que la hizo.',
+    fundamento: 'Quien aprueba o rechaza una propuesta de producto es el Gerente de categoría y una de precio, el Responsable de precios (D1); el aviso va al proveedor que la hizo.',
   },
 
   // pricing: POST /v1/prices -> @Roles(Administrador, Responsable de precios).
@@ -208,6 +226,52 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
     origenes: [ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
     fundamento: 'pricing POST prices es de Administrador y Responsable de precios. Destino: Responsable de precios (bandeja del área), decidido por el equipo el 2026-10-08.',
+  },
+
+  // PRI-09/D-16: pricing POST /v1/price-observations (app móvil) ->
+  // @Roles(CAPTURAN_OBSERVACIONES) = [Analista comercial, Responsable de
+  // precios] (pricing/src/common/roles.ts:56). Nace `pendiente`: avisa a
+  // quien la resuelve. Agregado 2026-10-09 junto con `observacion.resuelta`
+  // porque PriceObservationsService no emitía ninguno de los dos (no
+  // inyectaba NotificationsReporter).
+  'precio.observado': {
+    origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+    destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
+    fundamento:
+      'pricing POST price-observations es de Analista y Responsable de precios (CAPTURAN_OBSERVACIONES). Destino: Responsable de precios, que es quien la resuelve (D1 APRUEBAN_PRECIOS).',
+  },
+
+  // PRI-09/D-16: pricing PATCH price-observations/:id/approve|reject ->
+  // @Roles(APRUEBAN_PRECIOS) = [Responsable de precios] (D1, mismo rol que
+  // resuelve propuestas de precio). Le llega a quien la capturó
+  // (`capturado_por`): solo el emisor sabe quién fue.
+  'observacion.resuelta': {
+    origenes: [ROL.RESPONSABLE_PRECIOS],
+    destino: { tipo: 'usuario' },
+    fundamento:
+      'pricing PATCH price-observations/:id/approve|reject es D1 APRUEBAN_PRECIOS = [Responsable de precios]. El aviso va a quien capturó la observación (recipientUserId).',
+  },
+
+  // ALG-10: algorithms-core POST /v1/association/apriori/run ->
+  // @Roles(Administrador, Analista comercial). De ~40 corridas medidas,
+  // ninguna llegó a audit-service ni emitió notificación — el emisor de
+  // auditoría y el de este evento se agregan en algorithms-core; aquí
+  // solo se abre el catálogo para que no lo rechace con 403/400. Vuelve a
+  // quien lanzó la corrida (dinámico, igual que escenario.generado):
+  // es un resultado suyo, no de un área. Corregido 2026-10-11: cubre
+  // TANTO corridas de asociación COMO de elasticidad (el precio-demanda
+  // también la lanza el Responsable de precios, no solo Administrador y
+  // Analista), aunque algorithms-core todavía no tiene módulo de
+  // elasticidad — cuando exista, su `@Roles` real es el que manda, no
+  // este comentario. `analytics-stats` (clustering, RF-16) todavía no
+  // tiene endpoints propios (solo scaffolding), así que no se agrega a
+  // `origenes` hasta que exista el `@Roles` real que lo respalde.
+  // Agregado 2026-10-10, corregido 2026-10-11.
+  'corrida.terminada': {
+    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+    destino: { tipo: 'usuario' },
+    fundamento:
+      'algorithms-core POST association/apriori/run es de Administrador y Analista comercial; una futura corrida de elasticidad la lanza también el Responsable de precios. Destino: quien lanzó la corrida (recipientUserId), igual criterio que escenario.generado.',
   },
 
   // decision: POST /v1/simulation/price|presentation -> @Roles(Administrador, Analista).
