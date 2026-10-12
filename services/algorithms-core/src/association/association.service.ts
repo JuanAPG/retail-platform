@@ -23,6 +23,17 @@ import { AssociationExclusion } from '../entities/association-exclusion.entity';
 import { FuenteDatos, ResumenProducto } from '../fuente-datos/fuente-datos.service';
 import { apriori, AprioriRule, compareItems } from './apriori';
 import { AprioriParamsDto } from './dto/apriori-params.dto';
+import { fpGrowth } from './fpgrowth';
+
+/**
+ * Los dos algoritmos de M10 (D2): mismas entradas y la misma forma de
+ * resultado. La llave es el valor del parámetro `algoritmo` de la corrida.
+ */
+const ALGORITMOS = {
+  apriori: { nombre: 'Apriori', correr: apriori },
+  fpgrowth: { nombre: 'FP-Growth', correr: fpGrowth },
+};
+export type Algoritmo = keyof typeof ALGORITMOS;
 
 const DEFAULT_MAX_ITEMSET_SIZE = 3;
 /** Filas por INSERT: lejos del límite de 65 535 parámetros de Postgres. */
@@ -59,8 +70,8 @@ export type CorridaRespuesta = Omit<AnalysisRun, 'date' | 'results'> & {
 };
 
 /**
- * M10 — Reglas de asociación (Apriori), según Contrato de Métodos y
- * Endpoints. Cada corrida se guarda completa (parámetros, supuestos,
+ * M10 — Reglas de asociación (Apriori y FP-Growth), según Contrato de
+ * Métodos y Endpoints. Cada corrida se guarda completa (parámetros, supuestos,
  * filtros, periodo, usuario y reglas) para poder reproducirla (RF-15).
  */
 @Injectable()
@@ -81,8 +92,21 @@ export class AssociationService {
     private readonly reporte: ReporteDeCorridas,
   ) {}
 
+  /** Corre Apriori y guarda la corrida (ver `run`). */
+  runApriori(params: AprioriParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ReglaConProductos[]> {
+    return this.run('apriori', params, user, contexto);
+  }
+
   /**
-   * Corre Apriori sobre las canastas filtradas y guarda la corrida vía
+   * Corre FP-Growth y guarda la corrida (ver `run`). Con los mismos datos
+   * y umbrales da las mismas reglas que Apriori, en el mismo orden (RF-14).
+   */
+  runFpGrowth(params: AprioriParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ReglaConProductos[]> {
+    return this.run('fpgrowth', params, user, contexto);
+  }
+
+  /**
+   * Corre el algoritmo sobre las canastas filtradas y guarda la corrida vía
    * saveRun. `user` no está en la firma del contrato, pero la corrida
    * debe registrar quién la ejecutó y solo el controlador conoce el JWT
    * (mismo patrón que TransactionsService.createManual).
@@ -91,7 +115,13 @@ export class AssociationService {
    * no generan corrida. Una falla después de leer los datos deja la
    * corrida registrada como `fallida`.
    */
-  async runApriori(params: AprioriParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ReglaConProductos[]> {
+  private async run(
+    algoritmo: Algoritmo,
+    params: AprioriParamsDto,
+    user: SesionUsuario,
+    contexto: ContextoPeticion,
+  ): Promise<ReglaConProductos[]> {
+    const { nombre, correr } = ALGORITMOS[algoritmo];
     // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
     // comparar ese texto es comparar las fechas.
     if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
@@ -105,13 +135,13 @@ export class AssociationService {
 
     const period = this.periodOf(params, lines);
     const maxItemsetSize = params.maxItemsetSize ?? DEFAULT_MAX_ITEMSET_SIZE;
-    const corrida = { tipo: 'asociacion' as const, nombre: 'Apriori', periodo: period };
+    const corrida = { tipo: 'asociacion' as const, nombre, periodo: period };
 
     let runId: string;
     let resumen: string;
     try {
       const { baskets, categoryOf } = groupByBasket(lines);
-      const { rules } = apriori(baskets, {
+      const { rules } = correr(baskets, {
         minSupport: params.minSupport,
         minConfidence: params.minConfidence,
         maxItemsetSize,
@@ -120,7 +150,7 @@ export class AssociationService {
       const excludedPairs = await this.loadExcludedCategoryPairs();
       const kept = rules.filter((rule) => !isExcluded(rule, categoryOf, excludedPairs));
 
-      const run = this.buildRun(params, user, period, baskets.length, maxItemsetSize, {
+      const run = this.buildRun(algoritmo, params, user, period, baskets.length, maxItemsetSize, {
         generated: rules.length,
         excluded: rules.length - kept.length,
         rules: kept,
@@ -130,14 +160,14 @@ export class AssociationService {
         `${kept.length} regla(s) con soporte ≥ ${params.minSupport} y confianza ≥ ${params.minConfidence}, ` +
         `sobre ${baskets.length} canasta(s).`;
     } catch (error) {
-      const fallidaId = await this.recordFailedRun(params, user, period, maxItemsetSize, error);
+      const fallidaId = await this.recordFailedRun(algoritmo, params, user, period, maxItemsetSize, error);
       await this.reporte.terminada(
         { ...corrida, runId: fallidaId, estado: 'fallida', resumen: 'No se pudo completar la corrida; quedó registrada como fallida.' },
         user.id,
         contexto,
       );
       throw new InternalServerErrorException(
-        'No se pudo completar la corrida de Apriori; quedó registrada como fallida.',
+        `No se pudo completar la corrida de ${nombre}; quedó registrada como fallida.`,
       );
     }
 
@@ -280,6 +310,7 @@ export class AssociationService {
   }
 
   private buildRun(
+    algoritmo: Algoritmo,
     params: AprioriParamsDto,
     user: SesionUsuario,
     period: Period,
@@ -298,7 +329,7 @@ export class AssociationService {
     run.basketsConsidered = basketCount;
 
     run.parameters = [
-      ...algorithmParameters(params, maxItemsetSize),
+      ...algorithmParameters(algoritmo, params, maxItemsetSize),
       param('reglas_generadas', outcome.generated),
       param('reglas_excluidas_rn10', outcome.excluded),
     ];
@@ -342,6 +373,7 @@ export class AssociationService {
    * solo se registra en el log: no debe ocultar el error original.
    */
   private async recordFailedRun(
+    algoritmo: Algoritmo,
     params: AprioriParamsDto,
     user: SesionUsuario,
     period: Period,
@@ -349,7 +381,10 @@ export class AssociationService {
     error: unknown,
   ): Promise<string | null> {
     const message = error instanceof Error ? error.message : String(error);
-    this.logger.error(`Corrida de Apriori fallida: ${message}`, error instanceof Error ? error.stack : undefined);
+    this.logger.error(
+      `Corrida de ${ALGORITMOS[algoritmo].nombre} fallida: ${message}`,
+      error instanceof Error ? error.stack : undefined,
+    );
     try {
       const run = new AnalysisRun();
       run.type = 'asociacion';
@@ -360,7 +395,7 @@ export class AssociationService {
       run.transactionsConsidered = null;
       run.basketsConsidered = null;
       run.errorMessage = message;
-      run.parameters = algorithmParameters(params, maxItemsetSize);
+      run.parameters = algorithmParameters(algoritmo, params, maxItemsetSize);
       return (await this.saveRun(run)).id;
     } catch (recordError) {
       this.logger.error(`No se pudo registrar la corrida fallida: ${String(recordError)}`);
@@ -458,9 +493,10 @@ function pairKey(a: number, b: number): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
 }
 
-function algorithmParameters(params: AprioriParamsDto, maxItemsetSize: number): AnalysisRunParameter[] {
+/** `algoritmo` es el `AnalysisRun.algorithm` de D2: un parámetro, sin columna nueva. */
+function algorithmParameters(algoritmo: Algoritmo, params: AprioriParamsDto, maxItemsetSize: number): AnalysisRunParameter[] {
   return [
-    param('algoritmo', 'apriori'),
+    param('algoritmo', algoritmo),
     param('soporte_minimo', params.minSupport),
     param('confianza_minima', params.minConfidence),
     param('tamano_maximo_itemset', maxItemsetSize),
