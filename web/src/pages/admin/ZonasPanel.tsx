@@ -12,6 +12,8 @@ import { Switch } from '../../components/ui/Switch';
 import { IconCerrar as IconEliminar, IconOjo, IconZonas } from '../../components/ui/icons';
 import { ZonaFormModal } from './ZonaFormModal';
 import { ConfirmarEliminarZonaModal } from './ConfirmarEliminarZonaModal';
+import { ZonaDatosModal } from './ZonaDatosModal';
+import { IconSegmentos } from '../../components/ui/icons';
 import { EstadoError } from '../../components/EstadoError';
 import { Cargando } from '../../components/Cargando';
 import { useAuth } from '../../context/AuthContext';
@@ -32,6 +34,7 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [zonaEditando, setZonaEditando] = useState<Zona | undefined>();
   const [zonaAEliminar, setZonaAEliminar] = useState<Zona | null>(null);
+  const [zonaDatos, setZonaDatos] = useState<Zona | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const [cambiandoEstadoDe, setCambiandoEstadoDe] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
               actions={
                 escribe ? (
                   <>
+                    <CircleButton icon={<IconSegmentos className="h-[19px] w-[19px]" />} label={`Indicadores y segmento de ${z.nombre}`} onClick={() => setZonaDatos(z)} />
                     <CircleButton icon={<IconOjo className="h-[19px] w-[19px]" />} label={`Editar ${z.nombre}`} onClick={() => abrirEdicion(z)} />
                     <CircleButton
                       icon={<IconEliminar className="h-[19px] w-[19px]" />}
@@ -180,6 +184,19 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
 
       {formAbierto && municipios.data && (
         <ZonaFormModal zona={zonaEditando} municipios={municipios.data} onCerrar={cerrarForm} onGuardado={trasGuardar} />
+      )}
+
+      {zonaDatos && (
+        <ZonaDatosModal
+          zona={zonaDatos}
+          onCerrar={() => setZonaDatos(null)}
+          onGuardado={(mensaje) => {
+            setZonaDatos(null);
+            setErrorAccion(null);
+            setAviso(mensaje);
+            estado.refetch();
+          }}
+        />
       )}
 
       {zonaAEliminar && (

@@ -14,6 +14,23 @@ import {
 
 // Los usuarios viven en api/usuarios.ts junto con su CRUD.
 
+export interface IndicadoresZonaPayload {
+  ingresoEstimado: number;
+  poblacion: number;
+  disponibilidad: number;
+  periodoInicio: string;
+  periodoFin: string;
+  fuente: string;
+}
+
+/** CAT-12 — carga manual de indicadores de una zona (solo Analista comercial). */
+export const cargarIndicadoresZona = (zonaId: string, payload: IndicadoresZonaPayload) =>
+  catalogApi.put(`/zones/${zonaId}/indicators`, payload).then((r) => r.data);
+
+/** CAT-13 — clasifica la zona en un segmento de ingreso (solo Analista comercial). */
+export const clasificarZona = (zonaId: string, segmentId: number) =>
+  catalogApi.put(`/zones/${zonaId}/classification`, { segmentId }).then((r) => r.data);
+
 export const getTiendas = () => traerTodo<Tienda>(catalogApi, '/stores');
 export const getZonas = () => traerTodo<Zona>(catalogApi, '/zones');
 export const getMunicipios = () => catalogApi.get<Municipio[]>('/municipalities').then((r) => r.data);

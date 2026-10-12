@@ -37,6 +37,16 @@ export interface GenerarReportePayload {
   segmentId?: number;
 }
 
+export interface EstadisticaMensual {
+  usuarioId: string;
+  mes: string;
+  reportes: number;
+}
+
+/** Agregación de Mongo (DOC-03): reportes generados por usuario y mes. Un Proveedor solo ve los suyos. */
+export const getEstadisticasReportes = () =>
+  documentsApi.get<{ data: EstadisticaMensual[] }>('/reports/stats/by-user-month').then((r) => r.data);
+
 export const generarReporteEjecutivo = (payload: GenerarReportePayload) =>
   documentsApi.post<Reporte>('/reports/executive', payload).then((r) => r.data);
 

@@ -58,7 +58,7 @@ export function ZonaFormModal({ zona, municipios, onCerrar, onGuardado }: ZonaFo
   return (
     <Modal
       titulo={esEdicion ? 'Editar zona' : 'Nueva zona'}
-      descripcion="El ingreso estimado, la población y la disponibilidad no se capturan aquí: los calcula el módulo de Analítica."
+      descripcion="El ingreso estimado, la población, la disponibilidad y el segmento se cargan aparte, con «Indicadores y segmento» en la tarjeta de la zona."
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

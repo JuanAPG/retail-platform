@@ -7,11 +7,14 @@ import {
   exportarReporte,
   generarReporteEjecutivo,
   getReporte,
+  getEstadisticasReportes,
   getReportes,
+  EstadisticaMensual,
   IndicadorReporte,
   Reporte,
 } from '../../api/documentos';
 import { EmptyState } from '../../components/EmptyState';
+import { Cargando } from '../../components/Cargando';
 import { EstadoError } from '../../components/EstadoError';
 import { SectionHeader } from '../../components/SectionHeader';
 import { Card } from '../../components/ui/Card';
@@ -137,6 +140,7 @@ export function ReportesPanel() {
 
   const historial = useFetch(() => getReportes({ limit: 20 }), []);
   const zonas = useFetch(getZonas, []);
+  const estadisticas = useFetch(getEstadisticasReportes, []);
   const filas = listaSegura<Reporte>(historial.data?.data);
 
   const [dateFrom, setDateFrom] = useState('');
@@ -258,6 +262,37 @@ export function ReportesPanel() {
         ))}
         {historial.data && Number(historial.data.total) > filas.length && (
           <p className="text-xs text-teal/60">Mostrando los {filas.length} más recientes de {historial.data.total}.</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 px-6">
+        <h2 className="font-display text-2xl text-vino">Reportes por usuario y mes</h2>
+        {estadisticas.loading && !estadisticas.data && <Cargando etiqueta="Cargando estadísticas…" />}
+        {estadisticas.error && <EstadoError mensaje={estadisticas.error} onReintentar={estadisticas.reintentable ? estadisticas.refetch : undefined} />}
+        {estadisticas.data && listaSegura<EstadisticaMensual>(estadisticas.data.data).length === 0 && (
+          <p className="text-sm text-teal/70">Todavía no hay reportes que contar.</p>
+        )}
+        {estadisticas.data && listaSegura<EstadisticaMensual>(estadisticas.data.data).length > 0 && (
+          <div className="overflow-x-auto rounded-[28px] bg-arena p-3">
+            <table className="w-full min-w-[320px] text-left text-sm">
+              <thead>
+                <tr className="text-[13px] font-semibold text-teal">
+                  <th className="px-3 py-2">Mes</th>
+                  <th className="px-3 py-2">Usuario</th>
+                  <th className="px-3 py-2 text-right">Reportes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listaSegura<EstadisticaMensual>(estadisticas.data.data).map((e) => (
+                  <tr key={`${e.mes}-${e.usuarioId}`} className="border-t border-salvia/25 text-tinta">
+                    <td className="px-3 py-2 font-data">{e.mes}</td>
+                    <td className="px-3 py-2 font-data text-xs">{String(e.usuarioId).slice(0, 8)}…</td>
+                    <td className="px-3 py-2 text-right font-data">{e.reportes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </section>
