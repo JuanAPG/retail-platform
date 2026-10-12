@@ -79,7 +79,8 @@ describe('Sustitución (integración, requiere stack y ventas cargadas)', () => 
       const juntos = (a: string, b: string) => [...canastas.values()].filter((s) => s.has(a) && s.has(b)).length;
       const dias = filas.map((f) => f.dia).sort();
 
-      const { status, json } = await patrones(`?categoryId=${id}`);
+      // limit=100 (el máximo): para comparar contra la referencia hacen falta todos los pares.
+      const { status, json } = await patrones(`?categoryId=${id}&limit=100`);
       expect(status).toBe(200);
       if (json.length > 0) conPatrones++;
       const enCategoria = new Set(filas.map((f) => f.producto));
@@ -114,9 +115,9 @@ describe('Sustitución (integración, requiere stack y ventas cargadas)', () => 
     expect(conPatrones).toBeGreaterThan(0);
   });
 
-  it('categoría inexistente → 404; categoryId ausente o no entero positivo → 400', async () => {
+  it('categoría inexistente → 404; categoryId o limit ausente o no entero positivo → 400', async () => {
     expect((await patrones('?categoryId=999999')).status).toBe(404);
-    for (const q of ['', '?categoryId=abc', '?categoryId=0', '?categoryId=1.5']) {
+    for (const q of ['', '?categoryId=abc', '?categoryId=0', '?categoryId=1.5', '?categoryId=1&limit=0', '?categoryId=1&limit=abc']) {
       expect((await patrones(q)).status).toBe(400);
     }
   });

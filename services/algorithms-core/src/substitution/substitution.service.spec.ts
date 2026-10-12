@@ -1,6 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { FuenteDatos } from '../fuente-datos/fuente-datos.service';
-import { SubstitutionService } from './substitution.service';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { SubstitutionQueryDto } from './dto/substitution-query.dto';
+import { SubstitutionService, topN } from './substitution.service';
 
 const LACTEOS = 2;
 const PRODUCTOS = {
@@ -75,9 +78,40 @@ describe('SubstitutionService (fuente simulada)', () => {
     expect(patron).toMatchObject({ type: 'precio', priceVariation: 0.2, originFrequencyChange: -1, targetFrequencyChange: 1 });
   });
 
+  it('limit corta a los pares más fuertes', async () => {
+    const { service } = servicio([
+      ...Array.from({ length: 6 }, () => canasta(['leche'])),
+      ...Array.from({ length: 6 }, () => canasta(['queso'])),
+    ]);
+
+    expect(await service.detectPatterns(LACTEOS, 1)).toHaveLength(1);
+  });
+
   it('categoría inexistente → 404; con menos de 2 productos o sin canastas → []', async () => {
     await expect(servicio([]).service.detectPatterns(99)).rejects.toThrow(NotFoundException);
     expect(await servicio([canasta(['frijol'])]).service.detectPatterns(1)).toEqual([]);
     expect(await servicio([]).service.detectPatterns(LACTEOS)).toEqual([]);
+  });
+});
+
+describe('tope de pares (paginacion.md: cálculo al vuelo con tope propio)', () => {
+  const pares = Array.from({ length: 150 }, (_, i) => i);
+
+  it('default 20, el limit pedido, y más de 100 se recorta a 100', () => {
+    expect(topN(pares)).toEqual(pares.slice(0, 20));
+    expect(topN(pares, 1)).toEqual([0]);
+    expect(topN(pares, 30)).toHaveLength(30);
+    expect(topN(pares, 150)).toHaveLength(100);
+  });
+
+  it('limit 0, negativo o no entero → 400 con su mensaje', async () => {
+    const errores = async (limit: string) =>
+      (await validate(plainToInstance(SubstitutionQueryDto, { categoryId: '1', limit }))).flatMap((e) =>
+        Object.values(e.constraints ?? {}),
+      );
+    expect(await errores('0')).toEqual(['limit debe ser mayor a 0.']);
+    expect(await errores('-5')).toEqual(['limit debe ser mayor a 0.']);
+    expect(await errores('1.5')).toEqual(['limit debe ser un número entero.']);
+    expect(await errores('150')).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { LIMITE_DEFAULT, LIMITE_MAXIMO } from '../common/dto/pagination.dto';
 import { FuenteDatos, PrecioHistorico } from '../fuente-datos/fuente-datos.service';
 import { SubstitutionPattern } from './dto/substitution-pattern.dto';
 import { findSubstitutes, PriceRow, priceInEffect, SubstitutionBasket } from './substitution';
@@ -13,7 +14,7 @@ import { findSubstitutes, PriceRow, priceInEffect, SubstitutionBasket } from './
 export class SubstitutionService {
   constructor(private readonly fuente: FuenteDatos) {}
 
-  async detectPatterns(categoryId: number): Promise<SubstitutionPattern[]> {
+  async detectPatterns(categoryId: number, limit?: number): Promise<SubstitutionPattern[]> {
     if (!(await this.fuente.categoriaExiste(categoryId))) {
       throw new NotFoundException(`No existe la categoría ${categoryId}.`);
     }
@@ -48,8 +49,17 @@ export class SubstitutionService {
       return { products: new Set(basket.products), prices };
     });
 
-    return findSubstitutes(products, view).map((pattern) => ({ ...pattern, ...period }));
+    return topN(findSubstitutes(products, view), limit).map((pattern) => ({ ...pattern, ...period }));
   }
+}
+
+/**
+ * Los `limit` pares más fuertes (ya vienen ordenados por score). Misma
+ * regla que la paginación estándar: default 20 y lo que pase de 100 se
+ * recorta a 100 (`paginacion.md`, excepción de cálculos al vuelo).
+ */
+export function topN<T>(patrones: T[], limit?: number): T[] {
+  return patrones.slice(0, Math.min(limit ?? LIMITE_DEFAULT, LIMITE_MAXIMO));
 }
 
 function agrupar(rows: PrecioHistorico[]): Map<string, PriceRow[]> {

@@ -531,15 +531,18 @@ precios) se correlaciona con comprar B (r ≥ 0.3); si no, `preferencia`. Mínim
 canastas por producto. Un patrón describe cómo se compró: es un **indicio**, no
 prueba que el precio cause el cambio (QA ALG-03).
 
-El método (correlación simple del Sprint 1) es el de este contrato; RN-11 deja
-PENDIENTE (PR-5) si se cambia a elasticidad cruzada y qué lo dispara.
+El método es el de **D-23** (Matriz §4): indicio por coocurrencia y correlación
+de precio, no elasticidad cruzada. El disparador por umbral de precio (RN-06)
+sigue PENDIENTE en PR-5.
 
-**Se calcula al vuelo y no se guarda**; no se pagina (excepción declarada en
-`paginacion.md`). No detecta `desabasto`: no hay historial de inventario.
+**Se calcula al vuelo y no se guarda**; no se pagina: tiene tope propio
+(`limit`, top-N), la excepción que declara `paginacion.md`. No detecta
+`desabasto`: no hay historial de inventario.
 
 | Query | Regla |
 |---|---|
 | `categoryId` | **obligatorio**, entero positivo (solo la categoría directa, sin subcategorías) |
+| `limit` | opcional, entero ≥ 1; default 20. Devuelve los `limit` pares de **mayor score**; mayor a 100 se recorta a 100 (misma regla que la paginación estándar) |
 
 Response `200` (arreglo plano):
 
@@ -592,7 +595,7 @@ XML: elemento `substitutionPatternListResponse`.
 
 | Status | Cuándo |
 |---|---|
-| 400 | Falta `categoryId` o no es entero positivo |
+| 400 | Falta `categoryId`, o `categoryId`/`limit` no es entero positivo |
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso (Proveedor) |
 | 404 | Categoría inexistente |

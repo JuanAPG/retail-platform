@@ -35,13 +35,13 @@ export class SubstitutionController {
   })
   @RespuestaXml(
     200,
-    'Indicios de sustitución de la categoría, del más fuerte al más débil; [] si no hay datos suficientes.',
+    'Los `limit` indicios más fuertes de la categoría (default 20, máximo 100); [] si no hay datos suficientes.',
     muestras.patronesSustitucion,
     'substitutionPatternListResponse',
     { siemprePresentes: ['priceCorrelation', 'priceVariation', 'originFrequencyChange', 'targetFrequencyChange'] },
   )
   @ApiErrores(400, 401, 403, 404, 503)
   detectPatterns(@Query() query: SubstitutionQueryDto) {
-    return this.substitutionService.detectPatterns(query.categoryId);
+    return this.substitutionService.detectPatterns(query.categoryId, query.limit);
   }
 }
