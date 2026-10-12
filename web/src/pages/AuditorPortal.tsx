@@ -154,7 +154,7 @@ export function AuditorPortal() {
 
 const LIMITE_BITACORA = 20;
 
-function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
+export function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
   const [accion, setAccion] = useState<AccionAuditoria | ''>('');
   const [page, setPage] = useState(1);
 
