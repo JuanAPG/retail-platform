@@ -7,6 +7,7 @@ import databaseConfig from './config/database.config';
 import { ElasticityModule } from './elasticity/elasticity.module';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { SubstitutionModule } from './substitution/substitution.module';
 
 /**
  * algorithms-core: Apriori (M10), elasticidad y sustitución (M11). Lo
@@ -23,6 +24,7 @@ import { SessionGuard } from './common/auth/session.guard';
     JwtModule.register({}),
     AssociationModule,
     ElasticityModule,
+    SubstitutionModule,
   ],
   controllers: [HealthController],
   providers: [SessionGuard],

@@ -523,11 +523,16 @@ si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResp
 
 ### GET /v1/substitution/patterns
 
-Pares de productos de una categoría que se compran juntos **menos** de lo
-esperado (lift < 1, medido sobre las canastas con productos de la categoría, y
-solo si por azar se esperaba verlos juntos al menos una vez). Tipo `precio` si
-además el precio vigente de A (histórico de precios) se correlaciona con
-comprar B (r ≥ 0.3); si no, `preferencia`. Mínimo 2 canastas por producto.
+**Indicios de sustitución** entre productos de una misma categoría: pares que
+se compran juntos **menos** de lo esperado (lift < 1, medido sobre las canastas
+con productos de la categoría, y solo si por azar se esperaba verlos juntos al
+menos una vez). Tipo `precio` si además el precio vigente de A (histórico de
+precios) se correlaciona con comprar B (r ≥ 0.3); si no, `preferencia`. Mínimo 2
+canastas por producto. Un patrón describe cómo se compró: es un **indicio**, no
+prueba que el precio cause el cambio (QA ALG-03).
+
+El método (correlación simple del Sprint 1) es el de este contrato; RN-11 deja
+PENDIENTE (PR-5) si se cambia a elasticidad cruzada y qué lo dispara.
 
 **Se calcula al vuelo y no se guarda**; no se pagina (excepción declarada en
 `paginacion.md`). No detecta `desabasto`: no hay historial de inventario.
@@ -550,6 +555,10 @@ Response `200` (arreglo plano):
     "lift": 0.4,
     "priceCorrelation": 0.52,
     "observations": 18,
+    "priceVariation": 0.1154,
+    "originFrequencyChange": -0.42,
+    "targetFrequencyChange": 0.38,
+    "summary": "Indicio de sustitución por precio: cuando Leche entera estuvo más caro, más canastas llevaron Leche deslactosada (r = 0.52). No prueba que una cosa cause la otra.",
     "periodStart": "2026-08-05",
     "periodEnd": "2026-08-15"
   }
@@ -558,14 +567,23 @@ Response `200` (arreglo plano):
 
 | Campo | Notas |
 |---|---|
-| `originProduct*` | A: el que sube de precio o se deja de comprar |
-| `targetProduct*` | B: el que lo reemplaza |
+| `originProduct*` | A: el que se compra menos (por ejemplo, cuando está más caro) |
+| `targetProduct*` | B: el que se compra en su lugar con más frecuencia (indicio) |
 | `type` | `precio` \| `preferencia` |
 | `score` | Fuerza del patrón, 0–1 |
 | `lift` | < 1 = casi no se compran juntos |
 | `priceCorrelation` | Correlación precio de A ↔ ventas de B; `null` si no hubo datos |
-| `observations` | Canastas (o periodos, para la correlación) que respaldan el patrón |
+| `observations` | Canastas de la categoría que respaldan el patrón |
+| `priceVariation` | Variación del precio de A en el periodo: (máximo − mínimo) / mínimo; `null` si A no tiene precios |
+| `originFrequencyChange` | Proporción de canastas que llevan A cuando A está **caro** menos cuando está **barato**; `null` si su precio no cambió |
+| `targetFrequencyChange` | Lo mismo para B; positiva = más canastas llevan B cuando A está caro |
+| `summary` | Una frase que lo describe como indicio, nunca como causa |
 | `periodStart`, `periodEnd` | Periodo de las canastas que compraron la categoría |
+
+"Caro" y "barato" se separan en el punto medio entre el precio mínimo y el máximo
+de A, contando solo las canastas en que se conoce su precio vigente. Funciona igual
+con dos niveles de precio que con precios continuos. Estos tres campos son
+evidencia: no cambian qué pares se detectan (eso lo deciden el lift y r).
 
 Categoría con menos de 2 productos, o sin canastas → `[]` (no es error).
 XML: elemento `substitutionPatternListResponse`.

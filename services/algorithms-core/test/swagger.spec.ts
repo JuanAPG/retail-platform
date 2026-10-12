@@ -20,9 +20,9 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 3 de association + 3 de elasticity; substitution suma la suya al migrarse.
+    // 3 de association + 3 de elasticity + 1 de substitution.
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(6);
+    expect(operaciones).toBe(7);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
