@@ -460,6 +460,11 @@
       <xs:element name="lift" type="xs:decimal"/>
       <xs:element name="priceCorrelation" type="alg:decimalOrEmpty"/>
       <xs:element name="observations" type="xs:integer"/>
+      <!-- Evidencia (QA ALG-03): vacíos si A no tiene precios o su precio no cambió. -->
+      <xs:element name="priceVariation" type="alg:decimalOrEmpty"/>
+      <xs:element name="originFrequencyChange" type="alg:decimalOrEmpty"/>
+      <xs:element name="targetFrequencyChange" type="alg:decimalOrEmpty"/>
+      <xs:element name="summary" type="xs:string"/>
       <xs:element name="periodStart" type="xs:date"/>
       <xs:element name="periodEnd" type="xs:date"/>
     </xs:all>

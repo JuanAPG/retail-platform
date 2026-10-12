@@ -71,6 +71,31 @@ export interface Segmento {
   nombre: string;
 }
 
+/** Producto candidato de una categoría (sustitución). */
+export interface ProductoDeCategoria {
+  id: string;
+  name: string;
+}
+
+/** Canasta vista por la sustitución: tienda, día local y productos de la categoría. */
+export interface CanastaDeCategoria {
+  store: string;
+  /** 'yyyy-mm-dd', día local (la sesión corre en la zona del negocio). */
+  day: string;
+  products: string[];
+}
+
+/** Una vigencia del histórico de precios de la presentación principal de un producto. */
+export interface PrecioHistorico {
+  productId: string;
+  store: string;
+  price: number;
+  /** 'yyyy-mm-dd' */
+  from: string;
+  /** 'yyyy-mm-dd'; null = sigue vigente. */
+  until: string | null;
+}
+
 /**
  * Periodo de cada observación; la semana es ISO (empieza en lunes). El día
  * y la semana se cortan en la zona del negocio porque la sesión de
@@ -114,14 +139,17 @@ const LINEAS_DE_CANASTA_SQL = `
   JOIN producto_presentaciones pp ON pp.id = d.presentacion_id
   JOIN productos p ON p.id = pp.producto_id
   WHERE ($1::uuid IS NULL OR k.zona_id = $1::uuid)
-    AND ($2::smallint IS NULL OR k.segmento_ingreso_id = $2::smallint)
+    -- numeric y no smallint: un segmentId mayor a 32 767 no existe (400 sin
+    -- canastas), en vez de reventar el cast y responder 500.
+    AND ($2::numeric IS NULL OR k.segmento_ingreso_id = $2::numeric)
     AND ($3::uuid IS NULL OR t.tienda_id = $3::uuid)
     AND ($4::date IS NULL OR k.fecha >= $4::date)
     AND ($5::date IS NULL OR k.fecha < $5::date + 1)`;
 
 /**
  * Única puerta de algorithms-core a datos de OTROS servicios: canastas
- * (core-process), productos y presentaciones (catalog) y usuarios (auth).
+ * (core-process), productos, presentaciones y categorías (catalog),
+ * histórico de precios (pricing) y usuarios (auth).
  *
  * Fase B: SQL de solo lectura sobre el Postgres compartido. Fase C: estas
  * mismas firmas pasan a llamar por HTTP a esos servicios, sin tocar a
@@ -225,6 +253,67 @@ export class FuenteDatos {
       'SELECT id, nombre FROM segmentos_ingreso ORDER BY ingreso_min',
     );
     return rows.map((r) => ({ id: Number(r.id), nombre: r.nombre }));
+  }
+
+  /**
+   * ¿Existe la categoría? (catalog). El id es SMALLINT: se compara como
+   * numeric para que uno mayor a 32 767 simplemente no exista (404) en vez
+   * de reventar el cast y responder 500.
+   */
+  async categoriaExiste(id: number): Promise<boolean> {
+    const rows: unknown[] = await this.dataSource.query('SELECT 1 FROM categorias_producto WHERE id = $1::numeric', [id]);
+    return rows.length > 0;
+  }
+
+  /** Productos de la categoría directa, sin subcategorías (catalog). */
+  async productosDeCategoria(id: number): Promise<ProductoDeCategoria[]> {
+    return this.dataSource.query('SELECT id, nombre AS name FROM productos WHERE categoria_id = $1::numeric', [id]);
+  }
+
+  /**
+   * Canastas que llevaron algún producto de la lista, con su tienda, su
+   * día y SOLO esos productos (core-process). Las demás canastas no dicen
+   * nada de la elección dentro de la categoría, así que no se leen.
+   */
+  async canastasConProductos(productIds: string[]): Promise<CanastaDeCategoria[]> {
+    if (productIds.length === 0) return [];
+    return this.dataSource.query(
+      `SELECT t.tienda_id AS store, to_char(k.fecha, 'YYYY-MM-DD') AS day,
+              array_agg(DISTINCT pp.producto_id) AS products
+       FROM canastas k
+       JOIN transacciones t ON t.id = k.transaccion_id
+       JOIN transacciones_detalle d ON d.transaccion_id = k.transaccion_id
+       JOIN producto_presentaciones pp ON pp.id = d.presentacion_id
+       WHERE pp.producto_id = ANY($1::uuid[])
+       GROUP BY k.id, t.tienda_id, k.fecha`,
+      [productIds],
+    );
+  }
+
+  /**
+   * Histórico de precios (pricing) de la presentación PRINCIPAL de cada
+   * producto (la más vendida), para no mezclar el precio de 1 kg con el
+   * de 500 g. Del histórico y no de las ventas: cuando A está caro nadie
+   * lo compra, y su precio no aparecería en ninguna venta. Misma consulta
+   * que `loadPriceHistory` del monolito.
+   */
+  async historialDePrecios(productIds: string[]): Promise<PrecioHistorico[]> {
+    if (productIds.length === 0) return [];
+    return this.dataSource.query(
+      `WITH principal AS (
+         SELECT DISTINCT ON (pp.producto_id) pp.producto_id, pp.id AS presentacion_id
+         FROM producto_presentaciones pp
+         LEFT JOIN transacciones_detalle d ON d.presentacion_id = pp.id
+         WHERE pp.producto_id = ANY($1::uuid[])
+         GROUP BY pp.producto_id, pp.id
+         ORDER BY pp.producto_id, COALESCE(SUM(d.cantidad), 0) DESC, pp.id
+       )
+       SELECT pr.producto_id AS "productId", p.tienda_id AS store, p.precio::float8 AS price,
+              p.fecha_vigencia_desde::text AS "from", p.fecha_vigencia_hasta::text AS "until"
+       FROM principal pr
+       JOIN precios p ON p.presentacion_id = pr.presentacion_id`,
+      [productIds],
+    );
   }
 
   /**

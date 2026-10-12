@@ -14,9 +14,9 @@ de negocio.
 | Módulo | Rutas | Estado |
 |---|---|---|
 | Base del servicio | `/v1/health` | listo: Postgres, roles (`RolesGuard`, `@Roles`, `@CurrentUser`) y jest |
-| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/fpgrowth/run`, `/v1/association/runs`, `/v1/association/runs/:id` | migrado: Apriori trasladado sin cambios, corrida completa guardada, `/runs` paginado, JSON y XML, Swagger con ejemplos. FP-Growth (D2): mismas reglas que Apriori, `algoritmo` en los parámetros de la corrida |
-| Elasticidad (M11) | `/v1/elasticity/calculate`, `/v1/elasticity/chart`, `/v1/elasticity/current` | pendiente (Fase B) |
-| Sustitución (M11) | `/v1/substitution/patterns` | pendiente (Fase B) |
+| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/runs`, `/v1/association/runs/:id` | migrado: Apriori trasladado sin cambios, corrida completa guardada, `/runs` paginado, JSON y XML, Swagger con ejemplos |
+| Elasticidad (M11) | `/v1/elasticity/calculate`, `/v1/elasticity/chart`, `/v1/elasticity/current` | migrado (#56) |
+| Sustitución (M11) | `/v1/substitution/patterns` | migrado (ALG-03) |
 
 ## Levantarlo solo
 
@@ -85,6 +85,9 @@ ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
   1e-4, límites de D-18, nacional sobre zona × periodo, precio ponderado, atípica,
   cantidad 0, desborde de la columna, segmento ponderado, `/chart` y `/current`.
 - `src/config/zona-horaria.spec.ts`: los días se cortan a medianoche de Monterrey.
+- `src/substitution/substitution.spec.ts` y `substitution.service.spec.ts`: las tres pruebas
+  sintéticas de QA (sustitución conocida, datos sin relación, otra categoría), la evidencia
+  (variación de precio y de frecuencia) con su caso de control y el precio vigente.
 - `src/association/association.service.spec.ts`: orden de reglas determinista (ALG-06),
   el mismo que `apriori()`, sin depender del id aleatorio de la regla.
 - `test/swagger.spec.ts`: cada ruta publica ejemplo JSON y XML y sus errores estándar.
@@ -99,6 +102,8 @@ ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
   Analista. Necesita `postgres`, `redis`, `auth-service` y este servicio arriba, y ventas
   cargadas con alguna entre las 18:00 y las 24:00 locales (p. ej.
   `db/datos_prueba_100_canastas.csv` importado por core-process). Borra las corridas que crea.
+- `test/sustitucion.spec.ts`: cada categoría contra una referencia calculada aparte desde las
+  canastas crudas (lift, observaciones, periodo y pares completos), y 404/400. Solo lee.
 - `test/corridas.spec.ts`: cada corrida deja `ejecutar_corrida` en la bitácora y avisa
   `corrida.terminada` (ALG-10). Necesita además `audit-service`, `notifications-service` y
   `mongodb`. Los eventos de la bitácora se quedan (es append-only).

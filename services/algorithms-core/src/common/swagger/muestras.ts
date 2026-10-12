@@ -164,6 +164,31 @@ const vigente = (e: ReturnType<typeof elasticidad>) => ({
   periodEnd: '2026-09-20',
 });
 
+// ===== Sustitución (M11): salida real del CSV de 100 canastas, categoría Abarrotes.
+
+/** Respuesta de GET /v1/substitution/patterns?categoryId=1. */
+const patronesSustitucion = [
+  {
+    originProductId: '2de8e032-49d5-4e16-a9b4-138e425ee91c',
+    originProductName: 'Frijol negro',
+    targetProductId: '4393bde8-2d1e-4534-a9d7-792d0b0b6cee',
+    targetProductName: 'Quinoa orgánica',
+    type: 'precio',
+    score: 0.6302,
+    lift: 0.1058,
+    priceCorrelation: 0.3663,
+    observations: 71,
+    priceVariation: 0.1806,
+    originFrequencyChange: -0.2439,
+    targetFrequencyChange: 0.2683,
+    summary:
+      'Indicio de sustitución por precio: cuando Frijol negro estuvo más caro, más canastas llevaron Quinoa orgánica (r = 0.37). ' +
+      'No prueba que una cosa cause la otra.',
+    periodStart: '2026-08-02',
+    periodEnd: '2026-09-20',
+  },
+];
+
 export const muestras = {
   reglas: [reglaQuesoLeche, reglaLecheQueso],
   corrida,
@@ -171,5 +196,6 @@ export const muestras = {
   calculoElasticidad,
   graficoElasticidad,
   /** Zona primero y la nacional al final de cada presentación. */
+  patronesSustitucion,
   elasticidadesVigentes: [vigente(frijolOriente), vigente(frijolNacional)],
 };
