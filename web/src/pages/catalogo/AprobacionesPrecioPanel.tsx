@@ -10,6 +10,7 @@ import { ErrorText } from '../../components/ui/ErrorText';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { TextArea } from '../../components/ui/TextArea';
 import { IconPrecios } from '../../components/ui/icons';
+import { ObservacionesPrecioPanel } from './ObservacionesPrecioPanel';
 import { listaSegura } from '../../api/seguro';
 
 const moneda = (v: string | number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
@@ -169,6 +170,7 @@ export function AprobacionesPrecioPanel() {
           </div>
         </Modal>
       )}
+      <ObservacionesPrecioPanel />
     </div>
   );
 }

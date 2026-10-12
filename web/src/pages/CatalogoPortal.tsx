@@ -9,6 +9,7 @@ import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
 import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
 import { ReportesPanel } from './catalogo/ReportesPanel';
+import { AlertaPrecioCard } from './catalogo/AlertaPrecioCard';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
@@ -153,7 +154,12 @@ export function CatalogoPortal() {
 
       {tab === 'aprobaciones-precio' && <AprobacionesPrecioPanel />}
 
-      {tab === 'gestion-precios' && <PreciosPanel />}
+      {tab === 'gestion-precios' && (
+        <div className="flex flex-col gap-6">
+          <AlertaPrecioCard puedeEditar={usuario?.rol === 'Responsable de precios'} />
+          <PreciosPanel />
+        </div>
+      )}
 
       {tab === 'elasticidad' && <ElasticidadPanel />}
 
