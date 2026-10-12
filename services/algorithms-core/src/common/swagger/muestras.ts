@@ -65,8 +65,111 @@ const corridaCompleta = {
   results: [reglaQuesoLeche, reglaLecheQueso],
 };
 
+// ===== Elasticidad (M11): valores de una corrida por día sobre el CSV de 100 canastas.
+
+const CORRIDA_ELASTICIDAD = '99e12a2b-6f3d-4c8a-9b21-5e7d0c4a8f13';
+const FECHA_ELASTICIDAD = '2026-10-10T20:10:16.569Z';
+const ZONA_ORIENTE = { id: 'b3c1e7a2-4d5f-4a8b-9c0d-1e2f3a4b5c6d', nombre: 'Zona Oriente' };
+const LECHE_1L = { id: '7d2e9f41-3a6b-4c8d-8e1f-2a3b4c5d6e7f', product: 'Leche entera', presentation: '1 L' };
+const FRIJOL_1KG = { id: '5a8c3e72-9b1d-4f6a-8c2e-3d4f5a6b7c8d', product: 'Frijol negro', presentation: '1 kg' };
+
+function elasticidad(p: typeof LECHE_1L, zona: typeof ZONA_ORIENTE | null, value: number, rSquared: number, observations: number) {
+  return {
+    presentationId: p.id,
+    productName: p.product,
+    presentationName: p.presentation,
+    zoneId: zona?.id ?? null,
+    zoneName: zona?.nombre ?? 'Nacional',
+    value,
+    classification: 'elastic',
+    rSquared,
+    observations,
+  };
+}
+
+const frijolOriente = elasticidad(FRIJOL_1KG, ZONA_ORIENTE, -12.5959, 0.95082, 28);
+const frijolNacional = elasticidad(FRIJOL_1KG, null, -1.8771, 0.06995, 55);
+// E > 0 con estos datos: el precio de la leche solo cambia entre zonas, no en el tiempo.
+const lecheNacional = elasticidad(LECHE_1L, null, 3.4397, 0.07999, 60);
+
+/** Respuesta de POST /v1/elasticity/calculate. */
+const calculoElasticidad = {
+  runId: CORRIDA_ELASTICIDAD,
+  periodStart: '2026-08-02',
+  periodEnd: '2026-09-20',
+  granularity: 'day',
+  results: [frijolOriente, frijolNacional, lecheNacional].map((r) => ({ ...r, atypical: r.value > 0 })),
+  insufficient: [
+    {
+      presentationId: '9e4b2d61-7c3a-4f8e-a1b2-c3d4e5f6a7b8',
+      productName: 'Quinoa orgánica',
+      presentationName: '500 g',
+      zoneId: null,
+      zoneName: 'Nacional',
+      observations: 11,
+      distinctPrices: 1,
+      reason: 'Un solo precio en el periodo: no se puede medir cómo reacciona la demanda al precio.',
+    },
+  ],
+  assumptions: [
+    'Modelo de elasticidad constante: cantidad = A · precio^E; E es la pendiente de ln(cantidad) contra ln(precio).',
+    'Cada observación es una zona × día: precio promedio realmente cobrado (ponderado por unidades) y unidades vendidas.',
+    'Una elasticidad positiva (la demanda sube con el precio) se marca como atípica.',
+  ],
+};
+
+/** Respuesta de GET /v1/elasticity/chart (por zona): toda zona sale como barra, con o sin valor. */
+const graficoElasticidad = {
+  runId: CORRIDA_ELASTICIDAD,
+  presentationId: FRIJOL_1KG.id,
+  productName: FRIJOL_1KG.product,
+  presentationName: FRIJOL_1KG.presentation,
+  groupBy: 'zone',
+  executedAt: FECHA_ELASTICIDAD,
+  granularity: 'day',
+  periodStart: '2026-08-02',
+  periodEnd: '2026-09-20',
+  bars: [
+    {
+      key: 'f2670df2-94bd-494e-b4ac-04f7e7c02476',
+      label: 'Zona Centro',
+      value: null,
+      classification: null,
+      observations: 0,
+      rSquared: null,
+      atypical: null,
+    },
+    {
+      key: ZONA_ORIENTE.id,
+      label: ZONA_ORIENTE.nombre,
+      value: -12.5959,
+      classification: 'elastic',
+      observations: 28,
+      rSquared: 0.95082,
+      atypical: false,
+    },
+  ],
+  national: { value: -1.8771, classification: 'elastic', observations: 55, rSquared: 0.06995, atypical: false },
+  note: 'Elasticidad de cada zona (análisis del 2026-10-10, observaciones por día). Barras vacías: sin datos suficientes.',
+};
+
+/** Fila de GET /v1/elasticity/current. */
+const vigente = (e: ReturnType<typeof elasticidad>) => ({
+  ...e,
+  atypical: e.value > 0,
+  outdated: false,
+  runId: CORRIDA_ELASTICIDAD,
+  executedAt: FECHA_ELASTICIDAD,
+  periodStart: '2026-08-02',
+  periodEnd: '2026-09-20',
+});
+
 export const muestras = {
   reglas: [reglaQuesoLeche, reglaLecheQueso],
   corrida,
   corridaCompleta,
+  calculoElasticidad,
+  graficoElasticidad,
+  /** Zona primero y la nacional al final de cada presentación. */
+  elasticidadesVigentes: [vigente(frijolOriente), vigente(frijolNacional)],
 };

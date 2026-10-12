@@ -12,9 +12,10 @@
 # Variables:
 #   CORE_TOKEN      JWT de un perfil interno (obligatorio).
 #   CORE_TOKEN_ADMIN JWT de Administrador. Hace falta para la bandeja de
-#                   propuestas (productos pendientes, precios): esos
-#                   endpoints no los ve un Analista. Si falta, se usa
-#                   CORE_TOKEN y esas filas saldran como HTTP 403.
+#                   propuestas (productos pendientes, precios) y para la
+#                   bitacora de audit-service: esos endpoints no los ve
+#                   un Analista. Si falta, se usa CORE_TOKEN y esas filas
+#                   saldran como HTTP 403.
 #   HOST            host de los servicios (default localhost).
 #   SOLO            filtra por servicio: SOLO=catalog scripts/validate-xml.sh
 #
@@ -69,6 +70,37 @@ try:
     d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
 except Exception: print("")' 2>/dev/null)"
 
+PRESENTACION_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
+  "http://$HOST:3102/v1/products/$PRODUCTO_ID/presentations" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
+AUDITORIA_ID="$(curl -s -H "Authorization: Bearer ${CORE_TOKEN_ADMIN:-$CORE_TOKEN}" \
+  "http://$HOST:3110/v1/auditoria?limit=1" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
+# algorithms-core: una presentacion CON elasticidad calculada (sin ella el
+# grafico es 404 y no hay XML de exito que validar) y una corrida de Apriori.
+# Hace falta haber calculado elasticidad y corrido Apriori al menos una vez.
+PRES_ELASTICIDAD_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
+  "http://$HOST:3105/v1/elasticity/current?limit=1" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("presentationId",""))
+except Exception: print("")' 2>/dev/null)"
+
+CORRIDA_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
+  "http://$HOST:3105/v1/association/runs?limit=1" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
 # servicio|puerto|xsd|ruta[|admin]
 # Solo endpoints de LECTURA: el script no muta nada.
 # `admin` marca los que exigen un rol que el Analista no tiene.
@@ -89,9 +121,21 @@ ENDPOINTS=(
   "pricing|3103|pricing-service|/v1/prices/history?productId=PRODUCTO_ID&limit=2"
   "pricing|3103|pricing-service|/v1/prices/compare-zones?productId=PRODUCTO_ID"
   "pricing|3103|pricing-service|/v1/price-proposals?limit=2|admin"
+  "pricing|3103|pricing-service|/v1/prices/current?presentationId=PRESENTACION_ID"
+  "pricing|3103|pricing-service|/v1/prices/series?presentationId=PRESENTACION_ID"
+  "pricing|3103|pricing-service|/v1/prices/alert-settings|admin"
+  "pricing|3103|pricing-service|/v1/price-observations?limit=2|admin"
   "algorithms|3105|algorithms-core|/v1/association/runs?limit=2"
+  "algorithms|3105|algorithms-core|/v1/association/runs/CORRIDA_ID"
+  "algorithms|3105|algorithms-core|/v1/elasticity/current?limit=2"
+  "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=PRES_ELASTICIDAD_ID"
+  "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=PRES_ELASTICIDAD_ID&groupBy=segment"
   "decision|3107|decision-service|/v1/accessibility/index"
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
+  "notifications|3109|notifications-service|/v1/notifications?limit=2"
+  "notifications|3109|notifications-service|/v1/notifications/unread-count"
+  "audit|3110|audit-service|/v1/auditoria?limit=2|admin"
+  "audit|3110|audit-service|/v1/auditoria/AUDITORIA_ID|admin"
 )
 
 # Errores: el mismo cuerpo tiene que validar contra el elemento `error`.
@@ -99,8 +143,14 @@ ERRORES=(
   "catalog|3102|catalog-service|/v1/zones/00000000-0000-4000-8000-000000000000|404"
   "catalog|3102|catalog-service|/v1/zones|401"
   "pricing|3103|pricing-service|/v1/prices/history?limit=abc|400"
+  "pricing|3103|pricing-service|/v1/prices/series?presentationId=00000000-0000-4000-8000-000000000000&dateFrom=2026-13-45|400"
   "decision|3107|decision-service|/v1/accessibility/index|401"
   "algorithms|3105|algorithms-core|/v1/association/runs|401"
+  "algorithms|3105|algorithms-core|/v1/elasticity/current|401"
+  "algorithms|3105|algorithms-core|/v1/elasticity/current?page=1000001|400"
+  "algorithms|3105|algorithms-core|/v1/elasticity/chart?presentationId=00000000-0000-4000-8000-000000000000|404"
+  "notifications|3109|notifications-service|/v1/notifications|401"
+  "audit|3110|audit-service|/v1/auditoria|401"
 )
 
 ok=0; fallo=0
@@ -140,6 +190,10 @@ for fila in "${ENDPOINTS[@]}"; do
   ruta="${ruta//ZONA_IDS/$ZONA_IDS}"
   ruta="${ruta//ZONA_ID/$ZONA_ID}"
   ruta="${ruta//PRODUCTO_ID/$PRODUCTO_ID}"
+  ruta="${ruta//PRESENTACION_ID/$PRESENTACION_ID}"
+  ruta="${ruta//AUDITORIA_ID/$AUDITORIA_ID}"
+  ruta="${ruta//PRES_ELASTICIDAD_ID/$PRES_ELASTICIDAD_ID}"
+  ruta="${ruta//CORRIDA_ID/$CORRIDA_ID}"
   token="$CORE_TOKEN"
   [[ "$rol" == "admin" ]] && token="${CORE_TOKEN_ADMIN:-$CORE_TOKEN}"
   archivo="$TMP/$svc$(echo "$ruta" | tr '/?=&' '____').xml"

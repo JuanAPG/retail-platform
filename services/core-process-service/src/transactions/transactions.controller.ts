@@ -125,8 +125,9 @@ export class TransactionsController {
     @Body() dto: ConfirmCsvImportDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.transactionsService.confirmCsvImport(dto.previewId, usuario, ip);
+    return this.transactionsService.confirmCsvImport(dto.previewId, usuario, ip, token);
   }
 
   @Delete('import/:id')
@@ -144,8 +145,9 @@ export class TransactionsController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.transactionsService.discardCsvImport(id, usuario, ip);
+    return this.transactionsService.discardCsvImport(id, usuario, ip, token);
   }
 
   @Get('import/pending')

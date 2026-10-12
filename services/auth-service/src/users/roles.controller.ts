@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Ip,
   Param,
   ParseIntPipe,
@@ -12,9 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ROL } from '../common/roles';
-import { SesionUsuario } from '../common/auth/session.guard';
 import { UsersService } from './users.service';
 import { PermisoEntrada, RolesService } from './roles.service';
 import { ReemplazarMatrizDto } from './dto/reemplazar-matriz.dto';
@@ -53,14 +52,14 @@ export class RolesController {
   reemplazar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReemplazarMatrizDto,
-    @CurrentUser() solicitante: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
     const entradas: PermisoEntrada[] = dto.permisos.map((p) => ({
       ...(p.moduloId !== undefined && { moduloId: p.moduloId }),
       ...(p.clave !== undefined && { clave: p.clave }),
       nivel: p.nivel,
     }));
-    return this.rolesService.reemplazarMatriz(id, entradas, solicitante, ip);
+    return this.rolesService.reemplazarMatriz(id, entradas, ip, token);
   }
 }

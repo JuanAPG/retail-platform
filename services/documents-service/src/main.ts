@@ -1,3 +1,9 @@
+// La resolución DNS (getaddrinfo) usa el threadpool de libuv, de 4 hilos por defecto. El reporte consulta a
+// varios servicios a la vez y el DNS de un servicio apagado tarda ~2.5 s en fallar: con 4 hilos esas
+// búsquedas bloquean las de los servicios sanos y los marcan "no disponibles" por timeout. Debe fijarse
+// ANTES de la primera operación que use el pool.
+process.env.UV_THREADPOOL_SIZE ??= '32';
+
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,7 +15,7 @@ import { XmlInterceptor } from './common/interceptors/xml.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  app.enableCors({ exposedHeaders: ['Content-Disposition'] }); // el web lee el nombre del archivo exportado
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });

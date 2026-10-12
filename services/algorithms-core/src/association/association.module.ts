@@ -9,6 +9,7 @@ import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity'
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
 import { AssociationRule } from '../entities/association-rule.entity';
 import { AssociationRuleItem } from '../entities/association-rule-item.entity';
+import { ReportesModule } from '../common/reportes/reportes.module';
 import { FuenteDatosModule } from '../fuente-datos/fuente-datos.module';
 import { AssociationController } from './association.controller';
 import { AssociationService } from './association.service';
@@ -40,6 +41,7 @@ import { AssociationService } from './association.service';
       AssociationExclusion,
     ]),
     FuenteDatosModule,
+    ReportesModule,
     JwtModule.register({}),
   ],
   controllers: [AssociationController],

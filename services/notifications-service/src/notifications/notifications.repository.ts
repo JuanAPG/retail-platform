@@ -55,6 +55,14 @@ export interface NotificationsRepository {
     skip: number;
     limit: number;
   }): Promise<{ filas: NotificacionGuardada[]; total: number }>;
+  /**
+   * Lectura cruda por id, SIN filtrar por destinatario.
+   *
+   * La usa el servicio para comprobar a quién va dirigida antes de hacer
+   * nada con ella: la autorización vive ahí, donde está el rol del token,
+   * no en el repositorio.
+   */
+  buscarPorId(id: string): Promise<NotificacionGuardada | null>;
   marcarLeida(id: string, userId: string): Promise<NotificacionGuardada | null>;
   contarNoLeidas(userId: string, rol?: string): Promise<number>;
   archivarAnteriores(corte: Date): Promise<number>;

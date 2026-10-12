@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Ip,
@@ -52,10 +53,10 @@ export class UsersController {
   @HttpCode(HttpStatus.CREATED)
   create(
     @Body() dto: CreateUsuarioDto,
-    @CurrentUser() solicitante: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.usersService.create(dto, solicitante, ip);
+    return this.usersService.create(dto, ip, token);
   }
 
   @Patch(':id')
@@ -65,8 +66,9 @@ export class UsersController {
     @Body() dto: UpdateUsuarioDto,
     @CurrentUser() solicitante: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.usersService.update(id, dto, solicitante.id, ip);
+    return this.usersService.update(id, dto, solicitante.id, ip, token);
   }
 
   @Delete(':id')
@@ -75,7 +77,8 @@ export class UsersController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() solicitante: SesionUsuario,
     @Ip() ip: string,
+    @Headers('authorization') token: string | undefined,
   ) {
-    return this.usersService.remove(id, solicitante.id, ip);
+    return this.usersService.remove(id, solicitante.id, ip, token);
   }
 }

@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsPositive, IsUUID, Max } from 'class-validator';
+import { IsFechaIso } from '../../common/validators/fecha-calendario';
+import { PRECIO_MAXIMO } from '../../common/precio';
 
 /**
  * Registrar un precio (RN-06). El precio cuelga de PRESENTACIÓN + TIENDA, no
@@ -26,6 +28,7 @@ export class CreatePriceDto {
   @Type(() => Number)
   @IsNumber({}, { message: 'price debe ser numérico.' })
   @IsPositive({ message: 'price debe ser mayor que cero.' })
+  @Max(PRECIO_MAXIMO, { message: `price no puede pasar de ${PRECIO_MAXIMO}.` })
   price: number;
 
   @ApiPropertyOptional({
@@ -33,6 +36,6 @@ export class CreatePriceDto {
     description: 'Fecha desde la que aplica (YYYY-MM-DD). Por omisión, hoy.',
   })
   @IsOptional()
-  @IsDateString()
+  @IsFechaIso({ message: 'effectiveDate debe ser una fecha válida (YYYY-MM-DD).' })
   effectiveDate?: string;
 }

@@ -5,7 +5,6 @@ import { ModuloEntity } from '../entities/modulo.entity';
 import { RolModuloPermisoEntity, NivelPermiso } from '../entities/rol-modulo-permiso.entity';
 import { RoleEntity } from '../entities/role.entity';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
-import { ActorAuditoria } from './users.service';
 
 const NIVELES: NivelPermiso[] = [
   'total',
@@ -61,8 +60,8 @@ export class RolesService {
   async reemplazarMatriz(
     rolId: number,
     entradas: PermisoEntrada[],
-    actor?: ActorAuditoria | null,
     ip?: string,
+    token?: string,
   ) {
     const rol = await this.rolesRepo.findOne({ where: { id: rolId } });
     if (!rol) throw new NotFoundException('El rol no existe.');
@@ -92,16 +91,17 @@ export class RolesService {
     await this.permisosRepo.delete({ rolId });
     if (filas.length > 0) await this.permisosRepo.save(filas);
 
-    await this.auditoria.reportar({
-      tabla: 'rol_modulo_permiso',
-      registroId: String(rolId),
-      accion: 'update',
-      descripcion: `Matriz de permisos reemplazada para el rol ${rol.nombre} (${filas.length} módulos).`,
-      usuarioId: actor?.id ?? null,
-      rolId: actor?.rolId ?? null,
-      ip,
-      cambios: [{ campo: 'permisos', previo: null, posterior: `${filas.length} módulos` }],
-    });
+    await this.auditoria.reportar(
+      {
+        tabla: 'rol_modulo_permiso',
+        registroId: String(rolId),
+        accion: 'update',
+        descripcion: `Matriz de permisos reemplazada para el rol ${rol.nombre} (${filas.length} módulos).`,
+        ip,
+        cambios: [{ campo: 'permisos', previo: null, posterior: `${filas.length} módulos` }],
+      },
+      token,
+    );
 
     return this.matrizDe(rolId);
   }

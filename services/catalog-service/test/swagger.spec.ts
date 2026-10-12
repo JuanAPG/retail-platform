@@ -20,9 +20,9 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 5 segmentos + 7 zonas/municipios + 6 tiendas + 15 productos/catálogos.
+    // 5 segmentos + 9 zonas/municipios (con indicadores y clasificación) + 6 tiendas + 16 productos/catálogos.
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(33);
+    expect(operaciones).toBe(36);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
@@ -38,7 +38,10 @@ describe('Swagger (integración, requiere stack)', () => {
           const contenido = respuesta.content ?? {};
           if (contenido['application/json']?.example === undefined) fallas.push(`${etiqueta} ${estado}: sin ejemplo JSON`);
           const xml = contenido['application/xml']?.example;
-          if (typeof xml !== 'string' || !xml.includes('<response>')) fallas.push(`${etiqueta} ${estado}: sin ejemplo XML`);
+          // CAT-15: el ejemplo trae la raíz con nombre y el namespace reales, nunca un <response> genérico.
+          if (typeof xml !== 'string' || xml.includes('<response>') || !xml.includes('xmlns="catalog/v1"')) {
+            fallas.push(`${etiqueta} ${estado}: el ejemplo XML no es el que emite el servicio (raíz con namespace catalog/v1)`);
+          }
         }
       }
     }
@@ -58,9 +61,17 @@ describe('Swagger (integración, requiere stack)', () => {
     const ejemplo = paths['/v1/segments'].get.responses?.['200']?.content?.['application/xml']?.example as string;
 
     // Misma estructura que `GET /v1/segments` con Accept: application/xml.
-    for (const etiqueta of ['<response>', '<data>', '<item>', '<total>', '<page>', '<limit>']) {
+    expect(ejemplo).toContain('<segmentListResponse xmlns="catalog/v1">');
+    for (const etiqueta of ['<data>', '<item>', '<total>', '<page>', '<limit>']) {
       expect(ejemplo).toContain(etiqueta);
     }
     expect(ejemplo.match(/<data>/g)).toHaveLength(1);
+  });
+
+  it('CAT-15: los errores documentan también su ejemplo en XML (<error>)', async () => {
+    const { paths } = await documentacion();
+    const xml = paths['/v1/segments'].get.responses?.['401']?.content?.['application/xml']?.example as string;
+    expect(xml).toContain('<error xmlns="catalog/v1">');
+    expect(xml).toContain('<statusCode>401</statusCode>');
   });
 });

@@ -1,5 +1,5 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
 import { CacheService } from '../common/cache/cache.service';
 import { CodigoPostalEntity } from '../entities/codigo-postal.entity';
 import { TiendaEntity } from '../entities/tienda.entity';
@@ -26,7 +26,9 @@ function crearServicio() {
     update: jest.fn(),
     remove: jest.fn(),
     delete: jest.fn(),
-    findOneOrFail: jest.fn(async () => ({ id: 'nuevo-id' })),
+    // Por omisión la tienda NO tiene historial (ninguna tabla dependiente devuelve filas).
+    query: jest.fn(async (_sql: string, _params?: unknown[]) => [] as unknown[]),
+    findOneOrFail: jest.fn(async (): Promise<Record<string, unknown>> => ({ id: 'nuevo-id' })),
   };
   const dataSource = {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
@@ -107,33 +109,48 @@ describe('StoresService', () => {
     expect(manager.update).toHaveBeenCalledWith(DireccionEntity, { id: 'd-1' }, { calle: 'Nueva 123' });
   });
 
-  it('remove borra la tienda y su dirección en la misma transacción', async () => {
+  it('remove borra la tienda y su dirección en la misma transacción cuando no tiene historial', async () => {
     const { tiendas, manager, dataSource, servicio } = crearServicio();
     const tienda = { id: 't-1', direccionId: 'd-1' };
     tiendas.findOne.mockResolvedValue(tienda);
 
-    await servicio.remove('t-1');
+    const resultado = await servicio.remove('t-1');
 
+    expect(resultado).toEqual({ eliminado: true });
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(manager.remove).toHaveBeenCalledWith(tienda);
     expect(manager.delete).toHaveBeenCalledWith(DireccionEntity, { id: 'd-1' });
   });
 
-  it('remove convierte la violación de llave foránea (23503) en 409', async () => {
+  it('remove NO borra una tienda con historial (D-07): la desactiva y la devuelve', async () => {
     const { tiendas, manager, servicio } = crearServicio();
     tiendas.findOne.mockResolvedValue({ id: 't-1', direccionId: 'd-1' });
-    manager.remove.mockRejectedValue(
-      Object.assign(new QueryFailedError('delete', [], new Error('fk')), { code: '23503' }),
-    );
+    manager.query.mockResolvedValueOnce([{ '?column?': 1 }]); // hay precios
+    manager.findOneOrFail.mockResolvedValueOnce({ id: 't-1', activo: false });
 
-    await expect(servicio.remove('t-1')).rejects.toBeInstanceOf(ConflictException);
+    const resultado = await servicio.remove('t-1');
+
+    expect(resultado).toEqual({ eliminado: false, entidad: { id: 't-1', activo: false } });
+    expect(manager.update).toHaveBeenCalledWith(TiendaEntity, { id: 't-1' }, { activo: false });
+    expect(manager.remove).not.toHaveBeenCalled();
     expect(manager.delete).not.toHaveBeenCalled();
+  });
+
+  it('remove revisa precios, inventario y transacciones antes de borrar', async () => {
+    const { tiendas, manager, servicio } = crearServicio();
+    tiendas.findOne.mockResolvedValue({ id: 't-1', direccionId: 'd-1' });
+
+    await servicio.remove('t-1');
+
+    const tablas = manager.query.mock.calls.map(([sql]) => String(sql).match(/FROM (\w+)/)?.[1]);
+    expect(tablas).toEqual(['precios', 'inventario', 'transacciones']);
   });
 
   it('findAll une todas las relaciones y pagina por nombre', async () => {
     const { tiendas, servicio } = crearServicio();
     const qb = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
@@ -145,6 +162,7 @@ describe('StoresService', () => {
     const pagina = await servicio.findAll({});
 
     expect(qb.leftJoinAndSelect).toHaveBeenCalledTimes(6);
+    expect(qb.where).toHaveBeenCalledWith('t.activo = true'); // las desactivadas quedan fuera (D-07)
     expect(qb.orderBy).toHaveBeenCalledWith('t.nombre', 'ASC');
     expect(pagina).toEqual({ data: [{ id: 't-1' }], total: 1, page: 1, limit: 20 });
   });

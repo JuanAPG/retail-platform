@@ -167,6 +167,7 @@ DROP TABLE IF EXISTS
     categorias_producto, unidades_medida, productos, indicador_valores,
     producto_presentaciones, producto_imagenes, producto_revisiones,
     inventario, precios, precios_propuestos_proveedor, limites_precio_zona,
+    config_alertas_precio, precios_observados,
     reglas_exclusion_asociacion, clientes, importaciones,
     importacion_filas, importacion_errores, transacciones,
     transacciones_detalle, tamanos_compra, canastas, reglas_asociacion,
@@ -848,6 +849,47 @@ CREATE TABLE limites_precio_zona (
     -- duplicados justo en el caso general.
     UNIQUE NULLS NOT DISTINCT (zona_id, presentacion_id)
 );
+
+-- PRI-07 (D-09). Configuración de la alerta de cambio de precio: UNA fila (id = 1) que edita el
+-- Responsable de precios. Se alerta cuando el precio nuevo difiere un `umbral_pct` o más del precio
+-- que la misma presentación y tienda tenían al inicio de la ventana de `ventana_dias` (así cambios
+-- chicos y repetidos, de 1 % diario, acumulan hasta cruzar el umbral en vez de pasar desapercibidos).
+-- Sin fila, el servicio usa los defaults (5 % en 30 días). Tabla de pricing-service.
+CREATE TABLE config_alertas_precio (
+    id              SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    umbral_pct      NUMERIC(6,2) NOT NULL DEFAULT 5  CHECK (umbral_pct > 0),
+    ventana_dias    INTEGER      NOT NULL DEFAULT 30 CHECK (ventana_dias > 0),
+    actualizado_por UUID REFERENCES usuarios(id),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE config_alertas_precio IS 'Umbral y ventana de la alerta de cambio de precio (D-09). Una sola fila editable.';
+
+-- PRI-09 (D-16). Precio observado EN CAMPO (app móvil): nace pendiente, igual que una propuesta de
+-- proveedor, y solo al aprobarlo el Responsable de precios entra al historial `precios`. Mientras
+-- está pendiente no cambia el precio actual. `precio_id` apunta al precio que se creó al aprobar.
+-- Tabla de pricing-service.
+CREATE TABLE precios_observados (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    presentacion_id     UUID NOT NULL REFERENCES producto_presentaciones(id) ON DELETE CASCADE,
+    tienda_id           UUID NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+    precio              NUMERIC(12,2) NOT NULL CHECK (precio > 0),
+    observado_en        TIMESTAMPTZ NOT NULL,
+    latitud             NUMERIC(9,6) CHECK (latitud  BETWEEN -90  AND 90),
+    longitud            NUMERIC(9,6) CHECK (longitud BETWEEN -180 AND 180),
+    estatus             estatus_propuesta NOT NULL DEFAULT 'pendiente',
+    motivo_rechazo      TEXT,
+    capturado_por       UUID NOT NULL REFERENCES usuarios(id),
+    revisado_por        UUID REFERENCES usuarios(id),
+    revisado_en         TIMESTAMPTZ,
+    precio_id           UUID REFERENCES precios(id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_precio_obs_rechazo CHECK (
+        (estatus = 'rechazado' AND motivo_rechazo IS NOT NULL) OR estatus <> 'rechazado'
+    )
+);
+COMMENT ON TABLE precios_observados IS 'Precios levantados en tienda por la app móvil, pendientes de aprobación del Responsable de precios (D-16).';
+CREATE INDEX idx_precios_obs_estatus ON precios_observados(estatus, created_at);
+CREATE INDEX idx_precios_obs_presentacion ON precios_observados(presentacion_id);
 COMMENT ON TABLE limites_precio_zona IS 'Variación máxima de precio permitida por zona (RN-06, RN-10).';
 
 CREATE TABLE reglas_exclusion_asociacion (
@@ -1353,6 +1395,16 @@ COMMENT ON TABLE recomendacion_evidencias IS 'Datos concretos que sustentan cada
 -- =====================================================================
 
 CREATE TYPE accion_auditoria AS ENUM ('insert','update','delete','login','importacion');
+-- Ampliado para que los microservicios de negocio registren sus propias
+-- acciones (antes solo las de CRUD/login/importación): ver
+-- docs/contratos/audit-service.md para qué acción usar en cada evento.
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'aprobar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'rechazar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'desactivar';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'ejecutar_corrida';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'simular';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'generar_recomendacion';
+ALTER TYPE accion_auditoria ADD VALUE IF NOT EXISTS 'exportar';
 
 CREATE TABLE auditoria (
     id                  BIGSERIAL PRIMARY KEY,
@@ -1360,6 +1412,7 @@ CREATE TABLE auditoria (
     rol_id              SMALLINT REFERENCES roles(id),
     tabla_afectada      VARCHAR(80) NOT NULL,
     registro_id         TEXT,
+    servicio            VARCHAR(40) NOT NULL,
     accion              accion_auditoria NOT NULL,
     descripcion         TEXT,
     direccion_ip        INET,
@@ -1367,6 +1420,7 @@ CREATE TABLE auditoria (
 );
 COMMENT ON TABLE auditoria IS 'Evento auditable: quién, qué acción, sobre qué entidad y cuándo. Append-only: no se actualiza ni se borra.';
 COMMENT ON COLUMN auditoria.rol_id IS 'Rol con el que actuaba el usuario EN EL INSTANTE del evento. No es copia redundante de usuarios.rol_id (eso sería una dependencia transitiva): el rol del usuario puede cambiar después y la bitácora no debe cambiar con él.';
+COMMENT ON COLUMN auditoria.servicio IS 'Microservicio emisor del evento (p. ej. pricing-service), siempre lo manda quien reporta.';
 
 CREATE INDEX idx_auditoria_tabla_registro ON auditoria(tabla_afectada, registro_id);
 CREATE INDEX idx_auditoria_usuario ON auditoria(usuario_id);

@@ -26,7 +26,17 @@ Request JSON:
 
 `quantity` y `unitPrice` admiten **máximo 2 decimales** (las columnas son
 `NUMERIC(10,2)` y `NUMERIC(12,2)`: un tercer decimal descuadraría el
-total). `fecha` no puede ser futura. La misma presentación repetida en
+total). `fecha` no puede ser futura (se tolera el día local en curso
+completo).
+
+**Huso de `fecha`.** Una fecha SIN huso —`2026-09-18` o
+`2026-09-18 21:00`— se interpreta como hora local de
+**`America/Monterrey`**, que es donde se captura: `2026-09-18` es la
+medianoche del 18 en Monterrey (`2026-09-18T06:00:00Z`), no la medianoche
+UTC (que sería el 17 a las 18:00 locales, un día antes del que dice el
+texto). Si la fecha trae huso explícito (`Z`, `-06:00`) se respeta tal
+cual: ahí el emisor ya dijo qué instante es. Misma regla en el alta
+manual y en el CSV. Se cambia con `CORE_PROCESS_TIMEZONE`. La misma presentación repetida en
 `details` → 400 (suma las cantidades en una línea). Presentación de un
 producto que no esté `activo` → 400, igual que en el CSV.
 
@@ -51,7 +61,10 @@ Valida **sin insertar nada en transacciones**: las filas quedan en
 staging con su resultado por fila. Campo `file`, solo `.csv`, máximo
 5 MB (se rechaza en el borde). Columnas
 `folio,fecha,tienda,sku,presentacion,cantidad,precio` (cualquier orden,
-`,` o `;`, insensible a mayúsculas y espacios). Códigos por fila:
+`,` o `;`, insensible a mayúsculas y espacios). La columna `fecha`
+admite `yyyy-mm-dd` (lo normal en un export de punto de venta) y también
+con hora; sin huso se lee como hora local de Monterrey, igual que en el
+alta manual. Códigos por fila:
 `FOLIO_VACIO`, `FECHA_VACIA`, `FECHA_INVALIDA`, `FECHA_FUTURA`,
 `TIENDA_VACIA`, `TIENDA_NO_EXISTE`, `SKU_VACIO`, `SKU_NO_EXISTE`,
 `PRODUCTO_INACTIVO`, `PRESENTACION_VACIA`, `PRESENTACION_NO_EXISTE`,
@@ -143,9 +156,41 @@ confirmarla de nuevo retoma solo lo que falta.
 
 ## GET /v1/transactions y GET /v1/transactions/:id
 
-`?storeId&dateFrom&dateTo&page&limit`. Filtros opcionales y combinables
-con AND; `dateTo` incluye el **día completo**. Ordenado por fecha
-descendente. Devuelve la envoltura de paginación estándar
+`?storeId&zoneId&segmentId&dateFrom&dateTo&page&limit`. Filtros
+opcionales y combinables con AND (intersección: una transacción sale solo
+si cumple **todos** los que se manden). Cualquier otro parámetro da 400.
+
+| Parámetro | Tipo | Filtra por |
+|---|---|---|
+| `storeId` | UUID v4 | La tienda de la transacción. |
+| `zoneId` | UUID v4 | La **zona de la tienda** de la transacción. |
+| `segmentId` | entero ≥ 1 | El **segmento de ingreso vigente de la zona** de la tienda. |
+| `dateFrom`, `dateTo` | `YYYY-MM-DD` | Día local, los dos inclusivos. |
+
+`zoneId` y `segmentId` tienen los mismos nombres que en canastas (M07) e
+indicadores (M09), para que una pantalla filtre los tres niveles con los
+mismos parámetros. La diferencia es de dónde salen: una canasta ya nace
+con su zona y su segmento congelados, mientras que una transacción es un
+nivel más arriba y solo tiene tienda, así que aquí la zona es la de la
+tienda y el segmento se resuelve a través de ella.
+
+`segmentId` filtra por la clasificación **vigente** de esa zona, resuelta
+por la vista `v_zona_segmento` (la misma fuente que usa la construcción
+de canastas, no un cálculo aparte). Es el segmento **agregado de la
+zona**, nunca el ingreso de la persona que compró (RN-02). Consecuencias
+a tener presentes:
+
+- Una zona sin clasificación vigente no aparece con **ningún**
+  `segmentId`; sus transacciones solo se alcanzan sin ese filtro.
+- Reclasificar una zona cambia lo que devuelve este endpoint para ventas
+  ya registradas, porque el filtro es sobre la clasificación de hoy. Las
+  canastas, en cambio, conservan el segmento con el que nacieron.
+
+`dateFrom` y `dateTo` son **días completos**, los dos inclusivos, y el día
+es el día local de `America/Monterrey`: una venta de las 21:00 del 30 de
+septiembre entra en `dateTo=2026-09-30` aunque en UTC ya sea el 1 de
+octubre. Mismo criterio en canastas (M07) e indicadores (M09), para que
+los tres vean el mismo conjunto. Ordenado por fecha descendente. Devuelve la envoltura de paginación estándar
 (`paginacion.md`): `{data,total,page,limit}`
 (`xsd/core-process/transactions-page.xsd`).
 

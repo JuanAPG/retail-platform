@@ -2,13 +2,27 @@ import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } f
 import { AuditoriaCambio } from './auditoria-cambio.entity';
 
 /** Acciones del ENUM `accion_auditoria` de schema.sql (§15, RN-13). */
-export type AccionAuditoria = 'insert' | 'update' | 'delete' | 'login' | 'importacion';
+export type AccionAuditoria =
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'login'
+  | 'importacion'
+  | 'aprobar'
+  | 'rechazar'
+  | 'desactivar'
+  | 'ejecutar_corrida'
+  | 'simular'
+  | 'generar_recomendacion'
+  | 'exportar';
 
 /**
  * M15 — Evento de bitácora (`auditoria`). Append-only: nunca se actualiza
- * ni se borra desde la API. `rolId` es el rol VIGENTE EN EL INSTANTE del
- * evento, no un join vivo a `usuarios.rol_id` (el rol puede cambiar
- * después y la bitácora no debe cambiar con él).
+ * ni se borra desde la API. `usuarioId`/`rolId` SIEMPRE salen del token
+ * de quien llama a `POST /v1/auditoria` (SessionGuard), nunca del cuerpo:
+ * `rolId` es el rol VIGENTE EN EL INSTANTE del evento, no un join vivo a
+ * `usuarios.rol_id` (el rol puede cambiar después y la bitácora no debe
+ * cambiar con él).
  */
 @Entity({ name: 'auditoria' })
 export class Auditoria {
@@ -27,9 +41,26 @@ export class Auditoria {
   @Column({ name: 'registro_id', type: 'text', nullable: true })
   registroId: string | null;
 
+  /** Microservicio que reportó el evento (p. ej. `pricing-service`). */
+  @Column({ type: 'varchar', length: 40 })
+  servicio: string;
+
   @Column({
     type: 'enum',
-    enum: ['insert', 'update', 'delete', 'login', 'importacion'],
+    enum: [
+      'insert',
+      'update',
+      'delete',
+      'login',
+      'importacion',
+      'aprobar',
+      'rechazar',
+      'desactivar',
+      'ejecutar_corrida',
+      'simular',
+      'generar_recomendacion',
+      'exportar',
+    ],
     enumName: 'accion_auditoria',
   })
   accion: AccionAuditoria;

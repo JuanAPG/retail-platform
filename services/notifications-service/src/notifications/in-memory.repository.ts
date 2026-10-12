@@ -76,6 +76,10 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
     return { filas: todas.slice(filtros.skip, filtros.skip + filtros.limit), total: todas.length };
   }
 
+  async buscarPorId(id: string): Promise<NotificacionGuardada | null> {
+    return this.filas.get(id) ?? null;
+  }
+
   async marcarLeida(id: string, userId: string): Promise<NotificacionGuardada | null> {
     const fila = this.filas.get(id);
     if (!fila) return null;

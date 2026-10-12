@@ -1,4 +1,7 @@
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { TransactionsService } from './transactions.service';
+import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { BasketsService } from '../baskets/baskets.service';
 
 const TIENDAS = [
@@ -276,16 +279,19 @@ describe('TransactionsService — preview CSV', () => {
     expect(codigos).toContain('PRECIO_INVALIDO');
   });
 
-  it('detecta la fecha futura aunque no venga en formato ISO', async () => {
+  it('rechaza una fecha que no viene en formato ISO', async () => {
     // Antes se comparaban cadenas: "12/31/2099" > "2026-10-06" era false
-    // porque "1" < "2", y la fila pasaba como válida.
+    // porque "1" < "2", y la fila pasaba como válida. Siguió rechazándose
+    // como FECHA_FUTURA mientras `new Date()` la interpretaba; hoy el
+    // código es FECHA_INVALIDA, que es lo que de verdad es: un formato que
+    // esta API no acepta. Lo que importa es que no entre.
     const { svc } = servicio();
     const r = await svc.previewCsvImport(
       archivo(['T1,12/31/2099,Super Valle Centro,P-001-001,1 kg,2,42.5']),
       USUARIO as never,
     );
     expect(r.filasValidas).toBe(0);
-    expect(r.errores.map((e) => e.codigo)).toContain('FECHA_FUTURA');
+    expect(r.errores.map((e) => e.codigo)).toContain('FECHA_INVALIDA');
   });
 
   it('rechaza notaciones que no son decimales planos', async () => {
@@ -470,21 +476,20 @@ describe('TransactionsService — confirmación CSV', () => {
       importacion: { ...IMPORTACION_VALIDADA },
       filas: [FILA_VALIDA],
     });
-    await svc.confirmCsvImport('imp1', USUARIO as never, '1.2.3.4');
+    await svc.confirmCsvImport('imp1', USUARIO as never, '1.2.3.4', 'Bearer t-1');
 
     expect(auditoria.reportar).toHaveBeenCalledWith(
       expect.objectContaining({
         tabla: 'importaciones',
         registroId: 'imp1',
         accion: 'importacion',
-        usuarioId: 'u1',
-        rolId: 2,
         ip: '1.2.3.4',
         cambios: expect.arrayContaining([
           { campo: 'transacciones_creadas', posterior: '1' },
           { campo: 'canastas_creadas', posterior: '1' },
         ]),
       }),
+      'Bearer t-1',
     );
   });
 
@@ -817,6 +822,7 @@ describe('TransactionsService — alta manual', () => {
         ip: '9.9.9.9',
         cambios: expect.arrayContaining([{ campo: 'total', posterior: '85.00' }]),
       }),
+      undefined,
     );
   });
 
@@ -869,14 +875,19 @@ describe('TransactionsService — alta manual', () => {
 // --- Lectura ---------------------------------------------------------
 
 describe('TransactionsService — findAll', () => {
-  it('devuelve la envoltura paginada y aplica los filtros con AND', async () => {
-    const condiciones: string[] = [];
+  /**
+   * Query builder de mentiras que solo anota el SQL y los parámetros de
+   * cada `andWhere`, para comprobar QUÉ condiciones se acumulan (todas con
+   * AND) sin necesitar Postgres.
+   */
+  function builderEspia() {
+    const condiciones: { sql: string; params?: Record<string, unknown> }[] = [];
     const qb: Record<string, jest.Mock> = {};
     for (const metodo of ['leftJoinAndSelect', 'orderBy', 'addOrderBy', 'skip', 'take']) {
       qb[metodo] = jest.fn(() => qb);
     }
-    qb.andWhere = jest.fn((sql: string) => {
-      condiciones.push(sql);
+    qb.andWhere = jest.fn((sql: string, params?: Record<string, unknown>) => {
+      condiciones.push({ sql, params });
       return qb;
     });
     qb.getManyAndCount = jest.fn(async () => [[], 0]);
@@ -892,6 +903,11 @@ describe('TransactionsService — findAll', () => {
       {} as never,
       {} as never,
     );
+    return { svc, condiciones, sql: () => condiciones.map((c) => c.sql) };
+  }
+
+  it('devuelve la envoltura paginada y aplica los filtros con AND', async () => {
+    const { svc, sql } = builderEspia();
 
     const r = await svc.findAll({
       storeId: 't1',
@@ -902,12 +918,108 @@ describe('TransactionsService — findAll', () => {
     } as never);
 
     expect(r).toEqual({ data: [], total: 0, page: 3, limit: 10 });
-    expect(condiciones).toEqual([
+    expect(sql()).toEqual([
       't.storeId = :storeId',
-      't.fecha >= :dateFrom',
-      // Día completo, igual que M07 y M09.
-      't.fecha < CAST(:dateTo AS date) + 1',
+      // Días completos locales en los dos extremos, igual que M07 y M09.
+      't.fecha >= CAST(:dateFrom AS date)::timestamp AT TIME ZONE :zona',
+      't.fecha < (CAST(:dateTo AS date) + 1)::timestamp AT TIME ZONE :zona',
     ]);
+  });
+
+  it('`zoneId` filtra por la zona de la TIENDA, con el join que ya existía', async () => {
+    const { svc, condiciones, sql } = builderEspia();
+
+    await svc.findAll({ zoneId: 'z-centro' } as never);
+
+    // `store.zonaId`, no un join nuevo: `leftJoinAndSelect('t.store')` ya
+    // está en findAll porque la respuesta lleva la tienda.
+    expect(sql()).toEqual(['store.zonaId = :zoneId']);
+    expect(condiciones[0].params).toEqual({ zoneId: 'z-centro' });
+  });
+
+  it('`segmentId` resuelve el segmento por `v_zona_segmento` vigente, no con su propio cálculo', async () => {
+    const { svc, condiciones } = builderEspia();
+
+    await svc.findAll({ segmentId: 2 } as never);
+
+    expect(condiciones).toHaveLength(1);
+    const { sql, params } = condiciones[0];
+    // La vista es la fuente única del segmento de la zona (db/schema.sql);
+    // la prueba falla si alguien la cambia por `zona_clasificaciones` con
+    // su propia aritmética de fechas de vigencia.
+    expect(sql).toContain('v_zona_segmento');
+    expect(sql).toContain('segmento_ingreso_id = :segmentId');
+    expect(sql).toContain('vigente');
+    expect(sql).not.toContain('zona_clasificaciones');
+    expect(sql).not.toContain('vigente_desde');
+    expect(params).toEqual({ segmentId: 2 });
+  });
+
+  it('zona, segmento, tienda y fechas se combinan con AND, no se excluyen', async () => {
+    const { svc, sql } = builderEspia();
+
+    await svc.findAll({
+      storeId: 't1',
+      zoneId: 'z-centro',
+      segmentId: 2,
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-30',
+    } as never);
+
+    // Cinco condiciones acumuladas con andWhere: la consulta pide que se
+    // cumplan TODAS (intersección), igual que el resto del servicio.
+    const condiciones = sql();
+    expect(condiciones).toHaveLength(5);
+    expect(condiciones[0]).toBe('t.storeId = :storeId');
+    expect(condiciones[1]).toBe('store.zonaId = :zoneId');
+    expect(condiciones[2]).toContain('v_zona_segmento');
+    expect(condiciones[3]).toContain(':dateFrom');
+    expect(condiciones[4]).toContain(':dateTo');
+  });
+
+  it('sin filtros no agrega ninguna condición', async () => {
+    const { svc, sql } = builderEspia();
+
+    await svc.findAll({} as never);
+
+    expect(sql()).toEqual([]);
+  });
+});
+
+describe('TransactionFilterDto — validación de zoneId y segmentId', () => {
+  /** Lo mismo que hace el ValidationPipe global con la query. */
+  async function validar(query: Record<string, unknown>) {
+    const dto = plainToInstance(TransactionFilterDto, query);
+    const errores = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+    return { dto, propiedades: errores.map((e) => e.property) };
+  }
+
+  it('acepta un zoneId UUID y un segmentId entero, y convierte el segmento a número', async () => {
+    // `segmentId` llega como texto en la query string: sin @Type el
+    // @IsInt fallaría y el filtro daría 400 siempre.
+    const { dto, propiedades } = await validar({
+      zoneId: '11111111-1111-4111-8111-111111111111',
+      segmentId: '2',
+    });
+
+    expect(propiedades).toEqual([]);
+    expect(dto.segmentId).toBe(2);
+    expect(typeof dto.segmentId).toBe('number');
+  });
+
+  it('un zoneId que no es UUID se rechaza, igual que storeId', async () => {
+    expect((await validar({ zoneId: 'zona-centro' })).propiedades).toEqual(['zoneId']);
+    expect((await validar({ storeId: 'tienda-1' })).propiedades).toEqual(['storeId']);
+  });
+
+  it('un segmentId que no es entero positivo se rechaza', async () => {
+    expect((await validar({ segmentId: 'alto' })).propiedades).toEqual(['segmentId']);
+    expect((await validar({ segmentId: '0' })).propiedades).toEqual(['segmentId']);
+    expect((await validar({ segmentId: '1.5' })).propiedades).toEqual(['segmentId']);
+  });
+
+  it('un parámetro desconocido sigue siendo rechazado (forbidNonWhitelisted)', async () => {
+    expect((await validar({ segmento: '2' })).propiedades).toEqual(['segmento']);
   });
 });
 
@@ -918,7 +1030,7 @@ describe('TransactionsService — descartar importación', () => {
     const importacion = { ...IMPORTACION_VALIDADA, estado: 'con_errores' };
     const { svc, auditoria } = servicio({ importacion });
 
-    const r = await svc.discardCsvImport('imp1', USUARIO as never, '1.2.3.4');
+    const r = await svc.discardCsvImport('imp1', USUARIO as never, '1.2.3.4', 'Bearer t-1');
 
     expect(r).toMatchObject({ estado: 'descartado', estadoPrevio: 'con_errores' });
     // `descartado` es el único estado que libera el hash: sin él, un
@@ -929,6 +1041,7 @@ describe('TransactionsService — descartar importación', () => {
         accion: 'update',
         cambios: [{ campo: 'estado', previo: 'con_errores', posterior: 'descartado' }],
       }),
+      'Bearer t-1',
     );
   });
 
