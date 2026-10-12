@@ -125,9 +125,9 @@ services:
 
   # ---------------------------------------------------------------
   # Microservicios Sprint 2+3 (Juan Angel: transversal + compose)
-  # Arrancan de la plantilla (solo /v1/health) hasta que cada frente
-  # implemente su servicio en su rama. Puertos 3101-3110: el 3001 sigue
-  # siendo del monolito `api` hasta que la migración lo jubile.
+  # Puertos 3101-3110. Todos implementados salvo analytics-stats (solo
+  # /v1/health por ahora). El 3001 sigue siendo del monolito `api`
+  # (congelado), que el web solo consulta como respaldo temporal.
   # Levantarlos: docker compose -f infra/docker-compose.yml up -d <servicio>
   # (cada uno arrastra postgres y redis sanos vía depends_on)
   # ---------------------------------------------------------------

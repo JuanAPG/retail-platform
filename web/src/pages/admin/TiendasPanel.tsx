@@ -15,6 +15,8 @@ import { TiendaFormModal } from './TiendaFormModal';
 import { ConfirmarEliminarTiendaModal } from './ConfirmarEliminarTiendaModal';
 import { EstadoError } from '../../components/EstadoError';
 import { Cargando } from '../../components/Cargando';
+import { useAuth } from '../../context/AuthContext';
+import { puedeEscribir, quienEscribe } from '../../routes/permisosEscritura';
 
 interface TiendasPanelProps {
   estado: UseFetchState<Tienda[]>;
@@ -34,6 +36,9 @@ const ETIQUETA_FORMATO: Record<string, string> = {
  * una sucursal.
  */
 export function TiendasPanel({ estado }: TiendasPanelProps) {
+  const { usuario } = useAuth();
+  // catalog-service: solo el Gerente de categoría escribe tiendas; al resto no se le ofrece lo que daría 403.
+  const escribe = puedeEscribir('tiendas', usuario?.rol);
   const zonas = useFetch(getZonas, []);
   const codigosPostales = useFetch(getCodigosPostales, []);
 
@@ -98,16 +103,20 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
         title="Tiendas"
         subtitle="Sucursales físicas registradas"
         action={
-          <CtaButton
-            onClick={() => {
-              setTiendaEditando(undefined);
-              setFormAbierto(true);
-            }}
-            disabled={!puedeAbrirForm}
-            title={!puedeAbrirForm ? 'Necesitas al menos una zona y un código postal' : undefined}
-          >
-            Nueva tienda
-          </CtaButton>
+          escribe ? (
+            <CtaButton
+              onClick={() => {
+                setTiendaEditando(undefined);
+                setFormAbierto(true);
+              }}
+              disabled={!puedeAbrirForm}
+              title={!puedeAbrirForm ? 'Necesitas al menos una zona y un código postal' : undefined}
+            >
+              Nueva tienda
+            </CtaButton>
+          ) : (
+            <StatusPill tone="neutral">Solo lectura</StatusPill>
+          )
         }
         decorations={
           <>
@@ -148,6 +157,11 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {!escribe && (
+        <p className="rounded-full bg-arena px-5 py-3 text-sm text-teal">
+          Vista de solo lectura: solo {quienEscribe('tiendas')} administra las tiendas. Aquí puedes consultarlas.
+        </p>
+      )}
       {estado.loading && !estado.data && <Cargando etiqueta="Cargando tiendas…" />}
       {estado.error && (
         <EstadoError mensaje={`No se pudieron cargar las tiendas: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
@@ -168,15 +182,17 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
             <Card
               key={t.id}
               actions={
-                <>
-                  <CircleButton icon={<IconOjo className="h-[19px] w-[19px]" />} label={`Editar ${t.nombre}`} onClick={() => abrirEdicion(t)} />
-                  <CircleButton
-                    icon={<IconEliminar className="h-[19px] w-[19px]" />}
-                    label={`Eliminar ${t.nombre}`}
-                    variant="delete"
-                    onClick={() => setTiendaAEliminar(t)}
-                  />
-                </>
+                escribe ? (
+                  <>
+                    <CircleButton icon={<IconOjo className="h-[19px] w-[19px]" />} label={`Editar ${t.nombre}`} onClick={() => abrirEdicion(t)} />
+                    <CircleButton
+                      icon={<IconEliminar className="h-[19px] w-[19px]" />}
+                      label={`Eliminar ${t.nombre}`}
+                      variant="delete"
+                      onClick={() => setTiendaAEliminar(t)}
+                    />
+                  </>
+                ) : undefined
               }
             >
               <div className="flex items-start justify-between gap-2">
@@ -190,7 +206,7 @@ export function TiendasPanel({ estado }: TiendasPanelProps) {
                 <span>{t.direccion?.codigoPostal ?? '—'} · {t.zona?.nombre ?? 'Sin zona'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <Switch checked={t.activo} onChange={() => alternarActivo(t)} disabled={cambiandoEstadoDe === t.id}>
+                <Switch checked={t.activo} onChange={() => alternarActivo(t)} disabled={!escribe || cambiandoEstadoDe === t.id}>
                   {cambiandoEstadoDe === t.id ? '…' : t.activo ? 'Activa' : 'Inactiva'}
                 </Switch>
               </div>

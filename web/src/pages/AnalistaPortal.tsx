@@ -19,10 +19,14 @@ import { SustitucionPanel } from './analista/SustitucionPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AccesibilidadPanel } from './analista/AccesibilidadPanel';
 import { CanastasPanel } from './analista/CanastasPanel';
+import { ZonasPanel } from './admin/ZonasPanel';
+import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
 
 type Tab =
   | 'transacciones'
   | 'segmentos'
+  | 'zonas'
+  | 'comparar-zonas'
   | 'canastas'
   | 'indicadores'
   | 'reglas-asociacion'
@@ -122,7 +126,7 @@ export function AnalistaPortal() {
     label: m.label,
     icon: m.icon,
     permiso: m.permiso,
-    active: tab === m.key,
+    active: tab === m.key || (m.key === 'zonas' && tab === 'comparar-zonas'),
     onClick: () => setTab(m.key as Tab),
   }));
 
@@ -159,6 +163,8 @@ export function AnalistaPortal() {
 
         {tab === 'transacciones' && <TransaccionesPanel busqueda={busqueda} />}
         {tab === 'segmentos' && <SegmentosPanel />}
+        {tab === 'zonas' && <ZonasPanel estado={zonas} onComparar={() => setTab('comparar-zonas')} />}
+        {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} onVolver={() => setTab('zonas')} />}
         {tab === 'indicadores' && <IndicadoresPanel />}
         {tab === 'reglas-asociacion' && <ReglasAsociacionPanel />}
         {tab === 'sustitucion' && <SustitucionPanel />}

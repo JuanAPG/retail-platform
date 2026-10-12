@@ -192,6 +192,8 @@ export const catalogApi = crearCliente('catalog');
 export const pricingApi = crearCliente('pricing');
 export const coreApi = crearCliente('core');
 export const algorithmsApi = crearCliente('algorithms');
+// Reservado para analytics-stats (clustering, hipótesis, ANOVA, proporciones; RF-16/20/21/22). Sin uso a propósito:
+// el servicio solo tiene /health, y no se construyen pantallas contra endpoints que no existen.
 export const statsApi = crearCliente('stats');
 export const decisionApi = crearCliente('decision');
 export const documentsApi = crearCliente('documents');

@@ -14,6 +14,8 @@ import { ZonaFormModal } from './ZonaFormModal';
 import { ConfirmarEliminarZonaModal } from './ConfirmarEliminarZonaModal';
 import { EstadoError } from '../../components/EstadoError';
 import { Cargando } from '../../components/Cargando';
+import { useAuth } from '../../context/AuthContext';
+import { puedeEscribir, quienEscribe } from '../../routes/permisosEscritura';
 
 interface ZonasPanelProps {
   estado: UseFetchState<Zona[]>;
@@ -22,6 +24,9 @@ interface ZonasPanelProps {
 
 /** M03 — Zonas. CRUD completo: antes era una tabla de solo lectura. */
 export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
+  const { usuario } = useAuth();
+  // catalog-service: solo el Analista comercial escribe zonas; al resto no se le ofrece lo que daría 403.
+  const escribe = puedeEscribir('zonas', usuario?.rol);
   const municipios = useFetch(getMunicipios, []);
 
   const [formAbierto, setFormAbierto] = useState(false);
@@ -74,15 +79,17 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
         subtitle="Área Metropolitana"
         action={
           <div className="flex gap-3">
-            <CtaButton
-              onClick={() => {
-                setZonaEditando(undefined);
-                setFormAbierto(true);
-              }}
-              disabled={!municipios.data || municipios.data.length === 0}
-            >
-              Nueva zona
-            </CtaButton>
+            {escribe && (
+              <CtaButton
+                onClick={() => {
+                  setZonaEditando(undefined);
+                  setFormAbierto(true);
+                }}
+                disabled={!municipios.data || municipios.data.length === 0}
+              >
+                Nueva zona
+              </CtaButton>
+            )}
             <button
               type="button"
               onClick={onComparar}
@@ -118,6 +125,11 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {!escribe && (
+        <p className="rounded-full bg-arena px-5 py-3 text-sm text-teal">
+          Vista de solo lectura: solo {quienEscribe('zonas')} administra las zonas. Aquí puedes consultarlas.
+        </p>
+      )}
       {estado.loading && !estado.data && <Cargando etiqueta="Cargando zonas…" />}
       {estado.error && (
         <EstadoError mensaje={`No se pudieron cargar las zonas: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
@@ -138,15 +150,17 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
             <Card
               key={z.id}
               actions={
-                <>
-                  <CircleButton icon={<IconOjo className="h-[19px] w-[19px]" />} label={`Editar ${z.nombre}`} onClick={() => abrirEdicion(z)} />
-                  <CircleButton
-                    icon={<IconEliminar className="h-[19px] w-[19px]" />}
-                    label={`Eliminar ${z.nombre}`}
-                    variant="delete"
-                    onClick={() => setZonaAEliminar(z)}
-                  />
-                </>
+                escribe ? (
+                  <>
+                    <CircleButton icon={<IconOjo className="h-[19px] w-[19px]" />} label={`Editar ${z.nombre}`} onClick={() => abrirEdicion(z)} />
+                    <CircleButton
+                      icon={<IconEliminar className="h-[19px] w-[19px]" />}
+                      label={`Eliminar ${z.nombre}`}
+                      variant="delete"
+                      onClick={() => setZonaAEliminar(z)}
+                    />
+                  </>
+                ) : undefined
               }
             >
               <div className="flex items-start justify-between gap-2">
@@ -155,7 +169,7 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
               </div>
               <p className="font-data text-xs text-teal">{z.descripcion ?? 'Sin descripción'}</p>
               <div className="flex items-center justify-between">
-                <Switch checked={z.activo} onChange={() => alternarActivo(z)} disabled={cambiandoEstadoDe === z.id}>
+                <Switch checked={z.activo} onChange={() => alternarActivo(z)} disabled={!escribe || cambiandoEstadoDe === z.id}>
                   {cambiandoEstadoDe === z.id ? '…' : z.activo ? 'Activa' : 'Inactiva'}
                 </Switch>
               </div>

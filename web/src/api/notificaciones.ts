@@ -23,9 +23,8 @@ export interface PaginaNotificaciones {
 export const getNotificaciones = (limit = 10) =>
   notificationsApi.get<PaginaNotificaciones>('/notifications', { params: { limit } }).then((r) => r.data);
 
+/** Contrato de notifications-service: `{ unread: n }`. */
 export const getNoLeidas = () =>
-  notificationsApi
-    .get<{ unread?: number; count?: number; total?: number }>('/notifications/unread-count')
-    .then((r) => r.data.unread ?? r.data.count ?? r.data.total ?? 0);
+  notificationsApi.get<{ unread: number }>('/notifications/unread-count').then((r) => r.data.unread);
 
 export const marcarLeida = (id: string) => notificationsApi.patch(`/notifications/${id}/read`).then((r) => r.data);

@@ -10,6 +10,7 @@ import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
 import { ReportesPanel } from './catalogo/ReportesPanel';
 import { AlertaPrecioCard } from './catalogo/AlertaPrecioCard';
+import { TiendasPanel } from './admin/TiendasPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
@@ -165,7 +166,9 @@ export function CatalogoPortal() {
 
       {(tab === 'reportes' || tab === 'reportes-precios') && <ReportesPanel />}
 
-      {tab === 'tiendas' && (
+      {/* catalog-service: el Gerente de categoría es quien escribe tiendas; los demás perfiles ven la lista de solo lectura. */}
+      {tab === 'tiendas' && usuario?.rol === 'Gerente de categoría' && <TiendasPanel estado={tiendas} />}
+      {tab === 'tiendas' && usuario?.rol !== 'Gerente de categoría' && (
         <div className="flex flex-col gap-6">
           <div className="flex items-center gap-3">
             <h1 className="font-display text-4xl text-vino">Tiendas</h1>
