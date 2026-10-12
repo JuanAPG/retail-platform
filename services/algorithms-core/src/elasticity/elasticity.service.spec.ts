@@ -279,6 +279,30 @@ describe('ElasticityService (base simulada)', () => {
     expect(grafico.note).toContain('análisis del 2026-10-08');
   });
 
+  it('chart de una corrida mensual dice "por mes" y granularity sale como month (D-21)', async () => {
+    const service = servicio([
+      [{ ...corrida, granularity: 'month' }],
+      [{ zoneId: null, value: '-1.2000', rSquared: null, observations: 20 }],
+    ]);
+
+    const grafico = await service.getComparativeChart({ presentationId: 'pres-1', runId: 'corrida-1' });
+
+    expect(grafico.granularity).toBe('month');
+    expect(grafico.note).toContain('observaciones por mes');
+  });
+
+  it('una corrida sin granularidad guardada (runs anteriores a D-21) no revienta: cae a semana', async () => {
+    const service = servicio([
+      [{ ...corrida, granularity: null }],
+      [{ zoneId: null, value: '-1.2000', rSquared: null, observations: 20 }],
+    ]);
+
+    const grafico = await service.getComparativeChart({ presentationId: 'pres-1', runId: 'corrida-1' });
+
+    expect(grafico.granularity).toBe('week');
+    expect(grafico.note).toContain('observaciones por semana');
+  });
+
   it('current marca atypical solo cuando E > 0', async () => {
     const fila = {
       presentationId: 'pres-1',

@@ -19,7 +19,7 @@ import { FuenteDatos } from '../fuente-datos/fuente-datos.service';
 import { CurrentElasticity, CurrentElasticityFilterDto } from './dto/current-elasticity.dto';
 import { ElasticityChartBar, ElasticityChartData, ElasticityChartValue } from './dto/elasticity-chart-data.dto';
 import { ElasticityFilterDto } from './dto/elasticity-filter.dto';
-import { ElasticityParamsDto, Granularity } from './dto/elasticity-params.dto';
+import { ElasticityParamsDto, Granularity, GRANULARITIES } from './dto/elasticity-params.dto';
 import {
   ElasticityClass,
   ElasticityResult,
@@ -39,12 +39,24 @@ import {
 
 const NATIONAL = 'Nacional';
 
-// El agrupamiento por día o semana ISO (PERIOD_SQL del monolito) vive en
-// FuenteDatos.ventasParaElasticidad: es una lectura de ventas de core-process.
+// El agrupamiento por día, semana ISO o mes (PERIOD_SQL del monolito) vive
+// en FuenteDatos.ventasParaElasticidad: es una lectura de ventas de core-process.
+
+/** Nombre en español de cada periodo, para los textos de assumptions/notas. */
+const ETIQUETA_GRANULARIDAD: Record<Granularity, string> = { day: 'día', week: 'semana', month: 'mes' };
+
+/**
+ * Un `granularity` que viene de la base (parámetro guardado en texto) y
+ * puede no estar: corridas antiguas de antes de este campo. 'week' porque
+ * es el default vigente (D-21); nunca revienta por un valor desconocido.
+ */
+function granularidadValida(valor: string | null): Granularity {
+  return (GRANULARITIES as readonly string[]).includes(valor ?? '') ? (valor as Granularity) : 'week';
+}
 
 const ASSUMPTIONS = (granularity: Granularity) => [
   'Modelo de elasticidad constante: cantidad = A · precio^E; E es la pendiente de ln(cantidad) contra ln(precio).',
-  `Cada observación es una zona × ${granularity === 'day' ? 'día' : 'semana'}: precio promedio realmente cobrado (ponderado por unidades) y unidades vendidas.`,
+  `Cada observación es una zona × ${ETIQUETA_GRANULARIDAD[granularity]}: precio promedio realmente cobrado (ponderado por unidades) y unidades vendidas.`,
   'Los periodos sin ventas no se observan: no se registra la demanda cero.',
   'No se controlan otros factores que mueven la demanda (promociones, temporada, ingreso, precio de otros productos).',
   'Una elasticidad positiva (la demanda sube con el precio) se marca como atípica.',
@@ -155,7 +167,7 @@ export class ElasticityService {
    * AssociationService.runApriori).
    */
   async calculate(params: ElasticityParamsDto, user: SesionUsuario, contexto: ContextoPeticion = {}): Promise<ElasticityResult> {
-    const granularity = params.granularity ?? 'day';
+    const granularity = params.granularity ?? 'week';
     // EsFiltroDeFecha garantiza que los primeros 10 caracteres son un día real:
     // comparar ese texto es comparar las fechas.
     if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
@@ -222,7 +234,7 @@ export class ElasticityService {
         estado: 'completada',
         resumen:
           `${resultado.results.length} resultado(s) y ${resultado.insufficient.length} combinación(es) sin datos ` +
-          `suficientes; observaciones por ${granularity === 'week' ? 'semana' : 'día'}.`,
+          `suficientes; observaciones por ${ETIQUETA_GRANULARIDAD[granularity]}.`,
       },
       user.id,
       contexto,
@@ -273,7 +285,7 @@ export class ElasticityService {
 
     let bars: ElasticityChartBar[];
     let note: string;
-    const basis = `análisis del ${fechaLocal(run.executedAt)}, observaciones por ${run.granularity === 'week' ? 'semana' : 'día'}`;
+    const basis = `análisis del ${fechaLocal(run.executedAt)}, observaciones por ${ETIQUETA_GRANULARIDAD[granularidadValida(run.granularity)]}`;
     if (groupBy === 'zone') {
       bars = zones.map((z) => {
         const found = zoneValues.find((v) => v.zoneId === z.id);
@@ -301,7 +313,7 @@ export class ElasticityService {
       presentationName: name.presentation,
       groupBy,
       executedAt: run.executedAt.toISOString(),
-      granularity: run.granularity === 'week' ? 'week' : 'day',
+      granularity: granularidadValida(run.granularity),
       periodStart: run.periodStart,
       periodEnd: run.periodEnd,
       bars,
@@ -358,7 +370,10 @@ export class ElasticityService {
    * Elasticidad vigente (nuevo en microservicios; sustituye las consultas
    * que simulación y recomendaciones hacían directo a `elasticidades`):
    * por cada presentación × zona, el valor de la corrida completada MÁS
-   * RECIENTE que lo calculó — el mismo criterio que usaban.
+   * RECIENTE **de ventana completa** (sin `dateFrom`/`dateTo`) que lo
+   * calculó. Una corrida con filtro de fechas es exploratoria y nunca
+   * se vuelve vigente aquí, aunque sea la más reciente: para verla hay
+   * que pedirla por su `runId` en `/chart` (D-22, QA-ALG56-06).
    *
    * Con `zoneId` también salen las filas nacionales (zona null): simulación
    * cae a la nacional cuando la zona no tiene valor. Orden: producto,
@@ -395,6 +410,14 @@ export class ElasticityService {
          WHERE c.tipo = 'elasticidad' AND c.estado = 'completada'
            AND ($1::uuid IS NULL OR e.presentacion_id = $1::uuid)
            AND ($2::uuid IS NULL OR e.zona_id = $2::uuid OR e.zona_id IS NULL)
+           -- D-22: solo las corridas de ventana COMPLETA (sin dateFrom/dateTo)
+           -- cuentan como vigentes. Una corrida con filtro de fechas es
+           -- exploratoria: se consulta por su runId en /chart, nunca se
+           -- promueve aquí, sin importar qué tan reciente sea.
+           AND NOT EXISTS (
+             SELECT 1 FROM analisis_corrida_parametros p
+             WHERE p.corrida_id = c.id AND p.clave IN ('dateFrom', 'dateTo')
+           )
          ORDER BY e.presentacion_id, e.zona_id, c.ejecutada_en DESC
        )
        SELECT v.presentacion_id AS "presentationId", v.zona_id AS "zoneId", v.valor AS "value",
@@ -405,6 +428,12 @@ export class ElasticityService {
                 SELECT 1 FROM analisis_corridas posterior
                 WHERE posterior.tipo = 'elasticidad' AND posterior.estado = 'completada'
                   AND posterior.ejecutada_en > v.ejecutada_en
+                  -- Misma regla D-22: una corrida exploratoria posterior no
+                  -- cuenta para decidir si el valor vigente quedó viejo.
+                  AND NOT EXISTS (
+                    SELECT 1 FROM analisis_corrida_parametros p
+                    WHERE p.corrida_id = posterior.id AND p.clave IN ('dateFrom', 'dateTo')
+                  )
                   -- Filtrada a OTRA presentación no la abarcaba.
                   AND NOT EXISTS (
                     SELECT 1 FROM analisis_corrida_parametros p
@@ -694,6 +723,11 @@ function baseParameters(params: ElasticityParamsDto, granularity: Granularity): 
     ['observaciones_minimas', MIN_OBSERVATIONS],
     ['precios_distintos_minimos', MIN_DISTINCT_PRICES],
     ...(params.presentationId ? [['presentacion_id', params.presentationId] as [string, string]] : []),
+    // Solo si se pidieron: su presencia es lo que distingue una corrida de
+    // ventana completa (vigente, D-22) de una exploratoria. diaDelFiltro
+    // normaliza a 'yyyy-mm-dd' aunque el filtro traiga hora.
+    ...(params.dateFrom ? [['dateFrom', diaDelFiltro(params.dateFrom)!] as [string, string]] : []),
+    ...(params.dateTo ? [['dateTo', diaDelFiltro(params.dateTo)!] as [string, string]] : []),
   ];
 }
 

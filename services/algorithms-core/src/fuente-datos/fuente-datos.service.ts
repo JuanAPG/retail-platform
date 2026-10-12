@@ -29,7 +29,7 @@ export interface ResumenProducto {
 }
 
 /** Cómo se agrupan las ventas en observaciones de elasticidad. */
-export type Granularidad = 'day' | 'week';
+export type Granularidad = 'day' | 'week' | 'month';
 
 /** Filtros de ventas para elasticidad: mismos nombres que `ElasticityParamsDto` (M11). */
 export interface FiltrosVentas {
@@ -80,6 +80,7 @@ export interface Segmento {
 const PERIODO_SQL: Record<Granularidad, string> = {
   day: `to_char(fecha, 'YYYY-MM-DD')`,
   week: `to_char(date_trunc('week', fecha), 'YYYY-MM-DD')`,
+  month: `to_char(date_trunc('month', fecha), 'YYYY-MM-DD')`,
 };
 
 /**

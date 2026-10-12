@@ -559,3 +559,205 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     expect(r.cuerpo.code).toBe('VALIDATION_ERROR');
   });
 });
+
+/**
+ * Filtros por zona y por segmento de ingreso en `GET /v1/transactions`.
+ *
+ * La respuesta de una transacción trae `storeId` pero no la zona: la zona
+ * y el segmento son de la TIENDA, no de la venta. Así que el mapa
+ * tienda → zona/segmento se arma desde `/v1/baskets`, que sí publica las
+ * dos, y contra ese mapa se verifica lo que devuelve el filtro. Es la
+ * única forma de comprobar el filtro sin leer Postgres a mano.
+ */
+describe('GET /v1/transactions filtrado por zona y segmento (integración, requiere stack)', () => {
+  interface FilaCanasta {
+    storeId: string | null;
+    zoneId: string;
+    zone: { nombre: string } | null;
+    segmentId: number | null;
+  }
+  interface FilaTransaccion {
+    id: string;
+    storeId: string;
+    fecha: string;
+  }
+
+  /**
+   * Día LOCAL (`America/Monterrey`) de una fecha ISO.
+   *
+   * No sirve `fecha.slice(0, 10)`: la respuesta trae la fecha en UTC y el
+   * filtro recorta por día local. La venta T-0004 del seed es
+   * `2026-08-13T01:20:00Z`, o sea el 12 de agosto a las 19:20 en
+   * Monterrey: pedir `dateFrom=2026-08-13` NO la trae, y una prueba que
+   * cortara el ISO fallaría culpando al filtro.
+   */
+  function diaLocal(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Monterrey',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(iso));
+  }
+
+  /** zona de cada tienda, segmento de cada zona y nombre de cada zona. */
+  let zonaDeTienda: Map<string, string>;
+  let segmentoDeZona: Map<string, number>;
+  let nombreDeZona: Map<string, string>;
+
+  beforeAll(async () => {
+    const canastas = await get('/v1/baskets?limit=1000');
+    expect(canastas.estado).toBe(200);
+    const filas = canastas.cuerpo.data as FilaCanasta[];
+    expect(filas.length).toBeGreaterThan(0);
+
+    zonaDeTienda = new Map();
+    segmentoDeZona = new Map();
+    nombreDeZona = new Map();
+    for (const fila of filas) {
+      if (fila.storeId) zonaDeTienda.set(fila.storeId, fila.zoneId);
+      if (fila.segmentId != null) segmentoDeZona.set(fila.zoneId, fila.segmentId);
+      if (fila.zone?.nombre) nombreDeZona.set(fila.zoneId, fila.zone.nombre);
+    }
+    // Sin al menos dos zonas con ventas no hay nada que distinguir: la
+    // prueba de "no aparece en la otra zona" sería vacía.
+    expect(zonaDeTienda.size).toBeGreaterThan(0);
+    expect(new Set(zonaDeTienda.values()).size).toBeGreaterThanOrEqual(2);
+  }, 60000);
+
+  it('`zoneId` trae solo las transacciones de tiendas de esa zona, y la otra zona no las trae', async () => {
+    const zonas = [...new Set(zonaDeTienda.values())];
+    const [zonaA, zonaB] = zonas;
+
+    const enA = await get(`/v1/transactions?zoneId=${zonaA}&limit=200`);
+    expect(enA.estado).toBe(200);
+    expect(enA.cuerpo.total).toBeGreaterThan(0);
+    for (const t of enA.cuerpo.data as FilaTransaccion[]) {
+      expect(zonaDeTienda.get(t.storeId)).toBe(zonaA);
+    }
+
+    // La misma transacción NO sale al preguntar por otra zona: el filtro
+    // recorta de verdad, no solo reordena.
+    const enB = await get(`/v1/transactions?zoneId=${zonaB}&limit=200`);
+    expect(enB.estado).toBe(200);
+    const idsB = new Set((enB.cuerpo.data as FilaTransaccion[]).map((t) => t.id));
+    for (const t of enA.cuerpo.data as FilaTransaccion[]) {
+      expect(idsB.has(t.id)).toBe(false);
+    }
+    for (const t of enB.cuerpo.data as FilaTransaccion[]) {
+      expect(zonaDeTienda.get(t.storeId)).toBe(zonaB);
+    }
+
+    // Las dos zonas juntas no pueden pasar del total sin filtro.
+    const todas = await get('/v1/transactions?limit=1');
+    expect(enA.cuerpo.total + enB.cuerpo.total).toBeLessThanOrEqual(todas.cuerpo.total);
+  }, 60000);
+
+  it('`segmentId` de "Ingreso medio" trae solo las tiendas de Zona Centro (seed real)', async () => {
+    // Seed: Zona Valle = Ingreso alto, Zona Centro = Ingreso medio,
+    // Zona Oriente = Ingreso bajo (db/data_retail.sql).
+    const centro = [...nombreDeZona.entries()].find(([, nombre]) => nombre === 'Zona Centro')?.[0];
+    if (!centro) {
+      throw new Error('El seed no tiene ventas en Zona Centro: corre db/data_retail.sql y el CSV de 100.');
+    }
+    const segmentoMedio = segmentoDeZona.get(centro);
+    expect(segmentoMedio).toBeDefined();
+
+    const r = await get(`/v1/transactions?segmentId=${segmentoMedio}&limit=200`);
+    expect(r.estado).toBe(200);
+    expect(r.cuerpo.total).toBeGreaterThan(0);
+
+    const zonasDevueltas = new Set(
+      (r.cuerpo.data as FilaTransaccion[]).map((t) => zonaDeTienda.get(t.storeId)),
+    );
+    // Solo Zona Centro: ninguna tienda de Valle ni de Oriente se cuela.
+    expect([...zonasDevueltas]).toEqual([centro]);
+
+    // Y al revés: filtrar por la zona da el mismo conjunto que filtrar por
+    // su segmento, porque en el seed Zona Centro es la única de ese
+    // segmento.
+    const porZona = await get(`/v1/transactions?zoneId=${centro}&limit=200`);
+    expect(r.cuerpo.total).toBe(porZona.cuerpo.total);
+  }, 60000);
+
+  it('cada segmento del seed devuelve exactamente las zonas que le corresponden', async () => {
+    const segmentos = [...new Set(segmentoDeZona.values())];
+    expect(segmentos.length).toBeGreaterThanOrEqual(2);
+
+    for (const segmento of segmentos) {
+      const esperadas = new Set(
+        [...segmentoDeZona.entries()].filter(([, s]) => s === segmento).map(([z]) => z),
+      );
+      const r = await get(`/v1/transactions?segmentId=${segmento}&limit=200`);
+      expect(r.estado).toBe(200);
+      for (const t of r.cuerpo.data as FilaTransaccion[]) {
+        expect(esperadas.has(zonaDeTienda.get(t.storeId) as string)).toBe(true);
+      }
+    }
+  }, 60000);
+
+  it('zona, segmento, tienda y fechas se combinan con AND (intersección)', async () => {
+    // Se parte de UNA transacción real y se construye el filtro que la
+    // describe por completo: tiene que aparecer con los cinco parámetros.
+    const semilla = (await get('/v1/transactions?limit=1')).cuerpo.data[0] as FilaTransaccion;
+    const zona = zonaDeTienda.get(semilla.storeId) as string;
+    expect(zona).toBeDefined();
+    const segmento = segmentoDeZona.get(zona);
+    const dia = diaLocal(semilla.fecha);
+
+    const query =
+      `?storeId=${semilla.storeId}&zoneId=${zona}` +
+      (segmento != null ? `&segmentId=${segmento}` : '') +
+      `&dateFrom=${dia}&dateTo=${dia}&limit=200`;
+    const todos = await get(`/v1/transactions${query}`);
+    expect(todos.estado).toBe(200);
+    expect((todos.cuerpo.data as FilaTransaccion[]).some((t) => t.id === semilla.id)).toBe(true);
+    // Cada fila devuelta cumple TODAS las condiciones, no alguna.
+    for (const t of todos.cuerpo.data as FilaTransaccion[]) {
+      expect(t.storeId).toBe(semilla.storeId);
+      expect(zonaDeTienda.get(t.storeId)).toBe(zona);
+      expect(diaLocal(t.fecha)).toBe(dia);
+    }
+
+    // Romper UN solo parámetro la saca: la zona de otra tienda.
+    const otraZona = [...new Set(zonaDeTienda.values())].find((z) => z !== zona) as string;
+    const zonaMala = await get(
+      `/v1/transactions?storeId=${semilla.storeId}&zoneId=${otraZona}&dateFrom=${dia}&dateTo=${dia}&limit=200`,
+    );
+    expect(zonaMala.estado).toBe(200);
+    expect(zonaMala.cuerpo.total).toBe(0);
+
+    // Romper solo la fecha también la saca, con la zona correcta.
+    const fechaMala = await get(
+      `/v1/transactions?zoneId=${zona}&dateFrom=2099-01-01&dateTo=2099-01-02&limit=200`,
+    );
+    expect(fechaMala.estado).toBe(200);
+    expect(fechaMala.cuerpo.total).toBe(0);
+  }, 60000);
+
+  it('un segmento sin zonas devuelve data vacía, no error', async () => {
+    const r = await get('/v1/transactions?segmentId=9999');
+    expect(r.estado).toBe(200);
+    expect(r.cuerpo).toMatchObject({ data: [], total: 0 });
+  });
+
+  it('un `zoneId` que no es UUID da 400, igual que `storeId`', async () => {
+    const zonaMala = await get('/v1/transactions?zoneId=zona-centro');
+    expect(zonaMala.estado).toBe(400);
+    expect(zonaMala.cuerpo.code).toBe('VALIDATION_ERROR');
+
+    const tiendaMala = await get('/v1/transactions?storeId=tienda-1');
+    expect(tiendaMala.estado).toBe(400);
+    expect(tiendaMala.cuerpo.code).toBe('VALIDATION_ERROR');
+
+    const segmentoMalo = await get('/v1/transactions?segmentId=alto');
+    expect(segmentoMalo.estado).toBe(400);
+    expect(segmentoMalo.cuerpo.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('un parámetro desconocido sigue dando 400 (forbidNonWhitelisted)', async () => {
+    const r = await get('/v1/transactions?segmento=2');
+    expect(r.estado).toBe(400);
+    expect(r.cuerpo.code).toBe('VALIDATION_ERROR');
+  });
+});

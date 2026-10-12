@@ -286,7 +286,17 @@ Request JSON (todo opcional):
 |---|---|
 | `presentationId` | opcional, UUID. Sin ella, todas las presentaciones con ventas en el periodo |
 | `dateFrom`, `dateTo` | opcionales, día `YYYY-MM-DD` que exista (`2026-02-30`, `2026-09` o `2026-W40-1` → `400`); si trae hora, solo se usa el día. `dateTo` abarca el día completo. Mismo criterio que core-process (`EsFiltroDeFecha`) |
-| `granularity` | `day` (default) o `week` (semana ISO, empieza en lunes): cómo se agrupan las ventas en observaciones zona × periodo |
+| `granularity` | `day`, `week` (semana ISO, empieza en lunes) o `month`. **Default: `week`** (D-21) |
+
+**Por qué semana es el default y no mes (D-21):** RN-03 queda **fuera del
+Parcial 2** (ver `reglas-negocio.md`), así que no es una regla vigente a
+cumplir todavía. Entre las tres, semana es la que mejor balancea ruido y
+cantidad de datos: por día el modelo no controla el efecto fin de
+semana/entre-semana (es una de las `assumptions` de toda corrida) y además
+quedan fuera los días sin venta; por mes, con pocos meses de historia quedan
+muy pocos puntos y un cambio de precio a media de mes se diluye en el
+promedio. `month` existe para historias largas donde sí da suficientes
+puntos.
 
 La elasticidad se calcula siempre **por cada zona más el agregado nacional**;
 la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`. El
@@ -295,7 +305,9 @@ las zonas: no suma las zonas de un mismo periodo.
 
 Claves de `parameters` guardadas: `metodo` (`regresion_log_log`),
 `granularidad`, `observaciones_minimas` (3), `precios_distintos_minimos` (2),
-`presentacion_id` (si se filtró), `resultados_calculados`,
+`presentacion_id` (si se filtró), `dateFrom` y `dateTo` (si se filtró por
+fecha — su presencia es lo que distingue una corrida exploratoria de una de
+ventana completa, ver D-22 en `GET /v1/elasticity/current`), `resultados_calculados`,
 `combinaciones_insuficientes`.
 
 Response `201`:
@@ -410,9 +422,17 @@ ninguna corrida con resultados para la presentación → `404`.
 ### GET /v1/elasticity/current
 
 **Nuevo.** La elasticidad vigente: para cada par presentación–zona, el valor de
-la **corrida completada más reciente** que lo calculó. Sustituye las consultas
-SQL que `decision-service` hacía sobre `elasticidades` (simulación y
-recomendaciones).
+la **corrida completada más reciente, de ventana COMPLETA** (sin `dateFrom` ni
+`dateTo`) que lo calculó (D-22). Sustituye las consultas SQL que
+`decision-service` hacía sobre `elasticidades` (simulación y recomendaciones).
+
+**D-22 — por qué solo las corridas de ventana completa:** una corrida con
+`dateFrom`/`dateTo` es exploratoria (p. ej. "¿cómo se veía esto solo en
+agosto?") y se calculó con una fracción de los datos. Si se volviera vigente
+automáticamente por ser la más reciente, la simulación de precios podría
+terminar usando un valor calculado con muy poca información sin que nadie lo
+decidiera a propósito. Las corridas exploratorias siguen existiendo y se
+consultan por su `runId` en `GET /v1/elasticity/chart`; nunca se promueven aquí.
 
 | Query | Regla |
 |---|---|
@@ -475,12 +495,13 @@ debe usarla como una elasticidad normal.
 
 `periodStart` y `periodEnd` son el periodo de ventas de la corrida de cada fila:
 la zona y el nacional pueden venir de corridas distintas. `outdated` es `true` si
-una corrida de elasticidad completada **posterior**, que abarcaba la presentación
+una corrida de elasticidad completada **posterior, también de ventana completa**
+(D-22: una exploratoria posterior no cuenta), que abarcaba la presentación
 (sin filtro de presentación, o con esta), no obtuvo valor para esa zona —datos
 insuficientes o sin ventas en su periodo—. La fila se conserva con su valor
 anterior para que la simulación no se quede sin dato; quien la consume decide qué
 hacer con el aviso. No detecta ventas llegadas después de la corrida (eso es el
-snapshot de datos, D-15), y una corrida semanal posterior también cuenta.
+snapshot de datos, D-15), y una corrida semanal o mensual posterior también cuenta.
 
 Sin elasticidades calculadas → `data: []` (no es error; quien la consume decide
 si eso es un `404` en su propio flujo). XML: elemento `currentElasticityListResponse`.
