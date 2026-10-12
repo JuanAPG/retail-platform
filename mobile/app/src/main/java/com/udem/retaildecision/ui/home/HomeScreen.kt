@@ -18,9 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.AddBox
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.PendingActions
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.RequestQuote
 import androidx.compose.material.icons.rounded.Sell
@@ -75,6 +78,10 @@ private fun iconoDeSeccion(id: String): ImageVector = when (id) {
     "precios" -> Icons.Rounded.Sell
     "propuestas" -> Icons.Rounded.RequestQuote
     "visitas" -> Icons.Rounded.Storefront
+    "comparar_precios" -> Icons.Rounded.Sell
+    "proponer_producto" -> Icons.Rounded.AddBox
+    "revision_precios" -> Icons.Rounded.CheckCircle
+    "productos_pendientes" -> Icons.Rounded.PendingActions
     else -> Icons.Rounded.Apps
 }
 

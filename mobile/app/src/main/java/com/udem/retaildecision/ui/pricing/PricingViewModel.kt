@@ -25,6 +25,8 @@ data class PricingUiState(
 class PricingViewModel(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
+    /** true para el Proveedor: solo comparación de sus productos activos, sin historial. */
+    val soloComparacion: Boolean = false,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PricingUiState())
@@ -38,7 +40,8 @@ class PricingViewModel(
         _state.update { it.copy(cargandoProductos = true, error = null) }
         viewModelScope.launch {
             catalogRepository.productos()
-                .onSuccess { lista ->
+                .onSuccess { todos ->
+                    val lista = if (soloComparacion) todos.filter { it.estatus == "activo" } else todos
                     _state.update { it.copy(cargandoProductos = false, productos = lista) }
                     // Se abre con el primer producto para no mostrar la pantalla vacía.
                     lista.firstOrNull()?.let { seleccionar(it) }
@@ -52,7 +55,8 @@ class PricingViewModel(
     fun seleccionar(producto: ProductDto) {
         _state.update { it.copy(seleccionado = producto, cargandoPrecios = true, precios = null, error = null) }
         viewModelScope.launch {
-            pricingRepository.cargar(producto.id)
+            val carga = if (soloComparacion) pricingRepository.cargarComparacion(producto.id) else pricingRepository.cargar(producto.id)
+            carga
                 .onSuccess { datos ->
                     _state.update { it.copy(cargandoPrecios = false, precios = datos) }
                 }
@@ -72,9 +76,10 @@ class PricingViewModel(
 class PricingViewModelFactory(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
+    private val soloComparacion: Boolean = false,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return PricingViewModel(catalogRepository, pricingRepository) as T
+        return PricingViewModel(catalogRepository, pricingRepository, soloComparacion) as T
     }
 }

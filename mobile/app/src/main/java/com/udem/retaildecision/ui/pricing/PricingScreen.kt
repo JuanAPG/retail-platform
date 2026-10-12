@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.udem.retaildecision.data.remote.dto.PerUnitComparisonDto
 import com.udem.retaildecision.data.remote.dto.PriceHistoryDto
 import com.udem.retaildecision.data.remote.dto.ZoneComparisonDto
 import com.udem.retaildecision.ui.components.AppTopBar
@@ -63,7 +64,7 @@ fun PricingScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             AppTopBar(
-                title = "Precios",
+                title = if (viewModel.soloComparacion) "Comparar mis precios" else "Precios",
                 subtitle = state.seleccionado?.nombre,
                 onBack = onBack,
             )
@@ -121,7 +122,7 @@ fun PricingScreen(
                     message = "Selecciona un producto para ver su comparación por zonas y su historial de precios.",
                 )
 
-                precios.historial.isEmpty() && precios.zonas.isEmpty() -> EmptyState(
+                precios.historial.isEmpty() && precios.zonas.isEmpty() && precios.porUnidad.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Sell,
                     title = "Sin precios",
                     message = "Este producto no tiene precios registrados.",
@@ -135,10 +136,18 @@ fun PricingScreen(
                     if (precios.zonas.isEmpty()) {
                         item { InfoBanner("Sin datos por zona para este producto.") }
                     }
-                    items(precios.zonas, key = { it.zoneId }) { ZonaPrecioCard(it) }
+                    items(precios.zonas, key = { "${it.zoneId}|${it.presentationId}" }) { ZonaPrecioCard(it) }
 
-                    item { SectionTitle("Historial de precios", modifier = Modifier.padding(top = 8.dp)) }
-                    items(precios.historial, key = { it.id }) { HistorialCard(it) }
+                    if (precios.porUnidad.isNotEmpty()) {
+                        item { SectionTitle("Precio por unidad", modifier = Modifier.padding(top = 8.dp)) }
+                        item { InfoBanner("Sirve para comparar presentaciones de distinto tamaño: el precio se lleva a kilo, litro o pieza.") }
+                        items(precios.porUnidad, key = { "${it.zoneId}|${it.baseUnit}" }) { PorUnidadCard(it) }
+                    }
+
+                    if (!viewModel.soloComparacion) {
+                        item { SectionTitle("Historial de precios", modifier = Modifier.padding(top = 8.dp)) }
+                        items(precios.historial, key = { it.id }) { HistorialCard(it) }
+                    }
                 }
             }
         }
@@ -154,7 +163,12 @@ private fun ZonaPrecioCard(z: ZoneComparisonDto) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(z.zoneName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(z.zoneName, style = MaterialTheme.typography.titleMedium)
+                    z.presentationName?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Pill(text = "${z.storeCount} ${if (z.storeCount == 1) "tienda" else "tiendas"}")
             }
             Row(
@@ -172,6 +186,38 @@ private fun ZonaPrecioCard(z: ZoneComparisonDto) {
                 }
                 LabeledValue(label = "Mínimo", value = dinero(z.minPrice))
                 LabeledValue(label = "Máximo", value = dinero(z.maxPrice))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PorUnidadCard(u: PerUnitComparisonDto) {
+    RetailCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(u.zoneName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Pill(text = "por ${u.baseUnit}")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column {
+                    Text("Promedio", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        dinero(u.averagePricePerBaseUnit),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                LabeledValue(label = "Mínimo", value = dinero(u.minPricePerBaseUnit))
+                LabeledValue(label = "Máximo", value = dinero(u.maxPricePerBaseUnit))
             }
         }
     }
