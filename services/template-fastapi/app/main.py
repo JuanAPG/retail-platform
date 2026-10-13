@@ -32,8 +32,16 @@ async def manejador_http(request: Request, error: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def manejador_validacion(request: Request, error: RequestValidationError):
+    # `details` como lista de textos, igual que el ValidationPipe de Nest
+    # (`services/snippets/error-codes.md`). Los errores crudos de pydantic
+    # traen el valor recibido: un NaN ahí hace que el JSON de la respuesta
+    # no se pueda serializar y el 400 salga como 500.
+    detalles = [
+        ".".join(str(parte) for parte in e["loc"] if parte != "body") + f": {e['msg']}"
+        for e in error.errors()
+    ]
     return cuerpo_error(400, "Error de validación en la solicitud.",
-                        request.url.path, "VALIDATION_ERROR", error.errors())
+                        request.url.path, "VALIDATION_ERROR", detalles)
 
 
 @app.exception_handler(Exception)
