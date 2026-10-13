@@ -1,0 +1,385 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de analytics-stats (STA-01). Espacio de nombres fijo `stats/v1`.
+     Los endpoints responden esta envoltura cuando `Accept: application/xml`.
+     Secciones: hypothesis, anova, proportions (RF-20 a RF-22) y clustering (RF-16).
+
+     Convenciones de este esquema (las de `app/xml_out.py`):
+     - Objetos con xs:all: los campos pueden llegar en cualquier orden.
+     - Todo arreglo se envuelve en <item> por elemento; arreglo vacío = elemento vacío.
+     - Un null se OMITE: los campos que pueden ser nulos llevan minOccurs="0".
+     - Los números de las pruebas van sin redondear: xs:double (admite 1.2e-12). -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="stats/v1"
+           xmlns:st="stats/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== Tipos simples ===== -->
+
+  <xs:simpleType name="twoGroupTest">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="welch"/>
+      <xs:enumeration value="mannwhitney"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Con dos grupos, /anova se resuelve con la prueba de dos grupos. -->
+  <xs:simpleType name="anovaTest">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="anova"/>
+      <xs:enumeration value="welch"/>
+      <xs:enumeration value="mannwhitney"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="proportionsTest">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ztest"/>
+      <xs:enumeration value="fisher"/>
+      <xs:enumeration value="chisquare"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="alternative">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="two-sided"/>
+      <xs:enumeration value="greater"/>
+      <xs:enumeration value="less"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="metric">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="totalValue"/>
+      <xs:enumeration value="productCount"/>
+      <xs:enumeration value="unitsTotal"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- RN-05: tamaños de compra de core-process. -->
+  <xs:simpleType name="condition">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="hasBasicProducts"/>
+      <xs:enumeration value="chica"/>
+      <xs:enumeration value="mediana"/>
+      <xs:enumeration value="grande"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="groupBy">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="segment"/>
+      <xs:enumeration value="zone"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="feature">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="estimatedIncome"/>
+      <xs:enumeration value="population"/>
+      <xs:enumeration value="availability"/>
+      <xs:enumeration value="averageTicket"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="clusteringSource">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="servicios"/>
+      <xs:enumeration value="cuerpo"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="runType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="clustering"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===== Listas ===== -->
+
+  <xs:complexType name="textList">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="featureList">
+    <xs:sequence>
+      <xs:element name="item" type="st:feature" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== Pruebas estadísticas ===== -->
+
+  <!-- Lo pedido en `baskets`. Ausente si los datos vinieron en `groups`. -->
+  <xs:complexType name="source">
+    <xs:all>
+      <xs:element name="metric" type="st:metric" minOccurs="0"/>
+      <xs:element name="condition" type="st:condition" minOccurs="0"/>
+      <xs:element name="groupBy" type="st:groupBy"/>
+      <xs:element name="groupIds" type="st:textList"/>
+      <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
+      <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
+      <xs:element name="storeId" type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="numericGroup">
+    <xs:all>
+      <xs:element name="label" type="xs:string"/>
+      <xs:element name="n" type="xs:positiveInteger"/>
+      <xs:element name="mean" type="xs:double"/>
+      <xs:element name="median" type="xs:double"/>
+      <xs:element name="standardDeviation" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="numericGroupList">
+    <xs:sequence>
+      <xs:element name="item" type="st:numericGroup" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="proportionGroup">
+    <xs:all>
+      <xs:element name="label" type="xs:string"/>
+      <xs:element name="successes" type="xs:nonNegativeInteger"/>
+      <xs:element name="total" type="xs:positiveInteger"/>
+      <xs:element name="proportion" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="proportionGroupList">
+    <xs:sequence>
+      <xs:element name="item" type="st:proportionGroup" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/hypothesis/test -->
+  <xs:element name="hypothesisTestResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="test" type="st:twoGroupTest"/>
+        <xs:element name="statistic" type="xs:double"/>
+        <xs:element name="pValue" type="xs:double"/>
+        <!-- Welch-Satterthwaite; ausente en Mann-Whitney. -->
+        <xs:element name="degreesOfFreedom" type="xs:double" minOccurs="0"/>
+        <xs:element name="alpha" type="xs:double"/>
+        <xs:element name="alternative" type="st:alternative"/>
+        <xs:element name="rejectNull" type="xs:boolean"/>
+        <xs:element name="conclusion" type="xs:string"/>
+        <xs:element name="groups" type="st:numericGroupList"/>
+        <xs:element name="source" type="st:source" minOccurs="0"/>
+        <xs:element name="assumptions" type="st:textList"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/anova -->
+  <xs:element name="anovaResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="test" type="st:anovaTest"/>
+        <xs:element name="statistic" type="xs:double"/>
+        <xs:element name="pValue" type="xs:double"/>
+        <!-- Solo en `anova`. -->
+        <xs:element name="dfBetween" type="xs:nonNegativeInteger" minOccurs="0"/>
+        <xs:element name="dfWithin" type="xs:nonNegativeInteger" minOccurs="0"/>
+        <!-- Solo en `welch`. -->
+        <xs:element name="degreesOfFreedom" type="xs:double" minOccurs="0"/>
+        <xs:element name="alpha" type="xs:double"/>
+        <xs:element name="rejectNull" type="xs:boolean"/>
+        <xs:element name="conclusion" type="xs:string"/>
+        <xs:element name="groups" type="st:numericGroupList"/>
+        <xs:element name="source" type="st:source" minOccurs="0"/>
+        <xs:element name="assumptions" type="st:textList"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/proportions/compare -->
+  <xs:element name="proportionsResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="test" type="st:proportionsTest"/>
+        <!-- z, χ² o razón de momios (Fisher); ausente si es infinita. -->
+        <xs:element name="statistic" type="xs:double" minOccurs="0"/>
+        <xs:element name="pValue" type="xs:double"/>
+        <!-- Solo en `chisquare`. -->
+        <xs:element name="degreesOfFreedom" type="xs:nonNegativeInteger" minOccurs="0"/>
+        <!-- Solo con dos grupos. -->
+        <xs:element name="difference" type="xs:double" minOccurs="0"/>
+        <xs:element name="alpha" type="xs:double"/>
+        <xs:element name="rejectNull" type="xs:boolean"/>
+        <xs:element name="conclusion" type="xs:string"/>
+        <xs:element name="groups" type="st:proportionGroupList"/>
+        <xs:element name="source" type="st:source" minOccurs="0"/>
+        <xs:element name="assumptions" type="st:textList"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Clustering ===== -->
+
+  <!-- Indicadores de una zona; solo vienen los elegidos en `features`. -->
+  <xs:complexType name="featureValues">
+    <xs:all>
+      <xs:element name="estimatedIncome" type="xs:double" minOccurs="0"/>
+      <xs:element name="population" type="xs:double" minOccurs="0"/>
+      <xs:element name="availability" type="xs:double" minOccurs="0"/>
+      <xs:element name="averageTicket" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="zoneInput">
+    <xs:all>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string" minOccurs="0"/>
+      <xs:element name="estimatedIncome" type="xs:double" minOccurs="0"/>
+      <xs:element name="population" type="xs:double" minOccurs="0"/>
+      <xs:element name="availability" type="xs:double" minOccurs="0"/>
+      <xs:element name="averageTicket" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="zoneInputList">
+    <xs:sequence>
+      <xs:element name="item" type="st:zoneInput" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="cluster">
+    <xs:all>
+      <xs:element name="cluster" type="xs:positiveInteger"/>
+      <xs:element name="size" type="xs:nonNegativeInteger"/>
+      <xs:element name="centroid" type="st:featureValues"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="clusterList">
+    <xs:sequence>
+      <xs:element name="item" type="st:cluster" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="assignment">
+    <xs:all>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string" minOccurs="0"/>
+      <xs:element name="cluster" type="xs:positiveInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="assignmentList">
+    <xs:sequence>
+      <xs:element name="item" type="st:assignment" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="excludedZone">
+    <xs:all>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="zoneName" type="xs:string" minOccurs="0"/>
+      <xs:element name="reason" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="excludedZoneList">
+    <xs:sequence>
+      <xs:element name="item" type="st:excludedZone" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Lo pedido, más de dónde salieron los datos. -->
+  <xs:complexType name="clusteringParameters">
+    <xs:all>
+      <xs:element name="k" type="xs:positiveInteger"/>
+      <xs:element name="seed" type="xs:nonNegativeInteger"/>
+      <xs:element name="features" type="st:featureList"/>
+      <xs:element name="source" type="st:clusteringSource"/>
+      <xs:element name="zoneIds" type="st:textList" minOccurs="0"/>
+      <xs:element name="dateFrom" type="xs:date" minOccurs="0"/>
+      <xs:element name="dateTo" type="xs:date" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="clusteringRun">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="type" type="st:runType"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="parameters" type="st:clusteringParameters"/>
+      <xs:element name="input" type="st:zoneInputList"/>
+      <xs:element name="clusters" type="st:clusterList"/>
+      <xs:element name="assignments" type="st:assignmentList"/>
+      <xs:element name="excludedZones" type="st:excludedZoneList"/>
+      <xs:element name="inertia" type="xs:double"/>
+      <xs:element name="silhouette" type="xs:double" minOccurs="0"/>
+      <xs:element name="assumptions" type="st:textList"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- En el listado: sin la entrada ni las asignaciones. -->
+  <xs:complexType name="clusteringRunSummary">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="type" type="st:runType"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="parameters" type="st:clusteringParameters"/>
+      <xs:element name="zoneCount" type="xs:nonNegativeInteger"/>
+      <xs:element name="inertia" type="xs:double"/>
+      <xs:element name="silhouette" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- POST /v1/clustering/run (201) y GET /v1/clustering/runs/:id -->
+  <xs:element name="clusteringRunResponse" type="st:clusteringRun"/>
+
+  <!-- GET /v1/clustering/runs (paginado) -->
+  <xs:element name="clusteringRunListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="st:clusteringRunSummary" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:nonNegativeInteger"/>
+        <xs:element name="page" type="xs:positiveInteger"/>
+        <xs:element name="limit" type="xs:positiveInteger"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Error estándar ===== -->
+
+  <xs:simpleType name="errorCode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- El middleware quita `details` al responder XML. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="st:errorCode"/>
+        <xs:element name="details" type="xs:anyType" minOccurs="0"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
