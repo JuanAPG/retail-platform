@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFetch } from '../../hooks/useFetch';
-import { getTransacciones } from '../../api/transacciones';
+import { getTransacciones, getTransaccion } from '../../api/transacciones';
+import { mensajeDeError } from '../../api/errores';
+import { Transaction } from '../../types';
 import { getProductos, getTiendas } from '../../api/catalogo';
 import { Hero } from '../../components/ui/Hero';
 import { CtaButton } from '../../components/ui/CtaButton';
@@ -27,6 +29,23 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
   const [formAbierto, setFormAbierto] = useState(false);
   const [importacionAbierta, setImportacionAbierta] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [abiertaId, setAbiertaId] = useState<string | null>(null);
+  const [detalle, setDetalle] = useState<Transaction | null>(null);
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+
+  // Al abrir una fila se pide la transacción completa: tienda, fecha, total y líneas.
+  useEffect(() => {
+    if (!abiertaId) return;
+    let vivo = true;
+    setDetalle(null);
+    setErrorDetalle(null);
+    getTransaccion(abiertaId)
+      .then((t) => vivo && setDetalle(t))
+      .catch((err) => vivo && setErrorDetalle(mensajeDeError(err, 'No se pudo abrir la transacción.')));
+    return () => {
+      vivo = false;
+    };
+  }, [abiertaId]);
 
   const todas = transacciones.data ?? [];
   const texto = busqueda.trim().toLowerCase();
@@ -123,9 +142,12 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
       {filas.length > 0 && (
         <div className="flex flex-col gap-2">
           {filas.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center gap-3.5 rounded-full bg-arena p-2 pr-4 transition hover:translate-x-1 hover:border-salvia border-2 border-transparent"
+            <div key={t.id} className="flex flex-col gap-2">
+            <button
+              type="button"
+              aria-expanded={abiertaId === t.id}
+              onClick={() => setAbiertaId(abiertaId === t.id ? null : t.id)}
+              className="flex items-center gap-3.5 rounded-full bg-arena p-2 pr-4 text-left transition hover:translate-x-1 hover:border-salvia border-2 border-transparent"
             >
               <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-salvia text-sm font-bold text-tinta">
                 {t.details?.length ?? 0}
@@ -137,6 +159,31 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
                 </span>
               </div>
               <span className="font-data text-[15px] font-semibold text-tinta">${Number(t.total).toFixed(2)}</span>
+            </button>
+            {abiertaId === t.id && (
+              <div className="flex flex-col gap-2 rounded-panel bg-arena p-5 text-sm text-teal">
+                {errorDetalle && <ErrorText>{errorDetalle}</ErrorText>}
+                {!errorDetalle && !detalle && <p className="text-teal/70">Cargando…</p>}
+                {detalle && (
+                  <>
+                    <p>
+                      <span className="font-semibold text-tinta">{detalle.store?.nombre ?? '—'}</span> · {detalle.folio} ·{' '}
+                      {new Date(detalle.fecha).toLocaleDateString('es-MX')} · Total ${Number(detalle.total).toFixed(2)}
+                    </p>
+                    <ul className="flex flex-col gap-1 font-data text-xs">
+                      {detalle.details.map((d) => (
+                        <li key={d.id} className="flex justify-between gap-3">
+                          <span className="min-w-0 truncate">
+                            {d.presentation?.producto?.nombre ?? 'Producto'} · {Number(d.quantity)} × ${Number(d.unitPrice).toFixed(2)}
+                          </span>
+                          <span>${Number(d.subtotal).toFixed(2)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
             </div>
           ))}
         </div>
