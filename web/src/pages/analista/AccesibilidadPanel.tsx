@@ -77,9 +77,12 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
             onChange={(e) => setZonaBId(e.target.value)}
             placeholder="Sin comparación"
           >
-            {zonas.filter((z) => z.id !== zonaId).map((z) => (
-              <option key={z.id} value={z.id}>{z.nombre}</option>
-            ))}
+            {[
+              <option key="" value="">Sin comparación</option>,
+              ...zonas.filter((z) => z.id !== zonaId).map((z) => (
+                <option key={z.id} value={z.id}>{z.nombre}</option>
+              )),
+            ]}
           </Select>
           <Select
             id="acc-segmento"

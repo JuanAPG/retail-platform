@@ -124,7 +124,7 @@ src/
 
 1. Servicios arriba: `docker compose -f infra/docker-compose.yml up -d` (postgres, redis, mongodb y los servicios) y el web en `http://localhost:5173`.
 2. Necesita Chrome o Edge instalado (o `CHROME_PATH=/ruta/al/ejecutable`). `E2E_BASE_URL` cambia la URL del web.
-3. Cubren: login de los 7 roles y recorrido de todos sus módulos (`01`), errores inyectados — 500, 403, 404, sin red, token vencido, datos corruptos (`02`) y permisos de escritura de Tiendas y Zonas (`03`).
+3. Cubren: login de los 7 roles y recorrido de todos sus módulos (`01`); permisos de Planeador y Gerente, D-12 y detalles (`11`), errores inyectados — 500, 403, 404, sin red, token vencido, datos corruptos (`02`) y permisos de escritura de Tiendas y Zonas (`03`).
 4. `E2E_DOCKER=1` agrega servicio caído (`docker stop`) y Redis colgado (`docker pause`).
 
 Usan los usuarios semilla de `db/data_retail.sql` (solo desarrollo local).
