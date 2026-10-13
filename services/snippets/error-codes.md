@@ -11,8 +11,8 @@ no inventes códigos por servicio.
 | `FORBIDDEN` | 403 | Token válido pero rol sin permiso sobre el recurso |
 | `NOT_FOUND` | 404 | El recurso pedido no existe |
 | `CONFLICT` | 409 | Duplicado, folio/SKU repetido, transición de estado ilegal |
-| `SERVICE_UNAVAILABLE` | 503 | Un microservicio del que dependes no responde (p. ej. catálogo caído) |
-| `INTERNAL` | 500 | Todo lo demás (incluye fallos de BD, Redis o Mongo) |
+| `SERVICE_UNAVAILABLE` | 503 | Un microservicio o almacén del que dependes no responde (p. ej. catálogo o MongoDB caído; D-25) |
+| `INTERNAL` | 500 | Todo lo demás (incluye fallos de BD o Redis). MongoDB caído NO es 500: es 503 (D-25) |
 
 `message` es siempre un string. El detalle de los 400 del `ValidationPipe`
 viaja en `details` como arreglo de strings; en los demás errores `details`
