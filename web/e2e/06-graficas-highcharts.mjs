@@ -95,6 +95,13 @@ const graficas = (page) => page.locator('.highcharts-container');
 
   await rail(page, 'Elasticidad de precios').click();
   await page.waitForTimeout(600);
+  // Respuesta fija con solo 2 puntos con dato (Centro y Nacional), para no depender de las corridas guardadas.
+  await page.route('**/localhost:3105/v1/elasticity/chart**', json({
+    runId: 'r0', presentationId: 'p0', productName: 'Leche', presentationName: '1 L', groupBy: 'zone', executedAt: '2026-10-12T19:00:00Z', granularity: 'day',
+    periodStart: '2026-08-05', periodEnd: '2026-08-14', note: 'datos de prueba',
+    bars: [{ key: 'a', label: 'Centro', value: -2.1, classification: 'elastic', observations: 6, rSquared: 0.4 }, { key: 'b', label: 'Oriente', value: null, classification: null, observations: 1, rSquared: null }],
+    national: { value: -1.4, classification: 'elastic', observations: 24, rSquared: 0.5 },
+  }));
   await page.locator('button', { hasText: 'Elige una presentación' }).first().click();
   await page.locator('[role=option]', { hasText: 'Leche entera · 1 L' }).first().click();
   await page.locator('.highcharts-container').first().waitFor({ timeout: 15000 });
