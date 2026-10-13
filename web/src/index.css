@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Nombres largos sin espacios (SKU, ids, texto pegado) no deben salirse de su tarjeta: se parten donde haga falta. */
+body {
+  overflow-wrap: break-word;
+}
+
 /* DESIGN.md — barra de desplazamiento delgada y sobria en vez del scrollbar
    por defecto del sistema operativo, consistente en toda la app. */
 * {

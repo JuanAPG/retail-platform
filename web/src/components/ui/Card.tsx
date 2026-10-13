@@ -9,7 +9,7 @@ interface CardProps {
 }
 
 const CARD_CLASS =
-  'group flex flex-col gap-3 rounded-card border-2 border-transparent bg-arena p-4 text-left transition hover:-translate-y-1.5 hover:border-salvia hover:shadow-lift';
+  'group flex min-w-0 flex-col gap-3 break-words rounded-card border-2 border-transparent bg-arena p-4 text-left transition hover:-translate-y-1.5 hover:border-salvia hover:shadow-lift';
 
 /** DESIGN.md §5 — Tarjeta. */
 export function Card({ children, actions, onClick, className = '' }: CardProps) {

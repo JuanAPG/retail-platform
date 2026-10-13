@@ -51,7 +51,7 @@ const PASOS: { label: string; tab: Tab }[] = [
 
 function PipelineStepper({ tabActual, onIr }: { tabActual: Tab; onIr: (t: Tab) => void }) {
   return (
-    <div className="flex items-center rounded-panel bg-arena px-6 py-5">
+    <div className="flex items-center overflow-x-auto rounded-panel bg-arena px-6 py-5" aria-label="Pasos del análisis">
       {PASOS.map((paso, i) => {
         const activo = paso.tab === tabActual;
         return (

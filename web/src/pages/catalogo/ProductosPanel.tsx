@@ -241,7 +241,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               </div>
 
               <div className="flex flex-col gap-1 px-1.5">
-                <h3 className="font-display text-base leading-tight text-tinta sm:text-[19px]">{p.nombre}</h3>
+                <h3 className="font-display text-base leading-tight text-tinta [overflow-wrap:anywhere] sm:text-[19px]">{p.nombre}</h3>
                 <span className="text-[13px] text-teal">{p.categoria?.nombre}</span>
                 {p.presentaciones.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
@@ -255,7 +255,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               </div>
 
               <div className="flex items-center px-1.5">
-                <span className="font-data text-xs text-teal">{p.sku}</span>
+                <span className="font-data text-xs text-teal [overflow-wrap:anywhere]">{p.sku}</span>
                 {puedeGestionar && (
                   <button
                     type="button"
