@@ -156,11 +156,12 @@ const LIMITE_BITACORA = 20;
 
 export function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
   const [accion, setAccion] = useState<AccionAuditoria | ''>('');
+  const [usuarioId, setUsuarioId] = useState('');
   const [page, setPage] = useState(1);
 
   const bitacora = useFetch(
-    () => getBitacora({ accion: accion || undefined, page, limit: LIMITE_BITACORA }),
-    [accion, page],
+    () => getBitacora({ accion: accion || undefined, usuarioId: usuarioId || undefined, page, limit: LIMITE_BITACORA }),
+    [accion, usuarioId, page],
   );
 
   const eventos = bitacora.data?.data ?? [];
@@ -184,7 +185,27 @@ export function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]>
         }
       />
 
-      <div className="max-w-xs">
+      <div className="flex flex-wrap gap-3.5">
+        <div className="w-full max-w-xs">
+          <Select
+            id="bitacora-usuario"
+            label="Usuario"
+            value={usuarioId}
+            onChange={(e) => {
+              setUsuarioId(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Todos"
+          >
+            {[
+              <option key="" value="">Todos</option>,
+              ...(usuarios.data ?? []).map((u) => (
+                <option key={u.id} value={u.id}>{u.nombre}</option>
+              )),
+            ]}
+          </Select>
+        </div>
+        <div className="w-full max-w-xs">
         <Select
           id="bitacora-accion"
           label="Tipo de operación"
@@ -202,6 +223,7 @@ export function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]>
             )),
           ]}
         </Select>
+        </div>
       </div>
 
       {bitacora.loading && <p className="text-sm text-teal/70">Cargando…</p>}
