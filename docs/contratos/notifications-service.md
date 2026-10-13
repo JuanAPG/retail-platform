@@ -17,20 +17,35 @@ timeout corto del lado emisor).
 emisor reenvía el `Authorization` del usuario que originó la acción, y con
 ese rol se valida contra la tabla de `notification.types.ts`:
 
-| Evento | Puede originarlo | Le llega a |
-|---|---|---|
-| `producto.propuesto` | Proveedor | rol Gerente de categoría (fijo) |
-| `precio.propuesto` | Proveedor | rol Responsable de precios (fijo) |
-| `propuesta.resuelta` | Administrador, Gerente de categoría, Responsable de precios | el usuario que propuso |
-| `precio.umbral` | Administrador, Responsable de precios | rol Responsable de precios (fijo) |
-| `precio.observado` | Analista comercial, Responsable de precios | rol Responsable de precios (fijo) |
-| `observacion.resuelta` | Responsable de precios | el usuario que la capturó |
-| `corrida.terminada` | Administrador, Analista comercial, Responsable de precios | el usuario que lanzó la corrida |
-| `escenario.generado` | Administrador, Analista comercial | el usuario que lo generó |
-| `recomendacion.generada` | Administrador, Analista comercial | rol Planeador (fijo) |
-| `recomendacion.resuelta` | Gerente de categoría | rol Analista comercial (fijo) |
-| `proveedor.solicitud` | **sin regla: nadie** | — |
-| `proveedor.resuelto` | **sin regla: nadie** | — |
+| Evento | Puede originarlo | Le llega a | Copia a |
+|---|---|---|---|
+| `producto.propuesto` | Proveedor | rol Gerente de categoría (fijo) | — |
+| `precio.propuesto` | Proveedor | rol Responsable de precios (fijo) | — |
+| `propuesta.resuelta` | Gerente de categoría, Responsable de precios | el usuario que propuso | rol Auditor |
+| `precio.umbral` | Responsable de precios | rol Responsable de precios (fijo) | rol Auditor (D-09) |
+| `precio.observado` | Analista comercial, Responsable de precios | rol Responsable de precios (fijo) | — |
+| `observacion.resuelta` | Responsable de precios | el usuario que la capturó | rol Auditor |
+| `corrida.terminada` | Analista comercial, Responsable de precios | el usuario que lanzó la corrida | — |
+| `escenario.generado` | Planeador (D-12) | el usuario que lo generó | — |
+| `recomendacion.generada` | Planeador (D-12) | rol Gerente de categoría (fijo) | — |
+| `recomendacion.resuelta` | Gerente de categoría | rol Planeador (fijo) | rol Auditor |
+| `proveedor.solicitud` | **sin regla: nadie** | — | — |
+| `proveedor.resuelto` | **sin regla: nadie** | — | — |
+
+**Corregido 2026-10-13** (orígenes alineados con los `@Roles` reales de
+main y decisiones del equipo):
+
+- Se quita al Administrador de todos los orígenes: ningún endpoint emisor
+  lo admite ya (catalog `APRUEBAN_PRODUCTOS` = Gerente; pricing `POST
+  /v1/prices` = Responsable de precios por D1; algorithms-core Apriori y
+  FP-Growth = Analista, elasticidad = Responsable de precios).
+- D-12: el **Planeador** simula y genera recomendaciones; el **Gerente de
+  categoría** las aprueba o rechaza. Por eso `recomendacion.generada` va
+  a la bandeja del Gerente y `recomendacion.resuelta` vuelve al Planeador.
+- **Copia automática al Auditor**: el emisor manda **un solo** aviso; el
+  servicio guarda además una notificación por cada rol de «Copia a», con
+  su propio dedup y su propio registro en auditoría. La respuesta del
+  `POST` es siempre la notificación principal.
 
 **Agregado 2026-10-09** (PRI-09/D-16, precios observados en tienda vía
 app móvil): `precio.observado` se emite al capturar (`POST
@@ -103,8 +118,29 @@ archivada con mismo `eventType` + `relatedEntityId` + **destinatario**
 se duplica: responde `200` con la existente. Distinto destinatario siempre
 crea una nueva (201), aunque coincidan evento y entidad.
 
+Request XML (`Content-Type: application/xml`, raíz `notificacionRequest`
+del XSD, mismo `xmlns` `notif/v1`): equivale al JSON de arriba y pasa por
+las mismas validaciones. XML mal formado, raíz distinta, `DOCTYPE`/`ENTITY`
+o cuerpo mayor a 100 kb → **400** `VALIDATION_ERROR` (error estándar en
+JSON o XML según `Accept`). Los demás endpoints no llevan cuerpo.
+
 Response `201` (o `200` si fue dedup): la notificación con `id`,
 `readBy: []`, `archived: false`, `createdAt`.
+
+## Persistencia y errores
+
+MongoDB, colección `notificaciones` (`MONGO_URL`). `id` es UUID v4
+(`_id` del documento). Índices: `{recipientUserId, createdAt}`,
+`{recipientRole, createdAt}`, el de dedup
+`{eventType, relatedEntityId, recipientUserId, recipientRole, createdAt}`
+y `{archived, createdAt}` para el job de archivado.
+
+Si MongoDB se cae con el servicio en marcha: `GET /v1/health` responde
+200 con `status: degraded` y `checks.mongodb` con el motivo, y las rutas
+de `/v1/notifications` responden **503** `SERVICE_UNAVAILABLE` con el
+error estándar (JSON o XML); al volver Mongo se recupera solo. Al
+arrancar, el servicio espera a que Mongo responda (reintentos de
+`@nestjs/mongoose`), igual que documents-service.
 
 ## GET /v1/notifications (SessionGuard)
 

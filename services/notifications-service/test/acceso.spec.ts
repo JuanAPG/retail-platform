@@ -7,12 +7,8 @@
  *  - un Proveedor leyendo o marcando la notificación de otro,
  *  - `sourceService` quedando en null.
  *
- * NO depende de Mongo: la autorización es independiente del almacén, así
- * que esto corre hoy con el repositorio en memoria. El spec que sí
- * necesita Mongo (`notificaciones.spec.ts`) sigue en `skip`.
- *
- * Requiere `docker compose up -d notifications-service auth-service` con
- * seed. Los tokens los saca del propio auth-service:
+ * Requiere `docker compose up -d mongodb notifications-service auth-service`
+ * con seed. Los tokens los saca del propio auth-service:
  *
  *   npm run test:integracion
  */

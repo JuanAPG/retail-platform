@@ -173,6 +173,12 @@ export interface PermisoEvento {
   /** Roles que pueden ORIGINAR el evento. Fuera de la lista → 403. */
   origenes: readonly string[];
   destino: Destino;
+  /**
+   * Roles que reciben COPIA automática (decisión del equipo: el Auditor ve
+   * resoluciones y alertas sin que el emisor mande un segundo aviso). Se
+   * guarda una notificación por rol en copia, con su propio dedup.
+   */
+  copias?: readonly string[];
   /** De dónde salió la regla, para poder discutirla sin arqueología. */
   fundamento: string;
 }
@@ -210,22 +216,25 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
     fundamento: 'pricing POST price-proposals es solo del Proveedor; la aprueba ÚNICAMENTE el Responsable de precios (D1), así que su bandeja es la de ese rol y no la del Gerente de categoría.',
   },
 
-  // catalog: PATCH products/:id/approve|reject -> @Roles(Gerente de categoría) y pricing: PATCH
-  // price-proposals/:id/approve|reject -> @Roles(Responsable de precios).
+  // catalog: PATCH products/:id/approve|reject -> APRUEBAN_PRODUCTOS = [Gerente de categoría]
+  // y pricing: PATCH price-proposals/:id/approve|reject -> [Responsable de precios] (D1).
   // Le llega al proveedor que propuso: solo el emisor sabe quién es.
   'propuesta.resuelta': {
-    origenes: [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS],
+    origenes: [ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
-    fundamento: 'Quien aprueba o rechaza una propuesta de producto es el Gerente de categoría y una de precio, el Responsable de precios (D1); el aviso va al proveedor que la hizo.',
+    copias: [ROL.AUDITOR],
+    fundamento: 'Quien aprueba o rechaza una propuesta de producto es el Gerente de categoría y una de precio, el Responsable de precios (D1); el aviso va al proveedor que la hizo, con copia al Auditor.',
   },
 
-  // pricing: POST /v1/prices -> @Roles(Administrador, Responsable de precios).
+  // pricing: POST /v1/prices -> @Roles(Responsable de precios) (D1).
   // Destino fijado por el equipo 2026-10-08: el Responsable de precios es
-  // la bandeja del área que actúa sobre el umbral, no el Gerente.
+  // la bandeja del área que actúa sobre el umbral, no el Gerente. D-09:
+  // copia al Auditor.
   'precio.umbral': {
-    origenes: [ROL.ADMINISTRADOR, ROL.RESPONSABLE_PRECIOS],
+    origenes: [ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
-    fundamento: 'pricing POST prices es de Administrador y Responsable de precios. Destino: Responsable de precios (bandeja del área), decidido por el equipo el 2026-10-08.',
+    copias: [ROL.AUDITOR],
+    fundamento: 'pricing POST prices es solo del Responsable de precios (D1). Destino: Responsable de precios (bandeja del área), decidido el 2026-10-08; copia al Auditor (D-09).',
   },
 
   // PRI-09/D-16: pricing POST /v1/price-observations (app móvil) ->
@@ -248,56 +257,47 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
   'observacion.resuelta': {
     origenes: [ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
+    copias: [ROL.AUDITOR],
     fundamento:
-      'pricing PATCH price-observations/:id/approve|reject es D1 APRUEBAN_PRECIOS = [Responsable de precios]. El aviso va a quien capturó la observación (recipientUserId).',
+      'pricing PATCH price-observations/:id/approve|reject es D1 APRUEBAN_PRECIOS = [Responsable de precios]. El aviso va a quien capturó la observación (recipientUserId), con copia al Auditor.',
   },
 
-  // ALG-10: algorithms-core POST /v1/association/apriori/run ->
-  // @Roles(Administrador, Analista comercial). De ~40 corridas medidas,
-  // ninguna llegó a audit-service ni emitió notificación — el emisor de
-  // auditoría y el de este evento se agregan en algorithms-core; aquí
-  // solo se abre el catálogo para que no lo rechace con 403/400. Vuelve a
-  // quien lanzó la corrida (dinámico, igual que escenario.generado):
-  // es un resultado suyo, no de un área. Corregido 2026-10-11: cubre
-  // TANTO corridas de asociación COMO de elasticidad (el precio-demanda
-  // también la lanza el Responsable de precios, no solo Administrador y
-  // Analista), aunque algorithms-core todavía no tiene módulo de
-  // elasticidad — cuando exista, su `@Roles` real es el que manda, no
-  // este comentario. `analytics-stats` (clustering, RF-16) todavía no
-  // tiene endpoints propios (solo scaffolding), así que no se agrega a
-  // `origenes` hasta que exista el `@Roles` real que lo respalde.
-  // Agregado 2026-10-10, corregido 2026-10-11.
+  // ALG-10: algorithms-core POST association/apriori|fpgrowth/run ->
+  // @Roles(Analista comercial) y POST elasticity/calculate ->
+  // @Roles(Responsable de precios). Vuelve a quien lanzó la corrida
+  // (dinámico, igual que escenario.generado): es un resultado suyo, no de
+  // un área. `analytics-stats` no emite este evento todavía.
   'corrida.terminada': {
-    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+    origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
     destino: { tipo: 'usuario' },
     fundamento:
-      'algorithms-core POST association/apriori/run es de Administrador y Analista comercial; una futura corrida de elasticidad la lanza también el Responsable de precios. Destino: quien lanzó la corrida (recipientUserId), igual criterio que escenario.generado.',
+      'algorithms-core: Apriori/FP-Growth son del Analista comercial y la elasticidad del Responsable de precios. Destino: quien lanzó la corrida (recipientUserId).',
   },
 
-  // decision: POST /v1/simulation/price|presentation -> @Roles(Administrador, Analista).
-  // Destino fijado 2026-10-08: vuelve a quien lanzó la simulación (dinámico,
-  // no un rol fijo), porque un escenario es de quien lo pidió, no del área.
+  // decision (D-12): el Planeador simula y genera recomendaciones; el
+  // Gerente de categoría las aprueba o rechaza. Un escenario vuelve a
+  // quien lo pidió (decidido 2026-10-08).
   'escenario.generado': {
-    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
+    origenes: [ROL.PLANEADOR],
     destino: { tipo: 'usuario' },
-    fundamento: 'decision POST simulation/* es de Administrador y Analista. Destino: el usuario que lo generó (recipientUserId), decidido por el equipo el 2026-10-08.',
+    fundamento: 'decision POST simulation/* es del Planeador (D-12). Destino: el usuario que lo generó (recipientUserId), decidido el 2026-10-08.',
   },
 
-  // decision: POST /v1/recommendations/generate -> @Roles(Administrador, Analista).
-  // Destino fijado 2026-10-08: Planeador, que es quien ejecuta la
-  // recomendación comercial.
+  // D-12: la genera el Planeador y la bandeja que actúa es la del Gerente
+  // de categoría, que la aprueba o rechaza.
   'recomendacion.generada': {
-    origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA],
-    destino: { tipo: 'rol', rol: ROL.PLANEADOR },
-    fundamento: 'decision POST recommendations/generate es de Administrador y Analista. Destino: Planeador, decidido por el equipo el 2026-10-08.',
+    origenes: [ROL.PLANEADOR],
+    destino: { tipo: 'rol', rol: ROL.GERENTE_CATEGORIA },
+    fundamento: 'decision POST recommendations/generate es del Planeador (D-12). Destino: Gerente de categoría, que la resuelve.',
   },
 
-  // Destino fijado 2026-10-08: Analista comercial, que es quien genera las
-  // recomendaciones y necesita saber cómo se resolvió la suya.
+  // D-12: el Gerente resuelve; el aviso vuelve al Planeador que la generó,
+  // con copia al Auditor.
   'recomendacion.resuelta': {
     origenes: [ROL.GERENTE_CATEGORIA],
-    destino: { tipo: 'rol', rol: ROL.ANALISTA },
-    fundamento: 'El Gerente de categoría resuelve la recomendación. Destino: Analista comercial, decidido por el equipo el 2026-10-08.',
+    destino: { tipo: 'rol', rol: ROL.PLANEADOR },
+    copias: [ROL.AUDITOR],
+    fundamento: 'El Gerente de categoría aprueba o rechaza la recomendación (D-12). Destino: Planeador, con copia al Auditor.',
   },
 
   // SIN flujo implementado en ningún servicio: no hay endpoint de alta ni

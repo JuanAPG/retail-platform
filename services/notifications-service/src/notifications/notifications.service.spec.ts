@@ -73,11 +73,38 @@ describe('Tabla de permisos por evento', () => {
       origenes: [ROL.PROVEEDOR],
       destino: { tipo: 'rol', rol: ROL.GERENTE_CATEGORIA },
     });
-    expect(permisoDe('precio.umbral').origenes).toEqual([
-      ROL.ADMINISTRADOR,
-      ROL.RESPONSABLE_PRECIOS,
-    ]);
-    expect(permisoDe('recomendacion.resuelta').origenes).toEqual([ROL.GERENTE_CATEGORIA]);
+    expect(permisoDe('precio.umbral')).toMatchObject({
+      origenes: [ROL.RESPONSABLE_PRECIOS],
+      copias: [ROL.AUDITOR],
+    });
+  });
+
+  it('D-12: el Planeador genera, el Gerente de categoría resuelve y el aviso vuelve al Planeador', () => {
+    expect(permisoDe('escenario.generado')).toMatchObject({
+      origenes: [ROL.PLANEADOR],
+      destino: { tipo: 'usuario' },
+    });
+    expect(permisoDe('recomendacion.generada')).toMatchObject({
+      origenes: [ROL.PLANEADOR],
+      destino: { tipo: 'rol', rol: ROL.GERENTE_CATEGORIA },
+    });
+    expect(permisoDe('recomendacion.resuelta')).toMatchObject({
+      origenes: [ROL.GERENTE_CATEGORIA],
+      destino: { tipo: 'rol', rol: ROL.PLANEADOR },
+      copias: [ROL.AUDITOR],
+    });
+  });
+
+  it('el Administrador ya no origina ningún evento (ningún endpoint emisor lo admite)', () => {
+    for (const [evento, permiso] of Object.entries(permisos())) {
+      expect({ evento, admin: permiso.origenes.includes(ROL.ADMINISTRADOR) }).toEqual({ evento, admin: false });
+    }
+  });
+
+  it('resoluciones y alertas llevan copia al Auditor', () => {
+    for (const evento of ['propuesta.resuelta', 'observacion.resuelta', 'precio.umbral', 'recomendacion.resuelta'] as const) {
+      expect(permisoDe(evento).copias).toEqual([ROL.AUDITOR]);
+    }
   });
 
   it('las propuestas de precio las resuelve el Responsable de precios (D1): su aviso le llega a él y él puede originar la resolución', () => {
@@ -85,9 +112,7 @@ describe('Tabla de permisos por evento', () => {
       origenes: [ROL.PROVEEDOR],
       destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
     });
-    expect(permisoDe('propuesta.resuelta').origenes).toEqual(
-      expect.arrayContaining([ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS]),
-    );
+    expect(permisoDe('propuesta.resuelta').origenes).toEqual([ROL.GERENTE_CATEGORIA, ROL.RESPONSABLE_PRECIOS]);
     expect(permisoDe('propuesta.resuelta').destino).toEqual({ tipo: 'usuario' });
   });
 
@@ -102,9 +127,9 @@ describe('Tabla de permisos por evento', () => {
     });
   });
 
-  it('corrida.terminada aplica a asociación y elasticidad: incluye al Responsable de precios (ALG-10, corregido 2026-10-11)', () => {
+  it('corrida.terminada: Analista (asociación) y Responsable de precios (elasticidad)', () => {
     expect(permisoDe('corrida.terminada')).toMatchObject({
-      origenes: [ROL.ADMINISTRADOR, ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+      origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
       destino: { tipo: 'usuario' },
     });
   });
@@ -351,7 +376,7 @@ describe('create: corrida.terminada (ALG-10)', () => {
     message: 'Apriori sobre 3 zonas terminó con 42 reglas.',
   };
 
-  it('Administrador o Analista pueden emitirla; vuelve a quien la lanzó', async () => {
+  it('el Analista puede emitirla; vuelve a quien la lanzó', async () => {
     const { servicio } = servicioFresco();
     const { data } = await servicio.create(
       { ...CORRIDA, relatedEntityId: 'run-1', recipientUserId: 'analista-9' },
@@ -410,7 +435,7 @@ describe('create: sourceService', () => {
         accion: 'insert',
         cambios: expect.arrayContaining([
           { campo: 'sourceService', posterior: 'pricing-service' },
-          { campo: 'rolOrigen', posterior: ROL.ADMINISTRADOR },
+          { campo: 'rolOrigen', posterior: ROL.RESPONSABLE_PRECIOS },
         ]),
       }),
       undefined, // emisorDe() no manda token: nada que reenviar.
@@ -597,7 +622,7 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
       emisorDe('precio.umbral'),
     );
     expect(await servicio.countUnread('u9', ROL.RESPONSABLE_PRECIOS)).toEqual({ unread: 1 });
-    expect(await servicio.countUnread('u9', ROL.AUDITOR)).toEqual({ unread: 0 });
+    expect(await servicio.countUnread('u9', ROL.PLANEADOR)).toEqual({ unread: 0 });
   });
 
   it('archiva lo mayor a 90 días sin eliminar', async () => {
@@ -639,5 +664,57 @@ describe('Reglas que ya estaban y siguen valiendo', () => {
       expect.objectContaining({ tabla: 'notificaciones', accion: 'insert' }),
       'Bearer t-1',
     );
+  });
+});
+
+describe('create: copias automáticas (Auditor)', () => {
+  const RESUELTA = {
+    eventType: 'propuesta.resuelta' as const,
+    sourceService: 'catalog-service' as const,
+    title: 'Tu propuesta fue resuelta',
+    message: 'Quinoa 500 g aprobada.',
+  };
+
+  it('un solo aviso del emisor deja la principal y una copia al Auditor', async () => {
+    const { servicio, audit } = servicioFresco();
+    const { data, creada } = await servicio.create(
+      { ...RESUELTA, relatedEntityId: 'prod-c1', recipientUserId: 'prov-1' },
+      emisorDe('propuesta.resuelta'),
+    );
+    // La respuesta es la principal, no la copia.
+    expect(creada).toBe(true);
+    expect(data.recipientUserId).toBe('prov-1');
+    expect(await servicio.countUnread('prov-1')).toEqual({ unread: 1 });
+    expect(await servicio.countUnread('aud-1', ROL.AUDITOR)).toEqual({ unread: 1 });
+    // Cada notificación guardada se audita por separado.
+    expect(audit.reportar).toHaveBeenCalledTimes(2);
+  });
+
+  it('la copia también respeta el dedup: un reintento no duplica ni la principal ni la copia', async () => {
+    const { servicio } = servicioFresco();
+    const cuerpo = { ...RESUELTA, relatedEntityId: 'prod-c2', recipientUserId: 'prov-1' };
+    await servicio.create(cuerpo, emisorDe('propuesta.resuelta'));
+    const segundo = await servicio.create(cuerpo, emisorDe('propuesta.resuelta'));
+    expect(segundo.creada).toBe(false);
+    expect(await servicio.countUnread('aud-1', ROL.AUDITOR)).toEqual({ unread: 1 });
+  });
+
+  it('el Auditor ve la copia de un precio.umbral (D-09) y la puede marcar como leída', async () => {
+    const { servicio } = servicioFresco();
+    await servicio.create({ ...UMBRAL, relatedEntityId: 'pr-c3' }, emisorDe('precio.umbral'));
+    const { data } = await servicio.findAllForUser('aud-1', ROL.AUDITOR, {});
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({ eventType: 'precio.umbral', recipientRole: ROL.AUDITOR });
+    const leida = await servicio.markAsRead(data[0].id, { id: 'aud-1', rol: ROL.AUDITOR });
+    expect(leida.readBy).toMatchObject([{ userId: 'aud-1' }]);
+  });
+
+  it('un evento sin copias no genera nada para el Auditor', async () => {
+    const { servicio } = servicioFresco();
+    await servicio.create(
+      { eventType: 'producto.propuesto', sourceService: 'catalog-service', title: 'Nueva propuesta de producto', message: 'Nueva', relatedEntityId: 'prod-c4' },
+      emisorDe('producto.propuesto'),
+    );
+    expect(await servicio.countUnread('aud-1', ROL.AUDITOR)).toEqual({ unread: 0 });
   });
 });

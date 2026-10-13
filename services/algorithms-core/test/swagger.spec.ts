@@ -20,9 +20,9 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 4 de association (con FP-Growth) + 3 de elasticity; substitution suma la suya al migrarse.
+    // 4 de association (Apriori y FP-Growth) + 3 de elasticity + 1 de substitution.
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(7);
+    expect(operaciones).toBe(8);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
