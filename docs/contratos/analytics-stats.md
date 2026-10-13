@@ -24,9 +24,9 @@ el usuario (`conclusion`, `assumptions`) en español.
 | GET | `/v1/clustering/runs` | Los 6 perfiles internos |
 | GET | `/v1/clustering/runs/:id` | Los 6 perfiles internos |
 
-Roles según **D-24** (Matriz §4): igual que M10, ejecutar un análisis es del
-Analista comercial y las corridas guardadas las leen los 6 perfiles internos. El
-Proveedor no tiene acceso a ninguna ruta (`403`).
+Roles según **D-24** (Matriz §4; **espera el OK del PO**): igual que M10,
+ejecutar un análisis es del Analista comercial y las corridas guardadas las leen
+los 6 perfiles internos. El Proveedor no tiene acceso a ninguna ruta (`403`).
 
 En XML, la raíz es el elemento de cada endpoint (p. ej. `<anovaResponse
 xmlns="stats/v1">`), todo arreglo se envuelve en `<item>` por elemento y un `null`
@@ -41,7 +41,10 @@ ningún servicio lee cuerpos XML todavía).
 - core-process-service o catalog-service no responden en **3 s** (modo
   `baskets` o clustering sin `zones`).
 - MongoDB no responde (clustering): la corrida **no** se calcula a medias ni se
-  devuelve sin guardar. Igual que documents-service.
+  devuelve sin guardar (**D-25**: un almacén caído es `503`, no `500`).
+
+Los límites del Parcial 2 (**D-27**) responden `400` con su motivo, nunca `500`:
+ver *Límites del Parcial 2*.
 
 ---
 
@@ -88,6 +91,20 @@ El servicio pide `GET /v1/baskets` a core-process por grupo (con los mismos
 filtros, páginas de 100) reenviando el `Authorization` del usuario. Cada canasta
 es **un** valor (RN-03). El `label` de cada grupo es el nombre del segmento o de la
 zona en catalog-service. Un grupo con menos de 2 canastas → `400` que lo nombra.
+
+**Tope: 500 páginas por prueba (50 000 canastas, D-27 b).** El servicio lee la
+primera página de cada grupo, suma los `total` y, si en total harían falta más de
+500 páginas, responde `400` **sin leer el resto ni calcular nada**. No se corta:
+core-process entrega las canastas de la más reciente a la más antigua, así que
+cortar dejaría solo las más recientes (y al grupo grande más recortado que al
+chico), y el p-value se vería válido sin serlo. El mensaje dice cuántas canastas
+hay y pide acotar con `dateFrom`, `dateTo` o `storeId`:
+
+> Hay 62340 canastas para esta prueba (624 páginas); el máximo es 500 páginas
+> (50000 canastas, D-27). Acota con dateFrom, dateTo o storeId.
+
+En proporciones el tope no aplica: solo se piden conteos (`limit=1`, dos peticiones
+por grupo: todas las canastas y las que cumplen `condition`).
 
 ### Campos comunes
 
@@ -211,7 +228,7 @@ Response `200` (`proportionsResponse`): los campos comunes y:
 
 | Status | Cuándo |
 |---|---|
-| 400 | Cuerpo inválido; `groups` y `baskets` juntos o ninguno; número de grupos fuera de rango; grupo con menos de 2 valores; valor no numérico; sin variación; `successes > total`; `total = 0`; más de 100 000 valores |
+| 400 | Cuerpo inválido; `groups` y `baskets` juntos o ninguno; número de grupos fuera de rango; grupo con menos de 2 valores; valor no numérico; sin variación; `successes > total`; `total = 0`; más de 100 000 valores; con `baskets`, más de 500 páginas de canastas (D-27) |
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Cualquier rol que no sea Analista comercial |
 | 404 | Con `baskets`: segmento o zona inexistente en catalog-service |
@@ -224,12 +241,18 @@ Response `200` (`proportionsResponse`): los campos comunes y:
 Agrupa **zonas**, nunca personas (RF-16, RN-02), con **KMeans**
 (`sklearn.cluster.KMeans`, `n_init=10`) sobre sus indicadores **estandarizados**
 (z-score), con `k` y semilla fija. Cada corrida se guarda **completa en MongoDB**
-(D3): parámetros, usuario, fecha, **los datos de entrada** y las asignaciones. Con
-la entrada guardada y la semilla fija, repetirla da las mismas asignaciones (D-15).
+(D3): parámetros, usuario, fecha, **los datos de entrada** (la foto de D-15) y las
+asignaciones. Con la entrada guardada y la semilla fija, repetirla da las mismas
+asignaciones. Del usuario se guarda solo `userId`; el nombre lo resuelve el
+cliente con auth-service (**D-26**).
 
 La corrida **propone** grupos; no cambia la clasificación de las zonas. Clasificar
-una zona sigue siendo `PUT /v1/zones/:id/classification` en catalog-service (ver
-*Pendiente*).
+una zona sigue siendo `PUT /v1/zones/:id/classification` en catalog-service;
+`corrida_clusters` y `zona_clasificaciones.corrida_id` no se usan en este parcial
+(D3, aprobado por el PO en el #69).
+
+`GET /v1/health` revisa también `mongodb`: si no responde, sale `degraded` (sigue
+siendo `200`, como el resto de los servicios).
 
 ### POST /v1/clustering/run
 
@@ -240,7 +263,7 @@ una zona sigue siendo `PUT /v1/zones/:id/classification` en catalog-service (ver
 
 | Campo | Regla |
 |---|---|
-| `k` | **obligatorio**, entero de 2 a 10, menor al número de zonas con datos |
+| `k` | **obligatorio**, entero de 2 a 10, **menor al número de zonas con datos**. Con las 3 zonas de los datos de prueba solo se puede `k = 2` (D-27 a) |
 | `seed` | opcional, entero ≥ 0; default `42` |
 | `features` | opcional, 1 a 4 sin repetir de `estimatedIncome`, `population`, `availability` (catalog) y `averageTicket` (core-process); default los 4 |
 | `zoneIds` | opcional, UUIDs; default todas las zonas de `GET /v1/zones` |
@@ -305,11 +328,11 @@ no es un ObjectId de Mongo → `400`; inexistente → `404`.
 
 | Status | Cuándo |
 |---|---|
-| 400 | Cuerpo inválido; `k` fuera de rango o no menor a las zonas con datos; `features` repetidas o desconocidas; `zones` junto con `zoneIds` o fechas; `:id` mal formado |
+| 400 | Cuerpo inválido; `k` fuera de rango o no menor a las zonas con datos (D-27); `features` repetidas o desconocidas; `zones` junto con `zoneIds` o fechas; `:id` mal formado |
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Correr: cualquier rol que no sea Analista comercial. Leer: Proveedor |
 | 404 | Corrida inexistente; zona de `zoneIds` inexistente en catalog-service |
-| 503 | Redis o MongoDB no responden; catalog o core-process no responden en 3 s |
+| 503 | Redis o MongoDB no responden (D-25); catalog o core-process no responden en 3 s |
 
 ---
 
@@ -343,17 +366,20 @@ Datos propios: colección **`analysis_runs`** de MongoDB (D3), documentos con
 
 ---
 
+## Límites del Parcial 2 (D-27)
+
+Límites conocidos y aceptados por el PO. Responden `400` con su motivo; no son
+errores del servicio.
+
+| Límite | Qué pasa al pasarlo |
+|---|---|
+| **(a)** Clustering: `k` menor al número de zonas con datos. Con las 3 zonas de los datos de prueba (RN-02: 3 municipios), solo `k = 2` | `400`: "k debe ser menor que el número de zonas con datos (3): con estos datos solo se puede k = 2 (D-27)." |
+| **(b)** Modo `baskets`: máximo **500 páginas** de `GET /v1/baskets` por prueba (50 000 canastas) | `400` antes de leer el resto, con cuántas canastas hay y cómo acotar. **No se corta** (ver *De dónde salen los datos*) |
+
+Para el Parcial 3 (dataset grande): si 50 000 canastas no alcanzan, core-process
+tendría que exponer los valores agregados por grupo en lugar de páginas.
+
 ## Pendiente (no es parte de este contrato todavía)
 
-- **D3 frente al esquema:** `corrida_clusters` y `zona_clasificaciones.corrida_id`
-  esperan la corrida de clustering en `analisis_corridas` (PostgreSQL), pero D3 la
-  guarda en MongoDB. Hasta decidirlo, el clustering solo propone grupos y la
-  clasificación de zonas sigue siendo manual en catalog-service.
-- **503 de MongoDB:** `services/snippets/error-codes.md` dice que un fallo de Mongo es
-  `500 INTERNAL`; este contrato usa `503`, como documents-service y como pide QA
-  (STA-03). Conviene alinear el snippet.
-- **Volumen (Parcial 3):** con 50 000 canastas, el modo `baskets` pide 500 páginas a
-  core-process. Si hace falta, core-process tendría que exponer los valores
-  agregados por grupo.
-- **Con los datos de prueba** hay 3 zonas: el clustering solo admite `k = 2`. RN-02 ya
-  aclara que los datos de prueba usan 3 municipios.
+- **D-24** (permisos) espera el OK del PO. Si cambia, cambian los roles de la tabla
+  de rutas.
