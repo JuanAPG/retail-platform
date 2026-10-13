@@ -65,6 +65,31 @@ PROPORCIONES = {
 }
 
 
+def _cuerpos(con_valores: dict, con_canastas: dict) -> dict:
+    """Los dos modos de pedir una prueba, como ejemplos del cuerpo en Swagger."""
+    return {
+        "canastas": {"summary": "Desde las canastas (modo baskets)", "value": con_canastas},
+        "valores": {"summary": "Valores en el cuerpo (groups)", "value": con_valores},
+    }
+
+
+_VALORES = [{"label": "Ingreso alto", "values": [142.0, 170.5, 98.0, 120.0, 155.5, 133.0, 160.0, 149.5]},
+            {"label": "Ingreso bajo", "values": [108.0, 36.0, 72.0, 55.5, 90.0, 61.0, 80.5, 47.0]}]
+CUERPOS_HIPOTESIS = _cuerpos(
+    {"groups": _VALORES},
+    {"baskets": {"metric": "totalValue", "groupBy": "segment", "groupIds": ["3", "1"]}},
+)
+CUERPOS_ANOVA = _cuerpos(
+    {"groups": _VALORES + [{"label": "Ingreso medio", "values": [109.5, 96.0, 88.0, 120.0, 75.5, 101.0]}]},
+    {"baskets": {"metric": "totalValue", "groupBy": "segment", "groupIds": ["1", "2", "3"]}},
+)
+CUERPOS_PROPORCIONES = _cuerpos(
+    {"groups": [{"label": "Ingreso alto", "successes": 30, "total": 42},
+                {"label": "Ingreso bajo", "successes": 12, "total": 30}]},
+    {"baskets": {"condition": "hasBasicProducts", "groupBy": "segment", "groupIds": ["3", "1"]}},
+)
+
+
 def respuesta(descripcion: str, ejemplo: dict, raiz: str) -> dict:
     """Entrada de `responses=` con el ejemplo en JSON y en XML."""
     return {
@@ -80,7 +105,7 @@ _MENSAJES = {
     400: ("VALIDATION_ERROR", "El grupo «Ingreso bajo» tiene 1 valor(es); se necesitan al menos 2."),
     401: ("UNAUTHORIZED", "Sesión inactiva. Vuelve a iniciar sesión."),
     403: ("FORBIDDEN", "Tu rol no tiene permiso para esta operación."),
-    404: ("NOT_FOUND", "No existe la corrida."),
+    404: ("NOT_FOUND", "No existe el segmento 9."),
     503: ("SERVICE_UNAVAILABLE", "No se pudo verificar la sesión: el servicio de sesiones no responde."),
 }
 
