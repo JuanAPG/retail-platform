@@ -13,6 +13,7 @@ import { NotificationFilterDto } from './dto/notification-filter.dto';
 import { InMemoryNotificationsRepository } from './in-memory.repository';
 import {
   DIAS_PARA_ARCHIVAR,
+  EventType,
   Notification,
   VENTANA_DEDUP_MINUTOS,
   atributosDe,
@@ -34,6 +35,8 @@ import { NOTIFICATIONS_REPOSITORY, NotificationsRepository } from './notificatio
  *   la existente con 200 en vez de crear.
  * - Archivado a 90 días por job; jamás se elimina.
  * - Cada creación reporta a audit-service (best-effort, no bloquea).
+ * - Copias automáticas por regla (`copias`, p. ej. Auditor): una
+ *   notificación por rol en copia; la respuesta es la principal.
  */
 @Injectable()
 export class NotificationsService {
@@ -83,7 +86,27 @@ export class NotificationsService {
 
     // 2. El DESTINATARIO lo fija la regla del evento, no el emisor.
     const destinatario = this.resolverDestinatario(dto, permiso);
-    const base = atributosDe(dto.eventType);
+
+    const principal = await this.guardar(dto, destinatario, emisor);
+
+    // 3. Copias automáticas (p. ej. Auditor): una notificación por rol en
+    //    copia, cada una con su propio dedup y su propia auditoría. El
+    //    emisor sigue mandando un solo aviso y recibe la principal.
+    for (const rol of permiso.copias ?? []) {
+      if (destinatario.recipientRole === rol) continue;
+      await this.guardar(dto, { recipientUserId: null, recipientRole: rol }, emisor);
+    }
+
+    return principal;
+  }
+
+  /** Dedup + alta + auditoría para UN destinatario. */
+  private async guardar(
+    dto: CreateNotificationDto,
+    destinatario: { recipientUserId: string | null; recipientRole: string | null },
+    emisor: { rol?: string; ip?: string; token?: string },
+  ): Promise<{ data: Notification; creada: boolean }> {
+    const base = atributosDe(dto.eventType as EventType);
 
     // Ventana anti-duplicados (mismo evento + entidad + DESTINATARIO):
     // idempotencia para emisores con reintentos, sin perder avisos ajenos.

@@ -10,9 +10,8 @@ import {
 export { NOTIFICATIONS_REPOSITORY };
 
 /**
- * Adaptador en memoria. Solo existe para unitarias y desarrollo sin Mongo:
- * cuando documents-service fije el patrón se agrega el adaptador Mongoose
- * y este se retira (el servicio no cambia porque depende del puerto).
+ * Adaptador en memoria. Solo para unitarias: en ejecución se usa
+ * MongoNotificationsRepository (el servicio no cambia porque depende del puerto).
  */
 @Injectable()
 export class InMemoryNotificationsRepository implements NotificationsRepository {
