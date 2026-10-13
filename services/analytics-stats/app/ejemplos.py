@@ -1,0 +1,185 @@
+"""Ejemplos de Swagger en JSON **y** XML (estándar transversal).
+
+El XML se genera desde el ejemplo JSON con el mismo `serializar_xml` que usa
+el middleware, así que el ejemplo es exactamente lo que el servicio emite.
+"""
+from .xml_out import namespace_xml, serializar_xml
+
+_SUPUESTOS = ["Welch: no supone que los dos grupos tengan la misma varianza.",
+              "Grupos independientes: cada valor pertenece a un solo grupo."]
+
+#: Ticket real del CSV de 100 canastas (db/datos_prueba_100_canastas.csv).
+HIPOTESIS = {
+    "test": "welch",
+    "statistic": 8.271863737062235,
+    "pValue": 1.1695308337398335e-11,
+    "degreesOfFreedom": 63.19294386768545,
+    "alpha": 0.05,
+    "alternative": "two-sided",
+    "rejectNull": True,
+    "conclusion": "Con α = 0.05 hay diferencia estadística entre Ingreso alto e Ingreso bajo (p < 0.0001). "
+                  "Es una diferencia en estos datos; no prueba una causa.",
+    "groups": [
+        {"label": "Ingreso alto", "n": 42, "mean": 143.20238095238096, "median": 142.0,
+         "standardDeviation": 35.49288137555389},
+        {"label": "Ingreso bajo", "n": 30, "mean": 73.63333333333334, "median": 73.75,
+         "standardDeviation": 34.95981272471473},
+    ],
+    "source": None,
+    "assumptions": _SUPUESTOS,
+}
+
+ANOVA = {
+    "test": "anova",
+    "statistic": 44.75477063363583,
+    "pValue": 1.0276038606868197e-14,
+    "dfBetween": 2,
+    "dfWithin": 103,
+    "degreesOfFreedom": None,
+    "alpha": 0.05,
+    "rejectNull": True,
+    "conclusion": "Con α = 0.05 al menos uno de los 3 grupos difiere de los demás (p < 0.0001). "
+                  "Es una diferencia en estos datos; no prueba una causa.",
+    "groups": HIPOTESIS["groups"] + [
+        {"label": "Ingreso medio", "n": 34, "mean": 96.3970588235294, "median": 109.5,
+         "standardDeviation": 23.872698813982083}],
+    "source": None,
+    "assumptions": ["ANOVA de un factor: supone varianzas parecidas entre grupos y datos cercanos a la normal en cada uno.",
+                    "ANOVA dice si al menos un grupo difiere de los demás, no cuál."],
+}
+
+PROPORCIONES = {
+    "test": "ztest",
+    "statistic": 2.6668027176178364,
+    "pValue": 0.007657660828146556,
+    "degreesOfFreedom": None,
+    "difference": 0.3142857142857143,
+    "alpha": 0.05,
+    "rejectNull": True,
+    "conclusion": "Con α = 0.05 la proporción difiere entre Ingreso alto e Ingreso bajo (p = 0.0077). "
+                  "Es una diferencia en estos datos; no prueba una causa.",
+    "groups": [{"label": "Ingreso alto", "successes": 30, "total": 42, "proportion": 0.7142857142857143},
+               {"label": "Ingreso bajo", "successes": 12, "total": 30, "proportion": 0.4}],
+    "source": None,
+    "assumptions": ["Prueba z de dos proporciones con la proporción combinada, de dos lados."],
+}
+
+
+_VALLE, _CENTRO, _ORIENTE = ("6cd8d7f5-c388-446c-94fa-ef07c330a17b", "ed073f6d-ea24-439f-b552-bfa8c81d979a",
+                              "f48d6f15-7e03-4f98-a817-761c6b135a62")
+
+#: Corrida real: indicadores de las 3 zonas sembradas y ticket de core-process (CSV de 100 canastas).
+CLUSTERING = {
+    "id": "6713f0c2e4b0a1b2c3d4e5f6",
+    "type": "clustering",
+    "userId": "2b7c9d1e-4f3a-4c5b-8d6e-7f8091a2b3c4",
+    "date": "2026-10-13T04:15:03.123000+00:00",
+    "parameters": {"k": 2, "seed": 42, "features": ["estimatedIncome", "population", "availability", "averageTicket"],
+                   "source": "servicios", "zoneIds": None, "dateFrom": None, "dateTo": None},
+    "input": [
+        {"zoneId": _VALLE, "zoneName": "Zona Valle", "estimatedIncome": 65000, "population": 85000,
+         "availability": 0.95, "averageTicket": 143.2},
+        {"zoneId": _CENTRO, "zoneName": "Zona Centro", "estimatedIncome": 28000, "population": 120000,
+         "availability": 0.85, "averageTicket": 96.4},
+        {"zoneId": _ORIENTE, "zoneName": "Zona Oriente", "estimatedIncome": 12000, "population": 150000,
+         "availability": 0.65, "averageTicket": 73.63},
+    ],
+    "clusters": [
+        {"cluster": 1, "size": 2, "centroid": {"estimatedIncome": 20000.0, "population": 135000.0,
+                                               "availability": 0.75, "averageTicket": 85.015}},
+        {"cluster": 2, "size": 1, "centroid": {"estimatedIncome": 65000.0, "population": 85000.0,
+                                               "availability": 0.95, "averageTicket": 143.2}},
+    ],
+    "assignments": [{"zoneId": _VALLE, "zoneName": "Zona Valle", "cluster": 2},
+                    {"zoneId": _CENTRO, "zoneName": "Zona Centro", "cluster": 1},
+                    {"zoneId": _ORIENTE, "zoneName": "Zona Oriente", "cluster": 1}],
+    "excludedZones": [],
+    "inertia": 2.4923970074898127,
+    "silhouette": 0.24530671765148346,
+    "assumptions": ["Se agrupan zonas, nunca personas (RF-16).",
+                    "Indicadores estandarizados (z-score): ninguno pesa más por su unidad.",
+                    "KMeans con semilla 42: con los mismos datos, las mismas asignaciones.",
+                    "Los grupos se numeran por su ingreso estimado promedio, de menor a mayor."],
+}
+
+LISTA_CORRIDAS = {
+    "data": [{k: CLUSTERING[k] for k in ("id", "type", "userId", "date", "parameters", "inertia", "silhouette")}
+             | {"zoneCount": 3}],
+    "total": 1,
+    "page": 1,
+    "limit": 20,
+}
+
+CUERPOS_CLUSTERING = {
+    "servicios": {"summary": "Indicadores de catalog y ticket de core-process",
+                  "value": {"k": 2, "seed": 42}},
+    "cuerpo": {"summary": "Datos de las zonas en el cuerpo",
+               "value": {"k": 2, "features": ["estimatedIncome", "averageTicket"],
+                         "zones": [{"zoneId": "z-1", "zoneName": "Zona Valle", "estimatedIncome": 65000, "averageTicket": 143.2},
+                                   {"zoneId": "z-2", "zoneName": "Zona Centro", "estimatedIncome": 28000, "averageTicket": 96.4},
+                                   {"zoneId": "z-3", "zoneName": "Zona Oriente", "estimatedIncome": 12000, "averageTicket": 73.6}]}},
+}
+
+
+def _cuerpos(con_valores: dict, con_canastas: dict) -> dict:
+    """Los dos modos de pedir una prueba, como ejemplos del cuerpo en Swagger."""
+    return {
+        "canastas": {"summary": "Desde las canastas (modo baskets)", "value": con_canastas},
+        "valores": {"summary": "Valores en el cuerpo (groups)", "value": con_valores},
+    }
+
+
+_VALORES = [{"label": "Ingreso alto", "values": [142.0, 170.5, 98.0, 120.0, 155.5, 133.0, 160.0, 149.5]},
+            {"label": "Ingreso bajo", "values": [108.0, 36.0, 72.0, 55.5, 90.0, 61.0, 80.5, 47.0]}]
+CUERPOS_HIPOTESIS = _cuerpos(
+    {"groups": _VALORES},
+    {"baskets": {"metric": "totalValue", "groupBy": "segment", "groupIds": ["3", "1"]}},
+)
+CUERPOS_ANOVA = _cuerpos(
+    {"groups": _VALORES + [{"label": "Ingreso medio", "values": [109.5, 96.0, 88.0, 120.0, 75.5, 101.0]}]},
+    {"baskets": {"metric": "totalValue", "groupBy": "segment", "groupIds": ["1", "2", "3"]}},
+)
+CUERPOS_PROPORCIONES = _cuerpos(
+    {"groups": [{"label": "Ingreso alto", "successes": 30, "total": 42},
+                {"label": "Ingreso bajo", "successes": 12, "total": 30}]},
+    {"baskets": {"condition": "hasBasicProducts", "groupBy": "segment", "groupIds": ["3", "1"]}},
+)
+
+
+def respuesta(descripcion: str, ejemplo: dict, raiz: str) -> dict:
+    """Entrada de `responses=` con el ejemplo en JSON y en XML."""
+    return {
+        "description": descripcion,
+        "content": {
+            "application/json": {"example": ejemplo},
+            "application/xml": {"example": serializar_xml(ejemplo, raiz, namespace=namespace_xml())},
+        },
+    }
+
+
+_MENSAJES = {
+    400: ("VALIDATION_ERROR", "El grupo «Ingreso bajo» tiene 1 valor(es); se necesitan al menos 2."),
+    401: ("UNAUTHORIZED", "Sesión inactiva. Vuelve a iniciar sesión."),
+    403: ("FORBIDDEN", "Tu rol no tiene permiso para esta operación."),
+    404: ("NOT_FOUND", "No existe el segmento 9."),
+    503: ("SERVICE_UNAVAILABLE", "No se pudo verificar la sesión: el servicio de sesiones no responde."),
+}
+
+
+def errores(ruta: str, *estados: int, mensajes: dict[int, str] | None = None) -> dict:
+    """Errores estándar de una ruta, en JSON y XML (el XML sin `details`)."""
+    salida = {}
+    for estado in estados:
+        code, message = _MENSAJES[estado]
+        message = (mensajes or {}).get(estado, message)
+        cuerpo = {"statusCode": estado, "message": message, "code": code, "details": None,
+                  "path": ruta, "timestamp": "2026-10-12T22:15:03.123456+00:00"}
+        sin_detalles = {k: v for k, v in cuerpo.items() if k != "details"}
+        salida[estado] = {
+            "description": message,
+            "content": {
+                "application/json": {"example": cuerpo},
+                "application/xml": {"example": serializar_xml(sin_detalles, "error", namespace=namespace_xml())},
+            },
+        }
+    return salida

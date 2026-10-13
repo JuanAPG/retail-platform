@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { AuditModule } from '../common/audit/audit.module';
 import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
 import { AccessibilityWeightEntity } from '../entities/accessibility-weight.entity';
 import { AccessibilityComponentEntity } from '../entities/accessibility-component.entity';
@@ -30,6 +31,7 @@ import { AccessibilityController } from './accessibility.controller';
       IncomeSegment,
     ]),
     JwtModule.register({}),
+    AuditModule,
   ],
   controllers: [AccessibilityController],
   providers: [AccessibilityService, SessionGuard],

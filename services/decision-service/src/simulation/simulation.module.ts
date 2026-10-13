@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionGuard } from '../common/auth/session.guard';
+import { AuditModule } from '../common/audit/audit.module';
+import { NotificationsModule } from '../common/notifications/notifications.module';
 import { Scenario } from '../entities/scenario.entity';
 import { ScenarioChange } from '../entities/scenario-change.entity';
 import { ScenarioResult } from '../entities/scenario-result.entity';
@@ -18,7 +20,7 @@ import { SimulationController } from './simulation.controller';
  * servicios: ver nota en `SimulationService.findSegmentId`).
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Scenario, ScenarioChange, ScenarioResult]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Scenario, ScenarioChange, ScenarioResult]), JwtModule.register({}), AuditModule, NotificationsModule],
   controllers: [SimulationController],
   providers: [SimulationService, SessionGuard],
 })

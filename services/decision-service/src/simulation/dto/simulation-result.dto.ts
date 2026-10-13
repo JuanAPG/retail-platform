@@ -43,6 +43,9 @@ export class SimulationResult {
   @ApiProperty({ description: 'Id del escenario guardado automáticamente con esta simulación' })
   scenarioId: string;
 
+  @ApiPropertyOptional({ type: [String], description: 'Supuestos con los que se calculó y guardó el escenario' })
+  assumptions?: string[];
+
   @ApiPropertyOptional()
   note?: string;
 }

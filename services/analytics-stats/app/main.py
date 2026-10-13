@@ -10,7 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .clustering_api import RAICES_XML as RAICES_CLUSTERING, router as router_clustering
+from .corridas import verificar_mongo
 from .errors import cuerpo_error
+from .estadistica_api import RAICES_XML as RAICES_ESTADISTICA, router as router_estadistica
 from .logging_conf import LoggingMiddleware
 from .xml_out import CONTENT_TYPE_XML, quiere_xml, serializar_xml
 
@@ -36,8 +39,17 @@ async def manejador_http(request: Request, error: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def manejador_validacion(request: Request, error: RequestValidationError):
+    # `details` como lista de textos, igual que el ValidationPipe de Nest
+    # (`services/snippets/error-codes.md`). Los errores crudos de pydantic
+    # traen el valor recibido: un NaN ahí hace que el JSON de la respuesta
+    # no se pueda serializar y el 400 salga como 500.
+    detalles = []
+    for e in error.errors():
+        # Un error de todo el cuerpo (loc = ("body",)) va sin ruta de campo.
+        campo = ".".join(str(parte) for parte in e["loc"] if parte != "body")
+        detalles.append(f"{campo}: {e['msg']}" if campo else e["msg"])
     return cuerpo_error(400, "Error de validación en la solicitud.",
-                        request.url.path, "VALIDATION_ERROR", error.errors())
+                        request.url.path, "VALIDATION_ERROR", detalles)
 
 
 @app.exception_handler(Exception)
@@ -69,6 +81,13 @@ def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
     return None, ()
 
 
+# RF-20 a RF-22: hipótesis, ANOVA y proporciones; RF-16: clustering (D-24).
+app.include_router(router_estadistica)
+app.include_router(router_clustering)
+for _ruta, _raiz in {**RAICES_ESTADISTICA, **RAICES_CLUSTERING}.items():
+    xml_root(_ruta, _raiz)
+
+
 @app.get("/v1/health", summary="Salud del servicio y de sus dependencias.")
 def salud():
     """Sin autenticación y SIEMPRE 200 si el proceso responde.
@@ -77,7 +96,8 @@ def salud():
     `checks`. Asi el healthcheck de Docker distingue "proceso muerto" de
     "base caida".
     """
-    checks = {"redis": _verificar_redis(), "postgres": _verificar_postgres()}
+    # mongodb: corridas de clustering (D3). Caído → `degraded`, nunca 500 (D-25).
+    checks = {"redis": _verificar_redis(), "postgres": _verificar_postgres(), "mongodb": verificar_mongo()}
     # "no configurado" no es una falla: significa que el servicio todavia no
     # usa esa dependencia. Solo un "error:" degrada el estado.
     degradado = any(v.startswith("error") for v in checks.values())

@@ -11,3 +11,6 @@ __pycache__/
 
 # Reportes de cobertura de pruebas (se regeneran con npm run test:cov)
 coverage/
+
+# Configuración local de Android (ruta del SDK de cada máquina)
+local.properties

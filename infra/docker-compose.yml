@@ -377,6 +377,12 @@ services:
       PORT: 3106
       SERVICE_NAME: analytics-stats
       SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: stats/v1
+      CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -394,6 +400,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mongodb:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3106/v1/health').status==200 else 1)\""]
       interval: 15s
@@ -421,6 +429,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
