@@ -365,7 +365,14 @@ igual que algorithms-core (ALG-10): **nunca cambian la respuesta** del análisis
 | Hipótesis, ANOVA, proporciones | `accion: ejecutar_corrida`, `tabla: analisis_estadistico`, `registroId: null` | — |
 
 Las pruebas no avisan: no se guardan, así que el aviso no tendría nada que abrir, y
-el resultado ya llega en la respuesta. Un `400` no se reporta.
+el resultado ya llega en la respuesta. Un `400` no se reporta, y si Mongo no responde
+no hay corrida guardada y tampoco.
+
+Se envían **de fondo, después de responder** (`BackgroundTasks`): la respuesta no
+espera ni los 1.5 s. `cambios` lleva `tipo` (`hipotesis`, `anova`, `proporciones` o
+`clustering`) y, según el caso, `prueba` y `resultado` (p. ej. `rechaza H0 (p =
+1.17e-11)`) o `estado`. La `ip` va solo si es una IP válida (audit la guarda en una
+columna `INET`). Sin `AUDIT_SERVICE_URL` / `NOTIFICATIONS_SERVICE_URL` no se reporta.
 
 ## Lo que consume analytics-stats
 
