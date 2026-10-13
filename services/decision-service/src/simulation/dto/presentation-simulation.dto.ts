@@ -21,11 +21,11 @@ export class PresentationSimulationDto {
   @ApiPropertyOptional({
     type: [String],
     description:
-      'Presentaciones a comparar (2 o más, todas del producto). Si se omite, se usan todas las activas del producto.',
+      'Presentaciones a comparar (3 o más por D-14, todas del producto). Si se omite, se usan todas las activas del producto.',
   })
   @IsOptional()
   @IsArray({ message: 'presentationIds debe ser una lista de UUID.' })
-  @ArrayMinSize(2, { message: 'presentationIds debe traer al menos 2 presentaciones.' })
+  @ArrayMinSize(3, { message: 'presentationIds debe traer al menos 3 presentaciones (D-14).' })
   @ArrayUnique((id: unknown) => (typeof id === 'string' ? id.toLowerCase() : id), {
     message: 'presentationIds no debe repetir presentaciones.',
   })

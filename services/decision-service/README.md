@@ -39,6 +39,38 @@ cada cálculo del índice de accesibilidad con
 reenvía el `Authorization` del usuario; si audit-service falla, la operación
 no se rompe.
 
+## Pruebas
+
+```bash
+npm test                 # unitarias (src/**/*.spec.ts), sin stack
+npm run test:integracion # test/*.spec.ts contra el stack real
+```
+
+Las de integración necesitan el stack local levantado con el seed (desde la
+raíz del repo):
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres redis auth-service catalog-service \
+  core-process-service algorithms-core audit-service decision-service
+```
+
+- `test/contrato-xml.spec.ts`: pide cada endpoint con `Accept: application/xml`
+  y valida la respuesta real (y un 400 y un 404) contra
+  `docs/contratos/decision-service.xsd`. Necesita **`xmllint`** en el PATH o,
+  si no está, **Python 3 con `lxml`** (`pip install lxml`); sin ninguno de
+  los dos la prueba falla diciendo qué instalar. La simulación de precio
+  requiere una elasticidad ya calculada (`POST /v1/elasticity/calculate` en
+  algorithms-core).
+- `test/roles.spec.ts`: matriz de roles de simular, generar, aprobar y
+  rechazar con las 7 cuentas semilla. No crea datos.
+
+Solo corren contra la base local. Borran lo que crean (escenarios,
+recomendaciones, corridas de accesibilidad) y restauran las `propuesta` que
+`generate` haya reemplazado; los eventos de la bitácora se quedan
+(append-only). Variables opcionales: `DECISION_BASE_URL`
+(`http://localhost:3107`), `AUTH_BASE_URL` (`http://localhost:3101`) y
+`DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`.
+
 ## Cómo copiarme a un servicio nuevo (5 pasos)
 
 ```bash

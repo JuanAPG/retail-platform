@@ -5,7 +5,7 @@ import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { Scenario } from '../entities/scenario.entity';
 import { ScenarioChange } from '../entities/scenario-change.entity';
 import { ScenarioResult } from '../entities/scenario-result.entity';
-import { SimulationService } from './simulation.service';
+import { PRESENTACIONES_MINIMAS, SimulationService } from './simulation.service';
 
 type Fila = Record<string, unknown>;
 
@@ -106,6 +106,40 @@ describe('SimulationService.simulatePriceChange', () => {
     expect(resultado.assumptions?.[0]).toContain('agregado nacional');
   });
 
+  it('D-01, caso de control: demanda 1,000, precio 25 → 27.5 y E = −2 dan 826 unidades e ingreso −9.1 %', async () => {
+    // Los mismos mocks de respuestasPrecio, con el precio vigente (25) y la
+    // demanda base (1000) del caso de control por delante: gana el primer fragmento que coincide.
+    const { servicio } = crearServicio([
+      ['COALESCE(AVG(p.precio), 0) AS "precio"', [{ precio: '25' }]],
+      ['COALESCE(SUM(d.cantidad), 0)', [{ cantidad: 1000 }]],
+      ...respuestasPrecio([{ valor: '-2', corridaId: 'run-d01', esNacional: false }]),
+    ]);
+
+    const resultado = await servicio.simulatePriceChange({ ...DTO_PRECIO, newPrice: 27.5 }, USUARIO);
+
+    // A mano (elasticidad constante): 27.5/25 = 1.1; 1.1^-2 = 1/1.21 = 0.826446;
+    // demanda = 1000 × 0.826446 = 826.446 → 826 unidades;
+    // ingreso = 826.446 × 27.5 = 22727.27 contra 1000 × 25 = 25000 → −9.0909 % ≈ −9.1 %.
+    const [demanda, ingreso] = resultado.results;
+    expect(resultado.inputs).toMatchObject({ currentPrice: 25, newPrice: 27.5, baseDemand: 1000, elasticity: -2 });
+    expect(demanda.indicatorKey).toBe('demanda_estimada');
+    expect(demanda.baseValue).toBe(1000);
+    expect(demanda.simulatedValue).toBeCloseTo(826.446, 3);
+    expect(Math.round(demanda.simulatedValue)).toBe(826);
+    expect(ingreso.indicatorKey).toBe('ingreso_estimado');
+    expect(ingreso.baseValue).toBe(25000);
+    expect(ingreso.simulatedValue).toBeCloseTo(22727.27, 2);
+    // El servicio redondea la variación a 4 decimales.
+    expect(ingreso.variationPct).toBe(-9.0909);
+    expect(ingreso.variationPct).toBeCloseTo(-9.1, 1);
+
+    // D-01: la simulación usa elasticidad constante, NO la aproximación lineal
+    // (−2 × 10 % = −20 % → 800 unidades, ingreso 22,000 = −12 %). Ese resultado es INCORRECTO.
+    expect(Math.round(demanda.simulatedValue)).not.toBe(800);
+    expect(ingreso.simulatedValue).not.toBeCloseTo(22000, 0);
+    expect(ingreso.variationPct).not.toBeCloseTo(-12, 0);
+  });
+
   it('sin elasticidad calculada: NotFoundException con mensaje claro y no guarda nada', async () => {
     const { dataSource, audit, servicio } = crearServicio(respuestasPrecio([]));
 
@@ -144,15 +178,19 @@ describe('SimulationService.simulatePresentationChange', () => {
           presentacion('p-250', 250, 'masa', 0.001),
           presentacion('p-500', 500, 'masa', 0.001, true),
           presentacion('p-1k', 1000, 'masa', 0.001),
+          presentacion('p-2k', 2000, 'masa', 0.001),
         ],
+        // D-14 pide al menos 3 con precio: p-2k ($130 → $65/kg) completa el mínimo sin ser la más barata.
         [
           { presentationId: 'p-250', precio: 15 },
           { presentationId: 'p-500', precio: 25 },
+          { presentationId: 'p-2k', precio: 130 },
         ],
         [
           { presentationId: 'p-250', cantidad: 40 },
           { presentationId: 'p-500', cantidad: 60 },
           { presentationId: 'p-1k', cantidad: 90 },
+          { presentationId: 'p-2k', cantidad: 30 },
         ],
       ),
     );
@@ -227,10 +265,15 @@ describe('SimulationService.simulatePresentationChange', () => {
   it('después de guardar reporta a la bitácora con simular', async () => {
     const { audit, servicio } = crearServicio(
       respuestasPresentacion(
-        [presentacion('p-250', 250, 'masa', 0.001), presentacion('p-500', 500, 'masa', 0.001, true)],
+        [
+          presentacion('p-250', 250, 'masa', 0.001),
+          presentacion('p-500', 500, 'masa', 0.001, true),
+          presentacion('p-1k', 1000, 'masa', 0.001),
+        ],
         [
           { presentationId: 'p-250', precio: 15 },
           { presentationId: 'p-500', precio: 25 },
+          { presentationId: 'p-1k', precio: 45 },
         ],
         [],
       ),
@@ -242,6 +285,53 @@ describe('SimulationService.simulatePresentationChange', () => {
       expect.objectContaining({ tabla: 'escenarios', registroId: resultado.scenarioId, accion: 'simular' }),
       'Bearer abc',
     );
+  });
+
+  it('D-14, límite del mínimo: 2 presentaciones con precio dan error y 3 con precio pasan', async () => {
+    const TRES = [
+      presentacion('p-250', 250, 'masa', 0.001),
+      presentacion('p-500', 500, 'masa', 0.001, true),
+      presentacion('p-1k', 1000, 'masa', 0.001),
+    ];
+    const DOS_PRECIOS = [
+      { presentationId: 'p-250', precio: 15 },
+      { presentationId: 'p-500', precio: 25 },
+    ];
+
+    const conDos = crearServicio(respuestasPresentacion(TRES, DOS_PRECIOS, []));
+    const error = await conDos.servicio.simulatePresentationChange({ productId: 'prod-1' }, USUARIO).catch((e) => e);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(error.message).toContain('Solo 2 de las 3 presentaciones');
+    expect(error.message).toContain(`al menos ${PRESENTACIONES_MINIMAS} con precio`);
+    expect(conDos.dataSource.transaction).not.toHaveBeenCalled();
+    expect(conDos.audit.reportar).not.toHaveBeenCalled();
+
+    const conTres = crearServicio(
+      respuestasPresentacion(TRES, [...DOS_PRECIOS, { presentationId: 'p-1k', precio: 45 }], []),
+    );
+    const resultado = await conTres.servicio.simulatePresentationChange({ productId: 'prod-1' }, USUARIO);
+
+    expect(resultado.presentations.filter((p) => p.priceStatus === 'con_precio')).toHaveLength(3);
+    expect(resultado.warnings).toEqual([]);
+    expect(conTres.dataSource.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('D-14: un producto con solo 2 presentaciones activas da 400 antes de consultar precios', async () => {
+    const { dataSource, servicio } = crearServicio(
+      respuestasPresentacion(
+        [presentacion('p-250', 250, 'masa', 0.001), presentacion('p-500', 500, 'masa', 0.001, true)],
+        [],
+        [],
+      ),
+    );
+
+    const error = await servicio.simulatePresentationChange({ productId: 'prod-1' }, USUARIO).catch((e) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(error.message).toContain(`al menos ${PRESENTACIONES_MINIMAS} para comparar`);
+    expect(dataSource.query.mock.calls.some(([sql]) => sql.includes('p.presentacion_id = ANY'))).toBe(false);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });
 

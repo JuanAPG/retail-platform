@@ -48,7 +48,8 @@ interface PresentacionProducto {
 
 /** `escenarios.nombre` es VARCHAR(120). */
 const NOMBRE_MAXIMO = 120;
-const PRESENTACIONES_MINIMAS = 2;
+/** D-14: se comparan todas las presentaciones del mismo producto (mínimo 3). */
+export const PRESENTACIONES_MINIMAS = 3;
 const UNIQUE_VIOLATION = '23505';
 /** Caracteres del UUID del escenario que van al final de su nombre. */
 const LARGO_SUFIJO_NOMBRE = 6;

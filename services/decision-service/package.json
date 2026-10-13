@@ -7,7 +7,8 @@
     "build": "nest build -p tsconfig.build.json",
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "test": "jest --testPathIgnorePatterns=test/"
+    "test": "jest --testPathIgnorePatterns=test/",
+    "test:integracion": "jest --config ./test/jest.integracion.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",

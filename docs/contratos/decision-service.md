@@ -19,6 +19,32 @@ del índice, con `ejecutar_corrida` (tabla `analisis_corridas`). Se reenvía el
 `Authorization` del usuario; si audit-service falla, la operación no se
 rompe.
 
+## Lectura de datos de otros servicios (Fase B)
+
+decision-service lee datos de otros dueños por **SQL de solo lectura** sobre
+el Postgres compartido. **Nunca escribe tablas ajenas.**
+
+| Dueño | Lo que lee |
+|---|---|
+| catalog-service | `productos`, `producto_presentaciones`, `zonas`, `tiendas`, `segmentos_ingreso`, `unidades_medida`, `zona_clasificaciones`, `indicadores`, `indicador_valores`, `inventario`; vista `v_zona_indicadores` |
+| pricing-service | `precios` |
+| core-process-service | `transacciones_detalle`, `canastas` |
+| algorithms-core | `elasticidades`, `corrida_clusters`, y las corridas de elasticidad en `analisis_corridas` |
+| Vistas del tablero | `v_dashboard_accesibilidad_zona`, `v_dashboard_asociaciones` (esta última expone `reglas_asociacion` y `regla_asociacion_items` de algorithms-core) |
+
+Lo único que escribe son sus tablas: `accesibilidad_zona`,
+`accesibilidad_pesos` y `accesibilidad_componentes`; `escenarios`,
+`escenario_cambios` y `escenario_resultados`; `recomendaciones` y
+`recomendacion_evidencias`; y sus propias corridas de accesibilidad en
+`analisis_corridas` y `analisis_corrida_parametros` (tablas compartidas con
+algorithms-core, que filtra por `tipo`).
+
+Es Fase B **a propósito**: en Fase C (Parcial 3) estas lecturas pasan a
+llamadas HTTP a los servicios dueños. Hoy están en
+`src/simulation/simulation.service.ts`,
+`src/accessibility/accessibility.service.ts` y
+`src/recommendations/recommendations.service.ts`.
+
 ## GET /v1/accessibility/index?zoneId&segmentId
 
 Calcula el índice **ahora mismo** y crea una corrida nueva (no pisa la
@@ -96,17 +122,27 @@ inventa demanda). Sin precio vigente → 404. Response `201`:
 
 ## POST /v1/simulation/presentation (Planeador)
 
-Compara presentación A (base) contra B (alternativa): desembolso, precio
-unitario y demanda. Guarda el escenario.
+Compara **todas las presentaciones de un mismo producto** (D-14): desembolso,
+precio unitario y demanda de cada una. Guarda el escenario.
 
 Request JSON:
 
 ```json
-{ "presentationIdA": "uuid-a", "presentationIdB": "uuid-b", "zoneId": "uuid-zona" }
+{ "productId": "uuid-producto", "zoneId": "uuid-zona",
+  "presentationIds": ["uuid-a", "uuid-b", "uuid-c"] }
 ```
 
-(`zoneId` opcional: sin ella usa datos nacionales.) Response `201`:
-`SimulationResult` con `type: "presentation"`.
+`zoneId` opcional: sin ella usa datos nacionales. `presentationIds` opcional:
+sin ella se comparan todas las presentaciones activas del producto.
+
+**Mínimo 3 presentaciones (D-14).** No se mezclan productos.
+
+| Código | Cuándo |
+|---|---|
+| 400 | `presentationIds` trae menos de 3; el producto tiene menos de 3 presentaciones activas; alguna presentación es de otro producto (D-14) o está inactiva |
+| 404 | El producto o la zona no existen; menos de 3 de las presentaciones tienen precio vigente (las que no tienen se excluyen con aviso, nunca entran como 0) |
+
+Response `201`: `PresentationComparisonResult` con `type: "presentacion"`.
 
 ## GET /v1/simulation/scenarios
 
