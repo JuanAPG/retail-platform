@@ -1,6 +1,7 @@
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import 'highcharts/highcharts-more'; // telaraña (polar) y burbujas
+import 'highcharts/modules/treemap'; // mapa de árbol
 import { COLORES } from './coloresGrafica';
 
 const BASE: Highcharts.Options = {

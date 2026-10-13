@@ -142,5 +142,28 @@ const graficas = (page) => page.locator('.highcharts-container');
   await ctx.close();
 }
 
+// --- Interruptor de tipo de gráfica: gasto por categoría ---
+{
+  const { ctx, page } = await sesion(navegador, 'analista');
+  await page.route('**/localhost:3104/v1/analytics/spend-by-category**', json([
+    { categoryId: 1, categoryName: 'Abarrotes', totalSpend: 5856, units: 133, basketCount: 71, share: 50.9 },
+    { categoryId: 2, categoryName: 'Lácteos', totalSpend: 3645, units: 176, basketCount: 66, share: 31.7 },
+    { categoryId: 3, categoryName: 'Bebidas', totalSpend: 2000, units: 90, basketCount: 40, share: 17.4 },
+  ]));
+  await rail(page, 'Indicadores y gráficas').click();
+  await page.locator('.highcharts-container').first().waitFor({ timeout: 15000 });
+  const tipo = (n) => page.getByRole('button', { name: n, exact: true });
+  ok('gasto: el interruptor ofrece 4 tipos', (await page.locator('[role=group][aria-label^="Tipo de gráfica de gasto"] button').count()) === 4);
+  ok('gasto: empieza en Barras con 3 barras', (await page.locator('.highcharts-bar-series .highcharts-point').count()) === 3);
+  await tipo('Columnas').click(); await page.waitForTimeout(900);
+  ok('gasto: «Columnas» dibuja 3 columnas', (await page.locator('.highcharts-column-series .highcharts-point').count()) === 3);
+  await tipo('Dona').click(); await page.waitForTimeout(900);
+  ok('gasto: «Dona» dibuja 3 sectores', (await page.locator('.highcharts-pie-series .highcharts-point').count()) === 3);
+  await tipo('Mapa de árbol').click(); await page.waitForTimeout(1200);
+  ok('gasto: «Mapa de árbol» dibuja 3 bloques', (await page.locator('.highcharts-treemap-series .highcharts-point').count()) === 3);
+  ok('gasto: el interruptor no rompe nada', page.errores.length === 0, page.errores[0] ?? '');
+  await ctx.close();
+}
+
 await navegador.close();
 process.exit(resumen('06 gráficas Highcharts') ? 1 : 0);
