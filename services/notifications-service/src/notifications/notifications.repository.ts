@@ -34,9 +34,8 @@ export interface CrearNotificacion extends Destinatario {
 }
 
 /**
- * Puerto de persistencia. Hoy lo implementa el adaptador en memoria (sin
- * Mongo hasta que documents-service fije el patrón); entonces se agrega
- * el adaptador Mongoose SIN tocar el servicio (pendiente explícito).
+ * Puerto de persistencia. En ejecución lo implementa el adaptador MongoDB;
+ * en unitarias, el de memoria.
  */
 export interface NotificationsRepository {
   crear(datos: CrearNotificacion): Promise<NotificacionGuardada>;
