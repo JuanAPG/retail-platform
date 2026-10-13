@@ -380,6 +380,7 @@ services:
       PORT: 3106
       SERVICE_NAME: analytics-stats
       SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: stats/v1
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379

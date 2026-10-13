@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .errors import cuerpo_error
+from .estadistica_api import RAICES_XML as RAICES_ESTADISTICA, router as router_estadistica
 from .logging_conf import LoggingMiddleware
 from .xml_out import CONTENT_TYPE_XML, quiere_xml, serializar_xml
 
@@ -32,8 +33,16 @@ async def manejador_http(request: Request, error: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def manejador_validacion(request: Request, error: RequestValidationError):
+    # `details` como lista de textos, igual que el ValidationPipe de Nest
+    # (`services/snippets/error-codes.md`). Los errores crudos de pydantic
+    # traen el valor recibido: un NaN ahí hace que el JSON de la respuesta
+    # no se pueda serializar y el 400 salga como 500.
+    detalles = [
+        ".".join(str(parte) for parte in e["loc"] if parte != "body") + f": {e['msg']}"
+        for e in error.errors()
+    ]
     return cuerpo_error(400, "Error de validación en la solicitud.",
-                        request.url.path, "VALIDATION_ERROR", error.errors())
+                        request.url.path, "VALIDATION_ERROR", detalles)
 
 
 @app.exception_handler(Exception)
@@ -63,6 +72,12 @@ def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
         if patron.endswith("*") and ruta.startswith(patron[:-1]):
             return valor
     return None, ()
+
+
+# RF-20 a RF-22: hipótesis, ANOVA y proporciones (D-24: solo Analista).
+app.include_router(router_estadistica)
+for _ruta, _raiz in RAICES_ESTADISTICA.items():
+    xml_root(_ruta, _raiz)
 
 
 @app.get("/v1/health", summary="Salud del servicio y de sus dependencias.")
