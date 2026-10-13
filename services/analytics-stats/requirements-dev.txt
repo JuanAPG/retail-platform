@@ -1,0 +1,6 @@
+# Pruebas: pip install -r requirements-dev.txt && python -m pytest
+-r requirements.txt
+pytest==8.3.4
+xmlschema==3.4.3
+# Mongo en memoria para probar el repositorio de corridas sin servidor
+mongomock==4.3.0
