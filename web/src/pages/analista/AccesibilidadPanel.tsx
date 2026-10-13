@@ -30,6 +30,9 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
   const [calculando, setCalculando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<IndiceAccesibilidad | null>(null);
+  // Comparación lado a lado: segunda zona con el mismo segmento.
+  const [zonaBId, setZonaBId] = useState('');
+  const [resultadoB, setResultadoB] = useState<IndiceAccesibilidad | null>(null);
 
   const historial = useFetch(
     () => (zonaId ? getHistorialAccesibilidad(zonaId) : Promise.resolve<IndiceAccesibilidad[]>([])),
@@ -44,6 +47,7 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
     try {
       const r = await calcularAccesibilidad(zonaId, segmentId);
       setResultado(r);
+      setResultadoB(zonaBId ? await calcularAccesibilidad(zonaBId, segmentId) : null);
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudo calcular la accesibilidad. Intenta de nuevo.'));
     } finally {
@@ -63,6 +67,17 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           <Select id="acc-zona" label="Zona" value={zonaId} onChange={(e) => setZonaId(e.target.value)} placeholder="Elige una zona">
             {zonas.map((z) => (
+              <option key={z.id} value={z.id}>{z.nombre}</option>
+            ))}
+          </Select>
+          <Select
+            id="acc-zona-b"
+            label="Comparar con otra zona (opcional)"
+            value={zonaBId}
+            onChange={(e) => setZonaBId(e.target.value)}
+            placeholder="Sin comparación"
+          >
+            {zonas.filter((z) => z.id !== zonaId).map((z) => (
               <option key={z.id} value={z.id}>{z.nombre}</option>
             ))}
           </Select>
@@ -92,9 +107,13 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
       </form>
 
       {resultado && (
-        <div className="flex flex-col gap-3 rounded-panel bg-arena p-6">
+        <div className={resultadoB ? 'grid grid-cols-1 gap-4 md:grid-cols-2' : 'contents'}>
+        {[resultado, ...(resultadoB ? [resultadoB] : [])].map((resultado) => (
+        <div key={resultado.zoneId} className="flex flex-col gap-3 rounded-panel bg-arena p-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-slab text-[22px] text-vino">Resultado</h2>
+            <h2 className="font-slab text-[22px] text-vino">
+              {resultadoB ? (zonas.find((z) => z.id === resultado.zoneId)?.nombre ?? 'Zona') : 'Resultado'}
+            </h2>
             <StatusPill tone={toneDeIndice(resultado.indexValue)}>{formatoPorcentaje.format(resultado.indexValue)}</StatusPill>
           </div>
           <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm text-teal sm:grid-cols-2">
@@ -107,6 +126,8 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
               {resultado.estimatedIncome === null ? '—' : formatoMoneda.format(resultado.estimatedIncome)}
             </p>
           </div>
+        </div>
+        ))}
         </div>
       )}
 
