@@ -40,8 +40,8 @@ ningún servicio lee cuerpos XML todavía).
 - Redis (sesiones) no responde: no se puede verificar la sesión.
 - core-process-service o catalog-service no responden en **3 s** (modo
   `baskets` o clustering sin `zones`).
-- MongoDB no responde (clustering): la corrida **no** se calcula a medias ni se
-  devuelve sin guardar (**D-25**: un almacén caído es `503`, no `500`).
+- MongoDB no responde en **2 s** (clustering): la corrida **no** se devuelve sin
+  guardar (**D-25**: un almacén caído es `503`, no `500`).
 
 Los límites del Parcial 2 (**D-27**) responden `400` con su motivo, nunca `500`:
 ver *Límites del Parcial 2*.
@@ -273,38 +273,56 @@ siendo `200`, como el resto de los servicios).
 - Sin `zones`, los indicadores salen de catalog (`GET /v1/zones/compare`) y el
   ticket de core-process (`GET /v1/analytics/average-ticket?zoneId=`).
 - Una zona sin alguno de los indicadores elegidos **no se rellena con 0** (D-20):
-  queda en `excludedZones` con el motivo.
+  queda en `excludedZones` con el motivo. core-process responde `0` de ticket
+  promedio cuando la zona no tiene canastas en el periodo; como un ticket real
+  nunca es 0, se toma como **faltante**, no como valor.
 - Las zonas se ordenan por `zoneId` antes de agrupar, y los clusters se numeran de
   1 a k por el promedio de la primera variable de `features`, de menor a mayor:
-  el resultado no depende del orden en que lleguen.
+  el resultado no depende del orden en que lleguen. KMeans corre en un solo hilo:
+  con varios, la inercia cambiaba en el último dígito entre corridas (D-15 pide
+  exactamente lo mismo).
+- `date` va en milisegundos, como la guarda Mongo: el `201` es idéntico a lo que
+  devuelve después `GET /v1/clustering/runs/:id`.
 
-Response `201` (`clusteringRunResponse`): la corrida guardada.
+Response `201` (`clusteringRunResponse`): la corrida guardada. El ejemplo es una
+corrida real con las 3 zonas sembradas y el CSV de 100 canastas:
 
 ```json
 {
   "id": "6713f0c2e4b0a1b2c3d4e5f6",
   "type": "clustering",
   "userId": "uuid",
-  "date": "2026-10-12T22:15:03.123000+00:00",
+  "date": "2026-10-13T04:15:03.123000+00:00",
   "parameters": { "k": 2, "seed": 42, "features": ["estimatedIncome", "population", "availability", "averageTicket"],
-                  "source": "servicios", "dateFrom": "2026-08-01", "dateTo": "2026-08-31" },
+                  "source": "servicios", "zoneIds": null, "dateFrom": null, "dateTo": null },
   "input": [
-    { "zoneId": "uuid", "zoneName": "Zona Centro", "estimatedIncome": 18500, "population": 120000, "availability": 0.8, "averageTicket": 96.4 }
+    { "zoneId": "uuid", "zoneName": "Zona Valle", "estimatedIncome": 65000, "population": 85000, "availability": 0.95, "averageTicket": 143.2 },
+    { "zoneId": "uuid", "zoneName": "Zona Centro", "estimatedIncome": 28000, "population": 120000, "availability": 0.85, "averageTicket": 96.4 },
+    { "zoneId": "uuid", "zoneName": "Zona Oriente", "estimatedIncome": 12000, "population": 150000, "availability": 0.65, "averageTicket": 73.63 }
   ],
   "clusters": [
-    { "cluster": 1, "size": 2, "centroid": { "estimatedIncome": 14000, "population": 95000, "availability": 0.7, "averageTicket": 85.0 } }
+    { "cluster": 1, "size": 2, "centroid": { "estimatedIncome": 20000.0, "population": 135000.0, "availability": 0.75, "averageTicket": 85.015 } },
+    { "cluster": 2, "size": 1, "centroid": { "estimatedIncome": 65000.0, "population": 85000.0, "availability": 0.95, "averageTicket": 143.2 } }
   ],
-  "assignments": [ { "zoneId": "uuid", "zoneName": "Zona Centro", "cluster": 1 } ],
-  "excludedZones": [ { "zoneId": "uuid", "zoneName": "Zona Norte", "reason": "Sin población cargada." } ],
-  "inertia": 0.53,
-  "silhouette": 0.41,
+  "assignments": [
+    { "zoneId": "uuid", "zoneName": "Zona Valle", "cluster": 2 },
+    { "zoneId": "uuid", "zoneName": "Zona Centro", "cluster": 1 },
+    { "zoneId": "uuid", "zoneName": "Zona Oriente", "cluster": 1 }
+  ],
+  "excludedZones": [],
+  "inertia": 2.4923970074898127,
+  "silhouette": 0.24530671765148346,
   "assumptions": [
     "Se agrupan zonas, nunca personas (RF-16).",
     "Indicadores estandarizados (z-score): ninguno pesa más por su unidad.",
-    "KMeans con semilla 42: con los mismos datos, las mismas asignaciones."
+    "KMeans con semilla 42: con los mismos datos, las mismas asignaciones.",
+    "Los grupos se numeran por su ingreso estimado promedio, de menor a mayor."
   ]
 }
 ```
+
+Una zona excluida sale así: `{ "zoneId": "uuid", "zoneName": "Zona Norte", "reason": "Sin ticket
+promedio: no se rellena con 0 (D-20)." }`.
 
 `parameters` repite lo pedido (`k`, `seed`, `features` y, si vinieron, `zoneIds`,
 `dateFrom`, `dateTo`) y agrega `source`: `servicios` (catalog + core-process) o
@@ -357,7 +375,7 @@ Por **HTTP**, reenviando el `Authorization` del usuario; si no responden en 3 s 
 | Servicio | Qué | Para qué |
 |---|---|---|
 | core-process-service | `GET /v1/baskets` (filtros `segmentId`/`zoneId`, `storeId`, fechas, `hasBasicProducts`, `size`; páginas de 100) | Valores y conteos del modo `baskets` |
-| core-process-service | `GET /v1/analytics/average-ticket?zoneId=` | `averageTicket` del clustering |
+| core-process-service | `GET /v1/analytics/average-ticket?zoneId=` (con `dateFrom`/`dateTo`; `0` = sin canastas) | `averageTicket` del clustering |
 | catalog-service | `GET /v1/zones`, `GET /v1/zones/compare?ids=` | Zonas e indicadores del clustering |
 | catalog-service | `GET /v1/segments/:id`, `GET /v1/zones/:id` | Nombre (`label`) de cada grupo |
 
@@ -383,3 +401,6 @@ tendría que exponer los valores agregados por grupo en lugar de páginas.
 
 - **D-24** (permisos) espera el OK del PO. Si cambia, cambian los roles de la tabla
   de rutas.
+- **core-process, `GET /v1/analytics/average-ticket`:** responde `0` cuando la zona
+  no tiene canastas en el periodo, en lugar de `null`. analytics-stats lo trata como
+  faltante (D-20), pero cualquier otro cliente que lo lea mostraría un ticket de $0.
