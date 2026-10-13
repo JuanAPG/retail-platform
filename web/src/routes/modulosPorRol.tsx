@@ -53,6 +53,7 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
   'Gerente de categoría': [
     { key: 'catalogo-productos', label: 'Catálogo de productos', icon: <IconProductos /> },
     { key: 'aprobaciones', label: 'Aprobaciones', icon: <IconAprobaciones />, permiso: 'aprueba' },
+    { key: 'recomendaciones', label: 'Recomendaciones', icon: <IconRecomendaciones />, permiso: 'aprueba' },
     { key: 'comparar-precios', label: 'Comparar precios', icon: <IconPrecios />, permiso: 'lectura' },
     { key: 'reportes', label: 'Reportes', icon: <IconReportes />, permiso: 'lectura' },
     { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas /> }, // el Gerente es quien escribe tiendas (catalog-service)

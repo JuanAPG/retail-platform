@@ -50,10 +50,9 @@ export function PlaneadorPortal() {
   const zonas = useFetch(getZonas, []);
   const transacciones = useFetch(getTransacciones, []);
 
-  // M10/M11/M13/M14 comparten el mismo criterio: calcular/generar es de
-  // Administrador y Analista comercial; el Planeador (y los demás) solo
-  // consultan lo ya guardado.
-  const puedeSimular = usuario?.rol === 'Administrador' || usuario?.rol === 'Analista comercial';
+  // decision-service (M13/M14): simular y generar recomendaciones es solo del
+  // Planeador (los demás reciben 403); aprobar o rechazar es del Gerente (D-12).
+  const puedeSimular = usuario?.rol === 'Planeador';
 
   const modulos: RailModule[] = MODULOS_POR_ROL.Planeador.map((m) => ({
     key: m.key,

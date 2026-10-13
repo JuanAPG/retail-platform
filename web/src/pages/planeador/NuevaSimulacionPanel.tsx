@@ -13,7 +13,7 @@ type Modo = 'precio' | 'presentacion';
 interface Props {
   productos: Producto[];
   zonas: Zona[];
-  /** Solo Administrador y Analista comercial pueden simular (mismo criterio que M10/M11). */
+  /** Solo el Planeador puede simular (decision-service). */
   puedeSimular: boolean;
 }
 
@@ -87,7 +87,7 @@ export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) 
       {!puedeSimular && (
         <div className="rounded-full bg-vino/10 px-5 py-3">
           <p className="text-sm font-semibold text-vino">
-            Solo Administrador o Analista comercial pueden crear simulaciones nuevas. Consulta las que ya existen en
+            Solo el Planeador puede crear simulaciones nuevas. Consulta las que ya existen en
             Historial.
           </p>
         </div>

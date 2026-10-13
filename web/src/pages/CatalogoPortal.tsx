@@ -12,6 +12,7 @@ import { ReportesPanel } from './catalogo/ReportesPanel';
 import { AlertaPrecioCard } from './catalogo/AlertaPrecioCard';
 import { TiendasPanel } from './admin/TiendasPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
+import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
 import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
@@ -28,6 +29,7 @@ type Tab =
   | 'categorias'
   | 'aprobaciones'
   | 'aprobaciones-precio'
+  | 'recomendaciones'
   | 'gestion-precios'
   | 'elasticidad'
   | 'reportes'
@@ -154,6 +156,10 @@ export function CatalogoPortal() {
       )}
 
       {tab === 'aprobaciones-precio' && <AprobacionesPrecioPanel />}
+
+      {tab === 'recomendaciones' && (
+        <RecomendacionesPanel puedeGenerar={false} puedeResolver={usuario?.rol === 'Gerente de categoría'} />
+      )}
 
       {tab === 'gestion-precios' && (
         <div className="flex flex-col gap-6">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Select } from '../../components/ui/Select';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { ErrorText } from '../../components/ui/ErrorText';
@@ -8,22 +8,28 @@ import {
   explicarRecomendacion,
   ExplicacionRecomendacion,
   generarRecomendaciones,
+  listarRecomendaciones,
+  aprobarRecomendacion,
+  rechazarRecomendacion,
   Recomendacion,
 } from '../../api/recomendaciones';
 import { Zona } from '../../types';
 
 interface Props {
-  zonas: Zona[];
-  /** Solo Administrador y Analista comercial pueden generar (mismo criterio que M10/M11/M13). */
+  zonas?: Zona[];
+  /** Solo el Planeador genera (decision-service). */
   puedeGenerar: boolean;
+  /** D-12: solo el Gerente de categoría aprueba o rechaza las propuestas. */
+  puedeResolver?: boolean;
 }
 
+const TONO_ESTATUS = { propuesta: 'warn', aceptada: 'ok', descartada: 'neutral' } as const;
+
 /**
- * M14 — El contrato solo expone "generar" y "explicar una ya generada"
- * (no hay listado general): por eso lo que se ve aquí es el lote recién
- * generado en esta sesión, no un historial persistente entre recargas.
+ * M14 — Lista las recomendaciones guardadas (GET /recommendations), así que
+ * sobreviven a una recarga. El Planeador genera; el Gerente decide (D-12).
  */
-export function RecomendacionesPanel({ zonas, puedeGenerar }: Props) {
+export function RecomendacionesPanel({ zonas = [], puedeGenerar, puedeResolver = false }: Props) {
   const [zonaId, setZonaId] = useState('');
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +37,44 @@ export function RecomendacionesPanel({ zonas, puedeGenerar }: Props) {
   const [expandidaId, setExpandidaId] = useState<string | null>(null);
   const [explicacion, setExplicacion] = useState<ExplicacionRecomendacion | null>(null);
   const [cargandoExplicacion, setCargandoExplicacion] = useState(false);
+  const [rechazandoId, setRechazandoId] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [resolviendoId, setResolviendoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    listarRecomendaciones()
+      .then((r) => vivo && setRecomendaciones(r))
+      .catch((err) => vivo && setError(mensajeDeError(err, 'No se pudieron cargar las recomendaciones.')));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  async function resolver(id: string, accion: 'aprobar' | 'rechazar') {
+    setError(null);
+    setResolviendoId(id);
+    try {
+      if (accion === 'aprobar') await aprobarRecomendacion(id);
+      else await rechazarRecomendacion(id, motivo.trim());
+      setRecomendaciones(await listarRecomendaciones());
+      setRechazandoId(null);
+      setMotivo('');
+    } catch (err) {
+      setError(mensajeDeError(err, 'No se pudo registrar la decisión.'));
+      // 409: alguien más ya la decidió; se recarga para mostrar el estatus real.
+      listarRecomendaciones().then(setRecomendaciones).catch(() => undefined);
+    } finally {
+      setResolviendoId(null);
+    }
+  }
 
   async function generar() {
     setError(null);
     setGenerando(true);
     try {
-      const r = await generarRecomendaciones(zonaId || undefined);
-      setRecomendaciones(r);
+      await generarRecomendaciones(zonaId || undefined);
+      setRecomendaciones(await listarRecomendaciones());
       setExpandidaId(null);
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudieron generar las recomendaciones.'));
@@ -73,8 +110,9 @@ export function RecomendacionesPanel({ zonas, puedeGenerar }: Props) {
       {!puedeGenerar && (
         <div className="rounded-full bg-vino/10 px-5 py-3">
           <p className="text-sm font-semibold text-vino">
-            Solo Administrador o Analista comercial pueden generar recomendaciones. Pide que generen un lote y
-            compártelo contigo.
+            {puedeResolver
+              ? 'El Planeador genera las recomendaciones; aquí apruebas o rechazas las propuestas (el rechazo exige un motivo).'
+              : 'Solo el Planeador puede generar recomendaciones. Consulta las que ya existen.'}
           </p>
         </div>
       )}
@@ -129,7 +167,53 @@ export function RecomendacionesPanel({ zonas, puedeGenerar }: Props) {
                   <span className="font-display text-lg text-tinta">{r.titulo}</span>
                   <IconChevron className={`h-4 w-4 flex-shrink-0 text-teal transition-transform ${abierta ? '-rotate-90' : 'rotate-90'}`} />
                 </button>
+                <div className="flex items-center gap-2">
+                  <StatusPill tone={TONO_ESTATUS[r.estatus] ?? 'neutral'}>{r.estatus}</StatusPill>
+                </div>
                 <p className="text-sm text-teal">{r.queRecomienda}</p>
+                {puedeResolver && r.estatus === 'propuesta' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={resolviendoId === r.id}
+                        onClick={() => resolver(r.id, 'aprobar')}
+                        className="h-10 rounded-full bg-teal px-5 text-sm font-bold text-arena transition hover:bg-vino disabled:opacity-50"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resolviendoId === r.id}
+                        onClick={() => { setRechazandoId(rechazandoId === r.id ? null : r.id); setMotivo(''); }}
+                        className="h-10 rounded-full border border-vino px-5 text-sm font-bold text-vino transition hover:bg-vino/10 disabled:opacity-50"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                    {rechazandoId === r.id && (
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          value={motivo}
+                          onChange={(e) => setMotivo(e.target.value)}
+                          maxLength={500}
+                          rows={2}
+                          aria-label="Motivo del rechazo"
+                          placeholder="Motivo del rechazo (10 a 500 caracteres)"
+                          className="rounded-card border border-salvia bg-white p-3 text-sm text-tinta"
+                        />
+                        <button
+                          type="button"
+                          disabled={motivo.trim().length < 10 || resolviendoId === r.id}
+                          onClick={() => resolver(r.id, 'rechazar')}
+                          className="h-10 self-start rounded-full bg-vino px-5 text-sm font-bold text-arena disabled:opacity-50"
+                        >
+                          Confirmar rechazo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {abierta && (
                   <div className="flex flex-col gap-2 border-t border-salvia/25 pt-3 text-sm">
                     {cargandoExplicacion && <p className="text-teal/70">Cargando…</p>}
