@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { SectionHeader } from '../../components/SectionHeader';
+import { Grafica } from '../../components/Grafica';
+import { COLORES } from '../../components/coloresGrafica';
+import type Highcharts from 'highcharts';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState } from '../../components/EmptyState';
 import { Badge } from '../../components/Badge';
@@ -9,6 +12,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { getCategorias } from '../../api/catalogo';
 import { getPatronesSustitucion } from '../../api/elasticidad';
 import { SubstitutionPattern } from '../../types';
+import { listaSegura } from '../../api/seguro';
 import { formatearDia } from './corridaFormato';
 
 const TIPO: Record<SubstitutionPattern['type'], { texto: string; tono: 'warning' | 'neutral'; flecha: string }> = {
@@ -19,6 +23,9 @@ const TIPO: Record<SubstitutionPattern['type'], { texto: string; tono: 'warning'
 };
 
 const dosDecimales = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+
+/** Un tipo que el servicio agregue mañana no debe tumbar la pantalla. */
+const tipoDe = (t: string) => TIPO[t as keyof typeof TIPO] ?? TIPO.preferencia;
 
 /**
  * M11 — Patrones de sustitución (S1-16) de una categoría. El backend los
@@ -34,7 +41,7 @@ export function SustitucionPanel() {
   );
 
   const nombreCategoria = categorias.data?.find((c) => String(c.id) === categoria)?.nombre ?? '';
-  const lista = patrones.data ?? [];
+  const lista = listaSegura<SubstitutionPattern>(patrones.data);
 
   return (
     <section className="flex flex-col gap-6">
@@ -90,6 +97,9 @@ export function SustitucionPanel() {
       )}
       {categoria && !patrones.loading && !patrones.error && lista.length > 0 && (
         <div className="flex flex-col gap-2">
+          <div className="rounded-panel bg-arena p-4">
+            <Grafica opciones={opcionesSustitucion(lista)} altura={Math.max(220, lista.length * 38 + 80)} />
+          </div>
           <DataTable
             rowKey={(p) => `${p.originProductId}-${p.targetProductId}-${p.type}`}
             rows={lista}
@@ -99,18 +109,18 @@ export function SustitucionPanel() {
                 render: (p) => (
                   <div>
                     <p className="text-tinta">
-                      {p.originProductName} <span className="text-teal/50">{TIPO[p.type].flecha}</span> {p.targetProductName}
+                      {p.originProductName} <span className="text-teal/50">{tipoDe(p.type).flecha}</span> {p.targetProductName}
                     </p>
                     <p className="mt-0.5 font-data text-xs text-teal/70">
-                      lift {p.lift.toLocaleString('es-MX', dosDecimales)} · r{' '}
-                      {p.priceCorrelation === null ? '—' : p.priceCorrelation.toLocaleString('es-MX', dosDecimales)} ·{' '}
+                      lift {Number(p.lift).toLocaleString('es-MX', dosDecimales)} · r{' '}
+                      {p.priceCorrelation === null || p.priceCorrelation === undefined ? '—' : Number(p.priceCorrelation).toLocaleString('es-MX', dosDecimales)} ·{' '}
                       {p.observations} canastas
                     </p>
                     {p.summary && <p className="mt-1 max-w-xl text-xs text-teal/80">{p.summary}</p>}
                   </div>
                 ),
               },
-              { header: 'Tipo', render: (p) => <Badge tone={TIPO[p.type].tono}>{TIPO[p.type].texto}</Badge> },
+              { header: 'Tipo', render: (p) => <Badge tone={tipoDe(p.type).tono}>{tipoDe(p.type).texto}</Badge> },
               {
                 header: 'Fuerza',
                 className: 'w-56',
@@ -151,4 +161,29 @@ export function SustitucionPanel() {
       </details>
     </section>
   );
+}
+
+/** Fuerza (score 0–100 %) de cada indicio de sustitución; por precio en vino, por preferencia en salvia. */
+function opcionesSustitucion(lista: SubstitutionPattern[]): Highcharts.Options {
+  return {
+    chart: { type: 'bar' },
+    xAxis: { categories: lista.map((p) => `${p.originProductName} → ${p.targetProductName}`) },
+    yAxis: { min: 0, max: 100, title: { text: 'Fuerza del indicio (%)' } },
+    legend: { enabled: false },
+    tooltip: {
+      useHTML: true,
+      formatter() {
+        const p = lista[this.index];
+        return `<b>${p.originProductName} → ${p.targetProductName}</b><br/>${p.type === 'precio' ? 'Por precio' : 'Por preferencia'} · fuerza ${Math.round(p.score * 100)} %<br/>lift ${p.lift.toFixed(2)} · ${p.observations} canastas`;
+      },
+    },
+    series: [
+      {
+        type: 'bar',
+        name: 'Fuerza',
+        borderRadius: 6,
+        data: lista.map((p) => ({ y: Math.round(p.score * 100), color: p.type === 'precio' ? COLORES.vino : COLORES.salvia })),
+      },
+    ],
+  };
 }

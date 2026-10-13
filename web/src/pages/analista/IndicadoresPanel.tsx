@@ -3,9 +3,12 @@ import { useFetch } from '../../hooks/useFetch';
 import { getResumenIndicadores } from '../../api/analitica';
 import { getTiendas, getZonas } from '../../api/catalogo';
 import { getSegmentos } from '../../api/segmentos';
-import { AnalyticsFilters } from '../../types';
+import { AnalyticsFilters, CategorySpend } from '../../types';
 import { Hero } from '../../components/ui/Hero';
 import { Select } from '../../components/ui/Select';
+import { Grafica } from '../../components/Grafica';
+import { COLORES } from '../../components/coloresGrafica';
+import type Highcharts from 'highcharts';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { IconReportes } from '../../components/ui/icons';
 
@@ -173,23 +176,8 @@ export function IndicadoresPanel() {
               <p className="font-display text-xl text-teal">Sin gasto registrado por categoría</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {datos.gastoPorCategoria.map((c) => (
-                <div key={c.categoryId} className="group relative flex h-14 items-center overflow-hidden rounded-full bg-arena px-5 transition hover:translate-x-1">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-salvia transition-all group-hover:bg-teal"
-                    style={{ width: `${c.share}%` }}
-                  />
-                  <div className="relative z-[1] flex w-full items-center justify-between text-sm font-semibold text-tinta group-hover:text-arena">
-                    <span>
-                      {c.categoryName} <span className="font-data text-xs opacity-70">{c.basketCount} canastas</span>
-                    </span>
-                    <span className="font-data">
-                      {moneda.format(c.totalSpend)} · {decimal.format(c.share)}%
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-panel bg-arena p-4">
+              <Grafica opciones={opcionesGasto(datos.gastoPorCategoria)} />
             </div>
           )}
         </>
@@ -200,4 +188,23 @@ export function IndicadoresPanel() {
       </p>
     </div>
   );
+}
+
+/** Barras de gasto por categoría (MXN); el tooltip trae la participación y las canastas. */
+function opcionesGasto(filas: CategorySpend[]): Highcharts.Options {
+  const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+  return {
+    chart: { type: 'bar' },
+    xAxis: { categories: filas.map((c) => c.categoryName) },
+    yAxis: { min: 0, title: { text: 'Gasto (MXN)' } },
+    legend: { enabled: false },
+    tooltip: {
+      useHTML: true,
+      formatter() {
+        const c = filas[this.index];
+        return `<b>${c.categoryName}</b><br/>${fmt.format(c.totalSpend)} · ${c.share.toFixed(1)} % del gasto<br/>${c.basketCount} canastas`;
+      },
+    },
+    series: [{ type: 'bar', name: 'Gasto', data: filas.map((c) => c.totalSpend), color: COLORES.salvia, borderRadius: 6 }],
+  };
 }

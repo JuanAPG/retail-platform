@@ -165,7 +165,8 @@ function crearCliente(nombre: NombreServicio): AxiosInstance {
  * Los listados de los servicios vienen paginados (`{ data, total, page, limit }`,
  * `limit` máx. 100: docs/contratos/paginacion.md) y las pantallas trabajan con
  * el arreglo completo. Junta las páginas (tope de 20 = 2 000 filas, para que
- * un servicio con datos de más no deje la pantalla cargando para siempre).
+ * un servicio con datos de más no deje la pantalla cargando para siempre);
+ * si hay más filas que el tope, avisa con el total real (la paginación con controles queda para el Parcial 3).
  * Solo para endpoints paginados: uno plano rechaza `page`/`limit` con 400.
  */
 export async function traerTodo<T>(
@@ -174,12 +175,19 @@ export async function traerTodo<T>(
   params: Record<string, unknown> = {},
 ): Promise<T[]> {
   const filas: T[] = [];
+  let total = 0;
   for (let page = 1; page <= 20; page++) {
     const { data } = await cliente.get<{ data: T[]; total: number }>(url, {
       params: { ...params, page, limit: 100 },
     });
     filas.push(...data.data);
-    if (filas.length >= data.total || data.data.length === 0) break;
+    total = Number(data.total);
+    if (filas.length >= total || data.data.length === 0) break;
+  }
+  // Pasado el tope los datos se truncan: que la pantalla lo diga en vez de mostrar una cifra que nadie puede explicar.
+  if (Number.isFinite(total) && filas.length < total) {
+    const fmt = new Intl.NumberFormat('es-MX');
+    emitirAviso({ servicio: url.replace(/^\//, ''), clase: 'truncado', detalle: `${fmt.format(filas.length)} de ${fmt.format(total)} registros` });
   }
   return filas;
 }

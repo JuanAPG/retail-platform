@@ -13,16 +13,18 @@ export function porcentaje(fraccion: number | string | undefined): string {
 
 /** ISO de ejecución → '25/09/26, 02:15' en hora local. */
 export function formatearFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+  const f = new Date(iso);
+  return Number.isNaN(f.getTime()) ? '—' : f.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 /**
  * 'yyyy-mm-dd' → 'dd/mm/yyyy' sin pasar por Date: new Date('2026-08-05')
  * es medianoche UTC y en México se mostraría como el 4 de agosto.
  */
-export function formatearDia(dia: string): string {
+export function formatearDia(dia: string | undefined | null): string {
+  if (typeof dia !== 'string') return '—';
   const [anio, mes, d] = dia.split('-');
-  return `${d}/${mes}/${anio}`;
+  return d && mes && anio ? `${d}/${mes}/${anio}` : '—';
 }
 
 const ESTADO: Record<AnalysisRunStatus, { texto: string; tono: 'ok' | 'warn' | 'neutral' }> = {

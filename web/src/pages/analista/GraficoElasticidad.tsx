@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { EmptyState } from '../../components/EmptyState';
+import { Grafica } from '../../components/Grafica';
+import { COLORES } from '../../components/coloresGrafica';
+import type Highcharts from 'highcharts';
 import { Select } from '../../components/ui/Select';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { getGraficoElasticidad } from '../../api/elasticidad';
@@ -8,6 +11,51 @@ import { mensajeDeError } from '../../api/errores';
 import { ElasticityChartBar, ElasticityChartData, ElasticityChartValue, Producto } from '../../types';
 import { formatearDia, formatearFechaHora } from './corridaFormato';
 import { AtipicaBadge, CLASIFICACION, ClasificacionBadge, formatearE, formatearR2, GRANULARIDAD } from './elasticidadFormato';
+
+const COLOR_CLASE = { elastic: COLORES.vino, inelastic: COLORES.salvia, unitary: COLORES.teal } as const;
+
+/**
+ * Columnas con |E| por zona/segmento (y Nacional); la línea punteada marca |E| = 1, la frontera entre
+ * inelástica y elástica. Una barra sin dato suficiente queda vacía y lo dice el tooltip.
+ */
+function opcionesGrafica(datos: ElasticityChartData): Highcharts.Options {
+  const filas: Array<{ nombre: string; v: ElasticityChartValue | ElasticityChartBar }> = [
+    ...datos.bars.map((b) => ({ nombre: b.label, v: b })),
+    ...(datos.national ? [{ nombre: 'Nacional', v: datos.national }] : []),
+  ];
+  return {
+    chart: { type: 'column' },
+    xAxis: { categories: filas.map((f) => f.nombre) },
+    yAxis: {
+      min: 0,
+      title: { text: '|E|' },
+      plotLines: [
+        { value: 1, width: 2, color: COLORES.vino, dashStyle: 'Dash', zIndex: 5, label: { text: '|E| = 1', style: { color: COLORES.vino, fontWeight: '600' } } },
+      ],
+    },
+    legend: { enabled: false },
+    tooltip: {
+      useHTML: true,
+      formatter() {
+        const f = filas[this.index];
+        if (!f || f.v.value === null || f.v.classification === null) return `<b>${f?.nombre ?? ''}</b><br/>Sin datos suficientes`;
+        return `<b>${f.nombre}</b><br/>E = ${formatearE(f.v.value)} (${CLASIFICACION[f.v.classification].texto})<br/>R² ${formatearR2(f.v.rSquared)} · ${f.v.observations} obs.`;
+      },
+    },
+    series: [
+      {
+        type: 'column',
+        name: 'Elasticidad',
+        data: filas.map((f) => ({
+          y: f.v.value === null ? null : Math.abs(f.v.value),
+          color: f.v.classification ? COLOR_CLASE[f.v.classification] : COLORES.salvia,
+        })),
+        borderRadius: 6,
+        dataLabels: { enabled: true, formatter() { return this.y === null || this.y === undefined ? '' : String(Math.round(this.y * 100) / 100); } },
+      },
+    ],
+  };
+}
 
 interface GraficoElasticidadProps {
   productos: Producto[];
@@ -19,8 +67,8 @@ interface GraficoElasticidadProps {
 
 /**
  * M11 — Gráfico comparativo de una presentación por zona o por segmento.
- * Barras propias (sin librería): el largo es |E| y la línea marca
- * |E| = 1, la frontera entre inelástica y elástica.
+ * Columnas de Highcharts: la altura es |E| y la línea marca |E| = 1,
+ * la frontera entre inelástica y elástica.
  */
 export function GraficoElasticidad({ productos, presentacionId, onPresentacion, runId }: GraficoElasticidadProps) {
   const [agrupar, setAgrupar] = useState<'zone' | 'segment'>('zone');
@@ -120,26 +168,21 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
             {GRANULARIDAD[datos.granularity]} · datos del {formatearDia(datos.periodStart)} al {formatearDia(datos.periodEnd)}
           </p>
 
-          <div className="flex text-xs text-teal/60">
-            <span className="w-36 shrink-0" />
-            <span className="relative flex-1">
-              <span className="absolute -translate-x-1/2" style={{ left: `${(1 / escala) * 100}%` }}>
-                |E| = 1
-              </span>
-            </span>
-            <span className="w-72 shrink-0" />
-          </div>
+          <Grafica opciones={opcionesGrafica(datos)} />
 
-          <ul className="flex flex-col gap-2.5">
-            {datos.bars.map((b) => (
-              <Fila key={b.key} etiqueta={b.label} valor={b} escala={escala} zonas={b.zones} />
-            ))}
-          </ul>
-          {datos.national && (
-            <ul className="flex flex-col gap-2.5 border-t-2 border-salvia/20 pt-3">
-              <Fila etiqueta="Nacional" valor={datos.national} escala={escala} destacada />
+          <details className="text-sm text-teal">
+            <summary className="cursor-pointer font-semibold text-teal/70">Ver detalle (R², observaciones y zonas)</summary>
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {datos.bars.map((b) => (
+                <Fila key={b.key} etiqueta={b.label} valor={b} escala={escala} zonas={b.zones} />
+              ))}
             </ul>
-          )}
+            {datos.national && (
+              <ul className="mt-3 flex flex-col gap-2.5 border-t-2 border-salvia/20 pt-3">
+                <Fila etiqueta="Nacional" valor={datos.national} escala={escala} destacada />
+              </ul>
+            )}
+          </details>
 
           <p className="text-xs text-teal/70">{datos.note}</p>
         </div>

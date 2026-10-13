@@ -3,11 +3,13 @@
  * avisa de caídas y de 403, y `AvisosGlobales` los pinta. Se usa un evento del
  * `window` para no acoplar la capa de red con React.
  */
-export type ClaseAviso = 'red' | 'timeout' | 'servidor' | 'no-disponible' | 'prohibido';
+export type ClaseAviso = 'red' | 'timeout' | 'servidor' | 'no-disponible' | 'prohibido' | 'truncado';
 
 export interface Aviso {
   servicio: string;
   clase: ClaseAviso;
+  /** Texto extra del aviso (p. ej. cuántas filas se muestran de cuántas hay). */
+  detalle?: string;
 }
 
 const EVENTO = 'api:aviso';
@@ -30,8 +32,10 @@ export function escucharAvisos(manejador: (aviso: Aviso) => void): () => void {
   return () => window.removeEventListener(EVENTO, alvo);
 }
 
-export function textoDeAviso({ servicio, clase }: Aviso): string {
+export function textoDeAviso({ servicio, clase, detalle }: Aviso): string {
   switch (clase) {
+    case 'truncado':
+      return `Se muestran ${detalle ?? 'solo una parte de los registros'} de ${servicio}. Usa los filtros para acotar y ver el resto.`;
     case 'red':
       return `No se pudo conectar con ${servicio}. Revisa tu conexión o que el servicio esté encendido.`;
     case 'timeout':
