@@ -17,14 +17,13 @@ Contrato: `docs/contratos/notifications-service.md` + `.xsd`. Matriz de
 eventos (`priority/title/entidad` por tipo) en
 `src/notifications/notification.types.ts`.
 
-## Estado Mongo (pendiente explícito)
+## Persistencia
 
-Sin Mongo todavía: persiste en `InMemoryNotificationsRepository` tras el
-puerto `NOTIFICATIONS_REPOSITORY`. Cuando `documents-service` fije el
-patrón: agregar `mongoose/@nestjs/mongoose`, `MONGO_URL` al compose,
-adaptador Mongoose con sus índices y cablearlo en `app.module` — el
-servicio y el controller no cambian. El job diario archiva a 90 días y
-jamás elimina.
+MongoDB (`MONGO_URL`), colección `notificaciones`, vía
+`MongoNotificationsRepository` tras el puerto `NOTIFICATIONS_REPOSITORY`.
+`InMemoryNotificationsRepository` queda solo para las unitarias. Con
+Mongo caído en marcha: health `degraded` y 503 en las rutas. El job diario archiva
+a 90 días y jamás elimina.
 
 ## Correr y probar
 
@@ -32,5 +31,5 @@ jamás elimina.
 npm install
 PORT=3109 SERVICE_NAME=notifications-service npm run start:dev
 npm test                                   # unitarias (sin infra)
-npm run test:integracion                   # requiere Mongo + stack (VM, skip hasta entonces)
+npm run test:integracion                   # requiere mongodb + redis + auth-service con seed
 ```
