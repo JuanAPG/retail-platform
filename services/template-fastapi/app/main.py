@@ -36,10 +36,11 @@ async def manejador_validacion(request: Request, error: RequestValidationError):
     # (`services/snippets/error-codes.md`). Los errores crudos de pydantic
     # traen el valor recibido: un NaN ahí hace que el JSON de la respuesta
     # no se pueda serializar y el 400 salga como 500.
-    detalles = [
-        ".".join(str(parte) for parte in e["loc"] if parte != "body") + f": {e['msg']}"
-        for e in error.errors()
-    ]
+    detalles = []
+    for e in error.errors():
+        # Un error de todo el cuerpo (loc = ("body",)) va sin ruta de campo.
+        campo = ".".join(str(parte) for parte in e["loc"] if parte != "body")
+        detalles.append(f"{campo}: {e['msg']}" if campo else e["msg"])
     return cuerpo_error(400, "Error de validación en la solicitud.",
                         request.url.path, "VALIDATION_ERROR", detalles)
 
