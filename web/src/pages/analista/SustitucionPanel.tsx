@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SectionHeader } from '../../components/SectionHeader';
 import { Grafica } from '../../components/Grafica';
+import { SelectorTipoGrafica } from '../../components/SelectorTipoGrafica';
 import { COLORES } from '../../components/coloresGrafica';
 import type Highcharts from 'highcharts';
 import { DataTable } from '../../components/DataTable';
@@ -35,6 +36,7 @@ const tipoDe = (t: string) => TIPO[t as keyof typeof TIPO] ?? TIPO.preferencia;
 export function SustitucionPanel() {
   const categorias = useFetch(getCategorias, []);
   const [categoria, setCategoria] = useState('');
+  const [tipoGrafica, setTipoGrafica] = useState<TipoSustitucion>('barras');
   const patrones = useFetch(
     () => (categoria ? getPatronesSustitucion(categoria) : Promise.resolve(null)),
     [categoria],
@@ -98,7 +100,14 @@ export function SustitucionPanel() {
       {categoria && !patrones.loading && !patrones.error && lista.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="rounded-panel bg-arena p-4">
-            <Grafica opciones={opcionesSustitucion(lista)} altura={Math.max(220, lista.length * 38 + 80)} />
+            <div className="mb-2 flex justify-end">
+              <SelectorTipoGrafica opciones={TIPOS_SUSTITUCION} valor={tipoGrafica} onChange={setTipoGrafica} nombre="sustitución" />
+            </div>
+            <Grafica
+              key={tipoGrafica}
+              opciones={opcionesSustitucion(lista, tipoGrafica)}
+              altura={tipoGrafica === 'barras' ? Math.max(220, lista.length * 38 + 80) : 360}
+            />
           </div>
           <DataTable
             rowKey={(p) => `${p.originProductId}-${p.targetProductId}-${p.type}`}
@@ -163,27 +172,89 @@ export function SustitucionPanel() {
   );
 }
 
-/** Fuerza (score 0–100 %) de cada indicio de sustitución; por precio en vino, por preferencia en salvia. */
-function opcionesSustitucion(lista: SubstitutionPattern[]): Highcharts.Options {
+export type TipoSustitucion = 'barras' | 'burbujas' | 'dona';
+
+const TIPOS_SUSTITUCION: { clave: TipoSustitucion; etiqueta: string; ayuda: string }[] = [
+  { clave: 'barras', etiqueta: 'Barras', ayuda: 'Fuerza de cada indicio, del más fuerte al más débil.' },
+  { clave: 'burbujas', etiqueta: 'Burbujas', ayuda: 'Lift (izquierda = casi no se compran juntos) contra fuerza; el tamaño es el número de canastas.' },
+  { clave: 'dona', etiqueta: 'Dona', ayuda: 'Cuántos indicios son por precio y cuántos por preferencia.' },
+];
+
+/**
+ * Los mismos indicios de sustitución en tres formas. Siempre son indicios de coocurrencia y precio
+ * (D-23), no prueba de causa: por precio en vino, por preferencia en salvia.
+ */
+function opcionesSustitucion(lista: SubstitutionPattern[], tipo: TipoSustitucion): Highcharts.Options {
+  const color = (p: SubstitutionPattern) => (p.type === 'precio' ? COLORES.vino : COLORES.salvia);
+  const nombre = (p: SubstitutionPattern) => `${p.originProductName} → ${p.targetProductName}`;
+  const tipoTexto = (p: SubstitutionPattern) => (p.type === 'precio' ? 'Por precio' : 'Por preferencia');
+
+  if (tipo === 'burbujas') {
+    return {
+      chart: { type: 'bubble', zooming: { type: 'xy' } },
+      xAxis: {
+        min: 0,
+        max: 1.2,
+        title: { text: 'Lift (menor que 1: se compran juntos menos de lo esperado)' },
+        plotLines: [{ value: 1, width: 2, color: COLORES.vino, dashStyle: 'Dash', label: { text: 'lift = 1', style: { color: COLORES.vino } } }],
+        gridLineWidth: 1,
+      },
+      yAxis: { min: 0, max: 100, title: { text: 'Fuerza del indicio (%)' } },
+      legend: { enabled: false },
+      tooltip: {
+        useHTML: true,
+        formatter() {
+          const p = lista[this.index];
+          return p ? `<b>${nombre(p)}</b><br/>${tipoTexto(p)} · fuerza ${Math.round(p.score * 100)} %<br/>lift ${Number(p.lift).toFixed(2)} · ${p.observations} canastas` : '';
+        },
+      },
+      series: [
+        {
+          type: 'bubble',
+          name: 'Indicios',
+          minSize: 14,
+          maxSize: 46,
+          data: lista.map((p) => ({ x: Number(p.lift), y: Math.round(p.score * 100), z: Math.max(1, Number(p.observations) || 1), color: color(p), name: nombre(p) })),
+          dataLabels: { enabled: true, format: '{point.name}', style: { fontSize: '10px', textOutline: 'none', color: COLORES.teal } },
+        },
+      ],
+    };
+  }
+
+  if (tipo === 'dona') {
+    const porPrecio = lista.filter((p) => p.type === 'precio').length;
+    const porPreferencia = lista.length - porPrecio;
+    return {
+      chart: { type: 'pie' },
+      tooltip: { pointFormat: '<b>{point.y}</b> indicio(s) · {point.percentage:.0f} %' },
+      plotOptions: { pie: { innerSize: '58%', borderRadius: 6, dataLabels: { enabled: true, format: '{point.name}: {point.y}', style: { textOutline: 'none', color: COLORES.teal } } } },
+      series: [
+        {
+          type: 'pie',
+          name: 'Indicios',
+          data: [
+            { name: 'Por precio', y: porPrecio, color: COLORES.vino },
+            { name: 'Por preferencia', y: porPreferencia, color: COLORES.salvia },
+          ].filter((d) => d.y > 0),
+        },
+      ],
+    };
+  }
+
+  // Barras: del indicio más fuerte al más débil.
+  const orden = [...lista].sort((a, b) => Number(b.score) - Number(a.score));
   return {
     chart: { type: 'bar' },
-    xAxis: { categories: lista.map((p) => `${p.originProductName} → ${p.targetProductName}`) },
+    xAxis: { categories: orden.map(nombre) },
     yAxis: { min: 0, max: 100, title: { text: 'Fuerza del indicio (%)' } },
     legend: { enabled: false },
     tooltip: {
       useHTML: true,
       formatter() {
-        const p = lista[this.index];
-        return `<b>${p.originProductName} → ${p.targetProductName}</b><br/>${p.type === 'precio' ? 'Por precio' : 'Por preferencia'} · fuerza ${Math.round(p.score * 100)} %<br/>lift ${p.lift.toFixed(2)} · ${p.observations} canastas`;
+        const p = orden[this.index];
+        return p ? `<b>${nombre(p)}</b><br/>${tipoTexto(p)} · fuerza ${Math.round(p.score * 100)} %<br/>lift ${Number(p.lift).toFixed(2)} · ${p.observations} canastas` : '';
       },
     },
-    series: [
-      {
-        type: 'bar',
-        name: 'Fuerza',
-        borderRadius: 6,
-        data: lista.map((p) => ({ y: Math.round(p.score * 100), color: p.type === 'precio' ? COLORES.vino : COLORES.salvia })),
-      },
-    ],
+    series: [{ type: 'bar', name: 'Fuerza', borderRadius: 6, data: orden.map((p) => ({ y: Math.round(p.score * 100), color: color(p) })) }],
   };
 }

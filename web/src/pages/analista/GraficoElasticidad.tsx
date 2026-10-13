@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { EmptyState } from '../../components/EmptyState';
 import { Grafica } from '../../components/Grafica';
+import { SelectorTipoGrafica } from '../../components/SelectorTipoGrafica';
 import { COLORES } from '../../components/coloresGrafica';
 import type Highcharts from 'highcharts';
 import { Select } from '../../components/ui/Select';
@@ -14,44 +15,68 @@ import { AtipicaBadge, CLASIFICACION, ClasificacionBadge, formatearE, formatearR
 
 const COLOR_CLASE = { elastic: COLORES.vino, inelastic: COLORES.salvia, unitary: COLORES.teal } as const;
 
+export type TipoElasticidad = 'columnas' | 'barras' | 'telarana';
+
+const TIPOS_ELASTICIDAD: { clave: TipoElasticidad; etiqueta: string; ayuda: string }[] = [
+  { clave: 'columnas', etiqueta: 'Columnas', ayuda: '|E| por zona o segmento, en el orden de la lista.' },
+  { clave: 'barras', etiqueta: 'Barras ordenadas', ayuda: 'De la más a la menos sensible al precio: la de arriba reacciona más.' },
+  { clave: 'telarana', etiqueta: 'Telaraña', ayuda: 'El perfil de sensibilidad de todas las zonas de un vistazo; el anillo marca |E| = 1.' },
+];
+
 /**
- * Columnas con |E| por zona/segmento (y Nacional); la línea punteada marca |E| = 1, la frontera entre
- * inelástica y elástica. Una barra sin dato suficiente queda vacía y lo dice el tooltip.
+ * |E| por zona/segmento (y Nacional) en tres formas: columnas, barras ordenadas y telaraña. En todas, la
+ * referencia |E| = 1 marca la frontera entre inelástica y elástica. Una barra sin dato suficiente queda
+ * vacía y lo dice el tooltip.
  */
-function opcionesGrafica(datos: ElasticityChartData): Highcharts.Options {
-  const filas: Array<{ nombre: string; v: ElasticityChartValue | ElasticityChartBar }> = [
+function opcionesGrafica(datos: ElasticityChartData, tipo: TipoElasticidad): Highcharts.Options {
+  const base: Array<{ nombre: string; v: ElasticityChartValue | ElasticityChartBar }> = [
     ...datos.bars.map((b) => ({ nombre: b.label, v: b })),
     ...(datos.national ? [{ nombre: 'Nacional', v: datos.national }] : []),
   ];
+  const magnitud = (v: ElasticityChartValue | ElasticityChartBar) => (v.value === null ? -1 : Math.abs(v.value));
+  const filas = tipo === 'barras' ? [...base].sort((x, y) => magnitud(y.v) - magnitud(x.v)) : base;
+  const puntos = filas.map((f) => ({
+    y: f.v.value === null ? null : Math.abs(f.v.value),
+    color: f.v.classification ? COLOR_CLASE[f.v.classification] : COLORES.salvia,
+  }));
+  const tooltip: Highcharts.TooltipOptions = {
+    useHTML: true,
+    formatter() {
+      const f = filas[this.index];
+      if (!f || f.v.value === null || f.v.classification === null) return `<b>${f?.nombre ?? ''}</b><br/>Sin datos suficientes`;
+      return `<b>${f.nombre}</b><br/>E = ${formatearE(f.v.value)} (${CLASIFICACION[f.v.classification].texto})<br/>R² ${formatearR2(f.v.rSquared)} · ${f.v.observations} obs.`;
+    },
+  };
+  const unitaria = (extra: Highcharts.YAxisPlotLinesOptions = {}): Highcharts.YAxisPlotLinesOptions => ({
+    value: 1, width: 2, color: COLORES.vino, dashStyle: 'Dash', zIndex: 5,
+    label: { text: '|E| = 1', style: { color: COLORES.vino, fontWeight: '600' } }, ...extra,
+  });
+
+  if (tipo === 'telarana') {
+    return {
+      chart: { polar: true, type: 'line' },
+      xAxis: { categories: filas.map((f) => f.nombre), tickmarkPlacement: 'on', lineWidth: 0 },
+      yAxis: { min: 0, gridLineInterpolation: 'polygon', lineWidth: 0, title: { text: undefined }, plotLines: [unitaria({ label: undefined })] },
+      legend: { enabled: false },
+      tooltip,
+      series: [{ type: 'area', name: '|E|', data: puntos.map((p) => p.y), color: COLORES.vino, fillOpacity: 0.18, marker: { enabled: true } }],
+    };
+  }
+
+  const horizontal = tipo === 'barras';
   return {
-    chart: { type: 'column' },
+    chart: { type: horizontal ? 'bar' : 'column' },
     xAxis: { categories: filas.map((f) => f.nombre) },
-    yAxis: {
-      min: 0,
-      title: { text: '|E|' },
-      plotLines: [
-        { value: 1, width: 2, color: COLORES.vino, dashStyle: 'Dash', zIndex: 5, label: { text: '|E| = 1', style: { color: COLORES.vino, fontWeight: '600' } } },
-      ],
-    },
+    yAxis: { min: 0, title: { text: '|E|' }, plotLines: [unitaria()] },
     legend: { enabled: false },
-    tooltip: {
-      useHTML: true,
-      formatter() {
-        const f = filas[this.index];
-        if (!f || f.v.value === null || f.v.classification === null) return `<b>${f?.nombre ?? ''}</b><br/>Sin datos suficientes`;
-        return `<b>${f.nombre}</b><br/>E = ${formatearE(f.v.value)} (${CLASIFICACION[f.v.classification].texto})<br/>R² ${formatearR2(f.v.rSquared)} · ${f.v.observations} obs.`;
-      },
-    },
+    tooltip,
     series: [
       {
-        type: 'column',
+        type: horizontal ? 'bar' : 'column',
         name: 'Elasticidad',
-        data: filas.map((f) => ({
-          y: f.v.value === null ? null : Math.abs(f.v.value),
-          color: f.v.classification ? COLOR_CLASE[f.v.classification] : COLORES.salvia,
-        })),
+        data: puntos,
         borderRadius: 6,
-        dataLabels: { enabled: true, formatter() { return this.y === null || this.y === undefined ? '' : String(Math.round(this.y * 100) / 100); } },
+        dataLabels: { enabled: true, format: '{y:.2f}' },
       },
     ],
   };
@@ -72,6 +97,7 @@ interface GraficoElasticidadProps {
  */
 export function GraficoElasticidad({ productos, presentacionId, onPresentacion, runId }: GraficoElasticidadProps) {
   const [agrupar, setAgrupar] = useState<'zone' | 'segment'>('zone');
+  const [tipoGrafica, setTipoGrafica] = useState<TipoElasticidad>('columnas');
   const [datos, setDatos] = useState<ElasticityChartData | null>(null);
   const [cargando, setCargando] = useState(false);
   const [sinResultados, setSinResultados] = useState<string | null>(null);
@@ -109,6 +135,12 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
 
   const valores = datos ? [...datos.bars.map((b) => b.value), datos.national?.value ?? null] : [];
   // Escala común: al menos un poco más que 1 para que la línea |E| = 1 siempre se vea.
+  // La telaraña compara el perfil de varias zonas: con menos de 3 con dato no dice nada, así que se deshabilita.
+  const conDato = datos ? [...datos.bars, ...(datos.national ? [datos.national] : [])].filter((b) => b.value !== null).length : 0;
+  const tiposDisponibles: { clave: TipoElasticidad; etiqueta: string; ayuda: string; noDisponible?: string }[] = TIPOS_ELASTICIDAD.map((t) =>
+    t.clave === 'telarana' && conDato < 3 ? { ...t, noDisponible: 'Se necesitan al menos 3 zonas o segmentos con dato' } : t,
+  );
+  const tipoEfectivo: TipoElasticidad = tiposDisponibles.find((t) => t.clave === tipoGrafica)?.noDisponible ? 'columnas' : tipoGrafica;
   const escala = Math.max(1.2, ...valores.filter((v): v is number => v !== null).map(Math.abs));
 
   return (
@@ -168,7 +200,10 @@ export function GraficoElasticidad({ productos, presentacionId, onPresentacion, 
             {GRANULARIDAD[datos.granularity]} · datos del {formatearDia(datos.periodStart)} al {formatearDia(datos.periodEnd)}
           </p>
 
-          <Grafica opciones={opcionesGrafica(datos)} />
+          <div className="flex justify-end">
+            <SelectorTipoGrafica opciones={tiposDisponibles} valor={tipoEfectivo} onChange={setTipoGrafica} nombre="elasticidad" />
+          </div>
+          <Grafica key={tipoEfectivo} opciones={opcionesGrafica(datos, tipoEfectivo)} altura={tipoEfectivo === 'telarana' ? 420 : undefined} />
 
           <details className="text-sm text-teal">
             <summary className="cursor-pointer font-semibold text-teal/70">Ver detalle (R², observaciones y zonas)</summary>

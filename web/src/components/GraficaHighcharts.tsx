@@ -1,5 +1,6 @@
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
+import 'highcharts/highcharts-more'; // telaraña (polar) y burbujas
 import { COLORES } from './coloresGrafica';
 
 const BASE: Highcharts.Options = {
