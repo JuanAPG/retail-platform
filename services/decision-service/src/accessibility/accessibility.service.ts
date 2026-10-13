@@ -9,6 +9,8 @@ import {
 } from '../entities/accessibility-weight.entity';
 import { AccessibilityComponentEntity } from '../entities/accessibility-component.entity';
 import { IncomeSegment } from '../entities/income-segment.entity';
+import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { ContextoPeticion } from '../common/audit/audit.module';
 
 /** Forma pública que exige el contrato (M12). No es una entidad: se arma. */
 export interface AccessibilityIndex {
@@ -40,15 +42,17 @@ export class AccessibilityService {
     @InjectRepository(IncomeSegment)
     private readonly segmentosRepo: Repository<IncomeSegment>,
     private readonly dataSource: DataSource,
+    /** Bitácora de cada corrida del índice (acción `ejecutar_corrida`). */
+    private readonly audit: AuditReporter,
   ) {}
 
   /**
    * Calcula el índice de accesibilidad de una zona AHORA MISMO y crea una
    * corrida nueva (`analisis_corridas`) cada vez que se llama: así se
    * puede ver cómo se mueve el número en el tiempo, en vez de pisar el
-   * resultado anterior.
+   * resultado anterior. `contexto` lleva el token y la IP para la bitácora.
    */
-  async calculateIndex(zoneId: string, segmentId: number): Promise<AccessibilityIndex> {
+  async calculateIndex(zoneId: string, segmentId: number, contexto: ContextoPeticion = {}): Promise<AccessibilityIndex> {
     const segmento = await this.segmentosRepo.findOne({ where: { id: segmentId } });
     if (!segmento) {
       throw new NotFoundException('El segmento de ingreso indicado no existe.');
@@ -94,7 +98,7 @@ export class AccessibilityService {
     // (corrida, parámetros, índice, pesos y componentes) o no queda nada.
     // Las validaciones y los cálculos van antes, para no tenerla abierta
     // más de lo necesario.
-    await this.dataSource.transaction(async (manager) => {
+    const corridaId = await this.dataSource.transaction(async (manager) => {
       const zonaRepo = manager.withRepository(this.zonaRepo);
       const pesosRepo = manager.withRepository(this.pesosRepo);
       const componentesRepo = manager.withRepository(this.componentesRepo);
@@ -120,7 +124,20 @@ export class AccessibilityService {
           }),
         ),
       );
+      return corridaId;
     });
+
+    // Después de confirmar: reportar nunca lanza, y la corrida ya quedó guardada.
+    await this.audit.reportar(
+      {
+        tabla: 'analisis_corridas',
+        registroId: corridaId,
+        accion: 'ejecutar_corrida',
+        descripcion: `Índice de accesibilidad de la zona ${zoneId} (segmento ${segmento.id}): ${indice.toFixed(4)}.`,
+        ip: contexto.ip ?? null,
+      },
+      contexto.token,
+    );
 
     return {
       zoneId,
@@ -164,7 +181,7 @@ export class AccessibilityService {
              MAX(CASE WHEN p.clave = 'basicBasketCost' THEN p.valor END) AS "basicBasketCost",
              MAX(CASE WHEN p.clave = 'estimatedIncome' THEN p.valor END) AS "estimatedIncome"
       FROM accesibilidad_zona az
-      JOIN analisis_corridas ac ON ac.id = az.corrida_id
+      JOIN analisis_corridas ac ON ac.id = az.corrida_id AND ac.tipo = 'accesibilidad'
       LEFT JOIN analisis_corrida_parametros p ON p.corrida_id = az.corrida_id
       WHERE az.zona_id = $1
       GROUP BY az.corrida_id, az.indice, ac.ejecutada_en

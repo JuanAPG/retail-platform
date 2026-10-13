@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { NotificationsModule } from './common/notifications/notifications.module';
 import { AccessibilityModule } from './accessibility/accessibility.module';
 import { SimulationModule } from './simulation/simulation.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
@@ -24,6 +25,7 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
     JwtModule.register({}),
+    NotificationsModule,
     AccessibilityModule,
     SimulationModule,
     RecommendationsModule,

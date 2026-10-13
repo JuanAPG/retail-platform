@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -24,8 +24,13 @@ export class AccessibilityController {
   @XmlRoot('indiceAccesibilidad')
   @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({ summary: 'Calcula el índice de accesibilidad de una zona (crea una corrida nueva cada vez)' })
-  calculateIndex(@Query() query: AccessibilityIndexQueryDto) {
-    return this.accessibilityService.calculateIndex(query.zoneId, query.segmentId);
+  calculateIndex(
+    @Query() query: AccessibilityIndexQueryDto,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    // El token y la IP van a la bitácora (audit-service exige sesión).
+    return this.accessibilityService.calculateIndex(query.zoneId, query.segmentId, { token, ip });
   }
 
   @Get('by-zone/:zoneId')
