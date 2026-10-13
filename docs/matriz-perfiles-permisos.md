@@ -75,6 +75,7 @@ Leyenda corta: **T** Total · **LA** Lect./Act. · **L** Lectura · **LP** Lectu
 | Comparación de precios | M08 | pricing-service | L | L | T | L | L | L | LP |
 | Reglas de asociación (Apriori, FP-Growth) | M10 | algorithms-core | L | T | L | L | L | L | – |
 | Elasticidad | M11 | algorithms-core | L | L | L | T | L | L | – |
+| Estadística: clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) ⁽⁵⁾ | — | analytics-stats | L | T | L | L | L | L | – |
 | Indicadores de accesibilidad | M12 | decision-service | L | T | L | L | L | L | – |
 | Simulación de formatos y empaques | M13 | decision-service | L | L | L | L | T | L | – |
 | Recomendaciones ⁽²⁾ | M14 | decision-service | L | L | **A** | L | **T** | L | – |
@@ -91,6 +92,9 @@ Notas:
 4. La Matriz S0 dice "Total", pero M15 está definida como **bitácora inmutable**
    (`db/data_retail.sql`): nadie actualiza ni borra registros. Se trata como Lectura
    (más el alta automática que hacen los servicios). **Confirmar (P-10).**
+5. **D-24:** fila agregada (no existía en la Matriz S0; estaba en P-07). Ejecutar una
+   prueba o una corrida de clustering es Total del Analista comercial; los demás
+   perfiles internos leen las corridas guardadas.
 
 ### 3.1 Módulos sin fila en la Matriz (PENDIENTE)
 
@@ -98,7 +102,7 @@ Notas:
 |---|---|---|
 | Analítica descriptiva (M09) | core-process-service | P-07 · se asume igual que Canastas |
 | Sustitución (RF-17) | algorithms-core | P-07 · ¿va con Asociación o con Elasticidad? |
-| Clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) | analytics-stats | P-07 |
+| Clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) | analytics-stats | Resuelto por **D-24** (fila en §3) |
 | Notificaciones (M17) | notifications-service | P-07 · se asume LA de lo propio para todos |
 | Configuración analítica: canasta básica (D-03), periodo de alerta (D-09), umbrales (D-13) | varios | P-07 |
 | Captura de campo: precio observado, disponibilidad, encuestas, ubicación (RF-33 a RF-38) | por definir | P-01, P-03 |
@@ -114,7 +118,7 @@ Notas:
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (`analisis_corrida_parametros`), sin columna nueva en `analisis_corridas`, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-23)
+### 4.2 Reglas de negocio (D-01 a D-24)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -141,6 +145,7 @@ Notas:
 | D-21 | Elasticidad | `POST /v1/elasticity/calculate` agrupa las ventas por **día, semana o mes** (`granularity`); default **semana**. RN-03 pide mes, pero queda **fuera del Parcial 2**, así que no es una regla vigente que cumplir todavía: semana se eligió porque promedia el ruido de entre-semana/fin-de-semana sin diluir los cambios de precio (día es más ruidoso; mes da muy pocos puntos con poca historia). | Sin `granularity`, la corrida sale con `granularity: "week"`. |
 | D-22 | Elasticidad | `GET /v1/elasticity/current` solo cuenta como **vigente** la corrida completada más reciente **sin** `dateFrom`/`dateTo` (ventana completa). Una corrida con esos filtros es exploratoria: nunca se promueve aquí aunque sea la más reciente; se consulta por su `runId` en `GET /v1/elasticity/chart`. | Una corrida filtrada por fecha no cambia lo que devuelve `/current`, aunque sea posterior a la vigente. |
 | D-23 | Sustitución | `GET /v1/substitution/patterns` detecta **indicios** de sustitución dentro de una misma categoría por **coocurrencia** (lift < 1 sobre las canastas que compraron la categoría, con al menos 1 coocurrencia esperada y al menos 2 canastas por producto) y **correlación de precio** (Pearson entre el precio vigente de A y "la canasta llevó B": `precio` si r ≥ 0.3, si no `preferencia`). **No es elasticidad cruzada.** El disparador por **desabasto no aplica**: no hay historial de inventario. Cada par trae su evidencia: `priceVariation` = (máximo − mínimo) / mínimo del precio de A; `originFrequencyChange` y `targetFrequencyChange` = proporción de canastas con A (o con B) cuando A está caro menos cuando está barato, con el corte en el punto medio entre el precio mínimo y el máximo de A. Es un indicio, nunca una causa. Resuelve el **método** de PR-5; el disparador por umbral de precio (RN-06) sigue PENDIENTE. | 12 canastas: leche a $10 en 6 (5 llevan leche, 1 queso) y a $12 en 6 (1 leche, 5 queso) → Leche → Queso tipo `precio`, lift 0, r = 0.6667, `priceVariation` 0.2, frecuencias −0.6667 y +0.6667 (`substitution.spec.ts`). |
+| D-24 | Estadística (analytics-stats) | Permisos de RF-16 y RF-20 a RF-22, iguales a M10: solo el **Analista comercial** ejecuta pruebas de hipótesis, ANOVA, proporciones y corridas de clustering (Total); los 6 perfiles internos leen las corridas de clustering guardadas; el **Proveedor** no tiene acceso. Las pruebas se calculan al vuelo y no se guardan. Resuelve P-07 para este módulo. | Proveedor → `403` en todas las rutas; Administrador → `403` en `POST /v1/anova` y en `POST /v1/clustering/run`, `200` en `GET /v1/clustering/runs`. |
 
 ## 5. Flujos con estado
 
