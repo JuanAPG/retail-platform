@@ -4,6 +4,8 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { ContextoPeticion } from '../common/audit/audit.module';
+import { AvisoDecision, NotificationsReporter } from '../common/notifications/notifications-reporter.service';
+import { ROL } from '../common/roles';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { Recommendation, RecommendationStatus } from '../entities/recommendation.entity';
@@ -57,6 +59,8 @@ export class RecommendationsService {
     private readonly dataSource: DataSource,
     /** Bitácora de cada recomendación creada (acción `generar_recomendacion`). */
     private readonly audit: AuditReporter,
+    /** Avisos `recomendacion.generada` y `recomendacion.resuelta` (D-12). */
+    private readonly avisos: NotificationsReporter,
   ) {}
 
   /** Corre las 4 reglas sobre el contexto dado. No escribe nada. */
@@ -132,7 +136,32 @@ export class RecommendationsService {
         ),
       ),
     );
+    // D-12: un solo aviso por `generate` a la bandeja del Gerente de
+    // categoría, que es quien decide. Solo ids y conteo, sin contenido.
+    this.avisar(
+      {
+        evento: 'recomendacion.generada',
+        recipientRole: ROL.GERENTE_CATEGORIA,
+        payload: {
+          relatedEntityId: guardadas[0].id,
+          title: guardadas.length === 1 ? 'Nueva recomendación' : `${guardadas.length} recomendaciones nuevas`,
+          message:
+            `Se generaron ${guardadas.length} recomendación(es) pendientes de decisión: ` +
+            `${guardadas.map((r) => r.id).join(', ')}.`,
+        },
+      },
+      contexto,
+    );
     return guardadas;
+  }
+
+  /**
+   * Sin `await`: el aviso no retrasa la respuesta, y si notifications-service
+   * falla (403, 5xx, timeout) la operación ya quedó hecha igual. Se reenvía
+   * el token del usuario: con su rol el receptor valida el origen.
+   */
+  private avisar(aviso: AvisoDecision, contexto: ContextoPeticion): void {
+    void this.avisos.notificar(aviso, { token: contexto.token }).catch(() => undefined);
   }
 
   /**
@@ -206,7 +235,9 @@ export class RecommendationsService {
   /**
    * Un solo UPDATE condicionado a `estatus = 'propuesta'`: si dos decisiones
    * llegan a la vez, solo una afecta la fila; la otra recibe 409.
-   * TODO(D-12): avisar al Auditor de cada decisión (notifications-service).
+   * D-12: la decisión se avisa al Planeador (`recomendacion.resuelta`); el
+   * Auditor recibe copia automática desde notifications-service, así que
+   * aquí NO se le manda un segundo aviso.
    */
   private async decidir(
     id: string,
@@ -237,6 +268,18 @@ export class RecommendationsService {
         ip: contexto.ip ?? null,
       },
       contexto.token,
+    );
+    this.avisar(
+      {
+        evento: 'recomendacion.resuelta',
+        recipientRole: ROL.PLANEADOR,
+        payload: {
+          relatedEntityId: id,
+          title: 'Recomendación resuelta',
+          message: `Recomendación ${id} ${aprobada ? 'aprobada' : 'rechazada'}.` + (motivo ? ` Motivo: ${motivo}` : ''),
+        },
+      },
+      contexto,
     );
     return this.explain(id);
   }

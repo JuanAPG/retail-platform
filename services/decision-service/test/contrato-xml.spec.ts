@@ -110,7 +110,7 @@ describe('Contrato XML contra el XSD (integración)', () => {
       // componentes y parámetros, con la corrida (ON DELETE CASCADE).
       if (escenarios.length > 0) await db.query('DELETE FROM escenarios WHERE id = ANY($1::uuid[])', [escenarios]);
       if (corridasAccesibilidad.length > 0) {
-        await db.query('DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[])', [corridasAccesibilidad]);
+        await db.query(`DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[]) AND tipo = 'accesibilidad'`, [corridasAccesibilidad]);
       }
     } finally {
       await db.destroy();

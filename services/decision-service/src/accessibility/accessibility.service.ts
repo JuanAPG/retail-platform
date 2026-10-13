@@ -181,7 +181,7 @@ export class AccessibilityService {
              MAX(CASE WHEN p.clave = 'basicBasketCost' THEN p.valor END) AS "basicBasketCost",
              MAX(CASE WHEN p.clave = 'estimatedIncome' THEN p.valor END) AS "estimatedIncome"
       FROM accesibilidad_zona az
-      JOIN analisis_corridas ac ON ac.id = az.corrida_id
+      JOIN analisis_corridas ac ON ac.id = az.corrida_id AND ac.tipo = 'accesibilidad'
       LEFT JOIN analisis_corrida_parametros p ON p.corrida_id = az.corrida_id
       WHERE az.zona_id = $1
       GROUP BY az.corrida_id, az.indice, ac.ejecutada_en

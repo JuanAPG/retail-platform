@@ -19,6 +19,30 @@ del índice, con `ejecutar_corrida` (tabla `analisis_corridas`). Se reenvía el
 `Authorization` del usuario; si audit-service falla, la operación no se
 rompe.
 
+## Avisos a notifications-service (D-12)
+
+Después de cada operación exitosa, decision-service manda **un** aviso a
+`POST {NOTIFICATIONS_SERVICE_URL}/v1/notifications`
+(`sourceService: "decision-service"`; contrato en `notifications-service.md`):
+
+| Evento | Cuándo | Quién lo origina | A quién llega |
+|---|---|---|---|
+| `escenario.generado` | Se guardó un escenario (`POST /v1/simulation/price` o `/presentation`) | Planeador | El usuario que simuló (`recipientUserId` = id del JWT) |
+| `recomendacion.generada` | `POST /v1/recommendations/generate` guardó al menos una (un solo aviso por llamada, con los ids y el conteo) | Planeador | Rol Gerente de categoría |
+| `recomendacion.resuelta` | `PATCH /v1/recommendations/:id/approve` o `/reject` (el mensaje dice aprobada o rechazada y, en el rechazo, el motivo) | Gerente de categoría | Rol Planeador, con copia automática al rol Auditor |
+
+- **No se manda un segundo aviso al Auditor**: la copia la genera
+  notifications-service por su cuenta.
+- Se **reenvía el `Authorization` del usuario** que hizo la acción, nunca una
+  cuenta de servicio ni un token propio: notifications-service valida el
+  origen con el rol de ese token y responde 403 a cualquier otro rol
+  (incluido el Administrador).
+- **El fallo del aviso no afecta la operación**: no se espera su resultado
+  para responder, tiene un timeout de 1.5 s y cualquier error (403, 5xx,
+  timeout, servicio caído) solo queda en el log. Sin
+  `NOTIFICATIONS_SERVICE_URL` no se envía nada.
+- Si la operación falla (400, 404, 409…) no se manda ningún aviso.
+
 ## Lectura de datos de otros servicios (Fase B)
 
 decision-service lee datos de otros dueños por **SQL de solo lectura** sobre
@@ -38,6 +62,11 @@ Lo único que escribe son sus tablas: `accesibilidad_zona`,
 `recomendacion_evidencias`; y sus propias corridas de accesibilidad en
 `analisis_corridas` y `analisis_corrida_parametros` (tablas compartidas con
 algorithms-core, que filtra por `tipo`).
+
+**Límite conocido del Parcial 2 (D-27c):** `analisis_corridas` es de
+algorithms-core y decision-service también escribe en ella sus corridas de
+accesibilidad (`tipo = 'accesibilidad'`). No se agregan escrituras nuevas a
+esa tabla, y toda consulta de decision-service que la toca filtra por `tipo`.
 
 Es Fase B **a propósito**: en Fase C (Parcial 3) estas lecturas pasan a
 llamadas HTTP a los servicios dueños. Hoy están en

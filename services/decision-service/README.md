@@ -39,6 +39,14 @@ cada cálculo del índice de accesibilidad con
 reenvía el `Authorization` del usuario; si audit-service falla, la operación
 no se rompe.
 
+Avisos (D-12, `src/common/notifications/`, requiere
+`NOTIFICATIONS_SERVICE_URL`): cada escenario guardado avisa
+`escenario.generado` a quien simuló; `generate`, `recomendacion.generada` al
+Gerente de categoría; aprobar o rechazar, `recomendacion.resuelta` al
+Planeador (el Auditor recibe copia automática desde notifications-service).
+También se reenvía el `Authorization` del usuario y un fallo del aviso no
+rompe la operación.
+
 ## Pruebas
 
 ```bash

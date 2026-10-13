@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DataSource, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Recommendation } from '../entities/recommendation.entity';
 import { RecommendationEvidence } from '../entities/recommendation-evidence.entity';
 import { RecommendationsService } from './recommendations.service';
@@ -54,13 +55,15 @@ function crearServicio(filas: Filas = {}) {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
   const audit = { reportar: jest.fn(async () => undefined) };
+  const avisos = { notificar: jest.fn(async (_aviso: Fila, _ctx?: { token?: string }): Promise<void> => undefined) };
   const servicio = new RecommendationsService(
     recommendationRepo as unknown as Repository<Recommendation>,
     evidenceRepo as unknown as Repository<RecommendationEvidence>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
+    avisos as unknown as NotificationsReporter,
   );
-  return { qb, recommendationRepo, evidenceRepo, manager, dataSource, audit, servicio };
+  return { qb, recommendationRepo, evidenceRepo, manager, dataSource, audit, avisos, servicio };
 }
 
 /** Parámetros con los que se llamó la consulta que contiene `fragmento`. */
@@ -255,11 +258,12 @@ describe('RecommendationsService — regla de asociación', () => {
 
 describe('RecommendationsService.generate', () => {
   it('con 0 borradores devuelve [] sin abrir transacción ni reportar', async () => {
-    const { dataSource, audit, servicio } = crearServicio();
+    const { dataSource, audit, avisos, servicio } = crearServicio();
 
     expect(await servicio.generate({})).toEqual([]);
     expect(dataSource.transaction).not.toHaveBeenCalled();
     expect(audit.reportar).not.toHaveBeenCalled();
+    expect(avisos.notificar).not.toHaveBeenCalled();
   });
 
   it('con 0 borradores tampoco borra las pendientes que ya había', async () => {
@@ -300,6 +304,59 @@ describe('RecommendationsService.generate', () => {
       );
     }
     expect(audit.reportar.mock.invocationCallOrder[0]).toBeGreaterThan(dataSource.transaction.mock.invocationCallOrder[0]);
+  });
+
+  const DOS_BORRADORES = {
+    accesibilidad: [{ zonaId: 'zona-1', zona: 'Centro', indice: '0.3', corridaId: 'run-a', ejecutadaEn: FECHA }],
+    elasticidad: [filaElasticidad('2.5', 'pres-9')],
+  };
+
+  it('D-12: después de la transacción manda UN aviso recomendacion.generada al rol Gerente de categoría, con ids y conteo', async () => {
+    const { dataSource, avisos, servicio } = crearServicio(DOS_BORRADORES);
+
+    await servicio.generate({}, { token: 'Bearer plan', ip: '10.0.0.5' });
+
+    expect(avisos.notificar).toHaveBeenCalledTimes(1);
+    const [aviso, ctx] = avisos.notificar.mock.calls[0];
+    expect(ctx).toEqual({ token: 'Bearer plan' });
+    expect(aviso).toMatchObject({
+      evento: 'recomendacion.generada',
+      recipientRole: 'Gerente de categoría',
+      payload: { relatedEntityId: 'rec-1', title: '2 recomendaciones nuevas' },
+    });
+    expect(aviso).not.toHaveProperty('recipientUserId');
+    const { message } = aviso.payload as { message: string };
+    expect(message).toContain('2 recomendación(es)');
+    expect(message).toContain('rec-1, rec-2');
+    // Sin contenido de las recomendaciones: solo ids y conteo.
+    expect(message).not.toContain('Centro');
+    expect(avisos.notificar.mock.invocationCallOrder[0]).toBeGreaterThan(dataSource.transaction.mock.invocationCallOrder[0]);
+  });
+
+  it('si la transacción falla no se avisa', async () => {
+    const { dataSource, avisos, servicio } = crearServicio(DOS_BORRADORES);
+    dataSource.transaction.mockRejectedValue(new Error('se cayó la base'));
+
+    await expect(servicio.generate({})).rejects.toThrow('se cayó la base');
+    expect(avisos.notificar).not.toHaveBeenCalled();
+  });
+
+  it('un fallo del aviso no cambia la respuesta de generate', async () => {
+    const { avisos, servicio } = crearServicio(DOS_BORRADORES);
+    avisos.notificar.mockRejectedValue(new Error('notifications caído'));
+
+    const guardadas = await servicio.generate({}, { token: 'Bearer plan' });
+
+    expect(guardadas.map((r) => r.id)).toEqual(['rec-1', 'rec-2']);
+  });
+
+  it('generate no espera al aviso para responder', async () => {
+    const { avisos, servicio } = crearServicio(DOS_BORRADORES);
+    avisos.notificar.mockReturnValue(new Promise<void>(() => undefined));
+
+    const guardadas = await servicio.generate({});
+
+    expect(guardadas).toHaveLength(2);
   });
 });
 
@@ -444,6 +501,55 @@ describe('RecommendationsService.approve / reject', () => {
     expect(evento.descripcion).toContain('u-ger');
   });
 
+  it('D-12, approve: avisa recomendacion.resuelta al rol Planeador (una sola vez: el Auditor recibe copia desde notifications)', async () => {
+    const { recommendationRepo, avisos, servicio } = crearServicio();
+    recommendationRepo.findOne.mockResolvedValue({ ...GUARDADA, estatus: 'aceptada' });
+
+    await servicio.approve('rec-1', GERENTE, { token: 'Bearer g', ip: '10.0.0.9' });
+
+    expect(avisos.notificar).toHaveBeenCalledTimes(1);
+    expect(avisos.notificar).toHaveBeenCalledWith(
+      {
+        evento: 'recomendacion.resuelta',
+        recipientRole: 'Planeador',
+        payload: { relatedEntityId: 'rec-1', title: 'Recomendación resuelta', message: 'Recomendación rec-1 aprobada.' },
+      },
+      { token: 'Bearer g' },
+    );
+    expect(avisos.notificar.mock.invocationCallOrder[0]).toBeGreaterThan(recommendationRepo.update.mock.invocationCallOrder[0]);
+  });
+
+  it('D-12, reject: avisa recomendacion.resuelta al rol Planeador con estatus rechazada y el motivo', async () => {
+    const { recommendationRepo, avisos, servicio } = crearServicio();
+    recommendationRepo.findOne.mockResolvedValue({ ...GUARDADA, estatus: 'descartada' });
+
+    await servicio.reject('rec-1', 'No aplica en temporada escolar.', GERENTE, { token: 'Bearer g' });
+
+    expect(avisos.notificar).toHaveBeenCalledTimes(1);
+    expect(avisos.notificar).toHaveBeenCalledWith(
+      {
+        evento: 'recomendacion.resuelta',
+        recipientRole: 'Planeador',
+        payload: {
+          relatedEntityId: 'rec-1',
+          title: 'Recomendación resuelta',
+          message: 'Recomendación rec-1 rechazada. Motivo: No aplica en temporada escolar.',
+        },
+      },
+      { token: 'Bearer g' },
+    );
+  });
+
+  it('un fallo del aviso no cambia la respuesta de approve', async () => {
+    const { recommendationRepo, avisos, servicio } = crearServicio();
+    recommendationRepo.findOne.mockResolvedValue({ ...GUARDADA, estatus: 'aceptada' });
+    avisos.notificar.mockRejectedValue(new Error('HTTP 403'));
+
+    const respuesta = await servicio.approve('rec-1', GERENTE, { token: 'Bearer g' });
+
+    expect(respuesta).toMatchObject({ recommendationId: 'rec-1', status: 'aceptada' });
+  });
+
   it("reject: 'propuesta' → 'descartada' y la bitácora lleva 'rechazar' con el motivo y el Gerente", async () => {
     const { recommendationRepo, audit, servicio } = crearServicio();
     recommendationRepo.findOne.mockResolvedValue({ ...GUARDADA, estatus: 'descartada' });
@@ -459,16 +565,17 @@ describe('RecommendationsService.approve / reject', () => {
   });
 
   it('id inexistente: 404 y no reporta', async () => {
-    const { recommendationRepo, audit, servicio } = crearServicio();
+    const { recommendationRepo, audit, avisos, servicio } = crearServicio();
     recommendationRepo.update.mockResolvedValue({ affected: 0 });
     recommendationRepo.findOne.mockResolvedValue(null);
 
     await expect(servicio.approve('no-existe', GERENTE)).rejects.toBeInstanceOf(NotFoundException);
     expect(audit.reportar).not.toHaveBeenCalled();
+    expect(avisos.notificar).not.toHaveBeenCalled();
   });
 
   it.each(['aceptada', 'descartada'])("ya en '%s' (o la ganó otra decisión simultánea): 409 y no reporta", async (estatus) => {
-    const { recommendationRepo, audit, servicio } = crearServicio();
+    const { recommendationRepo, audit, avisos, servicio } = crearServicio();
     recommendationRepo.update.mockResolvedValue({ affected: 0 });
     recommendationRepo.findOne.mockResolvedValue({ ...GUARDADA, estatus });
 
@@ -477,6 +584,7 @@ describe('RecommendationsService.approve / reject', () => {
     expect(error).toBeInstanceOf(ConflictException);
     expect(error.message).toContain(estatus);
     expect(audit.reportar).not.toHaveBeenCalled();
+    expect(avisos.notificar).not.toHaveBeenCalled();
   });
 });
 

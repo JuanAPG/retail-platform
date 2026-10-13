@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Scenario } from '../entities/scenario.entity';
 import { ScenarioChange } from '../entities/scenario-change.entity';
 import { ScenarioResult } from '../entities/scenario-result.entity';
@@ -56,14 +57,16 @@ function crearServicio(respuestas: Respuestas) {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
   const audit = { reportar: jest.fn(async () => undefined) };
+  const avisos = { notificar: jest.fn(async (_aviso: Fila, _ctx?: { token?: string }): Promise<void> => undefined) };
   const servicio = new SimulationService(
     {} as Repository<Scenario>,
     {} as Repository<ScenarioChange>,
     {} as Repository<ScenarioResult>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
+    avisos as unknown as NotificationsReporter,
   );
-  return { manager, dataSource, audit, servicio };
+  return { manager, dataSource, audit, avisos, servicio };
 }
 
 function nombreDuplicado(): QueryFailedError {
@@ -141,7 +144,7 @@ describe('SimulationService.simulatePriceChange', () => {
   });
 
   it('sin elasticidad calculada: NotFoundException con mensaje claro y no guarda nada', async () => {
-    const { dataSource, audit, servicio } = crearServicio(respuestasPrecio([]));
+    const { dataSource, audit, avisos, servicio } = crearServicio(respuestasPrecio([]));
 
     const error = await servicio.simulatePriceChange(DTO_PRECIO, USUARIO).catch((e) => e);
 
@@ -150,6 +153,41 @@ describe('SimulationService.simulatePriceChange', () => {
     expect(error.message).toContain('POST /elasticity/calculate');
     expect(dataSource.transaction).not.toHaveBeenCalled();
     expect(audit.reportar).not.toHaveBeenCalled();
+    expect(avisos.notificar).not.toHaveBeenCalled();
+  });
+
+  it('D-12: después de guardar avisa escenario.generado a quien simuló, con su token', async () => {
+    const { manager, dataSource, avisos, servicio } = crearServicio(
+      respuestasPrecio([{ valor: '-1.5', corridaId: 'run-1', esNacional: false }]),
+    );
+
+    const resultado = await servicio.simulatePriceChange(DTO_PRECIO, USUARIO, { token: 'Bearer abc', ip: '10.0.0.5' });
+
+    const guardado = manager.save.mock.calls[0][0];
+    expect(avisos.notificar).toHaveBeenCalledTimes(1);
+    expect(avisos.notificar).toHaveBeenCalledWith(
+      {
+        evento: 'escenario.generado',
+        recipientUserId: 'u-1',
+        payload: {
+          relatedEntityId: resultado.scenarioId,
+          title: 'Nuevo escenario',
+          message: `Se guardó el escenario "${guardado.nombre}".`,
+        },
+      },
+      { token: 'Bearer abc' },
+    );
+    expect(avisos.notificar.mock.invocationCallOrder[0]).toBeGreaterThan(dataSource.transaction.mock.invocationCallOrder[0]);
+  });
+
+  it('un fallo del aviso no cambia la respuesta de la simulación', async () => {
+    const { avisos, servicio } = crearServicio(respuestasPrecio([{ valor: '-1.5', corridaId: 'run-1', esNacional: false }]));
+    avisos.notificar.mockRejectedValue(new Error('notifications caído'));
+
+    const resultado = await servicio.simulatePriceChange(DTO_PRECIO, USUARIO, { token: 'Bearer abc' });
+
+    expect(resultado.scenarioId).toBeDefined();
+    expect(resultado.results).toHaveLength(2);
   });
 
   it('después de guardar reporta a la bitácora con simular y el id del escenario', async () => {
@@ -287,6 +325,36 @@ describe('SimulationService.simulatePresentationChange', () => {
     );
   });
 
+  it('D-12: la comparación de presentaciones también avisa escenario.generado a quien simuló', async () => {
+    const { avisos, servicio } = crearServicio(
+      respuestasPresentacion(
+        [
+          presentacion('p-250', 250, 'masa', 0.001),
+          presentacion('p-500', 500, 'masa', 0.001, true),
+          presentacion('p-1k', 1000, 'masa', 0.001),
+        ],
+        [
+          { presentationId: 'p-250', precio: 15 },
+          { presentationId: 'p-500', precio: 25 },
+          { presentationId: 'p-1k', precio: 45 },
+        ],
+        [],
+      ),
+    );
+
+    const resultado = await servicio.simulatePresentationChange({ productId: 'prod-1' }, USUARIO, { token: 'Bearer abc' });
+
+    expect(avisos.notificar).toHaveBeenCalledTimes(1);
+    expect(avisos.notificar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evento: 'escenario.generado',
+        recipientUserId: 'u-1',
+        payload: expect.objectContaining({ relatedEntityId: resultado.scenarioId }),
+      }),
+      { token: 'Bearer abc' },
+    );
+  });
+
   it('D-14, límite del mínimo: 2 presentaciones con precio dan error y 3 con precio pasan', async () => {
     const TRES = [
       presentacion('p-250', 250, 'masa', 0.001),
@@ -306,6 +374,7 @@ describe('SimulationService.simulatePresentationChange', () => {
     expect(error.message).toContain(`al menos ${PRESENTACIONES_MINIMAS} con precio`);
     expect(conDos.dataSource.transaction).not.toHaveBeenCalled();
     expect(conDos.audit.reportar).not.toHaveBeenCalled();
+    expect(conDos.avisos.notificar).not.toHaveBeenCalled();
 
     const conTres = crearServicio(
       respuestasPresentacion(TRES, [...DOS_PRECIOS, { presentationId: 'p-1k', precio: 45 }], []),
@@ -339,12 +408,13 @@ describe('SimulationService.saveScenario (vía simulatePriceChange)', () => {
   const ELASTICIDAD = [{ valor: '-1.5', corridaId: 'run-1', esNacional: false }];
 
   it('nombre duplicado (23505) en los 3 intentos: reintenta y termina en 409, nunca 500', async () => {
-    const { dataSource, audit, servicio } = crearServicio(respuestasPrecio(ELASTICIDAD));
+    const { dataSource, audit, avisos, servicio } = crearServicio(respuestasPrecio(ELASTICIDAD));
     dataSource.transaction.mockRejectedValue(nombreDuplicado());
 
     await expect(servicio.simulatePriceChange(DTO_PRECIO, USUARIO)).rejects.toBeInstanceOf(ConflictException);
     expect(dataSource.transaction).toHaveBeenCalledTimes(3);
     expect(audit.reportar).not.toHaveBeenCalled();
+    expect(avisos.notificar).not.toHaveBeenCalled();
   });
 
   it('si el reintento funciona, guarda con un id nuevo y no lanza', async () => {

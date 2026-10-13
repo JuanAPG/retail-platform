@@ -5,6 +5,7 @@ import { DataSource, In, QueryFailedError, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { ContextoPeticion } from '../common/audit/audit.module';
+import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Pagina, PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { Scenario } from '../entities/scenario.entity';
@@ -99,6 +100,8 @@ export class SimulationService {
     private readonly dataSource: DataSource,
     /** Bitácora de cada simulación (acción `simular`). */
     private readonly audit: AuditReporter,
+    /** Aviso `escenario.generado` a quien simuló (D-12). */
+    private readonly avisos: NotificationsReporter,
   ) {}
 
   /**
@@ -178,6 +181,7 @@ export class SimulationService {
       },
       contexto.token,
     );
+    this.avisarEscenario(escenario, user, contexto);
 
     return {
       type: 'price',
@@ -398,6 +402,7 @@ export class SimulationService {
       },
       contexto.token,
     );
+    this.avisarEscenario(escenario, user, contexto);
 
     return {
       type: 'presentacion',
@@ -580,6 +585,28 @@ export class SimulationService {
 
       return escenario;
     });
+  }
+
+  /**
+   * D-12: `escenario.generado` vuelve a quien lo simuló. Sin `await`: el
+   * aviso no retrasa la respuesta, y si notifications-service falla el
+   * escenario ya quedó guardado igual. Se reenvía el token del usuario.
+   */
+  private avisarEscenario(escenario: Scenario, user: SesionUsuario, contexto: ContextoPeticion): void {
+    void this.avisos
+      .notificar(
+        {
+          evento: 'escenario.generado',
+          recipientUserId: user.id,
+          payload: {
+            relatedEntityId: escenario.id,
+            title: 'Nuevo escenario',
+            message: `Se guardó el escenario "${escenario.nombre}".`,
+          },
+        },
+        { token: contexto.token },
+      )
+      .catch(() => undefined);
   }
 
   /** Lee el JSON de `descripcion`; null si el escenario es anterior al snapshot o no es JSON. */
