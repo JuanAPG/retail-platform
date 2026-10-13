@@ -21,6 +21,8 @@ import { AccesibilidadPanel } from './analista/AccesibilidadPanel';
 import { CanastasPanel } from './analista/CanastasPanel';
 import { ZonasPanel } from './admin/ZonasPanel';
 import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
+import { EstadisticaPanel } from './analista/EstadisticaPanel';
+import { ClusteringPanel } from './analista/ClusteringPanel';
 
 type Tab =
   | 'transacciones'
@@ -33,6 +35,8 @@ type Tab =
   | 'sustitucion'
   | 'elasticidad'
   | 'accesibilidad'
+  | 'estadistica'
+  | 'agrupacion'
   | 'productos'
   | 'tiendas';
 
@@ -172,6 +176,8 @@ export function AnalistaPortal() {
 
         {tab === 'canastas' && <CanastasPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
+        {tab === 'estadistica' && <EstadisticaPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
+        {tab === 'agrupacion' && <ClusteringPanel />}
         {tab === 'accesibilidad' && <AccesibilidadPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
         {tab === 'productos' && <ProductosLectura estado={productos} />}

@@ -83,6 +83,8 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'sustitucion', label: 'Sustitución', icon: <IconSustitucion /> },
     { key: 'elasticidad', label: 'Elasticidad de precios', icon: <IconElasticidad /> },
     { key: 'accesibilidad', label: 'Accesibilidad', icon: <IconAccesibilidad /> },
+    { key: 'estadistica', label: 'Pruebas estadísticas', icon: <IconResultados /> },
+    { key: 'agrupacion', label: 'Agrupación de zonas', icon: <IconZonas /> },
     { key: 'productos', label: 'Productos', icon: <IconProductos />, permiso: 'lectura' },
     { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas />, permiso: 'lectura' },
   ],
