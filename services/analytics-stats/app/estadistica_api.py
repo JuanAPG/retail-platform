@@ -8,9 +8,9 @@ las llamadas HTTP bloquean las demás peticiones.
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 
-from . import ejemplos
+from . import ejemplos, reportes
 from .esquemas import AnovaDto, FuenteCanastas, PruebaHipotesisDto, ProporcionesDto
 from .estadistica import Conteo, DatosInvalidos, Grupo, anova, comparar_proporciones, prueba_dos_grupos
 from .fuentes import QUE_CONDICION, QUE_METRICA, Fuentes, obtener_fuentes
@@ -46,6 +46,12 @@ def _calcular(funcion, *argumentos, fuente: FuenteCanastas | None) -> dict:
     return {**resultado, "source": fuente.model_dump(mode="json") if fuente else None}
 
 
+def _reportar(tareas: BackgroundTasks, request: Request, tipo: str, resultado: dict) -> dict:
+    """Bitácora de la prueba, de fondo: la respuesta sale primero (STA-04)."""
+    tareas.add_task(reportes.prueba_terminada, tipo, resultado, *reportes.contexto(request))
+    return resultado
+
+
 def _valores(cuerpo, fuentes: Fuentes) -> tuple[list[Grupo], str | None]:
     if cuerpo.baskets:
         return _datos(fuentes.valores, cuerpo.baskets), QUE_METRICA[cuerpo.baskets.metric]
@@ -65,12 +71,15 @@ def _valores(cuerpo, fuentes: Fuentes) -> tuple[list[Grupo], str | None]:
 )
 def prueba_de_hipotesis(
     cuerpo: Annotated[PruebaHipotesisDto, Body(openapi_examples=ejemplos.CUERPOS_HIPOTESIS)],
+    request: Request,
+    tareas: BackgroundTasks,
     _usuario: dict = _SOLO_ANALISTA,
     fuentes: Fuentes = _FUENTES,
 ) -> dict:
     grupos, que = _valores(cuerpo, fuentes)
-    return _calcular(prueba_dos_grupos, grupos, cuerpo.method, cuerpo.alternative, cuerpo.alpha, que,
-                     fuente=cuerpo.baskets)
+    resultado = _calcular(prueba_dos_grupos, grupos, cuerpo.method, cuerpo.alternative, cuerpo.alpha, que,
+                          fuente=cuerpo.baskets)
+    return _reportar(tareas, request, "hipotesis", resultado)
 
 
 @router.post(
@@ -85,11 +94,14 @@ def prueba_de_hipotesis(
 )
 def analisis_de_varianza(
     cuerpo: Annotated[AnovaDto, Body(openapi_examples=ejemplos.CUERPOS_ANOVA)],
+    request: Request,
+    tareas: BackgroundTasks,
     _usuario: dict = _SOLO_ANALISTA,
     fuentes: Fuentes = _FUENTES,
 ) -> dict:
     grupos, que = _valores(cuerpo, fuentes)
-    return _calcular(anova, grupos, cuerpo.alpha, que, fuente=cuerpo.baskets)
+    resultado = _calcular(anova, grupos, cuerpo.alpha, que, fuente=cuerpo.baskets)
+    return _reportar(tareas, request, "anova", resultado)
 
 
 @router.post(
@@ -106,6 +118,8 @@ def analisis_de_varianza(
 )
 def comparacion_de_proporciones(
     cuerpo: Annotated[ProporcionesDto, Body(openapi_examples=ejemplos.CUERPOS_PROPORCIONES)],
+    request: Request,
+    tareas: BackgroundTasks,
     _usuario: dict = _SOLO_ANALISTA,
     fuentes: Fuentes = _FUENTES,
 ) -> dict:
@@ -113,4 +127,5 @@ def comparacion_de_proporciones(
         conteos, que = _datos(fuentes.conteos, cuerpo.baskets), QUE_CONDICION[cuerpo.baskets.condition]
     else:
         conteos, que = [Conteo(g.label, g.successes, g.total) for g in cuerpo.groups], None
-    return _calcular(comparar_proporciones, conteos, cuerpo.alpha, que, fuente=cuerpo.baskets)
+    resultado = _calcular(comparar_proporciones, conteos, cuerpo.alpha, que, fuente=cuerpo.baskets)
+    return _reportar(tareas, request, "proporciones", resultado)

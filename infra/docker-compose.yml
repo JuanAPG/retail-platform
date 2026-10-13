@@ -384,6 +384,8 @@ services:
       CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
       CATALOG_SERVICE_URL: http://catalog-service:3102
       MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379

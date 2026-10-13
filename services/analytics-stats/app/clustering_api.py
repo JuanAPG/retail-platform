@@ -8,9 +8,9 @@ clasificación de las zonas, que sigue siendo manual en catalog.
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
 
-from . import ejemplos
+from . import ejemplos, reportes
 from .clustering import agrupar_zonas
 from .corridas import Corridas, obtener_corridas
 from .esquemas import ClusteringDto
@@ -49,6 +49,8 @@ _503 = {503: "MongoDB no responde: no se pudo guardar la corrida."}
 )
 def correr_clustering(
     cuerpo: Annotated[ClusteringDto, Body(openapi_examples=ejemplos.CUERPOS_CLUSTERING)],
+    request: Request,
+    tareas: BackgroundTasks,
     usuario: dict = Depends(requiere_roles(ROL.ANALISTA)),
     fuentes: Fuentes = Depends(obtener_fuentes),
     corridas: Corridas = Depends(obtener_corridas),
@@ -62,7 +64,7 @@ def correr_clustering(
     except DatosInvalidos as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    return corridas.guardar({
+    guardada = corridas.guardar({
         "userId": usuario["id"],
         "date": datetime.now(timezone.utc),
         "parameters": {
@@ -78,6 +80,10 @@ def correr_clustering(
         "input": entrada,
         **resultado,
     })
+    # Bitácora y aviso de fondo, ya con la corrida guardada (STA-04). Si Mongo no
+    # respondió no hay corrida y no se llega aquí: no se reporta.
+    tareas.add_task(reportes.clustering_terminado, guardada, *reportes.contexto(request))
+    return guardada
 
 
 def _entrada_de_servicios(fuentes: Fuentes, cuerpo: ClusteringDto) -> list[dict]:
