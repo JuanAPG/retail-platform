@@ -383,6 +383,7 @@ services:
       XML_NAMESPACE: stats/v1
       CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
       CATALOG_SERVICE_URL: http://catalog-service:3102
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -400,6 +401,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mongodb:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3106/v1/health').status==200 else 1)\""]
       interval: 15s

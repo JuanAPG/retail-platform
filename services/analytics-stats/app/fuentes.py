@@ -88,6 +88,40 @@ class Fuentes:
             conteos.append(Conteo(nombre, exitos, total))
         return conteos
 
+    # --- Clustering ---------------------------------------------------------
+
+    def zonas(self, zone_ids: list[str] | None) -> list[dict]:
+        """Zonas a agrupar con sus indicadores de catalog (`GET /v1/zones/compare`).
+
+        Sin `zone_ids`, todas las zonas activas de `GET /v1/zones`.
+        """
+        if zone_ids is None:
+            zone_ids, pagina = [], 1
+            while True:
+                datos = self._get("catalog-service", self._catalogo, "/v1/zones",
+                                  {"page": pagina, "limit": POR_PAGINA})
+                zone_ids += [z["id"] for z in datos["data"] if z.get("activo", True)]
+                if pagina * POR_PAGINA >= datos["total"]:
+                    break
+                pagina += 1
+        if len(zone_ids) < 3:
+            # `compare` pide al menos 2 ids, y agrupar pide al menos 3 zonas.
+            raise DatosInvalidos(f"Se necesitan al menos 3 zonas para agrupar; hay {len(zone_ids)}.")
+        filas = self._get("catalog-service", self._catalogo, "/v1/zones/compare", {"ids": ",".join(zone_ids)})
+        return [{"zoneId": f["zoneId"], "zoneName": f["zoneName"], "estimatedIncome": f["estimatedIncome"],
+                 "population": f["population"], "availability": f["availability"]} for f in filas]
+
+    def ticket_promedio(self, zone_id: str, date_from: str | None, date_to: str | None) -> float | None:
+        params = {"zoneId": zone_id}
+        if date_from:
+            params["dateFrom"] = date_from
+        if date_to:
+            params["dateTo"] = date_to
+        valor = self._get("core-process-service", self._core, "/v1/analytics/average-ticket", params)
+        # core-process responde 0 cuando la zona no tiene canastas en el periodo. Un
+        # ticket real nunca es 0, así que es un dato faltante, no un valor (D-20).
+        return float(valor) if valor else None
+
     def nombre_de_grupo(self, group_by: str, gid: str) -> str:
         if group_by == "segment":
             return self._get("catalog-service", self._catalogo, f"/v1/segments/{gid}",

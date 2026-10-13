@@ -65,6 +65,62 @@ PROPORCIONES = {
 }
 
 
+_VALLE, _CENTRO, _ORIENTE = ("6cd8d7f5-c388-446c-94fa-ef07c330a17b", "ed073f6d-ea24-439f-b552-bfa8c81d979a",
+                              "f48d6f15-7e03-4f98-a817-761c6b135a62")
+
+#: Corrida real: indicadores de las 3 zonas sembradas y ticket de core-process (CSV de 100 canastas).
+CLUSTERING = {
+    "id": "6713f0c2e4b0a1b2c3d4e5f6",
+    "type": "clustering",
+    "userId": "2b7c9d1e-4f3a-4c5b-8d6e-7f8091a2b3c4",
+    "date": "2026-10-13T04:15:03.123000+00:00",
+    "parameters": {"k": 2, "seed": 42, "features": ["estimatedIncome", "population", "availability", "averageTicket"],
+                   "source": "servicios", "zoneIds": None, "dateFrom": None, "dateTo": None},
+    "input": [
+        {"zoneId": _VALLE, "zoneName": "Zona Valle", "estimatedIncome": 65000, "population": 85000,
+         "availability": 0.95, "averageTicket": 143.2},
+        {"zoneId": _CENTRO, "zoneName": "Zona Centro", "estimatedIncome": 28000, "population": 120000,
+         "availability": 0.85, "averageTicket": 96.4},
+        {"zoneId": _ORIENTE, "zoneName": "Zona Oriente", "estimatedIncome": 12000, "population": 150000,
+         "availability": 0.65, "averageTicket": 73.63},
+    ],
+    "clusters": [
+        {"cluster": 1, "size": 2, "centroid": {"estimatedIncome": 20000.0, "population": 135000.0,
+                                               "availability": 0.75, "averageTicket": 85.015}},
+        {"cluster": 2, "size": 1, "centroid": {"estimatedIncome": 65000.0, "population": 85000.0,
+                                               "availability": 0.95, "averageTicket": 143.2}},
+    ],
+    "assignments": [{"zoneId": _VALLE, "zoneName": "Zona Valle", "cluster": 2},
+                    {"zoneId": _CENTRO, "zoneName": "Zona Centro", "cluster": 1},
+                    {"zoneId": _ORIENTE, "zoneName": "Zona Oriente", "cluster": 1}],
+    "excludedZones": [],
+    "inertia": 2.4923970074898127,
+    "silhouette": 0.24530671765148346,
+    "assumptions": ["Se agrupan zonas, nunca personas (RF-16).",
+                    "Indicadores estandarizados (z-score): ninguno pesa más por su unidad.",
+                    "KMeans con semilla 42: con los mismos datos, las mismas asignaciones.",
+                    "Los grupos se numeran por su ingreso estimado promedio, de menor a mayor."],
+}
+
+LISTA_CORRIDAS = {
+    "data": [{k: CLUSTERING[k] for k in ("id", "type", "userId", "date", "parameters", "inertia", "silhouette")}
+             | {"zoneCount": 3}],
+    "total": 1,
+    "page": 1,
+    "limit": 20,
+}
+
+CUERPOS_CLUSTERING = {
+    "servicios": {"summary": "Indicadores de catalog y ticket de core-process",
+                  "value": {"k": 2, "seed": 42}},
+    "cuerpo": {"summary": "Datos de las zonas en el cuerpo",
+               "value": {"k": 2, "features": ["estimatedIncome", "averageTicket"],
+                         "zones": [{"zoneId": "z-1", "zoneName": "Zona Valle", "estimatedIncome": 65000, "averageTicket": 143.2},
+                                   {"zoneId": "z-2", "zoneName": "Zona Centro", "estimatedIncome": 28000, "averageTicket": 96.4},
+                                   {"zoneId": "z-3", "zoneName": "Zona Oriente", "estimatedIncome": 12000, "averageTicket": 73.6}]}},
+}
+
+
 def _cuerpos(con_valores: dict, con_canastas: dict) -> dict:
     """Los dos modos de pedir una prueba, como ejemplos del cuerpo en Swagger."""
     return {
@@ -110,11 +166,12 @@ _MENSAJES = {
 }
 
 
-def errores(ruta: str, *estados: int) -> dict:
+def errores(ruta: str, *estados: int, mensajes: dict[int, str] | None = None) -> dict:
     """Errores estándar de una ruta, en JSON y XML (el XML sin `details`)."""
     salida = {}
     for estado in estados:
         code, message = _MENSAJES[estado]
+        message = (mensajes or {}).get(estado, message)
         cuerpo = {"statusCode": estado, "message": message, "code": code, "details": None,
                   "path": ruta, "timestamp": "2026-10-12T22:15:03.123456+00:00"}
         sin_detalles = {k: v for k, v in cuerpo.items() if k != "details"}

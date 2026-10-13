@@ -65,20 +65,25 @@ class FuenteCanastas(_Cuerpo):
                 raise _invalido(f"'{gid}' no es un id de segmento (entero de 1 a {_SEGMENTO_MAX}).")
             if self.groupBy == "zone" and not _es_uuid(gid):
                 raise _invalido(f"'{gid}' no es un id de zona (UUID).")
-        dias = {}
-        for campo in ("dateFrom", "dateTo"):
-            valor = getattr(self, campo)
-            if valor is None:
-                continue
-            try:
-                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
-                    raise ValueError
-                dias[campo] = date.fromisoformat(valor)
-            except ValueError:
-                raise _invalido(f"{campo} debe ser un día YYYY-MM-DD que exista.") from None
-        if len(dias) == 2 and dias["dateTo"] < dias["dateFrom"]:
-            raise _invalido("La fecha final no puede ser anterior a la inicial.")
+        _validar_dias(self)
         return self
+
+
+def _validar_dias(modelo) -> None:
+    """`dateFrom`/`dateTo`: día YYYY-MM-DD que exista, y en orden."""
+    dias = {}
+    for campo in ("dateFrom", "dateTo"):
+        valor = getattr(modelo, campo)
+        if valor is None:
+            continue
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+                raise ValueError
+            dias[campo] = date.fromisoformat(valor)
+        except ValueError:
+            raise _invalido(f"{campo} debe ser un día YYYY-MM-DD que exista.") from None
+    if len(dias) == 2 and dias["dateTo"] < dias["dateFrom"]:
+        raise _invalido("La fecha final no puede ser anterior a la inicial.")
 
 
 def _es_uuid(texto: str) -> bool:
@@ -135,3 +140,49 @@ class ProporcionesDto(_ConFuente):
     groups: list[GrupoConteo] | None = None
     baskets: FuenteCanastas | None = None
     alpha: Alpha = 0.05
+
+
+# --- Clustering (RF-16) -------------------------------------------------------
+
+Variable = Literal["estimatedIncome", "population", "availability", "averageTicket"]
+VARIABLES_POR_DEFECTO = ["estimatedIncome", "population", "availability", "averageTicket"]
+
+
+class ZonaEnCuerpo(_Cuerpo):
+    """Una zona con sus indicadores, cuando los datos llegan en el cuerpo."""
+
+    zoneId: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+    zoneName: Etiqueta | None = None
+    estimatedIncome: Numero | None = None
+    population: Numero | None = None
+    availability: Numero | None = None
+    averageTicket: Numero | None = None
+
+
+class ClusteringDto(_Cuerpo):
+    k: Annotated[Entero, Field(ge=2, le=10)]
+    # sklearn exige una semilla menor a 2^32.
+    seed: Annotated[Entero, Field(ge=0, le=2**32 - 1)] = 42
+    features: list[Variable] = Field(default_factory=lambda: list(VARIABLES_POR_DEFECTO))
+    zoneIds: list[UUID] | None = None
+    dateFrom: str | None = None
+    dateTo: str | None = None
+    zones: list[ZonaEnCuerpo] | None = None
+
+    @model_validator(mode="after")
+    def _coherente(self):
+        if not 1 <= len(self.features) <= len(VARIABLES_POR_DEFECTO) or len(set(self.features)) != len(self.features):
+            raise _invalido("features lleva de 1 a 4 variables, sin repetir.")
+        if self.zones is not None:
+            if self.zoneIds is not None or self.dateFrom or self.dateTo:
+                raise _invalido("Con `zones` (datos en el cuerpo) no van zoneIds ni fechas.")
+            ids = [z.zoneId for z in self.zones]
+            if len(set(ids)) != len(ids):
+                raise _invalido("zones no puede repetir zoneId.")
+        if self.zoneIds is not None:
+            if len(set(self.zoneIds)) != len(self.zoneIds):
+                raise _invalido("zoneIds no puede repetir ids.")
+            if len(self.zoneIds) < 3:
+                raise _invalido(f"Para agrupar hacen falta al menos 3 zonas; llegaron {len(self.zoneIds)}.")
+        _validar_dias(self)
+        return self
