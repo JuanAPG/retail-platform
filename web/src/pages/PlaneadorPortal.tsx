@@ -18,6 +18,7 @@ import { NuevaSimulacionPanel } from './planeador/NuevaSimulacionPanel';
 import { HistorialSimulacionesPanel } from './planeador/HistorialSimulacionesPanel';
 import { ResultadosSimulacionPanel } from './planeador/ResultadosSimulacionPanel';
 import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab =
   | 'nueva-simulacion'
@@ -49,10 +50,9 @@ export function PlaneadorPortal() {
   const zonas = useFetch(getZonas, []);
   const transacciones = useFetch(getTransacciones, []);
 
-  // M10/M11/M13/M14 comparten el mismo criterio: calcular/generar es de
-  // Administrador y Analista comercial; el Planeador (y los demás) solo
-  // consultan lo ya guardado.
-  const puedeSimular = usuario?.rol === 'Administrador' || usuario?.rol === 'Analista comercial';
+  // decision-service (M13/M14): simular y generar recomendaciones es solo del
+  // Planeador (los demás reciben 403); aprobar o rechazar es del Gerente (D-12).
+  const puedeSimular = usuario?.rol === 'Planeador';
 
   const modulos: RailModule[] = MODULOS_POR_ROL.Planeador.map((m) => ({
     key: m.key,
@@ -118,7 +118,7 @@ function ProductosLectura({ estado }: { estado: UseFetchState<Producto[]> }) {
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {estado.data.map((p) => (
@@ -165,7 +165,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
         <StatusPill tone="neutral">Lectura</StatusPill>
       </div>
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && estado.data.length === 0 && (
         <PlaceholderHonesto
           titulo="Aún no hay transacciones registradas"

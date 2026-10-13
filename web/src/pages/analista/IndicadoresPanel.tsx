@@ -3,9 +3,13 @@ import { useFetch } from '../../hooks/useFetch';
 import { getResumenIndicadores } from '../../api/analitica';
 import { getTiendas, getZonas } from '../../api/catalogo';
 import { getSegmentos } from '../../api/segmentos';
-import { AnalyticsFilters } from '../../types';
+import { AnalyticsFilters, CategorySpend } from '../../types';
 import { Hero } from '../../components/ui/Hero';
 import { Select } from '../../components/ui/Select';
+import { Grafica } from '../../components/Grafica';
+import { SelectorTipoGrafica } from '../../components/SelectorTipoGrafica';
+import { COLORES } from '../../components/coloresGrafica';
+import type Highcharts from 'highcharts';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { IconReportes } from '../../components/ui/icons';
 
@@ -28,6 +32,7 @@ export function IndicadoresPanel() {
   const segmentos = useFetch(getSegmentos, []);
 
   const [borrador, setBorrador] = useState<AnalyticsFilters>({});
+  const [tipoGasto, setTipoGasto] = useState<TipoGasto>('barras');
   const [aplicados, setAplicados] = useState<AnalyticsFilters>({});
   const indicadores = useFetch(() => getResumenIndicadores(aplicados), [aplicados]);
 
@@ -173,23 +178,11 @@ export function IndicadoresPanel() {
               <p className="font-display text-xl text-teal">Sin gasto registrado por categoría</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {datos.gastoPorCategoria.map((c) => (
-                <div key={c.categoryId} className="group relative flex h-14 items-center overflow-hidden rounded-full bg-arena px-5 transition hover:translate-x-1">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-salvia transition-all group-hover:bg-teal"
-                    style={{ width: `${c.share}%` }}
-                  />
-                  <div className="relative z-[1] flex w-full items-center justify-between text-sm font-semibold text-tinta group-hover:text-arena">
-                    <span>
-                      {c.categoryName} <span className="font-data text-xs opacity-70">{c.basketCount} canastas</span>
-                    </span>
-                    <span className="font-data">
-                      {moneda.format(c.totalSpend)} · {decimal.format(c.share)}%
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-panel bg-arena p-4">
+              <div className="mb-2 flex justify-end">
+                <SelectorTipoGrafica opciones={TIPOS_GASTO} valor={tipoGasto} onChange={setTipoGasto} nombre="gasto por categoría" />
+              </div>
+              <Grafica key={tipoGasto} opciones={opcionesGasto(datos.gastoPorCategoria, tipoGasto)} altura={tipoGasto === 'barras' ? Math.max(260, datos.gastoPorCategoria.length * 44 + 90) : 380} />
             </div>
           )}
         </>
@@ -200,4 +193,63 @@ export function IndicadoresPanel() {
       </p>
     </div>
   );
+}
+
+export type TipoGasto = 'barras' | 'columnas' | 'dona' | 'arbol';
+
+const TIPOS_GASTO: { clave: TipoGasto; etiqueta: string; ayuda: string }[] = [
+  { clave: 'barras', etiqueta: 'Barras', ayuda: 'Gasto (MXN) de cada categoría, de la que más gasto concentra a la que menos.' },
+  { clave: 'columnas', etiqueta: 'Columnas', ayuda: 'Gasto (MXN) por categoría en columnas, para compararlas lado a lado.' },
+  { clave: 'dona', etiqueta: 'Dona', ayuda: 'Qué porcentaje del gasto total representa cada categoría.' },
+  { clave: 'arbol', etiqueta: 'Mapa de árbol', ayuda: 'El área de cada bloque es su gasto: las categorías grandes saltan a la vista.' },
+];
+
+/** Gasto por categoría en cuatro formas; el tooltip siempre trae gasto, participación y canastas. */
+function opcionesGasto(datos: CategorySpend[], tipo: TipoGasto): Highcharts.Options {
+  const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+  const filas = [...datos].sort((a, b) => b.totalSpend - a.totalSpend);
+  const detalle = (c: CategorySpend) =>
+    `<b>${c.categoryName}</b><br/>${fmt.format(c.totalSpend)} · ${Number(c.share).toFixed(1)} % del gasto<br/>${c.basketCount} canastas`;
+  const tooltip: Highcharts.TooltipOptions = { useHTML: true, formatter() { const c = filas[this.index]; return c ? detalle(c) : ''; } };
+  const paleta = [COLORES.teal, COLORES.salvia, COLORES.vino, '#B8A98A', '#4F6F68', '#A66A5B', '#7E8F5A'];
+
+  if (tipo === 'dona') {
+    return {
+      chart: { type: 'pie' },
+      tooltip: { useHTML: true, formatter() { const c = filas[this.index]; return c ? detalle(c) : ''; } },
+      plotOptions: { pie: { innerSize: '58%', borderRadius: 6, dataLabels: { enabled: true, format: '{point.name}: {point.percentage:.1f} %', style: { textOutline: 'none', color: COLORES.teal } } } },
+      series: [{ type: 'pie', name: 'Gasto', data: filas.map((c, i) => ({ name: c.categoryName, y: c.totalSpend, color: paleta[i % paleta.length] })) }],
+    };
+  }
+
+  if (tipo === 'arbol') {
+    return {
+      tooltip: { useHTML: true, formatter() { const c = filas.find((f) => f.categoryName === (this as unknown as { name: string }).name); return c ? detalle(c) : ''; } },
+      series: [
+        {
+          type: 'treemap',
+          layoutAlgorithm: 'squarified',
+          data: filas.map((c, i) => ({ name: c.categoryName, value: c.totalSpend, color: paleta[i % paleta.length] })),
+          dataLabels: { enabled: true, format: '{point.name}', style: { textOutline: 'none', fontWeight: '600', color: '#FAF8F2' } },
+        },
+      ],
+    };
+  }
+
+  const horizontal = tipo === 'barras';
+  return {
+    chart: { type: horizontal ? 'bar' : 'column' },
+    xAxis: { categories: filas.map((c) => c.categoryName) },
+    yAxis: { min: 0, title: { text: 'Gasto (MXN)' } },
+    legend: { enabled: false },
+    tooltip,
+    series: [
+      {
+        type: horizontal ? 'bar' : 'column',
+        name: 'Gasto',
+        borderRadius: 6,
+        data: filas.map((c, i) => ({ y: c.totalSpend, color: paleta[i % paleta.length] })),
+      },
+    ],
+  };
 }

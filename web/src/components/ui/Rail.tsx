@@ -99,12 +99,13 @@ function ModuloBoton({
         )}
       </>
     );
+    const traerAVista = (e: { currentTarget: HTMLElement }) => e.currentTarget.scrollIntoView({ block: 'nearest' });
     return modulo.href ? (
-      <Link to={modulo.href} aria-label={modulo.label} className={className}>
+      <Link to={modulo.href} aria-label={modulo.label} className={className} onMouseEnter={traerAVista} onFocus={traerAVista}>
         {contenido}
       </Link>
     ) : (
-      <button type="button" onClick={modulo.onClick} aria-label={modulo.label} className={className}>
+      <button type="button" onClick={modulo.onClick} aria-label={modulo.label} className={className} onMouseEnter={traerAVista} onFocus={traerAVista}>
         {contenido}
       </button>
     );
@@ -114,6 +115,8 @@ function ModuloBoton({
   // pinta el Rail en un portal (ver más abajo) — este botón vive dentro de
   // una lista con scroll propio, que recortaría un tooltip absoluto normal.
   function mostrar(e: { currentTarget: HTMLElement }) {
+    // El círculo resaltado nunca debe quedar a medias: si el scroll de la lista lo deja cortado, se trae completo a la vista.
+    e.currentTarget.scrollIntoView({ block: 'nearest' });
     const rect = e.currentTarget.getBoundingClientRect();
     onHover({ label: modulo.label, permiso: tooltipPermiso, top: rect.top + rect.height / 2, left: rect.right + 12 });
   }
@@ -234,7 +237,7 @@ export function Rail({ modulos, iniciales, perfiles, onLogout, inicioHref = '/',
       </div>
 
       <div
-        className={`scrollbar-hidden flex flex-1 items-center gap-2.5 lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:py-1 ${
+        className={`scrollbar-hidden flex flex-1 items-center gap-2.5 lg:min-h-0 lg:scroll-py-2 lg:flex-col lg:overflow-y-auto lg:py-2 ${
           expandidoEfectivo ? 'lg:items-stretch' : 'lg:items-center'
         }`}
       >

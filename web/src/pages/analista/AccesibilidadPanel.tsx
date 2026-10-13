@@ -7,6 +7,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { calcularAccesibilidad, getHistorialAccesibilidad, IndiceAccesibilidad } from '../../api/accesibilidad';
 import { mensajeDeError } from '../../api/errores';
 import { IncomeSegment, Zona } from '../../types';
+import { EstadoError } from '../../components/EstadoError';
 
 const formatoPorcentaje = new Intl.NumberFormat('es-MX', { style: 'percent', maximumFractionDigits: 1 });
 const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -29,6 +30,9 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
   const [calculando, setCalculando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<IndiceAccesibilidad | null>(null);
+  // Comparación lado a lado: segunda zona con el mismo segmento.
+  const [zonaBId, setZonaBId] = useState('');
+  const [resultadoB, setResultadoB] = useState<IndiceAccesibilidad | null>(null);
 
   const historial = useFetch(
     () => (zonaId ? getHistorialAccesibilidad(zonaId) : Promise.resolve<IndiceAccesibilidad[]>([])),
@@ -43,6 +47,7 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
     try {
       const r = await calcularAccesibilidad(zonaId, segmentId);
       setResultado(r);
+      setResultadoB(zonaBId ? await calcularAccesibilidad(zonaBId, segmentId) : null);
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudo calcular la accesibilidad. Intenta de nuevo.'));
     } finally {
@@ -64,6 +69,20 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
             {zonas.map((z) => (
               <option key={z.id} value={z.id}>{z.nombre}</option>
             ))}
+          </Select>
+          <Select
+            id="acc-zona-b"
+            label="Comparar con otra zona (opcional)"
+            value={zonaBId}
+            onChange={(e) => setZonaBId(e.target.value)}
+            placeholder="Sin comparación"
+          >
+            {[
+              <option key="" value="">Sin comparación</option>,
+              ...zonas.filter((z) => z.id !== zonaId).map((z) => (
+                <option key={z.id} value={z.id}>{z.nombre}</option>
+              )),
+            ]}
           </Select>
           <Select
             id="acc-segmento"
@@ -91,9 +110,13 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
       </form>
 
       {resultado && (
-        <div className="flex flex-col gap-3 rounded-panel bg-arena p-6">
+        <div className={resultadoB ? 'grid grid-cols-1 gap-4 md:grid-cols-2' : 'contents'}>
+        {[resultado, ...(resultadoB ? [resultadoB] : [])].map((resultado) => (
+        <div key={resultado.zoneId} className="flex flex-col gap-3 rounded-panel bg-arena p-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-slab text-[22px] text-vino">Resultado</h2>
+            <h2 className="font-slab text-[22px] text-vino">
+              {resultadoB ? (zonas.find((z) => z.id === resultado.zoneId)?.nombre ?? 'Zona') : 'Resultado'}
+            </h2>
             <StatusPill tone={toneDeIndice(resultado.indexValue)}>{formatoPorcentaje.format(resultado.indexValue)}</StatusPill>
           </div>
           <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm text-teal sm:grid-cols-2">
@@ -107,12 +130,14 @@ export function AccesibilidadPanel({ zonas, segmentos }: { zonas: Zona[]; segmen
             </p>
           </div>
         </div>
+        ))}
+        </div>
       )}
 
       <div className="flex flex-col gap-2">
         <h2 className="px-1 text-xs font-bold uppercase tracking-wide text-teal/70">Historial de la zona</h2>
         {!zonaId && <p className="px-1 text-sm text-teal/70">Elige una zona para ver sus análisis anteriores.</p>}
-        {historial.error && <ErrorText>{historial.error}</ErrorText>}
+        {historial.error && <EstadoError mensaje={historial.error} onReintentar={historial.reintentable ? historial.refetch : undefined} />}
         {zonaId && historial.data && historial.data.length === 0 && (
           <p className="px-1 text-sm text-teal/70">Esta zona no tiene análisis de accesibilidad todavía.</p>
         )}

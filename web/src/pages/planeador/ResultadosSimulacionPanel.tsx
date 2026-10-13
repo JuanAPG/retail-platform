@@ -4,6 +4,7 @@ import { DataTable, DataTableColumn } from '../../components/DataTable';
 import { IconResultados } from '../../components/ui/icons';
 import { compararEscenarios, ComparacionEscenariosFila } from '../../api/simulacion';
 import { nombreIndicador, numero } from './simulacionFormato';
+import { EstadoError } from '../../components/EstadoError';
 
 interface Props {
   seleccionados: string[];
@@ -57,7 +58,7 @@ export function ResultadosSimulacionPanel({ seleccionados, onElegirOtros }: Prop
       </div>
 
       {comparacion.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {comparacion.error && <ErrorText>{comparacion.error}</ErrorText>}
+      {comparacion.error && <EstadoError mensaje={comparacion.error} onReintentar={comparacion.reintentable ? comparacion.refetch : undefined} />}
 
       {datos && datos.rows.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

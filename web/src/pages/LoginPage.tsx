@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { portalDelRol } from '../routes/portalPorRol';
 import { mensajeDeError } from '../api/errores';
@@ -15,7 +15,10 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [error, setError] = useState<string | null>(
+    params.get('motivo') === 'sesion-expirada' ? 'Tu sesión expiró o se cerró. Inicia sesión de nuevo.' : null,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 

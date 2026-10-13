@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { algorithmsApi, traerTodo } from './client';
 import { AnalysisRun, AprioriParams, AssociationRule } from '../types';
 
 /**
@@ -17,16 +17,23 @@ function limpiarFiltros(params: AprioriParams): AprioriParams {
   ) as unknown as AprioriParams;
 }
 
-/** Corre Apriori y guarda la corrida; cada regla trae su `runId`. */
-export const correrApriori = (params: AprioriParams) =>
-  apiClient.post<AssociationRule[]>('/association/apriori/run', limpiarFiltros(params)).then((r) => r.data);
+export type AlgoritmoAsociacion = 'apriori' | 'fpgrowth';
+
+/**
+ * Corre Apriori o FP-Growth (RF-13/14: mismas reglas con los mismos parámetros) y guarda la corrida;
+ * cada regla trae su `runId`. Solo el Analista comercial puede (algorithms-core).
+ */
+export const correrAsociacion = (algoritmo: AlgoritmoAsociacion, params: AprioriParams) =>
+  algorithmsApi.post<AssociationRule[]>(`/association/${algoritmo}/run`, limpiarFiltros(params)).then((r) => r.data);
+
+export const correrApriori = (params: AprioriParams) => correrAsociacion('apriori', params);
 
 /** Historial, de la más reciente a la más antigua. Sin reglas. */
-export const getCorridas = () => apiClient.get<AnalysisRun[]>('/association/runs').then((r) => r.data);
+export const getCorridas = () => traerTodo<AnalysisRun>(algorithmsApi, '/association/runs');
 
 /** Una corrida completa: parámetros, supuestos, filtros y reglas. */
 export const getCorrida = (id: string) =>
-  apiClient.get<AnalysisRun>(`/association/runs/${id}`).then((r) => r.data);
+  algorithmsApi.get<AnalysisRun>(`/association/runs/${id}`).then((r) => r.data);
 
 /** Valor de un parámetro de la corrida, p. ej. `parametro(run, 'soporte_minimo')`. */
 export const parametro = (run: AnalysisRun, clave: string): string | undefined =>

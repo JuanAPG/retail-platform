@@ -17,6 +17,7 @@ import {
 import { ProductoFormModal } from './ProductoFormModal';
 import { ConfirmarEliminarProductoModal } from './ConfirmarEliminarProductoModal';
 import { PresentacionesModal } from './PresentacionesModal';
+import { EstadoError } from '../../components/EstadoError';
 
 interface ProductosPanelProps {
   estado: UseFetchState<Producto[]>;
@@ -170,9 +171,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
         </div>
       )}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar los productos: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar los productos: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       <div className="flex items-center justify-between px-1">
@@ -242,7 +241,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               </div>
 
               <div className="flex flex-col gap-1 px-1.5">
-                <h3 className="font-display text-base leading-tight text-tinta sm:text-[19px]">{p.nombre}</h3>
+                <h3 className="font-display text-base leading-tight text-tinta [overflow-wrap:anywhere] sm:text-[19px]">{p.nombre}</h3>
                 <span className="text-[13px] text-teal">{p.categoria?.nombre}</span>
                 {p.presentaciones.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
@@ -256,7 +255,7 @@ export function ProductosPanel({ estado, puedeGestionar, busqueda, onComparar }:
               </div>
 
               <div className="flex items-center px-1.5">
-                <span className="font-data text-xs text-teal">{p.sku}</span>
+                <span className="font-data text-xs text-teal [overflow-wrap:anywhere]">{p.sku}</span>
                 {puedeGestionar && (
                   <button
                     type="button"

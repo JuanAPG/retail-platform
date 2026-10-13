@@ -7,6 +7,7 @@ import { DataTable } from '../../components/DataTable';
 import { useFetch } from '../../hooks/useFetch';
 import { getCanastas } from '../../api/canastas';
 import { IncomeSegment, Zona } from '../../types';
+import { EstadoError } from '../../components/EstadoError';
 
 const formatoMoneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const formatoFecha = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' });
@@ -63,7 +64,7 @@ export function CanastasPanel({ zonas, segmentos }: { zonas: Zona[]; segmentos: 
 
       {fechasInvertidas && <p className="px-1 text-xs font-semibold text-vino">La fecha final no puede ser anterior a la inicial.</p>}
       {canastas.loading && <p className="px-1 text-sm text-teal/70">Cargando…</p>}
-      {canastas.error && <ErrorText>{canastas.error}</ErrorText>}
+      {canastas.error && <EstadoError mensaje={canastas.error} onReintentar={canastas.reintentable ? canastas.refetch : undefined} />}
 
       {canastas.data && filas.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

@@ -14,6 +14,8 @@ import { Switch } from '../../components/ui/Switch';
 import { IconOjo, IconCerrar as IconEliminar, IconUsuarios } from '../../components/ui/icons';
 import { UsuarioFormModal } from './UsuarioFormModal';
 import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
+import { EstadoError } from '../../components/EstadoError';
+import { Cargando } from '../../components/Cargando';
 
 interface UsuariosPanelProps {
   estado: UseFetchState<Usuario[]>;
@@ -226,10 +228,9 @@ export function UsuariosPanel({ estado, busqueda }: UsuariosPanelProps) {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {estado.loading && !estado.data && <Cargando etiqueta="Cargando usuarios…" />}
       {estado.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar los usuarios: {estado.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar los usuarios: ${estado.error}`} onReintentar={estado.reintentable ? estado.refetch : undefined} />
       )}
 
       {estado.data && usuarios.length === 0 && (

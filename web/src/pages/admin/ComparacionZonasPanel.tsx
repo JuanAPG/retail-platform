@@ -7,6 +7,7 @@ import { Chip } from '../../components/ui/Chip';
 import { Card } from '../../components/ui/Card';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { IconResultados } from '../../components/ui/icons';
+import { EstadoError } from '../../components/EstadoError';
 
 interface ComparacionZonasPanelProps {
   estado: UseFetchState<Zona[]>;
@@ -66,7 +67,7 @@ export function ComparacionZonasPanel({ estado, onVolver }: ComparacionZonasPane
         </button>
       </div>
 
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
 
       {zonas.length > 0 && (
         <div className="flex flex-wrap gap-2">

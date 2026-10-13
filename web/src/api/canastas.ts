@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { coreApi, traerTodo } from './client';
 import { Zona } from '../types';
 
 /** M07 — Filtros opcionales de GET /baskets. */
@@ -33,4 +33,4 @@ export interface Canasta {
 }
 
 export const getCanastas = (filtros?: CanastaFiltros) =>
-  apiClient.get<Canasta[]>('/baskets', { params: filtros }).then((r) => r.data);
+  traerTodo<Canasta>(coreApi, '/baskets', { ...filtros });

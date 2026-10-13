@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { decisionApi } from './client';
 
 /** M13 — Un indicador dentro del resultado de una simulación. */
 export interface SimulacionIndicador {
@@ -51,15 +51,15 @@ export interface ComparacionEscenarios {
 }
 
 export const simularCambioPrecio = (payload: { presentationId: string; zoneId: string; newPrice: number }) =>
-  apiClient.post<ResultadoSimulacion>('/simulation/price', payload).then((r) => r.data);
+  decisionApi.post<ResultadoSimulacion>('/simulation/price', payload).then((r) => r.data);
 
 export const simularComparacionPresentaciones = (payload: {
   presentationIdA: string;
   presentationIdB: string;
   zoneId?: string;
-}) => apiClient.post<ResultadoSimulacion>('/simulation/presentation', payload).then((r) => r.data);
+}) => decisionApi.post<ResultadoSimulacion>('/simulation/presentation', payload).then((r) => r.data);
 
-export const getEscenarios = () => apiClient.get<Escenario[]>('/simulation/scenarios').then((r) => r.data);
+export const getEscenarios = () => decisionApi.get<Escenario[]>('/simulation/scenarios').then((r) => r.data);
 
 export const compararEscenarios = (ids: string[]) =>
-  apiClient.get<ComparacionEscenarios>('/simulation/compare', { params: { ids: ids.join(',') } }).then((r) => r.data);
+  decisionApi.get<ComparacionEscenarios>('/simulation/compare', { params: { ids: ids.join(',') } }).then((r) => r.data);

@@ -4,6 +4,7 @@ import { Select } from '../../components/ui/Select';
 import { Field } from '../../components/ui/Field';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { useFetch } from '../../hooks/useFetch';
+import { useAuth } from '../../context/AuthContext';
 import { getProductos } from '../../api/catalogo';
 import { calcularElasticidad } from '../../api/elasticidad';
 import { mensajeDeError } from '../../api/errores';
@@ -17,6 +18,9 @@ import { ResultadoElasticidad } from './ResultadoElasticidad';
  * segmentos.
  */
 export function ElasticidadPanel() {
+  const { usuario } = useAuth();
+  // elasticity-calculate es solo del Responsable de precios (algorithms-core); los demás perfiles consultan.
+  const puedeCalcular = usuario?.rol === 'Responsable de precios';
   const productos = useFetch(getProductos, []);
   const conPresentaciones = (productos.data ?? []).filter((p) => p.presentaciones?.length > 0);
 
@@ -57,7 +61,14 @@ export function ElasticidadPanel() {
         description="Cuánto cambia la cantidad vendida cuando cambia el precio. Cada cálculo se guarda como un análisis, con sus parámetros y supuestos."
       />
 
-      <form onSubmit={calcular} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
+      {!puedeCalcular && (
+        <p className="rounded-full bg-arena px-5 py-3 text-sm text-teal">
+          Solo el Responsable de precios calcula la elasticidad; aquí consultas los resultados ya guardados.
+        </p>
+      )}
+
+      {puedeCalcular && (
+      <form noValidate onSubmit={calcular} className="flex flex-col gap-4 rounded-panel bg-arena p-6">
         <h2 className="font-slab text-[22px] text-vino">Calcular</h2>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
           <Select
@@ -114,6 +125,7 @@ export function ElasticidadPanel() {
           </button>
         </div>
       </form>
+      )}
 
       {resultado && <ResultadoElasticidad resultado={resultado} />}
 

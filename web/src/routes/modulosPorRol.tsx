@@ -53,9 +53,10 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
   'Gerente de categoría': [
     { key: 'catalogo-productos', label: 'Catálogo de productos', icon: <IconProductos /> },
     { key: 'aprobaciones', label: 'Aprobaciones', icon: <IconAprobaciones />, permiso: 'aprueba' },
+    { key: 'recomendaciones', label: 'Recomendaciones', icon: <IconRecomendaciones />, permiso: 'aprueba' },
     { key: 'comparar-precios', label: 'Comparar precios', icon: <IconPrecios />, permiso: 'lectura' },
     { key: 'reportes', label: 'Reportes', icon: <IconReportes />, permiso: 'lectura' },
-    { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas />, permiso: 'lectura' },
+    { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas /> }, // el Gerente es quien escribe tiendas (catalog-service)
     { key: 'proveedores', label: 'Proveedores', icon: <IconProveedores />, permiso: 'lectura' },
   ],
   'Responsable de precios': [
@@ -77,10 +78,14 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'transacciones', label: 'Transacciones', icon: <IconTransacciones /> },
     { key: 'canastas', label: 'Canastas', icon: <IconCanastas /> },
     { key: 'segmentos', label: 'Segmentos de ingreso', icon: <IconSegmentos /> },
+    { key: 'zonas', label: 'Zonas', icon: <IconZonas /> },
+    { key: 'indicadores', label: 'Indicadores y gráficas', icon: <IconResultados /> },
     { key: 'reglas-asociacion', label: 'Reglas de asociación', icon: <IconAsociacion /> },
     { key: 'sustitucion', label: 'Sustitución', icon: <IconSustitucion /> },
     { key: 'elasticidad', label: 'Elasticidad de precios', icon: <IconElasticidad /> },
     { key: 'accesibilidad', label: 'Accesibilidad', icon: <IconAccesibilidad /> },
+    { key: 'estadistica', label: 'Pruebas estadísticas', icon: <IconResultados /> },
+    { key: 'agrupacion', label: 'Agrupación de zonas', icon: <IconZonas /> },
     { key: 'productos', label: 'Productos', icon: <IconProductos />, permiso: 'lectura' },
     { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas />, permiso: 'lectura' },
   ],

@@ -17,6 +17,7 @@ import { StatusPill } from '../components/ui/StatusPill';
 import { ErrorText } from '../components/ui/ErrorText';
 import { IconAuditoria, IconCandado, IconFlecha } from '../components/ui/icons';
 import { AccionAuditoria, Producto, Proveedor, Tienda, Transaction, Usuario, Zona } from '../types';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab = 'bitacora' | 'usuarios' | 'tiendas' | 'zonas' | 'proveedores' | 'productos' | 'precios' | 'transacciones';
 
@@ -153,13 +154,14 @@ export function AuditorPortal() {
 
 const LIMITE_BITACORA = 20;
 
-function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
+export function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
   const [accion, setAccion] = useState<AccionAuditoria | ''>('');
+  const [usuarioId, setUsuarioId] = useState('');
   const [page, setPage] = useState(1);
 
   const bitacora = useFetch(
-    () => getBitacora({ accion: accion || undefined, page, limit: LIMITE_BITACORA }),
-    [accion, page],
+    () => getBitacora({ accion: accion || undefined, usuarioId: usuarioId || undefined, page, limit: LIMITE_BITACORA }),
+    [accion, usuarioId, page],
   );
 
   const eventos = bitacora.data?.data ?? [];
@@ -183,7 +185,27 @@ function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
         }
       />
 
-      <div className="max-w-xs">
+      <div className="flex flex-wrap gap-3.5">
+        <div className="w-full max-w-xs">
+          <Select
+            id="bitacora-usuario"
+            label="Usuario"
+            value={usuarioId}
+            onChange={(e) => {
+              setUsuarioId(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Todos"
+          >
+            {[
+              <option key="" value="">Todos</option>,
+              ...(usuarios.data ?? []).map((u) => (
+                <option key={u.id} value={u.id}>{u.nombre}</option>
+              )),
+            ]}
+          </Select>
+        </div>
+        <div className="w-full max-w-xs">
         <Select
           id="bitacora-accion"
           label="Tipo de operación"
@@ -201,10 +223,11 @@ function BitacoraPanel({ usuarios }: { usuarios: UseFetchState<Usuario[]> }) {
             )),
           ]}
         </Select>
+        </div>
       </div>
 
       {bitacora.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {bitacora.error && <ErrorText>{bitacora.error}</ErrorText>}
+      {bitacora.error && <EstadoError mensaje={bitacora.error} onReintentar={bitacora.reintentable ? bitacora.refetch : undefined} />}
 
       {bitacora.data && eventos.length === 0 && (
         <Placeholder
@@ -274,7 +297,7 @@ function UsuariosLectura({ estado }: { estado: UseFetchState<Usuario[]> }) {
     <div className="flex flex-col gap-6">
       <EncabezadoLectura titulo="Usuarios" />
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {estado.data.map((u) => (
@@ -381,7 +404,7 @@ function TransaccionesLectura({ estado }: { estado: UseFetchState<Transaction[]>
     <div className="flex flex-col gap-6">
       <EncabezadoLectura titulo="Transacciones" />
       {estado.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {estado.error && <ErrorText>{estado.error}</ErrorText>}
+      {estado.error && <EstadoError mensaje={estado.error} onReintentar={estado.reintentable ? estado.refetch : undefined} />}
       {estado.data && estado.data.length === 0 && (
         <Placeholder titulo="Aún no hay transacciones registradas" descripcion="Las registra el Analista comercial; aquí solo se consultan." />
       )}

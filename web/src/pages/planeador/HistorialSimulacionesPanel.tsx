@@ -3,6 +3,7 @@ import { ErrorText } from '../../components/ui/ErrorText';
 import { IconCheck, IconResultados } from '../../components/ui/icons';
 import { getEscenarios } from '../../api/simulacion';
 import { Zona } from '../../types';
+import { EstadoError } from '../../components/EstadoError';
 
 const formatoFecha = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -38,7 +39,7 @@ export function HistorialSimulacionesPanel({ zonas, seleccionados, onCambiarSele
       </div>
 
       {escenarios.loading && <p className="text-sm text-teal/70">Cargando…</p>}
-      {escenarios.error && <ErrorText>{escenarios.error}</ErrorText>}
+      {escenarios.error && <EstadoError mensaje={escenarios.error} onReintentar={escenarios.reintentable ? escenarios.refetch : undefined} />}
 
       {escenarios.data && lista.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-panel border-2 border-dashed border-salvia py-14 text-center">

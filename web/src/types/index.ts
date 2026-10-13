@@ -557,6 +557,14 @@ export interface SubstitutionPattern {
   /** Precio de A ↔ comprar B; null si no hubo datos. */
   priceCorrelation: number | null;
   observations: number;
+  /** (máx − mín) / mín del precio de A en el periodo; null si A no tiene precios. */
+  priceVariation?: number | null;
+  /** Canastas con A cuando A está caro menos cuando está barato. */
+  originFrequencyChange?: number | null;
+  /** Lo mismo para B; positiva = más canastas llevan B cuando A está caro. */
+  targetFrequencyChange?: number | null;
+  /** Frase que lo describe como indicio, nunca como causa. */
+  summary?: string;
   periodStart: string;
   periodEnd: string;
 }

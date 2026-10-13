@@ -8,6 +8,7 @@ import { ApprovalItem, ApprovalQueue } from '../../components/ui/ApprovalQueue';
 import { TextArea } from '../../components/ui/TextArea';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { IconPropuesta } from '../../components/ui/icons';
+import { EstadoError } from '../../components/EstadoError';
 
 function fechaCorta(iso: string | undefined): string {
   if (!iso) return '—';
@@ -88,7 +89,7 @@ export function AprobacionesPanel() {
         <p className="rounded-full bg-salvia/25 px-4 py-2.5 text-sm font-semibold text-teal">{aviso}</p>
       )}
       {error && <p className="rounded-full bg-vino/10 px-4 py-2.5 text-sm font-semibold text-vino">{error}</p>}
-      {pendientes.error && <ErrorText>{pendientes.error}</ErrorText>}
+      {pendientes.error && <EstadoError mensaje={pendientes.error} onReintentar={pendientes.reintentable ? pendientes.refetch : undefined} />}
 
       <ApprovalQueue items={items} emptyLabel="Todo al día" />
 

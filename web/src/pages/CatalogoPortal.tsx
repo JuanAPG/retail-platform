@@ -8,6 +8,12 @@ import { useAuth } from '../context/AuthContext';
 import { AprobacionesPanel } from './catalogo/AprobacionesPanel';
 import { ProductosPanel } from './catalogo/ProductosPanel';
 import { PreciosPanel } from './catalogo/PreciosPanel';
+import { ReportesPanel } from './catalogo/ReportesPanel';
+import { AlertaPrecioCard } from './catalogo/AlertaPrecioCard';
+import { TiendasPanel } from './admin/TiendasPanel';
+import { ElasticidadPanel } from './analista/ElasticidadPanel';
+import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
+import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
 import { MODULOS_POR_ROL, ModuloDefinicion } from '../routes/modulosPorRol';
@@ -16,12 +22,14 @@ import { Card } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
 import { ApprovalQueue } from '../components/ui/ApprovalQueue';
 import { Producto } from '../types';
+import { EstadoError } from '../components/EstadoError';
 
 type Tab =
   | 'catalogo-productos'
   | 'categorias'
   | 'aprobaciones'
   | 'aprobaciones-precio'
+  | 'recomendaciones'
   | 'gestion-precios'
   | 'elasticidad'
   | 'reportes'
@@ -126,7 +134,7 @@ export function CatalogoPortal() {
         <div className="flex flex-col gap-6">
           <h1 className="font-display text-4xl text-vino">Categorías</h1>
           {categorias.loading && <p className="text-sm text-teal/70">Cargando categorías…</p>}
-          {categorias.error && <p className="text-sm text-vino">{categorias.error}</p>}
+          {categorias.error && <EstadoError mensaje={categorias.error} onReintentar={categorias.reintentable ? categorias.refetch : undefined} />}
           {categorias.data && categorias.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {categorias.data.map((c) => (
@@ -147,47 +155,33 @@ export function CatalogoPortal() {
         </div>
       )}
 
-      {tab === 'aprobaciones-precio' && (
+      {tab === 'aprobaciones-precio' && <AprobacionesPrecioPanel />}
+
+      {tab === 'recomendaciones' && (
+        <RecomendacionesPanel puedeGenerar={false} puedeResolver={usuario?.rol === 'Gerente de categoría'} />
+      )}
+
+      {tab === 'gestion-precios' && (
         <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-4xl text-vino">Aprobaciones de precio</h1>
-            <StatusPill tone="neutral">Aprueba</StatusPill>
-          </div>
-          {/* No existe todavía un flujo de propuesta de precio por proveedor en el backend. */}
-          <ApprovalQueue items={[]} emptyLabel="Todo al día" />
+          <AlertaPrecioCard puedeEditar={usuario?.rol === 'Responsable de precios'} />
+          <PreciosPanel />
         </div>
       )}
 
-      {tab === 'gestion-precios' && <PreciosPanel />}
+      {tab === 'elasticidad' && <ElasticidadPanel />}
 
-      {tab === 'elasticidad' && (
-        <section>
-          <SectionHeader title="Elasticidad precio-demanda" />
-          <EmptyState
-            title="Aún no hay cálculos de elasticidad"
-            description="Ejecuta un cálculo por producto y zona para ver los resultados aquí."
-          />
-        </section>
-      )}
+      {(tab === 'reportes' || tab === 'reportes-precios') && <ReportesPanel />}
 
-      {(tab === 'reportes' || tab === 'reportes-precios') && (
-        <section>
-          <SectionHeader title="Reportes ejecutivos" />
-          <EmptyState
-            title="Aún no se ha generado ningún reporte"
-            description="Genera un reporte ejecutivo con los hallazgos del análisis comercial."
-          />
-        </section>
-      )}
-
-      {tab === 'tiendas' && (
+      {/* catalog-service: el Gerente de categoría es quien escribe tiendas; los demás perfiles ven la lista de solo lectura. */}
+      {tab === 'tiendas' && usuario?.rol === 'Gerente de categoría' && <TiendasPanel estado={tiendas} />}
+      {tab === 'tiendas' && usuario?.rol !== 'Gerente de categoría' && (
         <div className="flex flex-col gap-6">
           <div className="flex items-center gap-3">
             <h1 className="font-display text-4xl text-vino">Tiendas</h1>
             <StatusPill tone="neutral">Lectura</StatusPill>
           </div>
           {tiendas.loading && <p className="text-sm text-teal/70">Cargando tiendas…</p>}
-          {tiendas.error && <p className="text-sm text-vino">{tiendas.error}</p>}
+          {tiendas.error && <EstadoError mensaje={tiendas.error} onReintentar={tiendas.reintentable ? tiendas.refetch : undefined} />}
           {tiendas.data && tiendas.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {tiendas.data.map((t) => (
@@ -217,7 +211,7 @@ export function CatalogoPortal() {
             <StatusPill tone="neutral">Lectura</StatusPill>
           </div>
           {proveedores.loading && <p className="text-sm text-teal/70">Cargando proveedores…</p>}
-          {proveedores.error && <p className="text-sm text-vino">{proveedores.error}</p>}
+          {proveedores.error && <EstadoError mensaje={proveedores.error} onReintentar={proveedores.reintentable ? proveedores.refetch : undefined} />}
           {proveedores.data && proveedores.data.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {proveedores.data.map((p) => (

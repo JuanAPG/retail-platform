@@ -6,6 +6,7 @@
 import os
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -23,6 +24,9 @@ app = FastAPI(
     redoc_url=None,
 )
 app.add_middleware(LoggingMiddleware)
+# El web (otro origen, :5173) llama directo a este servicio, como a los NestJS (que hacen app.enableCors()).
+# Se agrega al final: Starlette ejecuta el último middleware añadido primero, así el preflight OPTIONS no pasa por la sesión.
+app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'], expose_headers=['Content-Disposition'])
 
 
 @app.exception_handler(StarletteHTTPException)

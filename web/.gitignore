@@ -1,0 +1,5 @@
+
+# Salidas de `tsc -b` (la fuente es vite.config.ts)
+vite.config.js
+vite.config.d.ts
+*.tsbuildinfo

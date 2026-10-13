@@ -19,16 +19,24 @@ import { SustitucionPanel } from './analista/SustitucionPanel';
 import { ElasticidadPanel } from './analista/ElasticidadPanel';
 import { AccesibilidadPanel } from './analista/AccesibilidadPanel';
 import { CanastasPanel } from './analista/CanastasPanel';
+import { ZonasPanel } from './admin/ZonasPanel';
+import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
+import { EstadisticaPanel } from './analista/EstadisticaPanel';
+import { ClusteringPanel } from './analista/ClusteringPanel';
 
 type Tab =
   | 'transacciones'
   | 'segmentos'
+  | 'zonas'
+  | 'comparar-zonas'
   | 'canastas'
   | 'indicadores'
   | 'reglas-asociacion'
   | 'sustitucion'
   | 'elasticidad'
   | 'accesibilidad'
+  | 'estadistica'
+  | 'agrupacion'
   | 'productos'
   | 'tiendas';
 
@@ -47,7 +55,7 @@ const PASOS: { label: string; tab: Tab }[] = [
 
 function PipelineStepper({ tabActual, onIr }: { tabActual: Tab; onIr: (t: Tab) => void }) {
   return (
-    <div className="flex items-center rounded-panel bg-arena px-6 py-5">
+    <div className="flex items-center overflow-x-auto rounded-panel bg-arena px-6 py-5" aria-label="Pasos del análisis">
       {PASOS.map((paso, i) => {
         const activo = paso.tab === tabActual;
         return (
@@ -122,7 +130,7 @@ export function AnalistaPortal() {
     label: m.label,
     icon: m.icon,
     permiso: m.permiso,
-    active: tab === m.key,
+    active: tab === m.key || (m.key === 'zonas' && tab === 'comparar-zonas'),
     onClick: () => setTab(m.key as Tab),
   }));
 
@@ -159,6 +167,8 @@ export function AnalistaPortal() {
 
         {tab === 'transacciones' && <TransaccionesPanel busqueda={busqueda} />}
         {tab === 'segmentos' && <SegmentosPanel />}
+        {tab === 'zonas' && <ZonasPanel estado={zonas} onComparar={() => setTab('comparar-zonas')} />}
+        {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} onVolver={() => setTab('zonas')} />}
         {tab === 'indicadores' && <IndicadoresPanel />}
         {tab === 'reglas-asociacion' && <ReglasAsociacionPanel />}
         {tab === 'sustitucion' && <SustitucionPanel />}
@@ -166,6 +176,8 @@ export function AnalistaPortal() {
 
         {tab === 'canastas' && <CanastasPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
+        {tab === 'estadistica' && <EstadisticaPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
+        {tab === 'agrupacion' && <ClusteringPanel />}
         {tab === 'accesibilidad' && <AccesibilidadPanel zonas={zonas.data ?? []} segmentos={segmentos.data ?? []} />}
 
         {tab === 'productos' && <ProductosLectura estado={productos} />}

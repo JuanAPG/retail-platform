@@ -113,24 +113,21 @@ services:
     volumes:
       - ../web:/app
       - /app/node_modules
-    environment:
-      # Esta URL la resuelve el NAVEGADOR, que corre en tu máquina y no
-      # dentro de la red de Compose: por eso es localhost y no
-      # http://api:3001, que solo funcionaría entre contenedores.
-      VITE_API_URL: http://localhost:3001
+    # El web consume los microservicios (3101-3110) directo desde el NAVEGADOR,
+    # que corre en tu máquina y no en la red de Compose: por eso localhost y no
+    # http://auth-service:3101. Los defaults de web/src/api/client.ts ya apuntan
+    # ahí; para otro host se define VITE_<SERVICIO>_URL (ej. VITE_AUTH_URL).
     ports:
       - "5173:5173"
     command: sh -c "npm install && npm run dev -- --host"
-    depends_on:
-      - api
     networks:
       - retail_net
 
   # ---------------------------------------------------------------
   # Microservicios Sprint 2+3 (Juan Angel: transversal + compose)
-  # Arrancan de la plantilla (solo /v1/health) hasta que cada frente
-  # implemente su servicio en su rama. Puertos 3101-3110: el 3001 sigue
-  # siendo del monolito `api` hasta que la migración lo jubile.
+  # Puertos 3101-3110. Todos implementados salvo analytics-stats (solo
+  # /v1/health por ahora). El 3001 sigue siendo del monolito `api`
+  # (congelado), que el web solo consulta como respaldo temporal.
   # Levantarlos: docker compose -f infra/docker-compose.yml up -d <servicio>
   # (cada uno arrastra postgres y redis sanos vía depends_on)
   # ---------------------------------------------------------------

@@ -9,6 +9,8 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { IconCerrar as IconEliminar, IconOjo, IconSegmentos } from '../../components/ui/icons';
 import { SegmentoFormModal } from './SegmentoFormModal';
 import { ConfirmarEliminarSegmentoModal } from './ConfirmarEliminarSegmentoModal';
+import { EstadoError } from '../../components/EstadoError';
+import { Cargando } from '../../components/Cargando';
 
 function formatoMoneda(valor: string | number): string {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(
@@ -90,10 +92,9 @@ export function SegmentosPanel() {
           <p className="text-sm font-semibold text-vino">{errorAccion}</p>
         </div>
       )}
+      {segmentos.loading && !segmentos.data && <Cargando etiqueta="Cargando segmentos…" />}
       {segmentos.error && (
-        <div className="rounded-panel border-2 border-dashed border-vino/40 px-5 py-4">
-          <p className="text-sm font-semibold text-vino">No se pudieron cargar los segmentos: {segmentos.error}</p>
-        </div>
+        <EstadoError mensaje={`No se pudieron cargar los segmentos: ${segmentos.error}`} onReintentar={segmentos.reintentable ? segmentos.refetch : undefined} />
       )}
 
       {segmentos.data && filas.length === 0 && (
