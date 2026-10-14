@@ -13,7 +13,7 @@
 > Lo marcado **PENDIENTE** no está decidido. Un agente **no lo asume ni lo
 > implementa**: lo reporta como *hallazgo de especificación* y sigue.
 >
-> Última actualización: 2026-10-10 · Responsable: Product Owner (Juan Angel).
+> Última actualización: 2026-10-14 · Responsable: Product Owner (Juan Angel).
 
 ---
 
@@ -64,8 +64,8 @@ Leyenda corta: **T** Total · **LA** Lect./Act. · **L** Lectura · **LP** Lectu
 |---|---|---|---|---|---|---|---|---|---|
 | Usuarios y perfiles | M01 | auth-service | T | – | – | – | – | L | – |
 | Catálogo de proveedores (datos de empresa) | M01 | auth-service | T | L | L | – | – | L | LA (su empresa) |
-| Tiendas | M02 | catalog-service | T | L | L | L | L | L | – |
-| Zonas | M03 | catalog-service | T | L | L | L | L | L | – |
+| Tiendas | M02 | catalog-service | L | L | T | L | L | L | – |
+| Zonas | M03 | catalog-service | L | T | L | L | L | L | – |
 | Catálogo de productos | M04 | catalog-service | L | L | T | L | L | L | P |
 | Alta de productos por proveedor | M04 | catalog-service | L | – | A | – | – | L | P |
 | Segmentos de ingreso | M05 | catalog-service | L | T | L | L | L | L | – |
@@ -118,7 +118,7 @@ Notas:
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (`analisis_corrida_parametros`), sin columna nueva en `analisis_corridas`, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-27)
+### 4.2 Reglas de negocio (D-01 a D-28)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -149,6 +149,7 @@ Notas:
 | D-25 | Errores | MongoDB caído (o cualquier almacén que el servicio no pueda alcanzar) responde **503 `SERVICE_UNAVAILABLE`**, no 500. Aplica a documents, notifications y a las corridas de algorithms-core y analytics-stats (D3). | Con Mongo detenido, `GET /v1/notifications` → 503 con el error estándar en JSON y XML; `GET /v1/health` → 200 `degraded`. |
 | D-26 | Usuarios | Las respuestas de los servicios traen solo el **id** del usuario. El **nombre** lo resuelve el cliente consultando a `auth-service`; ningún servicio lo copia ni lo inventa. | Una bandeja o un reporte muestran `userId`; la web o el escritorio piden el nombre a auth. |
 | D-27 | Límites del Parcial 2 | Se aceptan y documentan como límites conocidos: (a) el clustering de zonas solo admite **k = 2** mientras el seed tenga 3 zonas; (b) el modo `baskets` de analytics-stats lee como máximo **500 páginas** de canastas por prueba; (c) `analisis_corridas` es de algorithms-core y `decision-service` también escribe en ella (corridas de accesibilidad, `tipo` propio): se corrige después del parcial. | Pedir k = 3 con 3 zonas → 400 con motivo claro; no se interpreta como error del servicio. |
+| D-28 | Tiendas y zonas | Rigen los permisos implementados: el **Gerente de categoría** escribe tiendas y el **Analista comercial** escribe zonas; el **Administrador** solo lee ambos módulos. Se adopta lo construido sobre la Matriz S0 (QA-WEB64-02). | Administrador → `403` en `POST /v1/stores` y `POST /v1/zones`; Gerente → `201` en tiendas; Analista → `201` en zonas. |
 
 ## 5. Flujos con estado
 
