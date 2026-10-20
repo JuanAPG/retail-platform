@@ -184,7 +184,12 @@ export class IndicatorsService {
           : (await this.todos<{ id: string; nombre: string }>('catalog-service', u.catalog, '/v1/zones', authorization));
         const filas: Array<Record<string, unknown>> = [];
         for (const z of zonas) {
-          // by-zone responde UN objeto (la corrida vigente de la zona); sin corrida, 404 → se omite esa zona.
+          // by-zone responde el HISTORIAL de la zona, de la corrida más reciente a
+          // la más antigua, así que el indicador toma la primera. Una zona sin
+          // corridas devuelve `[]` (200) y se omite; `opcional` cubre además el
+          // 404 de una zona que no existe. Se acepta también un objeto suelto
+          // para no romper si alguien corre este servicio contra un
+          // decision-service viejo (antes del arreglo del fallo #10).
           const vigente = await this.opcional(
             get<Record<string, any> | Array<Record<string, any>>>('decision-service', u.decision, `/v1/accessibility/by-zone/${z.id}`),
           );
