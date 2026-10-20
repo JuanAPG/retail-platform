@@ -56,7 +56,7 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'recomendaciones', label: 'Recomendaciones', icon: <IconRecomendaciones />, permiso: 'aprueba' },
     { key: 'comparar-precios', label: 'Comparar precios', icon: <IconPrecios />, permiso: 'lectura' },
     { key: 'reportes', label: 'Reportes', icon: <IconReportes />, permiso: 'lectura' },
-    { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas /> }, // el Gerente es quien escribe tiendas (catalog-service)
+    { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas />, permiso: 'lectura' }, // M02 es del Administrador (Matriz §3)
     { key: 'proveedores', label: 'Proveedores', icon: <IconProveedores />, permiso: 'lectura' },
   ],
   'Responsable de precios': [
@@ -78,7 +78,7 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'transacciones', label: 'Transacciones', icon: <IconTransacciones /> },
     { key: 'canastas', label: 'Canastas', icon: <IconCanastas /> },
     { key: 'segmentos', label: 'Segmentos de ingreso', icon: <IconSegmentos /> },
-    { key: 'zonas', label: 'Zonas', icon: <IconZonas /> },
+    { key: 'zonas', label: 'Zonas', icon: <IconZonas />, permiso: 'lectura' }, // M03 es del Administrador (Matriz §3)
     { key: 'indicadores', label: 'Indicadores y gráficas', icon: <IconResultados /> },
     { key: 'reglas-asociacion', label: 'Reglas de asociación', icon: <IconAsociacion /> },
     { key: 'sustitucion', label: 'Sustitución', icon: <IconSustitucion /> },
