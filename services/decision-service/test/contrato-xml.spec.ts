@@ -36,6 +36,8 @@ describe('Contrato XML contra el XSD (integración)', () => {
 
   const escenarios: string[] = [];
   const corridasAccesibilidad: string[] = [];
+  /** Zonas que crea la prueba del historial vacío; se borran al terminar. */
+  const zonasPropias: string[] = [];
   let recomendacionesPrevias: string[] = [];
   let propuestasPrevias: Fila[] = [];
   let evidenciasPrevias: Fila[] = [];
@@ -111,6 +113,10 @@ describe('Contrato XML contra el XSD (integración)', () => {
       if (escenarios.length > 0) await db.query('DELETE FROM escenarios WHERE id = ANY($1::uuid[])', [escenarios]);
       if (corridasAccesibilidad.length > 0) {
         await db.query(`DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[]) AND tipo = 'accesibilidad'`, [corridasAccesibilidad]);
+      }
+      // Al final: la zona solo se puede borrar cuando ya no la referencia nada.
+      if (zonasPropias.length > 0) {
+        await db.query('DELETE FROM zonas WHERE id = ANY($1::uuid[])', [zonasPropias]);
       }
     } finally {
       await db.destroy();
@@ -197,7 +203,7 @@ describe('Contrato XML contra el XSD (integración)', () => {
     esperarXmlValido(r.texto, 'simulacionCompareResponse');
   });
 
-  it('GET /v1/accessibility/by-zone/:zoneId → indiceAccesibilidad', async () => {
+  it('GET /v1/accessibility/by-zone/:zoneId → historialAccesibilidad', async () => {
     const corridas = async (): Promise<string[]> =>
       (await db.query('SELECT corrida_id AS id FROM accesibilidad_zona WHERE zona_id = $1', [zonaId])).map((f: { id: string }) => f.id);
 
@@ -215,7 +221,54 @@ describe('Contrato XML contra el XSD (integración)', () => {
     const r = await http('GET', `/v1/accessibility/by-zone/${zonaId}`, planeador, { accept: XML });
 
     expect(r.estado).toBe(200);
-    esperarXmlValido(r.texto, 'indiceAccesibilidad');
+    esperarXmlValido(r.texto, 'historialAccesibilidad');
+    // Es el historial: trae al menos un <item>, no los campos pelados.
+    expect(r.texto).toContain('<item>');
+  });
+
+  /**
+   * Fallo #10 del 13-oct-2026: la pantalla de accesibilidad del web registraba
+   * un 404 al abrir una zona sin corridas. El contrato nunca definió un 404
+   * para esta ruta: una zona que existe y no tiene corridas es `200` con la
+   * lista vacía, y el XML tiene que seguir validando contra el XSD.
+   */
+  it('by-zone de una zona SIN corridas → 200 con historial vacío (no 404)', async () => {
+    const [sinCorridas]: { id: string }[] = await db.query(
+      `SELECT z.id FROM zonas z
+       WHERE NOT EXISTS (SELECT 1 FROM accesibilidad_zona a WHERE a.zona_id = z.id)
+       LIMIT 1`,
+    );
+    if (!sinCorridas) {
+      // Todas las zonas del seed ya tienen corrida: se crea una zona propia y
+      // se borra al terminar, para no depender del estado de la base.
+      const [municipio]: { id: number }[] = await db.query('SELECT id FROM municipios ORDER BY id LIMIT 1');
+      if (!municipio) throw new Error('La base no tiene municipios: carga el seed (db/data_retail.sql).');
+      const [creada]: { id: string }[] = await db.query(
+        `INSERT INTO zonas (nombre, municipio_id, descripcion, activo)
+         VALUES ($1, $2, 'Zona de la prueba de contrato XML.', true) RETURNING id`,
+        [`IT by-zone vacia ${Date.now()}`, municipio.id],
+      );
+      zonasPropias.push(creada.id);
+      const r = await http('GET', `/v1/accessibility/by-zone/${creada.id}`, planeador, { accept: XML });
+      expect(r.estado).toBe(200);
+      esperarXmlValido(r.texto, 'historialAccesibilidad');
+      expect(r.texto).not.toContain('<item>');
+      return;
+    }
+
+    const r = await http('GET', `/v1/accessibility/by-zone/${sinCorridas.id}`, planeador, { accept: XML });
+    expect(r.estado).toBe(200);
+    esperarXmlValido(r.texto, 'historialAccesibilidad');
+    expect(r.texto).not.toContain('<item>');
+  });
+
+  it('by-zone de una zona INEXISTENTE sigue siendo 404 en XML válido', async () => {
+    const r = await http('GET', '/v1/accessibility/by-zone/00000000-0000-4000-8000-000000000000', planeador, {
+      accept: XML,
+    });
+
+    expect(r.estado).toBe(404);
+    esperarXmlValido(r.texto, 'error');
   });
 
   it('POST /v1/recommendations/generate → recomendacionesResponse', async () => {

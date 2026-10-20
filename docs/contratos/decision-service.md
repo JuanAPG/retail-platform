@@ -109,7 +109,9 @@ básicos. Zona o segmento inexistente → 404 `NOT_FOUND`.
 ## GET /v1/accessibility/by-zone/:zoneId
 
 Historial de corridas de la zona (de la más reciente a la más antigua),
-con los parámetros con que se calculó cada una.
+con los parámetros con que se calculó cada una. **Solo lee: no calcula ni
+persiste nada** (a diferencia de `/index`), así que es la ruta que deben usar
+las pantallas.
 
 Response `200`:
 
@@ -118,6 +120,20 @@ Response `200`:
    "estimatedIncome": 30000.0, "indexValue": 0.62,
    "calculatedAt": "2026-09-20T12:00:00.000Z" }]
 ```
+
+Una zona que **existe pero todavía no tiene corridas** responde `200` con la
+lista **vacía** (`[]`), no 404: "no se ha calculado" es una respuesta válida.
+Solo una zona que **no existe** da `404 NOT_FOUND`.
+
+En XML la raíz es **`historialAccesibilidad`** con un `<item>` por corrida
+(`docs/contratos/decision-service.xsd`); la lista vacía sale como el elemento
+sin hijos. `indiceAccesibilidad` se queda para `/index`, que sí devuelve una
+sola corrida; las dos comparten el tipo `accesibilidadCorrida`.
+
+> Hasta el 20-oct-2026 el servicio devolvía **un solo objeto** con `LIMIT 1` y
+> un `404` cuando la zona no tenía corridas: contradecía a este archivo y era
+> el fallo **#10** de la corrida de integración. Se corrigió el servicio, no el
+> contrato.
 
 ## POST /v1/simulation/price (Planeador)
 

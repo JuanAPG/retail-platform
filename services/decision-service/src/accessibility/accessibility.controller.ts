@@ -34,9 +34,13 @@ export class AccessibilityController {
   }
 
   @Get('by-zone/:zoneId')
-  @XmlRoot('indiceAccesibilidad')
+  @XmlRoot('historialAccesibilidad')
   @Roles(...PERFILES_INTERNOS)
-  @ApiOperation({ summary: 'Accesibilidad vigente de una zona (su corrida más reciente)' })
+  @ApiOperation({
+    summary:
+      'Historial de accesibilidad de una zona, de la corrida más reciente a la más antigua. ' +
+      'Una zona sin corridas devuelve 200 con la lista vacía; el 404 es solo para una zona inexistente.',
+  })
   @ApiParam({ name: 'zoneId', type: String, description: 'UUID de la zona' })
   findByZone(
     @Param(

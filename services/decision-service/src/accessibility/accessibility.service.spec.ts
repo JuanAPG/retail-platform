@@ -187,3 +187,80 @@ describe('AccessibilityService.calculateIndex', () => {
     );
   });
 });
+
+/**
+ * `findByZone` no tenía ni una prueba, y por eso pasó inadvertido que devolvía
+ * un objeto con `LIMIT 1` y un 404 donde el contrato pide una lista y un 200
+ * con `[]` (fallo #10 de la corrida del 13-oct-2026).
+ */
+describe('AccessibilityService.findByZone', () => {
+  /** `dataSource` con las dos consultas que usa `findByZone`. */
+  function conHistorial(opciones: { zonaExiste: boolean; filas: Record<string, unknown>[] }) {
+    const dataSource = {
+      query: jest.fn(async (sql: string): Promise<unknown[]> => {
+        if (sql.includes('FROM zonas WHERE id')) return opciones.zonaExiste ? [{ '?column?': 1 }] : [];
+        if (sql.includes('FROM accesibilidad_zona az')) return opciones.filas;
+        throw new Error(`Consulta no esperada en el test: ${sql}`);
+      }),
+    };
+    const servicio = new AccessibilityService(
+      {} as unknown as Repository<AccessibilityZoneEntity>,
+      {} as unknown as Repository<AccessibilityWeightEntity>,
+      {} as unknown as Repository<AccessibilityComponentEntity>,
+      {} as unknown as Repository<IncomeSegment>,
+      dataSource as unknown as DataSource,
+      { reportar: jest.fn() } as unknown as AuditReporter,
+    );
+    return { dataSource, servicio };
+  }
+
+  const FILA = {
+    corridaId: 'corrida-9',
+    indice: '0.6200',
+    executedAt: new Date('2026-09-20T12:00:00.000Z'),
+    segmentId: '2',
+    basicBasketCost: '187.50',
+    estimatedIncome: '30000.00',
+  };
+
+  it('una zona que existe pero NO tiene corridas devuelve [] con 200, no 404', async () => {
+    const { servicio } = conHistorial({ zonaExiste: true, filas: [] });
+
+    await expect(servicio.findByZone('zona-1')).resolves.toEqual([]);
+  });
+
+  it('una zona que NO existe sigue siendo 404', async () => {
+    const { servicio } = conHistorial({ zonaExiste: false, filas: [] });
+
+    await expect(servicio.findByZone('zona-fantasma')).rejects.toThrow(NotFoundException);
+  });
+
+  it('devuelve el historial completo, no solo la corrida más reciente', async () => {
+    const vieja = { ...FILA, corridaId: 'corrida-1', indice: '0.4000', executedAt: new Date('2026-08-01T12:00:00.000Z') };
+    const { servicio, dataSource } = conHistorial({ zonaExiste: true, filas: [FILA, vieja] });
+
+    const historial = await servicio.findByZone('zona-1');
+
+    expect(historial).toHaveLength(2);
+    expect(historial.map((h) => h.indexValue)).toEqual([0.62, 0.4]);
+    // El orden lo pone la consulta (ejecutada_en DESC) y ya no se recorta.
+    const sql = dataSource.query.mock.calls.map(([s]: [string]) => s).find((s) => s.includes('accesibilidad_zona'));
+    expect(sql).toContain('ORDER BY ac.ejecutada_en DESC');
+    expect(sql).not.toContain('LIMIT 1');
+  });
+
+  it('convierte los números y deja `estimatedIncome` en null si la corrida no lo guardó', async () => {
+    const { servicio } = conHistorial({ zonaExiste: true, filas: [{ ...FILA, estimatedIncome: null }] });
+
+    const [fila] = await servicio.findByZone('zona-1');
+
+    expect(fila).toEqual({
+      zoneId: 'zona-1',
+      segmentId: 2,
+      basicBasketCost: 187.5,
+      estimatedIncome: null,
+      indexValue: 0.62,
+      calculatedAt: new Date('2026-09-20T12:00:00.000Z'),
+    });
+  });
+});

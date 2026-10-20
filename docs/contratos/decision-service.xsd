@@ -5,15 +5,31 @@
            xmlns:dec="decision/v1"
            elementFormDefault="qualified">
 
-  <xs:element name="indiceAccesibilidad">
+  <!-- Una corrida de accesibilidad. Se factoriza como tipo porque la usan dos
+       elementos: el indice que calcula `/index` y cada `item` del historial
+       que devuelve `/by-zone/:zoneId`. -->
+  <xs:complexType name="accesibilidadCorrida">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="segmentId" type="xs:integer"/>
+      <xs:element name="basicBasketCost" type="xs:decimal"/>
+      <xs:element name="estimatedIncome" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="indexValue" type="xs:decimal"/>
+      <xs:element name="calculatedAt" type="xs:dateTime" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/accessibility/index: una sola corrida, la que acaba de calcular. -->
+  <xs:element name="indiceAccesibilidad" type="dec:accesibilidadCorrida"/>
+
+  <!-- GET /v1/accessibility/by-zone/:zoneId: HISTORIAL de corridas de la zona,
+       de la mas reciente a la mas antigua. Una zona que existe pero todavia no
+       tiene corridas responde 200 con la lista VACIA (`minOccurs="0"`), no 404:
+       el 404 queda solo para una zona que no existe. -->
+  <xs:element name="historialAccesibilidad">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="zoneId" type="xs:string"/>
-        <xs:element name="segmentId" type="xs:integer"/>
-        <xs:element name="basicBasketCost" type="xs:decimal"/>
-        <xs:element name="estimatedIncome" type="xs:decimal" minOccurs="0"/>
-        <xs:element name="indexValue" type="xs:decimal"/>
-        <xs:element name="calculatedAt" type="xs:dateTime" minOccurs="0"/>
+        <xs:element name="item" type="dec:accesibilidadCorrida" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
