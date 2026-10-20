@@ -19,7 +19,11 @@
 #   HOST            host de los servicios (default localhost).
 #   SOLO            filtra por servicio: SOLO=catalog scripts/validate-xml.sh
 #
-# Requiere `xmllint` (Debian/Ubuntu: sudo apt-get install -y libxml2-utils).
+# Para validar hace falta `xmllint` (Debian/Ubuntu: sudo apt-get install -y
+# libxml2-utils) O Python 3 con `lxml` (pip install lxml). Antes solo servia
+# xmllint y en Windows el script moria de entrada; es el mismo motivo por el
+# que los fallos 8 y 9 de la corrida del 13-oct dejaron sin verificar el XML
+# de audit-service.
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,8 +33,33 @@ SOLO="${SOLO:-}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-if ! command -v xmllint >/dev/null 2>&1; then
-  echo "Falta xmllint. Debian/Ubuntu: sudo apt-get install -y libxml2-utils" >&2
+# Validador: xmllint si esta en el PATH; si no, Python 3 con lxml. En Windows
+# `python3` puede ser otro interprete sin lxml (MSYS), asi que se prueban los
+# tres nombres. Mismo mecanismo que services/*/test/apoyo.ts.
+VALIDA_CON_LXML='
+import sys
+from lxml import etree
+esquema = etree.XMLSchema(etree.parse(sys.argv[1]))
+documento = etree.parse(sys.argv[2])
+if not esquema.validate(documento):
+    print("\n".join(str(e) for e in esquema.error_log))
+    sys.exit(1)
+'
+VALIDADOR=""
+PYBIN=""
+if command -v xmllint >/dev/null 2>&1; then
+  VALIDADOR="xmllint"
+else
+  for p in python3 python py; do
+    if command -v "$p" >/dev/null 2>&1 && "$p" -c 'import lxml' >/dev/null 2>&1; then
+      VALIDADOR="lxml"; PYBIN="$p"; break
+    fi
+  done
+fi
+if [[ -z "$VALIDADOR" ]]; then
+  echo "No hay con que validar el XML contra el XSD." >&2
+  echo "Instala xmllint (Debian/Ubuntu: sudo apt-get install -y libxml2-utils;" >&2
+  echo "macOS: brew install libxml2) o Python 3 con lxml (pip install lxml)." >&2
   exit 2
 fi
 if [[ -z "${CORE_TOKEN:-}" ]]; then
@@ -116,6 +145,16 @@ try:
     d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
 except Exception: print("")' 2>/dev/null)"
 
+# documents-service: un reporte ya generado (lo crea un Gerente con
+# POST /v1/reports/executive; el script solo lee). Sin el, la fila del detalle
+# sale como HTTP 400/404 y se reporta como tal.
+REPORTE_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
+  "http://$HOST:3108/v1/reports?limit=1" \
+  | python3 -c 'import sys,json
+try:
+    d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
+except Exception: print("")' 2>/dev/null)"
+
 # servicio|puerto|xsd|ruta[|admin]
 # Solo endpoints de LECTURA: el script no muta nada.
 # `admin` marca los que exigen un rol que el Analista no tiene.
@@ -150,6 +189,9 @@ ENDPOINTS=(
   "analytics|3106|analytics-stats|/v1/clustering/runs/CLUSTERING_ID"
   "decision|3107|decision-service|/v1/accessibility/index"
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
+  "documents|3108|documents-service|/v1/reports?limit=2"
+  "documents|3108|documents-service|/v1/reports/stats/by-user-month"
+  "documents|3108|documents-service|/v1/reports/REPORTE_ID"
   "notifications|3109|notifications-service|/v1/notifications?limit=2"
   "notifications|3109|notifications-service|/v1/notifications/unread-count"
   "audit|3110|audit-service|/v1/auditoria?limit=2|admin"
@@ -157,7 +199,22 @@ ENDPOINTS=(
 )
 
 # Errores: el mismo cuerpo tiene que validar contra el elemento `error`.
+#
+# auth-service (3101) aparece SOLO aqui, en los cuerpos de error, y no arriba
+# con una fila de exito. Dos motivos:
+#   - Los unicos exitos que su XSD declara (loginResponse, refreshResponse,
+#     validateResponse) son POST, y este script es de solo lectura por diseno
+#     (un login ademas crea sesion en Redis).
+#   - Sus rutas de LECTURA (GET /v1/usuarios, /v1/usuarios/:id, /v1/roles,
+#     /v1/roles/:id/permisos) no tienen elemento en auth-service.xsd, asi que
+#     hoy no hay con que validarlas. Ver el hallazgo del PR: auth-service
+#     tampoco declara @XmlRoot en ningun handler, de modo que su XML de exito
+#     sale como <response> y no valida contra su propio XSD.
 ERRORES=(
+  "auth|3101|auth-service|/v1/usuarios|401"
+  "auth|3101|auth-service|/v1/roles|401"
+  "documents|3108|documents-service|/v1/reports|401"
+  "documents|3108|documents-service|/v1/reports/stats/by-user-month|401"
   "catalog|3102|catalog-service|/v1/zones/00000000-0000-4000-8000-000000000000|404"
   "catalog|3102|catalog-service|/v1/zones|401"
   "pricing|3103|pricing-service|/v1/prices/history?limit=abc|400"
@@ -187,14 +244,19 @@ try:
 except Exception: print("")' 2>/dev/null)"
 
 validar() { # $1 xml  $2 xsd  $3 etiqueta
-  local salida real
-  salida="$(xmllint --noout --schema "$XSD_DIR/$2.xsd" "$1" 2>&1)"
+  local salida estado real
+  if [[ "$VALIDADOR" == "xmllint" ]]; then
+    salida="$(xmllint --noout --schema "$XSD_DIR/$2.xsd" "$1" 2>&1)"; estado=$?
+  else
+    salida="$("$PYBIN" -c "$VALIDA_CON_LXML" "$XSD_DIR/$2.xsd" "$1" 2>&1)"; estado=$?
+  fi
   # Los targetNamespace de los XSD son URI relativas (`catalog/v1`), asi que
   # xmllint emite un "namespace warning" en TODOS los documentos. Es solo
-  # un aviso, no invalida: se descarta para quedarse con el error real.
+  # un aviso, no invalida (no cambia el codigo de salida): se descarta para
+  # quedarse con el error real.
   real="$(echo "$salida" | grep -v 'namespace warning' | grep -v 'is not absolute' \
-    | grep 'Schemas validity error' | head -1)"
-  if [[ -z "$real" ]] && ! echo "$salida" | grep -q 'fails to validate'; then
+    | grep -E 'Schemas validity error|ERROR:SCHEMASV' | head -1)"
+  if (( estado == 0 )); then
     printf '  \033[32mok\033[0m    %s\n' "$3"
     ok=$((ok+1))
   else
@@ -218,6 +280,7 @@ for fila in "${ENDPOINTS[@]}"; do
   ruta="${ruta//CORRIDA_ID/$CORRIDA_ID}"
   ruta="${ruta//CATEGORIA_ID/$CATEGORIA_ID}"
   ruta="${ruta//CLUSTERING_ID/$CLUSTERING_ID}"
+  ruta="${ruta//REPORTE_ID/$REPORTE_ID}"
   token="$CORE_TOKEN"
   [[ "$rol" == "admin" ]] && token="${CORE_TOKEN_ADMIN:-$CORE_TOKEN}"
   archivo="$TMP/$svc$(echo "$ruta" | tr '/?=&' '____').xml"
