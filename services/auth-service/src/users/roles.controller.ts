@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { ROL } from '../common/roles';
 import { UsersService } from './users.service';
 import { PermisoEntrada, RolesService } from './roles.service';
@@ -33,6 +34,7 @@ export class RolesController {
   ) {}
 
   @Get()
+  @XmlRoot('rolListResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
   @ApiOperation({ summary: 'Los 7 perfiles (alimenta el selector de rol).' })
   findAll() {
@@ -40,6 +42,7 @@ export class RolesController {
   }
 
   @Get(':id/permisos')
+  @XmlRoot('rolPermisosResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
   @ApiOperation({ summary: 'Matriz rol × módulo con su nivel.' })
   matriz(@Param('id', ParseIntPipe) id: number) {
@@ -48,6 +51,7 @@ export class RolesController {
 
   @Put(':id/permisos')
   @Roles(ROL.ADMINISTRADOR)
+  @XmlRoot('rolPermisosResponse')
   @ApiOperation({ summary: 'Reemplaza la matriz completa de un rol.' })
   reemplazar(
     @Param('id', ParseIntPipe) id: number,

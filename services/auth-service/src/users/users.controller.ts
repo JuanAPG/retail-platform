@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ROL } from '../common/roles';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -37,12 +38,14 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @XmlRoot('usuarioListResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
   findAll(@Query() filtros: PaginationDto) {
     return this.usersService.findAll(filtros);
   }
 
   @Get(':id')
+  @XmlRoot('usuarioResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findOne(id);
@@ -51,6 +54,7 @@ export class UsersController {
   @Post()
   @Roles(ROL.ADMINISTRADOR)
   @HttpCode(HttpStatus.CREATED)
+  @XmlRoot('usuarioResponse')
   create(
     @Body() dto: CreateUsuarioDto,
     @Ip() ip: string,
@@ -61,6 +65,7 @@ export class UsersController {
 
   @Patch(':id')
   @Roles(ROL.ADMINISTRADOR)
+  @XmlRoot('usuarioResponse')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUsuarioDto,
@@ -73,6 +78,7 @@ export class UsersController {
 
   @Delete(':id')
   @Roles(ROL.ADMINISTRADOR)
+  @XmlRoot('usuarioEliminadoResponse')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() solicitante: SesionUsuario,

@@ -9,6 +9,39 @@ Responde JSON por defecto y XML si `Accept: application/xml` (XSD en
 > rota el `jti` en vez de re-emitir solo el access, y existe
 > `POST /v1/auth/logout` + `POST /v1/auth/validate`.
 
+## Elemento raíz de cada respuesta en XML
+
+El cliente de escritorio es XML-exclusivo y valida con el XSD, así que cada
+ruta declara su elemento raíz. Hasta el 20-oct-2026 **ningún** handler lo
+declaraba: todas las respuestas de éxito salían como `<response>`, que el XSD
+no declara, y por eso ninguna validaba contra su propio contrato.
+
+| Ruta | Elemento raíz |
+|---|---|
+| `POST /v1/auth/register/proveedor` | `registroProveedorResponse` |
+| `POST /v1/auth/login` | `loginResponse` |
+| `POST /v1/auth/refresh` | `refreshResponse` |
+| `POST /v1/auth/logout` | `logoutResponse` |
+| `POST /v1/auth/validate` | `validateResponse` |
+| `GET /v1/usuarios` | `usuarioListResponse` |
+| `GET /v1/usuarios/:id`, `POST /v1/usuarios`, `PATCH /v1/usuarios/:id` | `usuarioResponse` |
+| `DELETE /v1/usuarios/:id` | `usuarioEliminadoResponse` |
+| `GET /v1/roles` | `rolListResponse` |
+| `GET /v1/roles/:id/permisos`, `PUT /v1/roles/:id/permisos` | `rolPermisosResponse` |
+| cualquier error | `error` |
+
+Dos notas sobre los tipos del XSD:
+
+- El tipo `usuario` declara `createdAt` y `updatedAt` (opcionales) y lleva
+  `activo` **antes** de `rol`, porque ese es el orden en que se emiten y
+  `xs:sequence` es estricto. Antes el tipo los omitía y tenía el orden al
+  revés, así que `loginResponse` no habría validado ni con el `@XmlRoot`
+  puesto.
+- El `user` de `validate` usa un tipo aparte, `usuarioDeToken`: se arma con el
+  **payload del JWT** (`sub`, `email`, `rol`, `rolId`), así que no trae
+  `nombre` ni `activo`, y es correcto que no los traiga — **D-26** dice que las
+  respuestas llevan el id y que el nombre lo resuelve el cliente.
+
 ## POST /v1/auth/register/proveedor (pública)
 
 Alta de proveedor + usuario inactivo (lo aprueba un Administrador).
