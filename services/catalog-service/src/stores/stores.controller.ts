@@ -27,7 +27,14 @@ import { StoreFilterDto } from './dto/store-filter.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { Auditar, AuditarInterceptor } from '../common/audit/auditar.interceptor';
 
-/** M02 — Tiendas. Contrato: docs/contratos/catalog-service.md */
+/**
+ * M02 — Tiendas. Contrato: docs/contratos/catalog-service.md
+ *
+ * Las escrituras son del Administrador (Matriz §3: Admin Total, los otros
+ * cinco perfiles internos Lectura, Proveedor sin acceso). Antes las tenía el
+ * Gerente de categoría, que es quien escribe el catálogo de productos (M04),
+ * no las tiendas.
+ */
 @ApiTags('M02 Stores')
 @ApiBearerAuth()
 @UseGuards(SessionGuard, RolesGuard)
@@ -70,9 +77,9 @@ export class StoresController {
 
   @Post()
   @XmlRoot('storeResponse')
-  @Roles(ROL.GERENTE_CATEGORIA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('tiendas', 'insert')
-  @ApiOperation({ summary: 'Crea una tienda junto con su dirección (solo Gerente de categoría).' })
+  @ApiOperation({ summary: 'Crea una tienda junto con su dirección (solo Administrador).' })
   @ApiRespuesta(201, 'Tienda creada, activa.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403)
   create(@Body() dto: CreateStoreDto) {
@@ -81,7 +88,7 @@ export class StoresController {
 
   @Patch(':id')
   @XmlRoot('storeResponse')
-  @Roles(ROL.GERENTE_CATEGORIA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('tiendas', 'update')
   @ApiOperation({ summary: 'Edita la tienda y/o su dirección; `activo: false` la desactiva sin borrarla.' })
   @ApiRespuesta(200, 'Tienda actualizada.', muestras.tienda, 'storeResponse')
@@ -92,7 +99,7 @@ export class StoresController {
 
   @Delete(':id')
   @XmlRoot('storeResponse')
-  @Roles(ROL.GERENTE_CATEGORIA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('tiendas', 'delete')
   @ApiOperation({
     summary:

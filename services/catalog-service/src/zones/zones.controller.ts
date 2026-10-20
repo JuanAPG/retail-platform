@@ -38,6 +38,11 @@ import { Auditar, AuditarInterceptor } from '../common/audit/auditar.interceptor
  * M03 — Zonas y su catálogo territorial. Se agrupan en un solo controlador
  * porque `municipalities` existe únicamente para dar de alta zonas.
  * Contrato: docs/contratos/catalog-service.md
+ *
+ * Las escrituras son del Administrador (Matriz §3: Admin Total, los otros
+ * cinco perfiles internos Lectura, Proveedor sin acceso). Eso incluye
+ * `indicators` y `classification`. Los SEGMENTOS de ingreso (M05) siguen
+ * siendo del Analista comercial: no se tocan aquí.
  */
 @ApiTags('M03 Zones')
 @ApiBearerAuth()
@@ -108,9 +113,9 @@ export class ZonesController {
 
   @Post('zones')
   @XmlRoot('zoneResponse')
-  @Roles(ROL.ANALISTA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('zonas', 'insert')
-  @ApiOperation({ summary: 'Crea una zona (solo Analista comercial).' })
+  @ApiOperation({ summary: 'Crea una zona (solo Administrador).' })
   @ApiRespuesta(201, 'Zona creada, activa.', muestras.zona, 'zoneResponse')
   @ApiErrores(400, 401, 403, 409)
   create(@Body() dto: CreateZoneDto) {
@@ -119,7 +124,7 @@ export class ZonesController {
 
   @Patch('zones/:id')
   @XmlRoot('zoneResponse')
-  @Roles(ROL.ANALISTA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('zonas', 'update')
   @ApiOperation({ summary: 'Edita una zona; `activo: false` la desactiva sin borrarla.' })
   @ApiRespuesta(200, 'Zona actualizada.', muestras.zona, 'zoneResponse')
@@ -130,10 +135,10 @@ export class ZonesController {
 
   @Put('zones/:id/indicators')
   @XmlRoot('zoneIndicatorsResponse')
-  @Roles(ROL.ANALISTA)
+  @Roles(ROL.ADMINISTRADOR)
   @ApiOperation({
     summary:
-      'Carga el ingreso estimado, la población y la disponibilidad de una zona (solo Analista comercial). Deja una corrida de carga manual con su fuente y periodo.',
+      'Carga el ingreso estimado, la población y la disponibilidad de una zona (solo Administrador). Deja una corrida de carga manual con su fuente y periodo.',
   })
   @ApiRespuesta(200, 'Indicadores cargados; los lee `GET /v1/zones/compare`.', muestras.indicadoresZona, 'zoneIndicatorsResponse')
   @ApiErrores(400, 401, 403, 404)
@@ -165,10 +170,10 @@ export class ZonesController {
 
   @Put('zones/:id/classification')
   @XmlRoot('zoneClassificationResponse')
-  @Roles(ROL.ANALISTA)
+  @Roles(ROL.ADMINISTRADOR)
   @ApiOperation({
     summary:
-      'Clasifica la zona en un segmento de ingreso (solo Analista comercial). Cierra la clasificación vigente y crea la nueva; el historial se conserva.',
+      'Clasifica la zona en un segmento de ingreso (solo Administrador). Cierra la clasificación vigente y crea la nueva; el historial se conserva.',
   })
   @ApiRespuesta(200, 'Clasificación vigente.', muestras.clasificacionZona, 'zoneClassificationResponse')
   @ApiErrores(400, 401, 403, 404)
@@ -196,7 +201,7 @@ export class ZonesController {
 
   @Delete('zones/:id')
   @HttpCode(204)
-  @Roles(ROL.ANALISTA)
+  @Roles(ROL.ADMINISTRADOR)
   @Auditar('zonas', 'delete')
   @ApiOperation({ summary: 'Elimina una zona. 409 si tiene tiendas asociadas (desactívala en su lugar).' })
   @ApiSinCuerpo(204, 'Eliminada, sin cuerpo.')

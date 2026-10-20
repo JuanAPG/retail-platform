@@ -17,6 +17,18 @@ de negocio.
 | Zonas y municipios (M03) | `/v1/zones`, `/v1/municipalities` | migrado (sin auditoría, pendiente) |
 | Productos y presentaciones (M04) | `/v1/products`, `/v1/presentations`, `/v1/product-categories`, `/v1/units`, `/v1/providers` | migrado (sin auditoría, pendiente) |
 
+## Quién escribe cada módulo
+
+Según la Matriz §3 (`docs/matriz-perfiles-permisos.md`), que es la fuente. Las lecturas son de
+los 6 perfiles internos en los cuatro módulos; el Proveedor solo entra a productos (propone).
+
+| Módulo | Escribe | Nota |
+|---|---|---|
+| Tiendas (M02) | **Administrador** | Admin Total; los otros 5 internos, Lectura. |
+| Zonas (M03) | **Administrador** | Incluye `indicators` y `classification`. |
+| Productos (M04) | Gerente de categoría | También aprueba/rechaza propuestas del Proveedor (D-08). |
+| Segmentos (M05) | Analista comercial | Rangos encimados → `400` (D-10). |
+
 ## Caché en Redis
 
 Los cuatro catálogos planos se cachean 1 hora (prefijo `catalog:`): `catalog:categories`, `catalog:units`,
