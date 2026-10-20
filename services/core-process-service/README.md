@@ -12,11 +12,14 @@ transversal `services/template-nest`.
   `GET /v1/transactions/import/pending`,
   `GET /v1/transactions[?storeId&dateFrom&dateTo&page&limit]`,
   `GET /v1/transactions/:id`.
-  Escritura Admin/Analista. Valida contra catalog-service por HTTP
-  (caído → 503, sin insertar); reporta a audit-service best-effort.
+  Escritura **solo del Analista comercial** (Matriz §3: el Administrador es
+  Lectura); `GET /v1/transactions/import/pending` lo siguen viendo los dos.
+  Valida contra catalog-service por HTTP (caído → 503, sin insertar);
+  reporta a audit-service best-effort.
 - **M07**: `GET /v1/baskets[?filtros&page&limit]`, `GET /v1/baskets/:id`,
   `POST /v1/baskets/reclassify[?zoneId]` (masivo, llena huecos),
   `POST /v1/baskets/:id/reclassify[?resyncZone]` (una canasta).
+  Reclasificar es escritura: **solo del Analista comercial** (Matriz §3).
   1:1 con transacción, zona y segmento congelados; segmento por lectura de
   `v_zona_segmento` (RN-02). Nueve filtros combinables con AND.
 - **M09**: `average-ticket`, `products-per-basket`, `purchase-frequency`,
@@ -97,8 +100,11 @@ equivocado en el host. Se arregla con
 (`docker exec retail_core_process_service sh -c 'cd /app && npm run xsd'`).
 
 Las pruebas de integración (`test/`) requieren el stack arriba y
-`CORE_TOKEN` con un JWT de Analista o Administrador; si falta alguno de los
-dos, fallan con un mensaje que lo dice en vez de un `fetch failed` opaco:
+`CORE_TOKEN` con un JWT de **Analista comercial** (un token de Administrador
+da 403 al escribir, por la Matriz §3); si falta alguno de los dos, fallan con
+un mensaje que lo dice en vez de un `fetch failed` opaco. `CORE_TOKEN_ADMIN`
+es opcional: con un JWT de Administrador se activan la prueba de que ese
+perfil lee pero no escribe y la que da de baja una tienda en el catálogo.
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d core-process-service

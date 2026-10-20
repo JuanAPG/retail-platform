@@ -24,6 +24,9 @@ import { ReclassifyBasketDto } from './dto/reclassify-basket.dto';
 /**
  * M07 — Canastas. Una por transacción (RN-03), con zona y segmento
  * congelados al momento de construirla.
+ *
+ * Reclasificar escribe, así que es SOLO del Analista comercial (Matriz §3,
+ * M07: Analista Total, Administrador y los demás perfiles internos Lectura).
  */
 @ApiTags('v1 Baskets')
 @ApiBearerAuth()
@@ -50,7 +53,7 @@ export class BasketsController {
 
   @Post('reclassify')
   @HttpCode(HttpStatus.OK)
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Rellena el segmento de las canastas que nacieron sin él.',
     description:
@@ -68,7 +71,7 @@ export class BasketsController {
 
   @Post(':id/reclassify')
   @HttpCode(HttpStatus.OK)
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Reclasifica UNA canasta contra la clasificación vigente de su zona.',
     description:
