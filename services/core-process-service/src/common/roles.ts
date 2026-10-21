@@ -5,7 +5,8 @@
  * cada uno escribiera los literales a mano, un acento o una mayúscula
  * distinta abriría un hueco de permisos que compila sin quejarse.
  * Cualquier cambio aquí debe reflejarse también en
- * docs/matriz-perfiles-permisos.docx (avisar al equipo).
+ * docs/matriz-perfiles-permisos.md (la fuente; el .docx es una copia para
+ * entregar) y avisarse al equipo.
  */
 export const ROL = {
   ADMINISTRADOR: 'Administrador',
@@ -30,14 +31,18 @@ export const PERFILES_INTERNOS = [
 /**
  * Perfiles sin ninguna ruta de escritura en este servicio.
  *
- * El Analista NO está aquí: el contrato de Fase A
- * (`docs/contratos/core-process-transactions.md`) le da escritura sobre
- * transacciones e importación CSV, y así está implementado. El comentario
- * anterior lo listaba como solo-consulta y contradecía al contrato — hay
- * que confirmarlo contra `docs/matriz-perfiles-permisos.docx`, que es la
- * autoridad, y avisar al equipo si la matriz dice otra cosa.
+ * Confirmado contra la Matriz §3 (`docs/matriz-perfiles-permisos.md`), que es
+ * la autoridad: en M06 (Transacciones) y M07 (Canastas) el **Analista
+ * comercial** es Total y los otros cinco perfiles internos son Lectura. Por
+ * eso el **Administrador** está aquí: tenía escritura en las 6 rutas
+ * (registro manual, las tres de importación CSV y las dos de reclasificar) y
+ * la Matriz solo le da Lectura, así que se le quitó.
+ *
+ * El Gerente de categoría y el Responsable de precios no se listan porque
+ * nunca tuvieron escritura aquí; se agregan si algún día hace falta la lista
+ * completa.
  */
-export const PERFILES_DE_CONSULTA = [ROL.AUDITOR, ROL.PLANEADOR] as const;
+export const PERFILES_DE_CONSULTA = [ROL.ADMINISTRADOR, ROL.AUDITOR, ROL.PLANEADOR] as const;
 
 /** Quién resuelve las propuestas de alta de producto (RF-12). */
 export const APRUEBAN_PRODUCTOS = [ROL.ADMINISTRADOR, ROL.GERENTE_CATEGORIA] as const;

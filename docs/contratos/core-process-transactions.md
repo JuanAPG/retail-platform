@@ -3,12 +3,16 @@
 Base: `http://core-process-service:3104` · Rutas `/v1/transactions` y
 `/v1/baskets`, JSON por defecto y XML si `Accept` pide XML
 (`application/xml`, `text/xml` o `*+xml`, respetando q-values).
-Escritura para Administrador y Analista; lectura para perfiles internos.
+Escritura **solo para el Analista comercial**; lectura para los perfiles
+internos. Es la Matriz §3 (M06 Transacciones y M07 Canastas: Analista Total,
+Administrador Lectura): antes el Administrador también escribía las 6 rutas de
+escritura y se corrigió, porque la Matriz gana sobre el contrato y sobre el
+código.
 
 XSD por endpoint en `docs/contratos/xsd/core-process/`. Los errores
 también salen en XML cuando se piden así, con el XSD `error.xsd`.
 
-## POST /v1/transactions (Admin, Analista)
+## POST /v1/transactions (Analista)
 
 Registro manual. El `total` se calcula del detalle (no se acepta del
 cliente) **replicando el redondeo por línea de Postgres**, y antes de
@@ -55,7 +59,7 @@ Response `201`: la transacción con tienda, detalle y presentaciones
 Errores: 400, 401, 403, 404 (tienda inexistente), 409 (folio duplicado),
 503 (catálogo caído).
 
-## POST /v1/transactions/import/preview (Admin, Analista, multipart)
+## POST /v1/transactions/import/preview (Analista, multipart)
 
 Valida **sin insertar nada en transacciones**: las filas quedan en
 staging con su resultado por fila. Campo `file`, solo `.csv`, máximo
@@ -86,7 +90,7 @@ Response `201` con `importacionId`, conteos, `grupos` y hasta 200
 
 Errores: 400, 401, 403, 409, 413 (>5 MB), 415 (no es CSV), 503.
 
-## POST /v1/transactions/import/confirm (Admin, Analista)
+## POST /v1/transactions/import/confirm (Analista)
 
 `{ "previewId": "uuid" }` → inserta **solo las filas válidas**. Cada
 folio entra completo o no entra: venta, líneas, canasta y la
@@ -131,7 +135,7 @@ Descartada / sin validar → 409. Sin filas válidas → 400. Ya confirmada
 para completarla (auto-reparación de importaciones que quedaron
 inconsistentes).
 
-## DELETE /v1/transactions/import/:id (Admin, Analista)
+## DELETE /v1/transactions/import/:id (Analista)
 
 Descarta una importación no confirmada. `descartado` es el único estado
 que libera el hash del archivo: sin esto, un preview equivocado dejaba
@@ -211,7 +215,7 @@ unión): `storeId`, `zoneId`, `segmentId`, `dateFrom`, `dateTo`
 canasta se construye igual (no se bloquea la venta) y se rellena después
 con `POST /v1/baskets/reclassify`.
 
-## POST /v1/baskets/:id/reclassify[?resyncZone] (Admin, Analista)
+## POST /v1/baskets/:id/reclassify[?resyncZone] (Analista)
 
 Reclasifica UNA canasta contra la clasificación vigente de su zona.
 
@@ -229,7 +233,7 @@ NULL`, así que una tienda nunca existe sin zona.
 
 Response `200`: la canasta reclasificada (`xsd/core-process/basket.xsd`).
 
-## POST /v1/baskets/reclassify[?zoneId] (Admin, Analista)
+## POST /v1/baskets/reclassify[?zoneId] (Analista)
 
 Rellena el segmento de las canastas que nacieron sin él. Hace falta
 porque la corrida de clustering (RF-16) clasifica las zonas **después** de

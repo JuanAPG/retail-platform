@@ -7,8 +7,10 @@ import { join } from 'path';
  * Requiere: `docker compose -f infra/docker-compose.yml up -d
  * core-process-service catalog-service audit-service auth-service`
  * (postgres y redis los arrastra `depends_on`) con seed, más un token de
- * Analista o Administrador de auth-service. Sube el CSV real de 100
- * canastas con multipart de verdad. No corre en CI sin infraestructura:
+ * **Analista comercial** de auth-service: por la Matriz §3 es el único perfil
+ * que escribe transacciones y canastas, así que un token de Administrador da
+ * 403 en el preview. Sube el CSV real de 100 canastas con multipart de
+ * verdad. No corre en CI sin infraestructura:
  *
  *   CORE_TOKEN=<jwt-analista> npm run test:integracion
  */
@@ -19,7 +21,11 @@ const CSV_100 = join(__dirname, '..', '..', '..', 'db', 'datos_prueba_100_canast
 const auth = { Authorization: `Bearer ${TOKEN}` };
 /** catalog-service, para las pruebas que necesitan dar de baja una tienda. */
 const BASE_CATALOGO = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
-/** Token de Administrador, si se exporta: hace falta para editar el catálogo. */
+/**
+ * Token de Administrador, si se exporta: hace falta para editar el catálogo.
+ * Desde la corrección de la Matriz §3, tiendas y zonas (M02/M03) las escribe
+ * el Administrador, así que un token de ese rol es justo el que sirve aquí.
+ */
 const authAdmin = { Authorization: `Bearer ${process.env.CORE_TOKEN_ADMIN ?? TOKEN}` };
 
 /** Identificador de esta corrida, para no chocar con lo ya importado. */
@@ -104,7 +110,7 @@ beforeAll(async () => {
     throw new Error(`El servicio está degradado: ${JSON.stringify(cuerpo.checks)}`);
   }
   if (!TOKEN) {
-    throw new Error('Falta CORE_TOKEN: exporta un JWT de Analista o Administrador.');
+    throw new Error('Falta CORE_TOKEN: exporta un JWT de Analista comercial (Matriz §3: es el único que escribe M06/M07).');
   }
 }, 30000);
 
@@ -465,8 +471,9 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
 
     const baja = await desactivar(false);
     if (!baja.ok) {
-      // Sin token de Administrador no se puede dar de baja: se omite en vez
-      // de dar un falso negativo.
+      // Sin token de Administrador no se puede dar de baja (CORE_TOKEN es de
+      // Analista y M02 es del Administrador): se omite en vez de dar un falso
+      // negativo.
       console.warn(`No se pudo desactivar la tienda (${baja.status}); prueba omitida.`);
       return;
     }
@@ -760,4 +767,40 @@ describe('GET /v1/transactions filtrado por zona y segmento (integración, requi
     expect(r.estado).toBe(400);
     expect(r.cuerpo.code).toBe('VALIDATION_ERROR');
   });
+
+  /**
+   * Matriz §3, M06/M07: el Administrador es **Lectura**. Antes escribía las 6
+   * rutas de abajo junto con el Analista.
+   *
+   * Necesita un token de Administrador de verdad en `CORE_TOKEN_ADMIN`: este
+   * servicio no trae `jsonwebtoken` para firmar uno al vuelo, así que sin esa
+   * variable la prueba se omite en vez de dar un falso verde.
+   */
+  it('Matriz §3: el Administrador lee transacciones y canastas (200) pero no las escribe (403)', async () => {
+    const tokenAdmin = process.env.CORE_TOKEN_ADMIN;
+    if (!tokenAdmin || tokenAdmin === TOKEN) {
+      console.warn('Sin CORE_TOKEN_ADMIN (token de Administrador); prueba omitida.');
+      return;
+    }
+    const comoAdmin = { Authorization: `Bearer ${tokenAdmin}` };
+    const json = { ...comoAdmin, 'Content-Type': 'application/json' };
+    const estado = async (ruta: string, init?: RequestInit) =>
+      (await fetch(`${BASE}${ruta}`, { headers: comoAdmin, ...init })).status;
+
+    // Lee: la Matriz le da Lectura en los dos módulos.
+    expect(await estado('/v1/transactions?limit=1')).toBe(200);
+    expect(await estado('/v1/baskets?limit=1')).toBe(200);
+
+    // No escribe: las 6 rutas de escritura de M06 y M07.
+    const forma = new FormData();
+    forma.append('file', new Blob([new Uint8Array(Buffer.from('folio\n'))], { type: 'text/csv' }), 'x.csv');
+    const fantasma = '00000000-0000-4000-8000-000000000000';
+
+    expect(await estado('/v1/transactions', { method: 'POST', headers: json, body: '{}' })).toBe(403);
+    expect(await estado('/v1/transactions/import/preview', { method: 'POST', headers: comoAdmin, body: forma })).toBe(403);
+    expect(await estado('/v1/transactions/import/confirm', { method: 'POST', headers: json, body: JSON.stringify({ previewId: fantasma }) })).toBe(403);
+    expect(await estado(`/v1/transactions/import/${fantasma}`, { method: 'DELETE' })).toBe(403);
+    expect(await estado('/v1/baskets/reclassify', { method: 'POST' })).toBe(403);
+    expect(await estado(`/v1/baskets/${fantasma}/reclassify`, { method: 'POST' })).toBe(403);
+  }, 60000);
 });

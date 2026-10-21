@@ -42,7 +42,7 @@ beforeAll(async () => {
         `(${error instanceof Error ? error.message : String(error)})`,
     );
   }
-  if (!TOKEN) throw new Error('Falta CORE_TOKEN: exporta un JWT de Analista o Administrador.');
+  if (!TOKEN) throw new Error('Falta CORE_TOKEN: exporta un JWT de Analista comercial (Matriz §3: es el único que escribe M06/M07).');
 }, 30000);
 
 describe('M09 de punta a punta (integración, requiere stack)', () => {

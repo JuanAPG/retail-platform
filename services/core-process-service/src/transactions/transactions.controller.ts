@@ -40,6 +40,11 @@ const MAX_ARCHIVO_BYTES = 5 * 1024 * 1024;
  * La validación de tiendas/productos se hace contra catalog-service por
  * HTTP (este servicio no es dueño del catálogo): si no responde, 503 y
  * no se inserta nada.
+ *
+ * Escribe SOLO el Analista comercial (Matriz §3, M06: Analista Total,
+ * Administrador y los demás perfiles internos Lectura). El Administrador
+ * también escribía las cuatro rutas de abajo; la Matriz solo le da Lectura,
+ * así que lee (`GET /v1/transactions`) pero ya no registra ni importa.
  */
 @ApiTags('v1 Transactions')
 @ApiBearerAuth()
@@ -49,7 +54,7 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post()
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Registra una transacción manual y construye su canasta.',
     description:
@@ -69,7 +74,7 @@ export class TransactionsController {
   }
 
   @Post('import/preview')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Paso 1 de la importación: valida el CSV y devuelve el preview.',
     description:
@@ -111,7 +116,7 @@ export class TransactionsController {
   // nuevo, aplica una importación que ya existe. Es lo que documenta el
   // contrato de Fase A.
   @HttpCode(HttpStatus.OK)
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Paso 2 de la importación: confirma e inserta solo las filas válidas.',
     description:
@@ -131,7 +136,7 @@ export class TransactionsController {
   }
 
   @Delete('import/:id')
-  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
+  @Roles(ROL.ANALISTA)
   @ApiOperation({
     summary: 'Descarta una importación no confirmada y libera su archivo.',
     description:
