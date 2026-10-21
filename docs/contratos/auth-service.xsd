@@ -54,21 +54,148 @@
     <xs:complexType>
       <xs:sequence>
         <xs:element name="active" type="xs:boolean"/>
-        <xs:element name="user" type="auth:usuario" minOccurs="0"/>
+        <xs:element name="user" type="auth:usuarioDeToken" minOccurs="0"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
 
+  <!-- Usuario tal como lo emite el servicio. El ORDEN es el de las propiedades
+       del entity y `xs:sequence` es estricto, asi que no se puede reacomodar a
+       gusto: antes este tipo declaraba `rol` antes de `activo` y no declaraba
+       `createdAt`/`updatedAt`, y por eso ninguna respuesta de exito validaba.
+       `createdAt`/`updatedAt` son del entity y si viajan en la respuesta. -->
   <xs:complexType name="usuario">
     <xs:sequence>
       <xs:element name="id" type="xs:string"/>
       <xs:element name="nombre" type="xs:string"/>
       <xs:element name="email" type="xs:string"/>
       <xs:element name="rolId" type="xs:integer"/>
-      <xs:element name="rol" type="xs:string" minOccurs="0"/>
       <xs:element name="activo" type="xs:boolean"/>
+      <xs:element name="createdAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="updatedAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="rol" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
+
+  <!-- El `user` de POST /v1/auth/validate NO sale de la base: se arma con el
+       payload del JWT, que carga `sub`, `email`, `rol` y `rolId`. Por eso no
+       lleva `nombre` ni `activo`, y es correcto que no los lleve: D-26 dice que
+       las respuestas traen el id y que el nombre lo resuelve el cliente. -->
+  <xs:complexType name="usuarioDeToken">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="rol" type="xs:string" minOccurs="0"/>
+      <xs:element name="rolId" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/auth/register/proveedor: la solicitud nace inactiva. -->
+  <xs:element name="registroProveedorResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="mensaje" type="xs:string"/>
+        <xs:element name="proveedorId" type="xs:string"/>
+        <xs:element name="usuarioId" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/auth/logout. -->
+  <xs:element name="logoutResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="mensaje" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/usuarios: pagina estandar (`docs/contratos/paginacion.md`). -->
+  <xs:element name="usuarioListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="auth:usuario" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/usuarios/:id. -->
+  <xs:element name="usuarioResponse" type="auth:usuario"/>
+
+  <!-- DELETE /v1/usuarios/:id. -->
+  <xs:element name="usuarioEliminadoResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="mensaje" type="xs:string"/>
+        <xs:element name="id" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/roles: arreglo plano, sin paginar. -->
+  <xs:complexType name="rol">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="nombre" type="xs:string"/>
+      <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="rolListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="auth:rol" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/roles/:id/permisos: matriz rol x modulo. `nivel` es el ENUM
+       `nivel_permiso` de db/schema.sql. -->
+  <xs:simpleType name="nivelPermiso">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="total"/>
+      <xs:enumeration value="lectura_actualiza"/>
+      <xs:enumeration value="lectura"/>
+      <xs:enumeration value="propone"/>
+      <xs:enumeration value="aprueba"/>
+      <xs:enumeration value="lectura_propios"/>
+      <xs:enumeration value="sin_acceso"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="permisoDeModulo">
+    <xs:sequence>
+      <xs:element name="moduloId" type="xs:integer"/>
+      <xs:element name="clave" type="xs:string"/>
+      <xs:element name="modulo" type="xs:string"/>
+      <xs:element name="nivel" type="auth:nivelPermiso"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="rolPermisosResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="rolId" type="xs:integer"/>
+        <xs:element name="rol" type="xs:string"/>
+        <xs:element name="permisos">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="auth:permisoDeModulo" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
 
   <xs:element name="error">
     <xs:complexType>
