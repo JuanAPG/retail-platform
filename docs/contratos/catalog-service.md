@@ -142,14 +142,17 @@ ingreso y sus indicadores cambian con el tiempo y viven en `zona_clasificaciones
 | GET | `/v1/zones` | Los 6 perfiles internos |
 | GET | `/v1/zones/compare?ids=` | Los 6 perfiles internos |
 | GET | `/v1/zones/:id` | Los 6 perfiles internos |
-| POST | `/v1/zones` | Analista comercial |
-| PATCH | `/v1/zones/:id` | Analista comercial |
-| DELETE | `/v1/zones/:id` | Analista comercial |
-| PUT | `/v1/zones/:id/indicators` | Analista comercial |
-| PUT | `/v1/zones/:id/classification` | Analista comercial |
+| POST | `/v1/zones` | Administrador |
+| PATCH | `/v1/zones/:id` | Administrador |
+| DELETE | `/v1/zones/:id` | Administrador |
+| PUT | `/v1/zones/:id/indicators` | Administrador |
+| PUT | `/v1/zones/:id/classification` | Administrador |
 | GET | `/v1/municipalities` | Los 6 perfiles internos |
 
 El Proveedor no tiene acceso (`403`). `:id` es UUID; otro valor → `400`.
+
+Las escrituras son del **Administrador** (Matriz §3, M03: Admin Total, los otros cinco perfiles internos
+Lectura). Antes las tenía el Analista comercial; los **segmentos de ingreso** (M05) sí siguen siendo suyos.
 
 ### Objeto Zone
 
@@ -230,7 +233,7 @@ exista clasificación vigente o el indicador no se haya cargado (ver `PUT /zones
 
 ### PUT /v1/zones/:id/indicators
 
-Carga a mano el **ingreso estimado, la población y la disponibilidad** de una zona (solo Analista comercial).
+Carga a mano el **ingreso estimado, la población y la disponibilidad** de una zona (solo Administrador).
 Son los indicadores que lee `GET /v1/zones/compare` y la accesibilidad; sin ellos salían `null`.
 
 ```json
@@ -249,7 +252,7 @@ Response `200` (`zoneIndicatorsResponse`): `{ zoneId, estimatedIncome, populatio
 
 ### PUT /v1/zones/:id/classification
 
-Clasifica la zona **a mano** en un segmento de ingreso (solo Analista comercial). Cierra la clasificación vigente
+Clasifica la zona **a mano** en un segmento de ingreso (solo Administrador). Cierra la clasificación vigente
 (le pone `vigente_hasta`; el historial se conserva) y crea la nueva con quién la asignó (RN-02).
 
 Body: `{ "segmentId": 2 }`. Segmento inexistente → `400`; zona inexistente → `404`.
@@ -275,11 +278,14 @@ Una tienda nace siempre **con su dirección** (se crean en una sola transacción
 | GET | `/v1/stores` | Los 6 perfiles internos |
 | GET | `/v1/stores/catalog/postal-codes` | Los 6 perfiles internos |
 | GET | `/v1/stores/:id` | Los 6 perfiles internos |
-| POST | `/v1/stores` | Gerente de categoría |
-| PATCH | `/v1/stores/:id` | Gerente de categoría |
-| DELETE | `/v1/stores/:id` | Gerente de categoría |
+| POST | `/v1/stores` | Administrador |
+| PATCH | `/v1/stores/:id` | Administrador |
+| DELETE | `/v1/stores/:id` | Administrador |
 
 El Proveedor no tiene acceso (`403`). `:id` es UUID; otro valor → `400`.
+
+Las escrituras son del **Administrador** (Matriz §3, M02: Admin Total, los otros cinco perfiles internos
+Lectura). Antes las tenía el Gerente de categoría, que escribe el catálogo de productos (M04), no las tiendas.
 
 ### Objeto Store
 

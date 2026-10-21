@@ -58,6 +58,7 @@ async function http(metodo: string, ruta: string, token?: string, cuerpo?: objec
 
 describe('/v1/stores (integración, requiere stack)', () => {
   let admin: string;
+  let gerente: string;
   let analista: string;
   let proveedor: string;
   let zonaA: string;
@@ -75,7 +76,8 @@ describe('/v1/stores (integración, requiere stack)', () => {
   });
 
   beforeAll(async () => {
-    admin = await sesion('it-s-gerente', 'Gerente de categoría');
+    admin = await sesion('it-s-admin', 'Administrador');
+    gerente = await sesion('it-s-gerente', 'Gerente de categoría');
     analista = await sesion('it-s-analista', 'Analista comercial');
     proveedor = await sesion('it-s-proveedor', 'Proveedor');
     const zonas = (await http('GET', '/v1/zones?limit=100', admin)).cuerpo.data;
@@ -93,6 +95,18 @@ describe('/v1/stores (integración, requiere stack)', () => {
 
   it('el Proveedor no entra a tiendas (403)', async () => {
     expect((await http('GET', '/v1/stores', proveedor)).estado).toBe(403);
+  });
+
+  it('Matriz §3: solo el Administrador escribe tiendas; los demás perfiles internos leen (403 al escribir)', async () => {
+    const lectores = { analista, gerente, auditor: await sesion('it-s-auditor', 'Auditor') };
+    const existente = (await http('GET', '/v1/stores?limit=1', admin)).cuerpo.data[0].id;
+
+    for (const [quien, token] of Object.entries(lectores)) {
+      expect([quien, (await http('GET', '/v1/stores?limit=1', token)).estado]).toEqual([quien, 200]);
+      expect([quien, (await http('POST', '/v1/stores', token, alta())).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('PATCH', `/v1/stores/${existente}`, token, { formato: 'super' })).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('DELETE', `/v1/stores/${existente}`, token)).estado]).toEqual([quien, 403]);
+    }
   });
 
   it('lista paginada por nombre, con dirección, zona y municipio anidados', async () => {
@@ -126,7 +140,10 @@ describe('/v1/stores (integración, requiere stack)', () => {
   });
 
   it('ciclo completo: crear → editar zona y dirección → borrar', async () => {
+    // Matriz §3: tiendas las escribe SOLO el Administrador.
     expect((await http('POST', '/v1/stores', analista, alta())).estado).toBe(403);
+    expect((await http('POST', '/v1/stores', gerente, alta())).estado).toBe(403);
+    expect((await http('POST', '/v1/stores', proveedor, alta())).estado).toBe(403);
 
     const creada = await http('POST', '/v1/stores', admin, alta());
     expect(creada.estado).toBe(201);
@@ -155,6 +172,7 @@ describe('/v1/stores (integración, requiere stack)', () => {
     expect(desactivada.cuerpo.activo).toBe(false);
 
     expect((await http('DELETE', `/v1/stores/${id}`, analista)).estado).toBe(403);
+    expect((await http('DELETE', `/v1/stores/${id}`, gerente)).estado).toBe(403);
     expect((await http('DELETE', `/v1/stores/${id}`, admin)).estado).toBe(204);
     expect((await http('GET', `/v1/stores/${id}`, admin)).estado).toBe(404);
   });

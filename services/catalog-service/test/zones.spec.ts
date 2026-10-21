@@ -56,13 +56,15 @@ async function http(metodo: string, ruta: string, token?: string, cuerpo?: objec
 
 describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => {
   let admin: string;
+  let analista: string;
   let auditor: string;
   let proveedor: string;
   let municipioId: number;
   const nombre = 'Zona Integración';
 
   beforeAll(async () => {
-    admin = await sesion('it-z-analista', 'Analista comercial');
+    admin = await sesion('it-z-admin', 'Administrador');
+    analista = await sesion('it-z-analista', 'Analista comercial');
     auditor = await sesion('it-z-auditor', 'Auditor');
     proveedor = await sesion('it-z-proveedor', 'Proveedor');
     municipioId = (await http('GET', '/v1/municipalities', auditor)).cuerpo[0].id;
@@ -79,6 +81,28 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
   it('el Proveedor no entra a zonas ni municipios (403)', async () => {
     expect((await http('GET', '/v1/zones', proveedor)).estado).toBe(403);
     expect((await http('GET', '/v1/municipalities', proveedor)).estado).toBe(403);
+  });
+
+  it('Matriz §3: solo el Administrador escribe zonas; los demás perfiles internos leen (403 al escribir)', async () => {
+    const existente = (await http('GET', '/v1/zones?limit=1', admin)).cuerpo.data[0].id;
+    const segmentoId = (await http('GET', '/v1/segments?limit=1', admin)).cuerpo.data[0].id;
+    const lectores: Record<string, string> = {
+      analista,
+      auditor,
+      gerente: await sesion('it-z-gerente', 'Gerente de categoría'),
+      precios: await sesion('it-z-precios', 'Responsable de precios'),
+      planeador: await sesion('it-z-planeador', 'Planeador'),
+    };
+    const carga = { ingresoEstimado: 1, poblacion: 1, disponibilidad: 0.5, periodoInicio: '2026-01-01', periodoFin: '2026-09-30', fuente: 'x' };
+
+    for (const [quien, token] of Object.entries(lectores)) {
+      expect([quien, (await http('GET', '/v1/zones?limit=1', token)).estado]).toEqual([quien, 200]);
+      expect([quien, (await http('POST', '/v1/zones', token, { nombre, municipioId })).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('PATCH', `/v1/zones/${existente}`, token, { descripcion: 'x' })).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('PUT', `/v1/zones/${existente}/indicators`, token, carga)).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('PUT', `/v1/zones/${existente}/classification`, token, { segmentId: segmentoId })).estado]).toEqual([quien, 403]);
+      expect([quien, (await http('DELETE', `/v1/zones/${existente}`, token)).estado]).toEqual([quien, 403]);
+    }
   });
 
   it('municipios: arreglo plano ordenado por nombre', async () => {
@@ -104,7 +128,9 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
   });
 
   it('ciclo completo: crear → duplicado → editar → borrar', async () => {
+    // Matriz §3: zonas las escribe SOLO el Administrador.
     expect((await http('POST', '/v1/zones', auditor, { nombre, municipioId })).estado).toBe(403);
+    expect((await http('POST', '/v1/zones', analista, { nombre, municipioId })).estado).toBe(403);
 
     const creada = await http('POST', '/v1/zones', admin, { nombre, municipioId });
     expect(creada.estado).toBe(201);
@@ -118,6 +144,7 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
     expect(editada.estado).toBe(200);
     expect(editada.cuerpo).toMatchObject({ activo: false, descripcion: 'edit', municipioId });
 
+    expect((await http('DELETE', `/v1/zones/${id}`, analista)).estado).toBe(403);
     const borrada = await http('DELETE', `/v1/zones/${id}`, admin);
     expect(borrada.estado).toBe(204);
     expect((await http('GET', `/v1/zones/${id}`, admin)).estado).toBe(404);
@@ -159,10 +186,12 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
     expect(faltante.cuerpo.message).not.toContain(a);
   });
 
-  it('CAT-13: el Analista carga indicadores y clasificación, y /zones/compare los muestra', async () => {
+  it('CAT-13: el Administrador carga indicadores y clasificación, y /zones/compare los muestra', async () => {
+    // Usuario REAL del seed: `indicador_valores.cargado_por` y
+    // `zona_clasificaciones.asignada_por` son FK a `usuarios`.
     const adminReal = await sesion(
-      await conDb(async (db) => (await db.query("SELECT u.id FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE r.nombre = 'Analista comercial' LIMIT 1")).rows[0].id),
-      'Analista comercial',
+      await conDb(async (db) => (await db.query("SELECT u.id FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE r.nombre = 'Administrador' LIMIT 1")).rows[0].id),
+      'Administrador',
     );
     const zona = await http('POST', '/v1/zones', adminReal, { nombre: 'Zona Indicadores IT', municipioId });
     expect(zona.estado).toBe(201);
@@ -175,7 +204,8 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
       const antes = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
       expect(antes).toMatchObject({ estimatedIncome: null, population: null, availability: null });
 
-      // Solo el Analista comercial.
+      // Solo el Administrador (Matriz §3): ni el Analista, que antes las tenía.
+      expect((await http('PUT', `/v1/zones/${id}/indicators`, analista, carga)).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/indicators`, auditor, carga)).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/indicators`, proveedor, carga)).estado).toBe(403);
 
@@ -208,6 +238,7 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
 
       // Clasificación: cierra la vigente y crea la nueva.
       const seg = (await http('GET', '/v1/segments?limit=100', auditor)).cuerpo.data;
+      expect((await http('PUT', `/v1/zones/${id}/classification`, analista, { segmentId: seg[0].id })).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/classification`, auditor, { segmentId: seg[0].id })).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: 9999 })).estado).toBe(400);
       const c1 = await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: seg[0].id });
