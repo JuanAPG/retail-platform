@@ -147,6 +147,39 @@ describe('IndicatorsService.reunir', () => {
     expect(llamadas.some((u) => u.includes('/v1/accessibility/index'))).toBe(false);
   });
 
+  it('accesibilidad: by-zone devuelve el historial (arreglo) y se toma la corrida más reciente', async () => {
+    // Forma vigente de decision-service desde el arreglo del fallo #10: un
+    // arreglo ordenado de la más reciente a la más antigua.
+    simular({
+      '/v1/zones': () => ok({ data: [{ id: 'z1', nombre: 'Centro' }], total: 1 }),
+      '/v1/accessibility/by-zone/z1': () =>
+        ok([
+          { indexValue: 0.62, calculatedAt: '2026-09-20T12:00:00.000Z' },
+          { indexValue: 0.4, calculatedAt: '2026-08-01T12:00:00.000Z' },
+        ]),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    expect(porClave(r, 'accesibilidad_por_zona').valor).toEqual([
+      { zonaId: 'z1', zona: 'Centro', indice: 0.62, calculadoEn: '2026-09-20T12:00:00.000Z' },
+    ]);
+  });
+
+  it('accesibilidad: una zona con historial VACÍO (200 []) se omite, igual que antes el 404', async () => {
+    simular({
+      '/v1/zones': () => ok({ data: [{ id: 'z1', nombre: 'Centro' }, { id: 'z2', nombre: 'Oriente' }], total: 2 }),
+      '/v1/accessibility/by-zone/z1': () => ok([{ indexValue: 0.62, calculatedAt: '2026-09-20T12:00:00.000Z' }]),
+      '/v1/accessibility/by-zone/z2': () => ok([]),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+
+    // D-20: el indicador sigue disponible; solo falta la zona sin corridas.
+    expect(porClave(r, 'accesibilidad_por_zona')).toMatchObject({ disponible: true, motivo: null });
+    expect(porClave(r, 'accesibilidad_por_zona').valor).toEqual([
+      { zonaId: 'z1', zona: 'Centro', indice: 0.62, calculadoEn: '2026-09-20T12:00:00.000Z' },
+    ]);
+  });
+
   it('accesibilidad con varias zonas: la que no tiene corrida (404) se omite y las demás entregan su valor (QA-DOC54-02)', async () => {
     simular({
       '/v1/zones': () => ok({ data: [{ id: 'z1', nombre: 'Centro' }, { id: 'z2', nombre: 'Oriente' }, { id: 'z3', nombre: 'Valle' }], total: 3 }),
