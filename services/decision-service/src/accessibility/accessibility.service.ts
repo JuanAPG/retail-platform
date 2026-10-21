@@ -149,17 +149,28 @@ export class AccessibilityService {
   }
 
   /**
-   * Accesibilidad VIGENTE de una zona: la corrida más reciente, sin importar
-   * el segmento (el `segmentId` de la respuesta dice con cuál se calculó).
-   * Es un solo objeto y no el historial porque el XSD declara
-   * `indiceAccesibilidad` como un único elemento, no como una lista.
+   * HISTORIAL de accesibilidad de una zona, de la corrida más reciente a la
+   * más antigua, sin importar el segmento (el `segmentId` de cada fila dice
+   * con cuál se calculó).
+   *
+   * Devuelve una LISTA, como siempre dijo el contrato
+   * (`docs/contratos/decision-service.md`). Antes devolvía un solo objeto
+   * porque el XSD declaraba `indiceAccesibilidad` como un único elemento; ya
+   * existe `historialAccesibilidad` con `item*` para esto, así que el código
+   * y los dos contratos vuelven a coincidir.
+   *
+   * Una zona que EXISTE pero no tiene corridas devuelve `[]` con 200, no 404:
+   * "todavía no se ha calculado" es una respuesta válida, no un recurso
+   * inexistente. Era el fallo #10 de la corrida del 13-oct-2026: la pantalla
+   * de accesibilidad del web registraba un 404 al abrirse. El 404 queda solo
+   * para una zona que no existe.
    *
    * `segmentId`, `basicBasketCost` y `estimatedIncome` se leen de
    * `analisis_corrida_parametros` (guardados en `calculateIndex`), no se
    * recalculan: por eso reflejan lo que se pasó en esa corrida, no el valor
    * actual.
    */
-  async findByZone(zoneId: string): Promise<AccessibilityIndex> {
+  async findByZone(zoneId: string): Promise<AccessibilityIndex[]> {
     // `zonas` es de catalog-service: aquí solo se lee, para distinguir
     // "la zona no existe" de "existe pero nunca se le calculó el índice".
     const [zona] = await this.dataSource.query(`SELECT 1 FROM zonas WHERE id = $1`, [zoneId]);
@@ -186,24 +197,20 @@ export class AccessibilityService {
       WHERE az.zona_id = $1
       GROUP BY az.corrida_id, az.indice, ac.ejecutada_en
       ORDER BY ac.ejecutada_en DESC
-      LIMIT 1
       `,
       [zoneId],
     );
 
-    const [f] = filas;
-    if (!f) {
-      throw new NotFoundException(`La zona ${zoneId} todavía no tiene accesibilidad calculada.`);
-    }
-
-    return {
+    // Sin corridas la lista sale vacía: la zona existe (se verificó arriba),
+    // solo que nadie le ha calculado la accesibilidad todavía.
+    return filas.map((f) => ({
       zoneId,
       segmentId: f.segmentId ? Number(f.segmentId) : 0,
       basicBasketCost: f.basicBasketCost ? Number(f.basicBasketCost) : 0,
       estimatedIncome: f.estimatedIncome ? Number(f.estimatedIncome) : null,
       indexValue: Number(f.indice),
       calculatedAt: f.executedAt,
-    };
+    }));
   }
 
   private async crearCorrida(
