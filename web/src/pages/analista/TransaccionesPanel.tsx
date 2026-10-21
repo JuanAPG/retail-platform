@@ -11,6 +11,8 @@ import { IconTransacciones } from '../../components/ui/icons';
 import { TransaccionFormModal } from './TransaccionFormModal';
 import { ImportarCsvPanel } from './ImportarCsvPanel';
 import { EstadoError } from '../../components/EstadoError';
+import { useAuth } from '../../context/AuthContext';
+import { puedeEscribir, quienEscribe } from '../../routes/permisosEscritura';
 
 interface TransaccionesPanelProps {
   busqueda: string;
@@ -20,11 +22,18 @@ interface TransaccionesPanelProps {
  * M06 — Transacciones. Lista lo registrado, da de alta manual y recibe
  * el CSV (preview → confirm). Cada guardado construye su canasta en el
  * backend (M07), así que aquí no hay que hacer nada más tras guardar.
+ *
+ * Escribir es del Analista comercial (Matriz §3). El Administrador llega aquí
+ * con «Ver como» y solo lee: no se le ofrecen «Importar CSV» ni «Nueva
+ * transacción», que core-process le rechaza con 403.
  */
 export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
   const transacciones = useFetch(getTransacciones, []);
   const tiendas = useFetch(getTiendas, []);
   const productos = useFetch(getProductos, []);
+
+  const { usuario } = useAuth();
+  const escribe = puedeEscribir('transacciones', usuario?.rol);
 
   const [formAbierto, setFormAbierto] = useState(false);
   const [importacionAbierta, setImportacionAbierta] = useState(false);
@@ -71,16 +80,18 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
         title="Transacciones"
         subtitle="Cada registro construye su canasta al guardarse"
         action={
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setImportacionAbierta((v) => !v)}
-              className="flex h-[52px] items-center rounded-full border-2 border-arena/40 px-5 text-sm font-bold text-arena transition hover:bg-salvia hover:text-tinta"
-            >
-              Importar CSV
-            </button>
-            <CtaButton onClick={() => setFormAbierto(true)}>Nueva transacción</CtaButton>
-          </div>
+          escribe ? (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setImportacionAbierta((v) => !v)}
+                className="flex h-[52px] items-center rounded-full border-2 border-arena/40 px-5 text-sm font-bold text-arena transition hover:bg-salvia hover:text-tinta"
+              >
+                Importar CSV
+              </button>
+              <CtaButton onClick={() => setFormAbierto(true)}>Nueva transacción</CtaButton>
+            </div>
+          ) : undefined
         }
         decorations={
           <>
@@ -110,7 +121,14 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
         </div>
       )}
 
-      {importacionAbierta && (
+      {!escribe && (
+        <p className="rounded-panel bg-arena/20 px-5 py-3 text-sm text-arena">
+          Vista de solo lectura: solo {quienEscribe('transacciones')} registra transacciones e importa el CSV.
+          Aquí puedes consultarlas.
+        </p>
+      )}
+
+      {escribe && importacionAbierta && (
         <div className="rounded-panel bg-teal p-6">
           <ImportarCsvPanel
             onImportado={(mensaje) => {

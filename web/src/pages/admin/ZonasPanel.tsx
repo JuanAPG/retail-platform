@@ -27,7 +27,7 @@ interface ZonasPanelProps {
 /** M03 — Zonas. CRUD completo: antes era una tabla de solo lectura. */
 export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
   const { usuario } = useAuth();
-  // catalog-service: solo el Analista comercial escribe zonas; al resto no se le ofrece lo que daría 403.
+  // Matriz §3 (M03): solo el Administrador escribe zonas; al resto no se le ofrece lo que daría 403.
   const escribe = puedeEscribir('zonas', usuario?.rol);
   const municipios = useFetch(getMunicipios, []);
 

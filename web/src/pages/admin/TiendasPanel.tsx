@@ -37,7 +37,7 @@ const ETIQUETA_FORMATO: Record<string, string> = {
  */
 export function TiendasPanel({ estado }: TiendasPanelProps) {
   const { usuario } = useAuth();
-  // catalog-service: solo el Gerente de categoría escribe tiendas; al resto no se le ofrece lo que daría 403.
+  // Matriz §3 (M02): solo el Administrador escribe tiendas; al resto no se le ofrece lo que daría 403.
   const escribe = puedeEscribir('tiendas', usuario?.rol);
   const zonas = useFetch(getZonas, []);
   const codigosPostales = useFetch(getCodigosPostales, []);

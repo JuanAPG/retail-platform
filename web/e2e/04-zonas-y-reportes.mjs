@@ -1,10 +1,12 @@
-// CAT-12/13 (indicadores y segmento de una zona, solo Analista) y DOC-03 (estadísticas de reportes por usuario y mes).
+// CAT-12/13 (indicadores y segmento de una zona, solo Administrador por la Matriz §3) y DOC-03
+// (estadísticas de reportes por usuario y mes).
 import { abrirNavegador, ok, resumen, sesion, rail, texto, espera } from './lib.mjs';
 
 const navegador = await abrirNavegador();
 
 {
-  const { ctx, page } = await sesion(navegador, 'analista');
+  // Zonas (M03) las escribe el Administrador: el Analista ya no ve estos botones.
+  const { ctx, page } = await sesion(navegador, 'admin');
   await rail(page, 'Zonas').click();
   await page.waitForTimeout(800);
   await page.locator('button[aria-label^="Indicadores y segmento de "]').first().click();
