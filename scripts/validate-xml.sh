@@ -187,7 +187,13 @@ ENDPOINTS=(
   "algorithms|3105|algorithms-core|/v1/substitution/patterns?categoryId=CATEGORIA_ID"
   "analytics|3106|analytics-stats|/v1/clustering/runs?limit=2"
   "analytics|3106|analytics-stats|/v1/clustering/runs/CLUSTERING_ID"
-  "decision|3107|decision-service|/v1/accessibility/index"
+  # /v1/accessibility/index NO va aqui: el contrato lo marca como una
+  # ESCRITURA disfrazada de GET (QA-DEC51-08) — cada llamada calcula y
+  # PERSISTE una corrida nueva en `analisis_corridas` y deja un evento en la
+  # bitacora. Este script declara no mutar nada, asi que no puede pedirla.
+  # Ademas exige `?zoneId&segmentId`, y la fila los omitia: salia HTTP 400 en
+  # cada corrida y se contaba como fallo de XML sin serlo. Su cuerpo de error
+  # (401) si se valida abajo.
   "decision|3107|decision-service|/v1/accessibility/by-zone/ZONA_ID"
   "documents|3108|documents-service|/v1/reports?limit=2"
   "documents|3108|documents-service|/v1/reports/stats/by-user-month"
@@ -232,8 +238,9 @@ ERRORES=(
   "audit|3110|audit-service|/v1/auditoria|401"
 )
 
-ok=0; fallo=0
+ok=0; fallo=0; omitida=0
 declare -a FALLOS=()
+declare -a OMITIDAS=()
 
 # Un id de zona real, para los endpoints que lo piden.
 ZONA_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
@@ -242,6 +249,40 @@ ZONA_ID="$(curl -s -H "Authorization: Bearer $CORE_TOKEN" \
 try:
     d=json.load(sys.stdin); print((d.get("data") or [{}])[0].get("id",""))
 except Exception: print("")' 2>/dev/null)"
+
+# Placeholders que se resuelven al vuelo contra la base. Si alguno sale VACIO
+# (la base no tiene ese dato previo: una corrida de elasticidad, un reporte
+# generado...), la fila que lo usa se OMITE diciendo cual falto, en vez de
+# pedirse con el id en blanco. Antes esas filas salian como `HTTP 400` y se
+# contaban como fallos de XML sin serlo: el 13-oct se reportaron asi los dos
+# `elasticity/chart` de una base sin elasticidad calculada.
+#
+# ZONA_IDS va ANTES que ZONA_ID: el detector corta en la primera coincidencia
+# y `ZONA_ID` es prefijo de `ZONA_IDS`.
+IDS=(
+  "ZONA_IDS=$ZONA_IDS"
+  "ZONA_ID=$ZONA_ID"
+  "PRODUCTO_ID=$PRODUCTO_ID"
+  "PRESENTACION_ID=$PRESENTACION_ID"
+  "AUDITORIA_ID=$AUDITORIA_ID"
+  "PRES_ELASTICIDAD_ID=$PRES_ELASTICIDAD_ID"
+  "CORRIDA_ID=$CORRIDA_ID"
+  "CATEGORIA_ID=$CATEGORIA_ID"
+  "CLUSTERING_ID=$CLUSTERING_ID"
+  "REPORTE_ID=$REPORTE_ID"
+)
+
+# Imprime el nombre del primer placeholder que la ruta use y que este vacio.
+faltante() { # $1 ruta
+  local ruta="$1" par nombre valor
+  for par in "${IDS[@]}"; do
+    nombre="${par%%=*}"; valor="${par#*=}"
+    case "$ruta" in
+      *"$nombre"*) if [[ -z "$valor" ]]; then echo "$nombre"; return 0; fi; return 1 ;;
+    esac
+  done
+  return 1
+}
 
 validar() { # $1 xml  $2 xsd  $3 etiqueta
   local salida estado real
@@ -271,6 +312,13 @@ echo "== Respuestas de lectura =="
 for fila in "${ENDPOINTS[@]}"; do
   IFS='|' read -r svc puerto xsd ruta rol <<< "$fila"
   [[ -n "$SOLO" && "$svc" != "$SOLO" ]] && continue
+  etiqueta="$(printf '%-11s %s' "$svc" "$ruta")"
+  if falta="$(faltante "$ruta")"; then
+    printf '  \033[33momitida\033[0m %s\n' "$etiqueta"
+    printf '          sin dato previo en esta base: %s no se pudo resolver\n' "$falta"
+    omitida=$((omitida+1)); OMITIDAS+=("$etiqueta :: falta $falta")
+    continue
+  fi
   ruta="${ruta//ZONA_IDS/$ZONA_IDS}"
   ruta="${ruta//ZONA_ID/$ZONA_ID}"
   ruta="${ruta//PRODUCTO_ID/$PRODUCTO_ID}"
@@ -287,6 +335,7 @@ for fila in "${ENDPOINTS[@]}"; do
   codigo="$(curl -s -o "$archivo" -w '%{http_code}' \
     -H "Authorization: Bearer $token" -H 'Accept: application/xml' \
     "http://$HOST:$puerto$ruta")"
+  # Se recalcula con la ruta ya sustituida, para que el reporte traiga el id real.
   etiqueta="$(printf '%-11s %s' "$svc" "$ruta")"
   if [[ "$codigo" != "200" ]]; then
     printf '  \033[33mHTTP %s\033[0m %s\n' "$codigo" "$etiqueta"
@@ -322,7 +371,12 @@ done
 
 echo
 echo "-------------------------------------------------"
-printf 'validan: %s    fallan: %s\n' "$ok" "$fallo"
+printf 'validan: %s    fallan: %s    omitidas: %s\n' "$ok" "$fallo" "$omitida"
+if (( omitida > 0 )); then
+  echo
+  echo "Omitidas por falta de datos previos (NO son fallos de XML):"
+  for o in "${OMITIDAS[@]}"; do echo "  - $o"; done
+fi
 if (( fallo > 0 )); then
   echo
   echo "Fallos (para la tabla del PR):"
