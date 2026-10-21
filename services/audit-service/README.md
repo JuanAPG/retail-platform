@@ -44,6 +44,17 @@ npm test                                   # unitarias (sin infra)
 npm run test:integracion                   # requiere stack (VM)
 ```
 
+`test/bitacora.spec.ts` valida el XML de la lista, del detalle y del 404
+contra `docs/contratos/audit-service.xsd`. Necesita **`xmllint`** en el PATH
+o, si no está, **Python 3 con `lxml`** (`pip install lxml`); sin ninguno de
+los dos la prueba falla al arrancar diciendo qué instalar (ver
+`test/apoyo.ts`). Antes exigía `xmllint` a secas y en Windows reventaba con
+`spawnSync xmllint ENOENT`, así que esta validación se quedó sin verificar
+en la corrida del 13-oct-2026 (fallos 8 y 9 del plan de pruebas).
+
+Variables: `AUDIT_TOKEN` (perfil interno, obligatoria) y
+`AUDIT_TOKEN_PROVEEDOR` (opcional, activa la prueba del Proveedor).
+
 Diferencias con M15: rutas bajo `/v1/`, `AuditFilterDto` extiende el
 `PaginationDto` transversal, `POST` de eventos para llamadas entre
 servicios (misma forma que espera el `AuditReporter` de auth-service) y
