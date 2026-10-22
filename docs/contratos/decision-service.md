@@ -54,7 +54,13 @@ el Postgres compartido. **Nunca escribe tablas ajenas.**
 | pricing-service | `precios` |
 | core-process-service | `transacciones_detalle`, `canastas` |
 | algorithms-core | `elasticidades`, `corrida_clusters`, y las corridas de elasticidad en `analisis_corridas` |
-| Vistas del tablero | `v_dashboard_accesibilidad_zona`, `v_dashboard_asociaciones` (esta última expone `reglas_asociacion` y `regla_asociacion_items` de algorithms-core) |
+| Vistas del tablero | `v_dashboard_accesibilidad_zona` |
+
+Por **HTTP** (no SQL), reenviando el `Authorization` de quien llama:
+
+| Servicio | Ruta | Para qué |
+|---|---|---|
+| algorithms-core | `GET /v1/association/runs` y `GET /v1/association/runs/:id` | Regla 4 de recomendaciones (venta cruzada): reglas de la corrida de Apriori o FP-Growth completada más reciente. Las corridas viven en MongoDB (D3), así que no hay tabla que leer. Si algorithms-core no responde en 3 s o rechaza la llamada, `POST /v1/recommendations/generate` responde **503** con motivo; nunca omite la regla en silencio. La recomendación de venta cruzada sale con `runId: null` (la corrida no está en `analisis_corridas`) y el id de la corrida va en la descripción de su evidencia. |
 
 Lo único que escribe son sus tablas: `accesibilidad_zona`,
 `accesibilidad_pesos` y `accesibilidad_componentes`; `escenarios`,

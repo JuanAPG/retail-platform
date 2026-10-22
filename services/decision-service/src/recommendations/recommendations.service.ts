@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
+import { AlgorithmsClient } from '../common/algorithms/algorithms-client.service';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { ContextoPeticion } from '../common/audit/audit.module';
 import { AvisoDecision, NotificationsReporter } from '../common/notifications/notifications-reporter.service';
@@ -61,15 +62,21 @@ export class RecommendationsService {
     private readonly audit: AuditReporter,
     /** Avisos `recomendacion.generada` y `recomendacion.resuelta` (D-12). */
     private readonly avisos: NotificationsReporter,
+    /** Reglas de asociación: viven en algorithms-core (Mongo, D3), se piden por HTTP. */
+    private readonly algorithms: AlgorithmsClient,
   ) {}
 
-  /** Corre las 4 reglas sobre el contexto dado. No escribe nada. */
-  async evaluateRules(context: RecommendationContextDto): Promise<RecommendationDraft[]> {
+  /**
+   * Corre las 4 reglas sobre el contexto dado. No escribe nada. `token` es el
+   * `Authorization` de quien genera: algorithms-core lo exige para leer las
+   * corridas de asociación.
+   */
+  async evaluateRules(context: RecommendationContextDto, token?: string): Promise<RecommendationDraft[]> {
     const [accesibilidad, elasticidad, simulacion, asociacion] = await Promise.all([
       this.reglaAccesibilidad(context.zoneId),
       this.reglaElasticidad(context.zoneId),
       this.reglaSimulacion(context.zoneId),
-      this.reglaAsociacion(),
+      this.reglaAsociacion(token),
     ]);
     return [...accesibilidad, ...elasticidad, ...simulacion, ...asociacion];
   }
@@ -83,7 +90,7 @@ export class RecommendationsService {
    * entrada por recomendación creada, después de confirmar la transacción.
    */
   async generate(context: RecommendationContextDto, contexto: ContextoPeticion = {}): Promise<Recommendation[]> {
-    const borradores = await this.evaluateRules(context);
+    const borradores = await this.evaluateRules(context, contexto.token);
     if (borradores.length === 0) {
       return [];
     }
@@ -479,32 +486,50 @@ export class RecommendationsService {
   }
 
   /**
-   * Regla 4 — asociación fuerte entre productos (M10): venta cruzada.
-   * No se acota por zona: `reglas_asociacion` no tiene ese dato.
+   * Regla 4 — asociación fuerte entre productos (M10): venta cruzada, con
+   * las reglas de la corrida de Apriori o FP-Growth completada más reciente
+   * (algorithms-core por HTTP, D3). No se acota por zona: las reglas no
+   * traen ese dato.
+   *
+   * `corridaId` va en null: la corrida vive en MongoDB y
+   * `recomendaciones.corrida_id` es llave foránea a `analisis_corridas`. El
+   * id de la corrida queda en la evidencia ("con qué datos").
    */
-  private async reglaAsociacion(): Promise<RecommendationDraft[]> {
-    const filas: {
-      reglaId: string;
-      corridaId: string;
-      soporte: string;
-      confianza: string;
-      lift: string;
-      antecedente: string;
-      consecuente: string;
-    }[] = await this.dataSource.query(
-      `
-      SELECT regla_id AS "reglaId", corrida_id AS "corridaId", soporte::text AS soporte,
-             confianza::text AS confianza, lift::text AS lift, antecedente, consecuente
-      FROM v_dashboard_asociaciones
-      WHERE lift > $1 AND confianza > $2 AND antecedente IS NOT NULL AND consecuente IS NOT NULL
-      ORDER BY lift DESC
-      LIMIT 20
-      `,
-      [ASSOCIATION_MIN_LIFT, ASSOCIATION_MIN_CONFIDENCE],
-    );
+  private async reglaAsociacion(token?: string): Promise<RecommendationDraft[]> {
+    const corrida = await this.algorithms.reglasDeLaUltimaCorrida(token);
+    if (!corrida) return [];
+
+    const lado = (regla: (typeof corrida.reglas)[number], side: 'antecedente' | 'consecuente') =>
+      regla.items
+        .filter((i) => i.side === side)
+        .map((i) => i.product?.nombre ?? i.productId)
+        .sort((a, b) => a.localeCompare(b, 'es'))
+        .join(' + ');
+    const filas = corrida.reglas
+      .map((r) => ({
+        reglaId: r.id,
+        liftNum: r.lift,
+        confianzaNum: r.confidence,
+        soporte: String(r.support),
+        confianza: String(r.confidence),
+        lift: String(r.lift),
+        antecedente: lado(r, 'antecedente'),
+        consecuente: lado(r, 'consecuente'),
+      }))
+      .filter(
+        (f) =>
+          f.liftNum !== null &&
+          f.liftNum > ASSOCIATION_MIN_LIFT &&
+          f.confianzaNum > ASSOCIATION_MIN_CONFIDENCE &&
+          f.antecedente !== '' &&
+          f.consecuente !== '',
+      )
+      // Estable: a igual lift se respeta el orden de algorithms-core (compararReglas).
+      .sort((a, b) => (b.liftNum ?? 0) - (a.liftNum ?? 0))
+      .slice(0, 20);
 
     return filas.map((f) => ({
-      corridaId: f.corridaId,
+      corridaId: null,
       escenarioId: null,
       zonaId: null,
       title: `Oportunidad de venta cruzada: ${f.antecedente} → ${f.consecuente}`,
@@ -517,7 +542,9 @@ export class RecommendationsService {
         {
           dimension: 'producto',
           referenceId: f.reglaId,
-          description: `Regla de asociación: soporte ${f.soporte}, confianza ${f.confianza}, lift ${f.lift}.`,
+          description:
+            `Regla de asociación de la corrida ${corrida.runId} (${corrida.algoritmo}): ` +
+            `soporte ${f.soporte}, confianza ${f.confianza}, lift ${f.lift}.`,
         },
       ],
     }));

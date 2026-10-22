@@ -1,7 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DataSource, Repository } from 'typeorm';
+import { AlgorithmsClient, CorridaConReglas, ReglaAsociacion } from '../common/algorithms/algorithms-client.service';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { NotificationsReporter } from '../common/notifications/notifications-reporter.service';
 import { Recommendation } from '../entities/recommendation.entity';
@@ -16,7 +17,8 @@ interface Filas {
   accesibilidad?: Fila[];
   elasticidad?: Fila[];
   simulacion?: Fila[];
-  asociacion?: Fila[];
+  /** Lo que devuelve algorithms-core (D3: las reglas ya no están en Postgres). */
+  asociacion?: CorridaConReglas | null;
 }
 
 const FECHA = new Date('2026-10-01T12:00:00.000Z');
@@ -49,21 +51,22 @@ function crearServicio(filas: Filas = {}) {
       if (sql.includes('v_dashboard_accesibilidad_zona')) return filas.accesibilidad ?? [];
       if (sql.includes('FROM elasticidades e')) return filas.elasticidad ?? [];
       if (sql.includes('FROM escenario_resultados r')) return filas.simulacion ?? [];
-      if (sql.includes('v_dashboard_asociaciones')) return filas.asociacion ?? [];
       throw new Error(`Consulta no esperada en el test: ${sql}`);
     }),
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
   const audit = { reportar: jest.fn(async () => undefined) };
   const avisos = { notificar: jest.fn(async (_aviso: Fila, _ctx?: { token?: string }): Promise<void> => undefined) };
+  const algorithms = { reglasDeLaUltimaCorrida: jest.fn(async (_token?: string) => filas.asociacion ?? null) };
   const servicio = new RecommendationsService(
     recommendationRepo as unknown as Repository<Recommendation>,
     evidenceRepo as unknown as Repository<RecommendationEvidence>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
     avisos as unknown as NotificationsReporter,
+    algorithms as unknown as AlgorithmsClient,
   );
-  return { qb, recommendationRepo, evidenceRepo, manager, dataSource, audit, avisos, servicio };
+  return { qb, recommendationRepo, evidenceRepo, manager, dataSource, audit, avisos, algorithms, servicio };
 }
 
 /** Parámetros con los que se llamó la consulta que contiene `fragmento`. */
@@ -233,26 +236,84 @@ describe('RecommendationsService — regla de simulación', () => {
   });
 });
 
-describe('RecommendationsService — regla de asociación', () => {
-  it('pasa lift 2 y confianza 0.5 como parámetros, sin zona', async () => {
-    const { dataSource, servicio } = crearServicio();
+/** Regla como la entrega algorithms-core; `null` en un producto = catálogo sin ese id. */
+function reglaAsociacion(
+  id: string,
+  antecedente: string[],
+  consecuente: string[],
+  m: { lift: number | null; confidence: number; support?: number },
+): ReglaAsociacion {
+  const item = (side: 'antecedente' | 'consecuente') => (nombre: string) => ({ productId: `id-${nombre}`, side, product: { nombre } });
+  return {
+    id,
+    support: m.support ?? 0.1,
+    confidence: m.confidence,
+    lift: m.lift,
+    items: [...antecedente.map(item('antecedente')), ...consecuente.map(item('consecuente'))],
+  };
+}
 
-    await servicio.evaluateRules({ zoneId: 'zona-1' });
+describe('RecommendationsService — regla de asociación (D3: por HTTP a algorithms-core)', () => {
+  it('pide las reglas con el token de quien genera, sin zona', async () => {
+    const { algorithms, servicio } = crearServicio();
 
-    expect(parametrosDe(dataSource, 'v_dashboard_asociaciones')).toEqual([2, 0.5]);
+    await servicio.generate({ zoneId: 'zona-1' }, { token: 'Bearer plan' });
+
+    expect(algorithms.reglasDeLaUltimaCorrida).toHaveBeenCalledWith('Bearer plan');
   });
 
-  it('arma la venta cruzada con la regla como evidencia', async () => {
+  it('sin corridas de asociación no propone venta cruzada', async () => {
+    const { servicio } = crearServicio({ asociacion: null });
+
+    expect(await servicio.evaluateRules({})).toEqual([]);
+  });
+
+  it('solo reglas con lift > 2 y confianza > 0.5 (estrictos), de mayor a menor lift', async () => {
     const { servicio } = crearServicio({
-      asociacion: [
-        { reglaId: 'regla-1', corridaId: 'run-ap', soporte: '0.1', confianza: '0.7', lift: '2.5', antecedente: 'Pan', consecuente: 'Leche' },
-      ],
+      asociacion: {
+        runId: 'run-fp',
+        algoritmo: 'fpgrowth',
+        reglas: [
+          reglaAsociacion('r-borde-lift', ['A'], ['B'], { lift: 2, confidence: 0.9 }),
+          reglaAsociacion('r-borde-conf', ['C'], ['D'], { lift: 3, confidence: 0.5 }),
+          reglaAsociacion('r-sin-lift', ['E'], ['F'], { lift: null, confidence: 0.9 }),
+          reglaAsociacion('r-2.5', ['G'], ['H'], { lift: 2.5, confidence: 0.6 }),
+          reglaAsociacion('r-4', ['I'], ['J'], { lift: 4, confidence: 0.51 }),
+        ],
+      },
+    });
+
+    const borradores = await servicio.evaluateRules({});
+
+    expect(borradores.map((b) => b.evidence[0].referenceId)).toEqual(['r-4', 'r-2.5']);
+  });
+
+  it('arma la venta cruzada con la regla y su corrida como evidencia; corridaId null (la corrida vive en Mongo)', async () => {
+    const { servicio } = crearServicio({
+      asociacion: {
+        runId: 'run-ap',
+        algoritmo: 'apriori',
+        reglas: [reglaAsociacion('regla-1', ['Pan', 'Café'], ['Leche'], { lift: 2.5, confidence: 0.7 })],
+      },
     });
 
     const [borrador] = await servicio.evaluateRules({});
 
-    expect(borrador).toMatchObject({ corridaId: 'run-ap', zonaId: null, title: 'Oportunidad de venta cruzada: Pan → Leche' });
-    expect(borrador.evidence).toEqual([{ dimension: 'producto', referenceId: 'regla-1', description: expect.any(String) }]);
+    expect(borrador).toMatchObject({ corridaId: null, zonaId: null, title: 'Oportunidad de venta cruzada: Café + Pan → Leche' });
+    expect(borrador.evidence).toEqual([
+      {
+        dimension: 'producto',
+        referenceId: 'regla-1',
+        description: 'Regla de asociación de la corrida run-ap (apriori): soporte 0.1, confianza 0.7, lift 2.5.',
+      },
+    ]);
+  });
+
+  it('si algorithms-core no responde, el error sube: no se omite la regla en silencio', async () => {
+    const { algorithms, servicio } = crearServicio();
+    algorithms.reglasDeLaUltimaCorrida.mockRejectedValue(new ServiceUnavailableException('algorithms-core no responde'));
+
+    await expect(servicio.generate({})).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
 
@@ -362,9 +423,11 @@ describe('RecommendationsService.generate', () => {
 
 describe('RecommendationsService.generate — reemplazo de pendientes', () => {
   const ACCESIBILIDAD = [{ zonaId: 'zona-1', zona: 'Centro', indice: '0.3', corridaId: 'run-a', ejecutadaEn: FECHA }];
-  const ASOCIACION = [
-    { reglaId: 'regla-1', corridaId: 'run-ap', soporte: '0.1', confianza: '0.7', lift: '2.5', antecedente: 'Pan', consecuente: 'Leche' },
-  ];
+  const ASOCIACION: CorridaConReglas = {
+    runId: 'run-ap',
+    algoritmo: 'apriori',
+    reglas: [reglaAsociacion('regla-1', ['Pan'], ['Leche'], { lift: 2.5, confidence: 0.7 })],
+  };
 
   it('sin zoneId borra TODAS las propuesta, solo las propuesta, dentro de la transacción y antes de insertar', async () => {
     const { manager, servicio } = crearServicio({ accesibilidad: ACCESIBILIDAD });
