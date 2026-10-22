@@ -3,8 +3,14 @@
 Materia: Integración de Aplicaciones Computacionales. Equipo de 4, metodología SCRUM.
 Repo: `JuanAPG/retail-platform` (GitHub, público).
 
-Sprint 2+3 unificado: 30 de septiembre al 13 de octubre de 2026 (14 días corridos,
-**sin colchón**). Entrega: Parcial 2.
+**Sprint actual: Sprint 4, del 20-oct al 3-nov de 2026: de 10 a 20 microservicios.**
+Antes de trabajar, lee `CONTRIBUTING.md` → "Para el agente de cada integrante" y "Qué le
+toca a cada quien": ahí están las tareas (T-xx), límites y ramas de cada persona. Las
+decisiones del sprint son D-33 a D-47 (`docs/matriz-perfiles-permisos.md` §4.2). Las
+tablas de abajo describen los 10 servicios existentes; los 10 nuevos (3111–3120) están
+en CONTRIBUTING.
+
+Sprint 2+3 (30-sep al 13-oct) se entregó como Parcial 2.
 
 ## Antes de tocar código: documentos de negocio
 
@@ -108,6 +114,10 @@ Reglas vigentes:
 - **Redis 7:** sesiones activas, tokens revocados, caché de catálogos, contadores y
   límites de login. **Todos** los servicios lo consultan al autorizar.
 
+Usos nuevos del Sprint 4: **D-47** (Mongo: corridas de pronóstico, historial de
+monitoreo, lotes de sincronización; Redis: idempotencia, caché, último estado) y
+**D-45** (token de recuperación de contraseña en Redis).
+
 No uses Mongo ni Redis para otra cosa sin acordarlo y registrarlo como decisión.
 
 ## Stack
@@ -196,7 +206,8 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
 |---|---|
 | Parcial 1 | 4-sep (entregado, observaciones corregidas en el monolito) |
 | Sprint 2+3 | 30-sep – 13-oct |
-| Parcial 2 | 13-oct |
+| Parcial 2 | 13-oct (entregado) |
+| Sprint 4: 20 microservicios | 20-oct – 3-nov |
 | Parcial 3 (GCP, Locust, dataset grande) | 27-nov |
 | Entrega final | 1-dic |
 
