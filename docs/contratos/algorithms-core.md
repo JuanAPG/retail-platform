@@ -285,7 +285,7 @@ otro tipo** (p. ej. de elasticidad) → `404`.
 | 403 | Rol sin permiso (p. ej. cualquiera que no sea Analista comercial corriendo Apriori o FP-Growth, o Proveedor) |
 | 404 | Corrida inexistente o que no es de asociación |
 | 500 | Falla durante el cálculo; la corrida queda `fallida` |
-| 503 | Redis (sesiones) no responde: no se puede verificar la sesión |
+| 503 | Redis (sesiones) no responde: no se puede verificar la sesión. O MongoDB no responde: las corridas de asociación viven ahí (D3) y una corrida que no se puede guardar no se corre (D-25) |
 
 ---
 
@@ -633,7 +633,7 @@ fallida**— deja un evento en audit-service y avisa a quien la lanzó. Un `400`
 
 | A dónde | Qué |
 |---|---|
-| audit-service `POST /v1/auditoria` | `tabla: analisis_corridas`, `registroId: runId`, `accion: ejecutar_corrida`, `servicio: algorithms-core`, descripción con el resumen y `cambios` de `tipo`, `estado` y `periodo` |
+| audit-service `POST /v1/auditoria` | `tabla`: `analysis_runs` (Apriori y FP-Growth, colección de MongoDB, D3) o `analisis_corridas` (elasticidad), `registroId: runId`, `accion: ejecutar_corrida`, `servicio: algorithms-core`, descripción con el resumen y `cambios` de `tipo`, `estado` y `periodo` |
 | notifications-service `POST /v1/notifications` | `corrida.terminada` con `relatedEntityType: corrida`, `relatedEntityId: runId` y `recipientUserId` = quien la lanzó; prioridad `info` si se completó, `warning` si falló |
 
 Los dos reenvían el `Authorization` del usuario (el actor sale del token) y van
@@ -657,10 +657,20 @@ SERVICE_UNAVAILABLE` en menos de 4 s; hasta entonces, un fallo de lectura es
 | pricing-service | Histórico de precios por presentación: `presentationId`, `storeId`, `price`, `validFrom`, `validUntil` | Sustitución (precio vigente de A en cada canasta) |
 | auth-service | Nombre del usuario que ejecutó la corrida (`user.nombre`) | Historial de corridas |
 
-Tablas propias de algorithms-core (solo este servicio las escribe):
-`analisis_corridas` y sus hijas `analisis_corrida_parametros`,
-`analisis_corrida_supuestos`, `analisis_corrida_filtros`; `reglas_asociacion`,
-`regla_asociacion_items`, `reglas_exclusion_asociacion`, `elasticidades`.
+Datos propios de algorithms-core (solo este servicio los escribe):
+
+- **MongoDB (D3):** las corridas de Apriori y FP-Growth, colección
+  `analysis_runs` con `type: "asociacion"` (la comparte con el clustering de
+  analytics-stats, que usa `type: "clustering"`). Cada documento es la corrida
+  completa: parámetros, supuestos, filtros, reglas y la foto de los datos
+  (hash SHA-256 de las canastas, D-15). El `id` sigue siendo un UUID.
+- **Postgres:** `analisis_corridas` y sus hijas `analisis_corrida_parametros`,
+  `analisis_corrida_supuestos`, `analisis_corrida_filtros` (solo corridas de
+  elasticidad); `reglas_exclusion_asociacion` (RN-10) y `elasticidades`.
+
+Quien necesite reglas de asociación (p. ej. decision-service para la venta
+cruzada) las pide por HTTP a `GET /v1/association/runs` y
+`GET /v1/association/runs/:id`; ya no hay tablas de reglas en Postgres.
 
 ---
 

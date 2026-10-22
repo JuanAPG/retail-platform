@@ -5,12 +5,13 @@
  * `algoritmo`. Se compara la respuesta tal como llega, sin ordenarla.
  * Borra las corridas que crea.
  *
- *   docker compose -f infra/docker-compose.yml up -d postgres redis auth-service algorithms-core
+ *   docker compose -f infra/docker-compose.yml up -d postgres redis mongodb auth-service algorithms-core
  *   npm run test:integracion
  */
 import { DataSource } from 'typeorm';
 import { ReglaConProductos } from '../src/association/association.service';
 import databaseConfig from '../src/config/database.config';
+import { CorridasMongo } from './corridas-mongo';
 
 const BASE = process.env.ALGORITHMS_BASE_URL ?? 'http://localhost:3105';
 const AUTH = process.env.AUTH_BASE_URL ?? 'http://localhost:3101';
@@ -38,6 +39,7 @@ describe('FP-Growth (integración, requiere stack y ventas cargadas)', () => {
     password: opciones.password,
     database: opciones.database,
   });
+  const mongo = new CorridasMongo();
   const creadas = new Set<string>();
   let analista = '';
 
@@ -65,12 +67,13 @@ describe('FP-Growth (integración, requiere stack y ventas cargadas)', () => {
   }
 
   beforeAll(async () => {
-    await db.initialize();
+    await Promise.all([db.initialize(), mongo.abrir()]);
     analista = await entrar(process.env.ALGORITHMS_TEST_EMAIL ?? 'analista@retail.mx');
   });
 
   afterAll(async () => {
-    if (creadas.size > 0) await db.query('DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[])', [[...creadas]]);
+    await mongo.borrar(creadas);
+    await mongo.cerrar();
     await db.destroy();
   });
 
@@ -109,7 +112,7 @@ describe('FP-Growth (integración, requiere stack y ventas cargadas)', () => {
 
   it('solo el Analista corre FP-Growth: el Administrador recibe 403 y no se crea corrida (Matriz §3, M10)', async () => {
     const admin = await entrar('admin@retail.mx');
-    const [{ antes }]: { antes: number }[] = await db.query('SELECT count(*)::int AS antes FROM analisis_corridas');
+    const antes = await mongo.contar();
 
     const r = await fetch(`${BASE}/v1/association/fpgrowth/run`, {
       method: 'POST',
@@ -118,7 +121,7 @@ describe('FP-Growth (integración, requiere stack y ventas cargadas)', () => {
     });
 
     expect(r.status).toBe(403);
-    const [{ despues }]: { despues: number }[] = await db.query('SELECT count(*)::int AS despues FROM analisis_corridas');
+    const despues = await mongo.contar();
     expect(despues).toBe(antes);
   });
 

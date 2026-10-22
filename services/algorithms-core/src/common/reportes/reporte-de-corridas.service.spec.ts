@@ -53,6 +53,14 @@ describe('ReporteDeCorridas (ALG-10)', () => {
     );
   });
 
+  it('una corrida de asociación apunta a la colección de Mongo (D3), no a analisis_corridas', async () => {
+    const { reporte, auditoria } = armar();
+
+    await reporte.terminada({ ...COMPLETADA, tipo: 'asociacion', nombre: 'Apriori' }, 'u-analista');
+
+    expect(auditoria.reportar.mock.calls[0][0]).toMatchObject({ tabla: 'analysis_runs', registroId: 'r-1' });
+  });
+
   it('una corrida fallida también se reporta, y el aviso sale como advertencia', async () => {
     const { reporte, auditoria, avisos } = armar();
 

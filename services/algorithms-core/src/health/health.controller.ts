@@ -1,6 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Connection } from 'mongoose';
 import { DataSource } from 'typeorm';
 import { getRedis } from '../common/auth/redis.client';
 
@@ -10,15 +12,19 @@ import { getRedis } from '../common/auth/redis.client';
  * responde: así lo pueden consultar el `healthcheck` de Docker y quien
  * revise la demo, incluso con una dependencia caída.
  *
- * `status` es `ok` cuando Postgres y Redis responden y `degraded` cuando
+ * `status` es `ok` cuando Postgres, Redis y MongoDB responden y `degraded` cuando
  * alguno falla; el detalle va en `checks`. Postgres se verifica porque sin
  * él ningún endpoint de M06/M07/M09 puede operar, y Redis porque el
- * `SessionGuard` lo consulta en cada petición protegida.
+ * `SessionGuard` lo consulta en cada petición protegida. MongoDB guarda las
+ * corridas de Apriori y FP-Growth (D3): sin él, asociación responde 503.
  */
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    @InjectConnection() private readonly mongo: Connection,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Salud del servicio y de sus dependencias.' })
@@ -29,14 +35,18 @@ export class HealthController {
         status: 'ok',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         version: '1.0.0',
-        checks: { postgres: 'ok', redis: 'ok' },
+        checks: { postgres: 'ok', redis: 'ok', mongodb: 'ok' },
         timestamp: '2026-10-03T12:00:00.000Z',
       },
     },
   })
   async check() {
     const [postgres, redis] = await Promise.all([this.verificarPostgres(), verificarRedis()]);
-    const checks = { postgres, redis };
+    const checks = {
+      postgres,
+      redis,
+      mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB',
+    };
     return {
       status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',
       service: process.env.SERVICE_NAME ?? 'unknown-service',

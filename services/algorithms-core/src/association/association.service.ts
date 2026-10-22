@@ -1,27 +1,33 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { ContextoPeticion, ReporteDeCorridas } from '../common/reportes/reporte-de-corridas.service';
 import { Pagina, PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { diaDelFiltro } from '../common/validators/filtro-de-fecha';
-import { AnalysisRun } from '../entities/analysis-run.entity';
-import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
-import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
-import { AnalysisRunFilter } from '../entities/analysis-run-filter.entity';
-import { AssociationRule } from '../entities/association-rule.entity';
-import { AssociationRuleItem } from '../entities/association-rule-item.entity';
 import { AssociationExclusion } from '../entities/association-exclusion.entity';
 import { FuenteDatos, ResumenProducto } from '../fuente-datos/fuente-datos.service';
 import { apriori, AprioriRule, compareItems } from './apriori';
+import {
+  CorridaAsociacionMongo,
+  DimensionFiltro,
+  FiltroCorrida,
+  FotoDatos,
+  ItemRegla,
+  LadoRegla,
+  ParametroCorrida,
+  ReglaGuardada,
+} from './corrida-asociacion.schema';
+import { CorridasAsociacion, NuevaCorrida } from './corridas-asociacion.repository';
 import { AprioriParamsDto } from './dto/apriori-params.dto';
 import { fpGrowth } from './fpgrowth';
 
@@ -36,8 +42,6 @@ const ALGORITMOS = {
 export type Algoritmo = keyof typeof ALGORITMOS;
 
 const DEFAULT_MAX_ITEMSET_SIZE = 3;
-/** Filas por INSERT: lejos del límite de 65 535 parámetros de Postgres. */
-const INSERT_CHUNK = 1000;
 
 /** Un producto presente en una canasta, con lo necesario para Apriori y RN-10. */
 interface BasketLine {
@@ -54,38 +58,62 @@ interface Period {
 }
 
 /** Ítem de una regla como lo pide el contrato: con el resumen de su producto. */
-export type ItemConProducto = AssociationRuleItem & { product: ResumenProducto | null };
+export interface ItemConProducto {
+  ruleId: string;
+  productId: string;
+  side: LadoRegla;
+  product: ResumenProducto | null;
+}
 
 /** Regla como la pide el contrato. */
-export type ReglaConProductos = AssociationRule & { items: ItemConProducto[] };
+export interface ReglaConProductos {
+  id: string;
+  runId: string;
+  support: number;
+  confidence: number;
+  lift: number | null;
+  transactionCount: number | null;
+  items: ItemConProducto[];
+}
 
 /**
  * Corrida como la pide el contrato: `date` en texto ISO (un `Date` sale
- * vacío en XML) y `user` como `{ id, nombre }`.
+ * vacío en XML), `user` como `{ id, nombre }` y cada parámetro, supuesto y
+ * filtro con su `runId`. Supuestos, filtros y reglas solo en el detalle.
  */
-export type CorridaRespuesta = Omit<AnalysisRun, 'date' | 'results'> & {
+export interface CorridaRespuesta {
+  id: string;
+  type: 'asociacion';
+  status: CorridaAsociacionMongo['status'];
+  userId: string | null;
+  periodStart: string;
+  periodEnd: string;
+  transactionsConsidered: number | null;
+  basketsConsidered: number | null;
+  errorMessage: string | null;
+  parameters: { runId: string; key: string; value: string }[];
+  assumptions?: { runId: string; order: number; assumption: string }[];
+  filters?: { runId: string; dimension: DimensionFiltro; referenceId: string }[];
   date: string;
   user: { id: string; nombre: string } | null;
   results?: ReglaConProductos[];
-};
+}
 
 /**
  * M10 — Reglas de asociación (Apriori y FP-Growth), según Contrato de
- * Métodos y Endpoints. Cada corrida se guarda completa (parámetros, supuestos,
- * filtros, periodo, usuario y reglas) para poder reproducirla (RF-15).
+ * Métodos y Endpoints. Cada corrida se guarda completa en MongoDB (D3):
+ * parámetros, supuestos, filtros, periodo, usuario, reglas y la foto de los
+ * datos (D-15), para poder reproducirla (RF-15).
  */
 @Injectable()
 export class AssociationService {
   private readonly logger = new Logger(AssociationService.name);
 
   constructor(
-    @InjectRepository(AnalysisRun)
-    private readonly runsRepo: Repository<AnalysisRun>,
-    @InjectRepository(AssociationRule)
-    private readonly rulesRepo: Repository<AssociationRule>,
+    private readonly corridas: CorridasAsociacion,
+    /** RN-10: los pares de categorías excluidos siguen en Postgres (tabla de este servicio). */
     @InjectRepository(AssociationExclusion)
     private readonly exclusionsRepo: Repository<AssociationExclusion>,
-    private readonly dataSource: DataSource,
     /** Canastas, productos y usuarios: datos de otros servicios. */
     private readonly fuente: FuenteDatos,
     /** Bitácora y aviso de cada corrida (ALG-10). */
@@ -106,14 +134,16 @@ export class AssociationService {
   }
 
   /**
-   * Corre el algoritmo sobre las canastas filtradas y guarda la corrida vía
-   * saveRun. `user` no está en la firma del contrato, pero la corrida
-   * debe registrar quién la ejecutó y solo el controlador conoce el JWT
-   * (mismo patrón que TransactionsService.createManual).
+   * Corre el algoritmo sobre las canastas filtradas y guarda la corrida.
+   * `user` no está en la firma del contrato, pero la corrida debe registrar
+   * quién la ejecutó y solo el controlador conoce el JWT (mismo patrón que
+   * TransactionsService.createManual).
    *
    * Errores de entrada (fechas invertidas, sin canastas) responden 400 y
-   * no generan corrida. Una falla después de leer los datos deja la
-   * corrida registrada como `fallida`.
+   * no generan corrida. Sin MongoDB responde 503 antes de leer los datos
+   * (D-25): una corrida que no se puede guardar no se puede reproducir.
+   * Una falla después de leer los datos deja la corrida registrada como
+   * `fallida`.
    */
   private async run(
     algoritmo: Algoritmo,
@@ -127,6 +157,7 @@ export class AssociationService {
     if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
+    this.corridas.exigirMongo();
 
     const lines = await this.fuente.lineasDeCanasta(params);
     if (lines.length === 0) {
@@ -137,7 +168,7 @@ export class AssociationService {
     const maxItemsetSize = params.maxItemsetSize ?? DEFAULT_MAX_ITEMSET_SIZE;
     const corrida = { tipo: 'asociacion' as const, nombre, periodo: period };
 
-    let runId: string;
+    let guardada: CorridaAsociacionMongo;
     let resumen: string;
     try {
       const { baskets, categoryOf } = groupByBasket(lines);
@@ -150,22 +181,33 @@ export class AssociationService {
       const excludedPairs = await this.loadExcludedCategoryPairs();
       const kept = rules.filter((rule) => !isExcluded(rule, categoryOf, excludedPairs));
 
-      const run = this.buildRun(algoritmo, params, user, period, baskets.length, maxItemsetSize, {
-        generated: rules.length,
-        excluded: rules.length - kept.length,
-        rules: kept,
-      });
-      runId = (await this.saveRun(run)).id;
+      guardada = await this.corridas.guardar(
+        this.buildRun(algoritmo, params, user, period, baskets, maxItemsetSize, {
+          generated: rules.length,
+          excluded: rules.length - kept.length,
+          rules: kept,
+        }),
+      );
       resumen =
         `${kept.length} regla(s) con soporte ≥ ${params.minSupport} y confianza ≥ ${params.minConfidence}, ` +
         `sobre ${baskets.length} canasta(s).`;
     } catch (error) {
-      const fallidaId = await this.recordFailedRun(algoritmo, params, user, period, maxItemsetSize, error);
+      // Mongo se cayó a media corrida: no hay dónde registrarla como fallida.
+      const sinMongo = error instanceof ServiceUnavailableException;
+      const fallidaId = sinMongo ? null : await this.recordFailedRun(algoritmo, params, user, period, maxItemsetSize, error);
       await this.reporte.terminada(
-        { ...corrida, runId: fallidaId, estado: 'fallida', resumen: 'No se pudo completar la corrida; quedó registrada como fallida.' },
+        {
+          ...corrida,
+          runId: fallidaId,
+          estado: 'fallida',
+          resumen: sinMongo
+            ? 'No se pudo guardar la corrida: MongoDB no está disponible.'
+            : 'No se pudo completar la corrida; quedó registrada como fallida.',
+        },
         user.id,
         contexto,
       );
+      if (sinMongo) throw error;
       throw new InternalServerErrorException(
         `No se pudo completar la corrida de ${nombre}; quedó registrada como fallida.`,
       );
@@ -173,58 +215,8 @@ export class AssociationService {
 
     // Fuera del try: el reporte nunca lanza, pero si lo hiciera no debe
     // convertir una corrida ya guardada en "fallida".
-    await this.reporte.terminada({ ...corrida, runId, estado: 'completada', resumen }, user.id, contexto);
-    return this.findRulesOfRun(runId);
-  }
-
-  /**
-   * Guarda la corrida y todo lo que cuelga de ella en UNA transacción:
-   * si algo falla a la mitad no queda una corrida "completada" con
-   * reglas faltantes. Cada tabla se inserta de forma explícita (sin
-   * cascade de TypeORM, que con llaves compuestas falla en silencio).
-   */
-  async saveRun(run: AnalysisRun): Promise<AnalysisRun> {
-    return this.dataSource.transaction(async (manager) => {
-      const saved = await manager.save(
-        manager.create(AnalysisRun, {
-          type: run.type,
-          status: run.status,
-          userId: run.userId,
-          periodStart: run.periodStart,
-          periodEnd: run.periodEnd,
-          transactionsConsidered: run.transactionsConsidered,
-          basketsConsidered: run.basketsConsidered,
-          errorMessage: run.errorMessage ?? null,
-        }),
-      );
-
-      const parameters = (run.parameters ?? []).map((p) => ({ runId: saved.id, key: p.key, value: p.value }));
-      const assumptions = (run.assumptions ?? []).map((a) => ({
-        runId: saved.id,
-        order: a.order,
-        assumption: a.assumption,
-      }));
-      const filters = (run.filters ?? []).map((f) => ({
-        runId: saved.id,
-        dimension: f.dimension,
-        referenceId: f.referenceId,
-      }));
-      // Id generado aquí para enlazar los ítems sin depender del orden en
-      // que Postgres devuelva los ids de un INSERT múltiple.
-      const results = (run.results ?? []).map((r) => ({ ...r, id: r.id ?? randomUUID(), runId: saved.id }));
-      const rules = results.map(({ items: _items, run: _run, ...rule }) => rule);
-      const items = results.flatMap((r) =>
-        (r.items ?? []).map((i) => ({ ruleId: r.id, productId: i.productId, side: i.side })),
-      );
-
-      await insertInChunks(manager, AnalysisRunParameter, parameters);
-      await insertInChunks(manager, AnalysisRunAssumption, assumptions);
-      await insertInChunks(manager, AnalysisRunFilter, filters);
-      await insertInChunks(manager, AssociationRule, rules);
-      await insertInChunks(manager, AssociationRuleItem, items);
-
-      return Object.assign(saved, { parameters, assumptions, filters, results }) as AnalysisRun;
-    });
+    await this.reporte.terminada({ ...corrida, runId: guardada._id, estado: 'completada', resumen }, user.id, contexto);
+    return this.reglasConProductos(guardada._id, guardada.results);
   }
 
   /**
@@ -234,61 +226,53 @@ export class AssociationService {
    * Paginado según docs/contratos/paginacion.md.
    */
   async findAllRuns(paginacion: PaginationDto): Promise<Pagina<CorridaRespuesta>> {
-    const pagina = await paginar(
-      this.runsQuery()
-        .leftJoinAndSelect('run.parameters', 'parameter')
-        // Solo columnas de la corrida: con skip/take TypeORM pagina sobre
-        // ids DISTINCT, y ordenar por `parameter.key` repetiría cada corrida
-        // una vez por parámetro (la página saldría con menos corridas).
-        .orderBy('run.date', 'DESC')
-        .addOrderBy('run.id', 'ASC'),
-      paginacion,
-    );
-    for (const run of pagina.data) run.parameters.sort((a, b) => a.key.localeCompare(b.key));
+    const pagina = await paginar(this.corridas.historial(), paginacion);
     return { ...pagina, data: await this.paraRespuesta(pagina.data) };
   }
 
   /**
    * Una corrida de asociación completa: parámetros, supuestos en orden,
    * filtros y reglas con sus productos. Lo necesario para reproducirla y
-   * explicarla. 404 también si el id es de una corrida de otro tipo.
+   * explicarla.
    */
   async findRun(id: string): Promise<CorridaRespuesta> {
-    const run = await this.runsQuery()
-      .leftJoinAndSelect('run.parameters', 'parameter')
-      .leftJoinAndSelect('run.assumptions', 'assumption')
-      .leftJoinAndSelect('run.filters', 'filter')
-      .andWhere('run.id = :id', { id })
-      .orderBy('parameter.key', 'ASC')
-      .addOrderBy('assumption.order', 'ASC')
-      .addOrderBy('filter.dimension', 'ASC')
-      .getOne();
+    const run = await this.corridas.porId(id);
     if (!run) throw new NotFoundException(`No existe la corrida de asociación ${id}.`);
 
     const [corrida] = await this.paraRespuesta([run]);
-    return { ...corrida, results: await this.findRulesOfRun(run.id) };
+    return {
+      ...corrida,
+      assumptions: run.assumptions.map((assumption, n) => ({ runId: run._id, order: n + 1, assumption })),
+      filters: [...run.filters]
+        .sort((a, b) => a.dimension.localeCompare(b.dimension))
+        .map((f) => ({ runId: run._id, dimension: f.dimension, referenceId: f.referenceId })),
+      results: await this.reglasConProductos(run._id, run.results),
+    };
   }
 
   /**
-   * Base de las consultas de corridas: solo las de asociación. La tabla
-   * también guarda corridas de elasticidad y las de accesibilidad de
-   * decision-service, así que el filtro por tipo no es opcional.
+   * Lo que el contrato pide de cada corrida: `id` (el `_id` de Mongo),
+   * `date` en texto ISO, `user` como `{ id, nombre }` (solo eso: nunca otros
+   * datos del usuario) y los parámetros ordenados por clave.
    */
-  private runsQuery() {
-    return this.runsRepo.createQueryBuilder('run').where('run.type = :type', { type: 'asociacion' });
-  }
-
-  /**
-   * Lo que el contrato pide de cada corrida: `date` en texto ISO y `user`
-   * como `{ id, nombre }` (solo eso: nunca otros datos del usuario).
-   */
-  private async paraRespuesta(runs: AnalysisRun[]): Promise<CorridaRespuesta[]> {
+  private async paraRespuesta(runs: CorridaAsociacionMongo[]): Promise<CorridaRespuesta[]> {
     const nombres = await this.fuente.nombresDeUsuarios(runs.flatMap((r) => (r.userId ? [r.userId] : [])));
-    return runs.map(({ date, results: _results, ...run }) => {
+    return runs.map((run) => {
       const nombre = run.userId ? nombres.get(run.userId) : undefined;
       return {
-        ...run,
-        date: date.toISOString(),
+        id: run._id,
+        type: 'asociacion',
+        status: run.status,
+        userId: run.userId,
+        periodStart: run.periodStart,
+        periodEnd: run.periodEnd,
+        transactionsConsidered: run.transactionsConsidered,
+        basketsConsidered: run.basketsConsidered,
+        errorMessage: run.errorMessage,
+        parameters: [...run.parameters]
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map((p) => ({ runId: run._id, key: p.key, value: p.value })),
+        date: new Date(run.date).toISOString(),
         user: run.userId && nombre !== undefined ? { id: run.userId, nombre } : null,
       };
     });
@@ -314,26 +298,10 @@ export class AssociationService {
     params: AprioriParamsDto,
     user: SesionUsuario,
     period: Period,
-    basketCount: number,
+    baskets: string[][],
     maxItemsetSize: number,
     outcome: { generated: number; excluded: number; rules: AprioriRule[] },
-  ): AnalysisRun {
-    const run = new AnalysisRun();
-    run.type = 'asociacion';
-    run.status = 'completada';
-    run.userId = user.id;
-    run.periodStart = period.start;
-    run.periodEnd = period.end;
-    // Una canasta = una transacción (RN-03).
-    run.transactionsConsidered = basketCount;
-    run.basketsConsidered = basketCount;
-
-    run.parameters = [
-      ...algorithmParameters(algoritmo, params, maxItemsetSize),
-      param('reglas_generadas', outcome.generated),
-      param('reglas_excluidas_rn10', outcome.excluded),
-    ];
-
+  ): NuevaCorrida {
     const assumptions = [
       'Una canasta equivale a una transacción (RN-03).',
       'Las presentaciones se agrupan en su producto y la cantidad comprada no pondera: cuenta presencia o ausencia.',
@@ -342,35 +310,48 @@ export class AssociationService {
     if (params.segmentId) {
       assumptions.push('El segmento de ingreso es el de la zona de la compra, no el de la persona (RN-02).');
     }
-    run.assumptions = assumptions.map((assumption, n) => Object.assign(new AnalysisRunAssumption(), { order: n + 1, assumption }));
 
-    run.filters = [
-      ...(params.storeId ? [filter('tienda', params.storeId)] : []),
-      ...(params.zoneId ? [filter('zona', params.zoneId)] : []),
-      ...(params.segmentId ? [filter('segmento', String(params.segmentId))] : []),
-    ];
-
-    run.results = outcome.rules.map((r) =>
-      Object.assign(new AssociationRule(), {
-        // Precisión de las columnas: numeric(6,5) y numeric(10,4).
+    return {
+      status: 'completada',
+      userId: user.id,
+      periodStart: period.start,
+      periodEnd: period.end,
+      // Una canasta = una transacción (RN-03).
+      transactionsConsidered: baskets.length,
+      basketsConsidered: baskets.length,
+      errorMessage: null,
+      parameters: [
+        ...algorithmParameters(algoritmo, params, maxItemsetSize),
+        param('reglas_generadas', outcome.generated),
+        param('reglas_excluidas_rn10', outcome.excluded),
+      ],
+      assumptions,
+      filters: [
+        ...(params.storeId ? [filter('tienda', params.storeId)] : []),
+        ...(params.zoneId ? [filter('zona', params.zoneId)] : []),
+        ...(params.segmentId ? [filter('segmento', String(params.segmentId))] : []),
+      ],
+      results: outcome.rules.map((r) => ({
+        id: randomUUID(),
+        // Misma precisión que tenían las columnas en Postgres (numeric(6,5) y
+        // (10,4)): el contrato y las pruebas comparan estas cifras.
         support: round(r.support, 5),
         confidence: round(r.confidence, 5),
         lift: round(r.lift, 4),
         transactionCount: r.count,
         items: [
-          ...r.antecedent.map((productId) => Object.assign(new AssociationRuleItem(), { productId, side: 'antecedente' })),
-          ...r.consequent.map((productId) => Object.assign(new AssociationRuleItem(), { productId, side: 'consecuente' })),
+          ...r.antecedent.map((productId): ItemRegla => ({ productId, side: 'antecedente' })),
+          ...r.consequent.map((productId): ItemRegla => ({ productId, side: 'consecuente' })),
         ],
-      }),
-    );
-
-    return run;
+      })),
+      snapshot: fotoDe(baskets),
+    };
   }
 
   /**
    * Deja constancia de un intento fallido con su periodo, parámetros y
-   * mensaje (chk_corrida_error exige el mensaje). Si esto también falla,
-   * solo se registra en el log: no debe ocultar el error original.
+   * mensaje. Si esto también falla, solo se registra en el log: no debe
+   * ocultar el error original.
    */
   private async recordFailedRun(
     algoritmo: Algoritmo,
@@ -386,17 +367,21 @@ export class AssociationService {
       error instanceof Error ? error.stack : undefined,
     );
     try {
-      const run = new AnalysisRun();
-      run.type = 'asociacion';
-      run.status = 'fallida';
-      run.userId = user.id;
-      run.periodStart = period.start;
-      run.periodEnd = period.end;
-      run.transactionsConsidered = null;
-      run.basketsConsidered = null;
-      run.errorMessage = message;
-      run.parameters = algorithmParameters(algoritmo, params, maxItemsetSize);
-      return (await this.saveRun(run)).id;
+      const fallida = await this.corridas.guardar({
+        status: 'fallida',
+        userId: user.id,
+        periodStart: period.start,
+        periodEnd: period.end,
+        transactionsConsidered: null,
+        basketsConsidered: null,
+        errorMessage: message,
+        parameters: algorithmParameters(algoritmo, params, maxItemsetSize),
+        assumptions: [],
+        filters: [],
+        results: [],
+        snapshot: null,
+      });
+      return fallida._id;
     } catch (recordError) {
       this.logger.error(`No se pudo registrar la corrida fallida: ${String(recordError)}`);
       return null;
@@ -405,24 +390,23 @@ export class AssociationService {
 
   /**
    * Reglas de una corrida con sus productos, en el orden de `compararReglas`
-   * (de la más confiable a la menos). Se ordena aquí y no en SQL: el
-   * desempate es por los productos de cada lado, que viven en otra tabla.
+   * (de la más confiable a la menos), así una corrida recién hecha y la misma
+   * releída salen idénticas.
    */
-  private async findRulesOfRun(runId: string): Promise<ReglaConProductos[]> {
-    const rules = (
-      await this.rulesRepo
-        .createQueryBuilder('rule')
-        .leftJoinAndSelect('rule.items', 'item')
-        .where('rule.runId = :runId', { runId })
-        .getMany()
-    ).sort(compararReglas);
+  private async reglasConProductos(runId: string, reglas: ReglaGuardada[]): Promise<ReglaConProductos[]> {
+    const ordenadas = [...reglas].sort(compararReglas);
 
     // Productos de catalog: solo el resumen que muestra el contrato.
-    const productos = await this.fuente.resumenDeProductos(rules.flatMap((r) => r.items.map((i) => i.productId)));
-    return rules.map((rule) => ({
-      ...rule,
+    const productos = await this.fuente.resumenDeProductos(ordenadas.flatMap((r) => r.items.map((i) => i.productId)));
+    return ordenadas.map((rule) => ({
+      id: rule.id,
+      runId,
+      support: rule.support,
+      confidence: rule.confidence,
+      lift: rule.lift,
+      transactionCount: rule.transactionCount,
       items: rule.items
-        .map((item) => ({ ...item, product: productos.get(item.productId) ?? null }))
+        .map((item) => ({ ruleId: rule.id, productId: item.productId, side: item.side, product: productos.get(item.productId) ?? null }))
         .sort(
           (a, b) =>
             (a.side === b.side ? 0 : a.side === 'antecedente' ? -1 : 1) ||
@@ -435,8 +419,8 @@ export class AssociationService {
 }
 
 /** Lo que `compararReglas` necesita de una regla guardada. */
-export type ReglaParaOrdenar = Pick<AssociationRule, 'confidence' | 'lift' | 'support'> & {
-  items: Pick<AssociationRuleItem, 'productId' | 'side'>[];
+export type ReglaParaOrdenar = Pick<ReglaGuardada, 'confidence' | 'lift' | 'support'> & {
+  items: Pick<ItemRegla, 'productId' | 'side'>[];
 };
 
 /**
@@ -445,11 +429,11 @@ export type ReglaParaOrdenar = Pick<AssociationRule, 'confidence' | 'lift' | 'su
  * se rompen por CONTENIDO —ids del antecedente y luego del consecuente,
  * como conjuntos ordenados— y nunca por el id de la regla, que es un UUID
  * aleatorio: así dos corridas idénticas devuelven las reglas en el mismo
- * orden. Al guardarse, las métricas se redondean (numeric(6,5) y (10,4)) y
+ * orden. Al guardarse, las métricas se redondean (5 y 4 decimales) y
  * pueden aparecer empates que en memoria no había; el desempate los cubre.
  */
 export function compararReglas(a: ReglaParaOrdenar, b: ReglaParaOrdenar): number {
-  const lado = (regla: ReglaParaOrdenar, side: AssociationRuleItem['side']) =>
+  const lado = (regla: ReglaParaOrdenar, side: LadoRegla) =>
     regla.items
       .filter((item) => item.side === side)
       .map((item) => item.productId)
@@ -462,6 +446,16 @@ export function compararReglas(a: ReglaParaOrdenar, b: ReglaParaOrdenar): number
     compareItems(lado(a, 'antecedente'), lado(b, 'antecedente')) ||
     compareItems(lado(a, 'consecuente'), lado(b, 'consecuente'))
   );
+}
+
+/**
+ * Foto de los datos (D-15): hash SHA-256 de las canastas como conjuntos
+ * ordenados, en orden. No depende del orden en que llegaron las líneas ni
+ * de si un producto se repite en la canasta (dos presentaciones).
+ */
+export function fotoDe(baskets: string[][]): FotoDatos {
+  const canonicas = baskets.map((b) => [...new Set(b)].sort().join(',')).sort();
+  return { hash: createHash('sha256').update(canonicas.join('\n')).digest('hex'), baskets: baskets.length };
 }
 
 function groupByBasket(lines: BasketLine[]): { baskets: string[][]; categoryOf: Map<string, number> } {
@@ -493,8 +487,8 @@ function pairKey(a: number, b: number): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
 }
 
-/** `algoritmo` es el `AnalysisRun.algorithm` de D2: un parámetro, sin columna nueva. */
-function algorithmParameters(algoritmo: Algoritmo, params: AprioriParamsDto, maxItemsetSize: number): AnalysisRunParameter[] {
+/** `algoritmo` es el `AnalysisRun.algorithm` de D2: un parámetro de la corrida. */
+function algorithmParameters(algoritmo: Algoritmo, params: AprioriParamsDto, maxItemsetSize: number): ParametroCorrida[] {
   return [
     param('algoritmo', algoritmo),
     param('soporte_minimo', params.minSupport),
@@ -503,25 +497,15 @@ function algorithmParameters(algoritmo: Algoritmo, params: AprioriParamsDto, max
   ];
 }
 
-function param(key: string, value: string | number): AnalysisRunParameter {
-  return Object.assign(new AnalysisRunParameter(), { key, value: String(value) });
+function param(key: string, value: string | number): ParametroCorrida {
+  return { key, value: String(value) };
 }
 
-function filter(dimension: AnalysisRunFilter['dimension'], referenceId: string): AnalysisRunFilter {
-  return Object.assign(new AnalysisRunFilter(), { dimension, referenceId });
+function filter(dimension: DimensionFiltro, referenceId: string): FiltroCorrida {
+  return { dimension, referenceId };
 }
 
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
-}
-
-async function insertInChunks<T>(
-  manager: EntityManager,
-  entity: new () => T,
-  rows: object[],
-): Promise<void> {
-  for (let start = 0; start < rows.length; start += INSERT_CHUNK) {
-    await manager.insert(entity, rows.slice(start, start + INSERT_CHUNK) as never);
-  }
 }
