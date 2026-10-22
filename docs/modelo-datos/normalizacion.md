@@ -446,6 +446,10 @@ las combinaciones efectivas que el análisis recorre.
 
 **`regla_asociacion_items(__regla_id__, __producto_id__, __lado__)`**
 
+> Nota (21-oct-2026): por D3, `reglas_asociacion` y `regla_asociacion_items` ya no
+> están en `db/schema.sql`; las reglas viven dentro de cada corrida en MongoDB
+> (`analysis_runs`). El análisis se conserva como referencia del diseño del Parcial 1.
+
 La DMV candidata sería `regla_id ↠ producto_id`. Exigiría que cada producto de la regla
 apareciera en ambos lados. Ocurre lo contrario: en una regla X → Y los conjuntos
 antecedente y consecuente son disjuntos por definición.
