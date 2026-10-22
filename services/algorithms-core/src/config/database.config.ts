@@ -13,9 +13,10 @@ export default registerAs(
     username: process.env.DB_USER ?? 'retail_user',
     password: process.env.DB_PASSWORD ?? 'retail_pass_2026',
     database: process.env.DB_NAME ?? 'retaildb',
-    // Este servicio es dueño de las tablas de corridas, reglas y
-    // elasticidades, y no escribe otras (Postgres compartido, tablas por
-    // dueño). Se registran con `TypeOrmModule.forFeature` en cada módulo.
+    // Este servicio es dueño de las tablas de corridas de elasticidad,
+    // exclusiones (RN-10) y elasticidades, y no escribe otras (Postgres
+    // compartido, tablas por dueño; las corridas de asociación van a Mongo,
+    // D3). Se registran con `TypeOrmModule.forFeature` en cada módulo.
     autoLoadEntities: true,
     // db/schema.sql es la fuente de verdad: TypeORM nunca altera el esquema.
     synchronize: false,

@@ -100,10 +100,12 @@
 --     canasta, gasto por categoría…) NO son columnas: son filas de
 --     `indicador_valores`, referidas a un catálogo `indicadores`. Así se
 --     agrega un indicador nuevo sin ALTER TABLE.
---  7. Toda salida analítica cuelga de `analisis_corridas`, que conserva
+--  7. Toda salida analítica en Postgres cuelga de `analisis_corridas`, que conserva
 --     datos usados, periodo, fecha, usuario, parámetros y supuestos.
---  8. El antecedente de una regla de asociación es un CONJUNTO de
---     productos, no un texto: `regla_asociacion_items` (1FN).
+--  8. Las corridas de asociación (Apriori, FP-Growth) y sus reglas ya no
+--     están aquí: viven en MongoDB, colección `analysis_runs` (D3). El
+--     antecedente sigue siendo un CONJUNTO de productos dentro del
+--     documento, no un texto.
 --
 -- Este archivo define únicamente estructura (DDL). Los datos de prueba
 -- están en `data_retail.sql`.
@@ -125,8 +127,8 @@
 -- que una de las dos llaves foráneas se cierra después de crear ambas
 -- tablas. Está señalado en su lugar.
 --
--- Decisión de alcance vigente: TODO el modelo analítico vive en
--- PostgreSQL. MongoDB y Redis quedan fuera hasta el Parcial 2.
+-- Decisión de alcance vigente: el modelo analítico vive en PostgreSQL,
+-- salvo las corridas de Apriori, FP-Growth y clustering (MongoDB, D3).
 -- =====================================================================
 
 BEGIN;
@@ -333,7 +335,7 @@ CREATE INDEX idx_usuarios_rol ON usuarios(rol_id);
 
 -- =====================================================================
 -- 4. TRAZABILIDAD ANALÍTICA
---    Toda salida calculada (indicadores, Apriori, elasticidad,
+--    Toda salida calculada en Postgres (indicadores, elasticidad,
 --    accesibilidad, simulación) cuelga de una corrida. Es lo que
 --    permite responder "¿con qué datos, en qué periodo, quién y bajo
 --    qué supuestos se obtuvo esto?" sin adivinar.
@@ -342,7 +344,7 @@ CREATE INDEX idx_usuarios_rol ON usuarios(rol_id);
 CREATE TYPE tipo_corrida AS ENUM (
     'descriptiva',      -- M09 indicadores de tamaño y frecuencia de compra
     'clasificacion_zona', -- M05 clustering / segmentación de zonas
-    'asociacion',       -- M10 Apriori / FP-Growth
+    'asociacion',       -- M10: sin uso desde D3 (corridas en MongoDB)
     'sustitucion',      -- M11 patrones de sustitución
     'elasticidad',      -- M11 elasticidad precio-demanda
     'accesibilidad',    -- M12
@@ -369,12 +371,12 @@ CREATE TABLE analisis_corridas (
         (estado = 'fallida' AND mensaje_error IS NOT NULL) OR estado <> 'fallida'
     )
 );
-COMMENT ON TABLE analisis_corridas IS 'Corrida de análisis: quién, cuándo, sobre qué periodo y con qué resultado. RF-15 exige poder reproducir una corrida de Apriori completa.';
+COMMENT ON TABLE analisis_corridas IS 'Corrida de análisis: quién, cuándo, sobre qué periodo y con qué resultado. Las corridas de Apriori y FP-Growth viven en MongoDB (D3).';
 
 CREATE INDEX idx_corridas_tipo_fecha ON analisis_corridas(tipo, ejecutada_en DESC);
 
 -- Parámetros como filas, no como JSON: se pueden consultar, comparar
--- entre corridas y validar. Ej. ('soporte_minimo','0.05').
+-- entre corridas y validar. Ej. ('granularidad','week').
 CREATE TABLE analisis_corrida_parametros (
     corrida_id      UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
     clave           VARCHAR(60) NOT NULL,
@@ -1187,32 +1189,12 @@ COMMENT ON VIEW v_canastas IS 'Consulta de canastas con todas las dimensiones qu
 -- =====================================================================
 
 -- --- M10 Reglas de asociación (Apriori / FP-Growth) ------------------
--- El antecedente de una regla es un CONJUNTO de productos. Guardarlo
--- como texto ("leche, pan") rompe 1FN e impide consultar "qué reglas
--- involucran el producto X". Por eso va en su propia tabla.
-CREATE TABLE reglas_asociacion (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    corrida_id          UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
-    soporte             NUMERIC(6,5) NOT NULL CHECK (soporte BETWEEN 0 AND 1),
-    confianza           NUMERIC(6,5) NOT NULL CHECK (confianza BETWEEN 0 AND 1),
-    lift                NUMERIC(10,4),
-    transacciones_regla INTEGER
-);
-COMMENT ON TABLE reglas_asociacion IS 'Regla de asociación producida por una corrida de M10 (RF-15).';
-
-CREATE INDEX idx_reglas_corrida ON reglas_asociacion(corrida_id, confianza DESC);
-
-CREATE TYPE lado_regla AS ENUM ('antecedente','consecuente');
-
-CREATE TABLE regla_asociacion_items (
-    regla_id            UUID NOT NULL REFERENCES reglas_asociacion(id) ON DELETE CASCADE,
-    producto_id         UUID NOT NULL REFERENCES productos(id),
-    lado                lado_regla NOT NULL,
-    PRIMARY KEY (regla_id, producto_id, lado)
-);
-COMMENT ON TABLE regla_asociacion_items IS 'Ítems de cada lado de la regla. Permite buscar reglas por producto.';
-
-CREATE INDEX idx_regla_items_producto ON regla_asociacion_items(producto_id);
+-- Sin tablas en Postgres: cada corrida con sus reglas es un documento de
+-- MongoDB, colección `analysis_runs` (D3), escrito por algorithms-core.
+-- Quien necesite reglas las pide por HTTP (`GET /v1/association/runs/:id`).
+-- `reglas_asociacion`, `regla_asociacion_items`, `lado_regla` y la vista
+-- `v_dashboard_asociaciones` se quitaron el 21-oct-2026; siguen en los
+-- DROP de arriba para limpiar bases creadas antes.
 
 -- --- M11 Sustitución -------------------------------------------------
 CREATE TYPE tipo_sustitucion AS ENUM ('precio','desabasto','preferencia');
@@ -1472,19 +1454,6 @@ JOIN productos p ON p.id = pp.producto_id
 JOIN categorias_producto c ON c.id = p.categoria_id
 GROUP BY c.id, c.nombre, k.zona_id, k.segmento_ingreso_id, date_trunc('month', k.fecha);
 COMMENT ON VIEW v_dashboard_gasto_categoria IS 'Gasto por categoría, con corte por zona, segmento y mes. Alimenta "categorías principales".';
-
-CREATE VIEW v_dashboard_asociaciones AS
-SELECT r.id AS regla_id, r.corrida_id, r.soporte, r.confianza, r.lift,
-       (SELECT string_agg(p.nombre, ' + ' ORDER BY p.nombre)
-          FROM regla_asociacion_items i
-          JOIN productos p ON p.id = i.producto_id
-         WHERE i.regla_id = r.id AND i.lado = 'antecedente') AS antecedente,
-       (SELECT string_agg(p.nombre, ' + ' ORDER BY p.nombre)
-          FROM regla_asociacion_items i
-          JOIN productos p ON p.id = i.producto_id
-         WHERE i.regla_id = r.id AND i.lado = 'consecuente') AS consecuente
-FROM reglas_asociacion r;
-COMMENT ON VIEW v_dashboard_asociaciones IS 'Reglas de asociación en texto legible para el tablero, sin perder la forma normalizada de abajo.';
 
 CREATE VIEW v_dashboard_accesibilidad_zona AS
 SELECT DISTINCT ON (a.zona_id)

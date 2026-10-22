@@ -13,18 +13,18 @@ de negocio.
 
 | Módulo | Rutas | Estado |
 |---|---|---|
-| Base del servicio | `/v1/health` | listo: Postgres, roles (`RolesGuard`, `@Roles`, `@CurrentUser`) y jest |
-| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/runs`, `/v1/association/runs/:id` | migrado: Apriori trasladado sin cambios, corrida completa guardada, `/runs` paginado, JSON y XML, Swagger con ejemplos |
+| Base del servicio | `/v1/health` | listo: Postgres, Redis y MongoDB en el health, roles (`RolesGuard`, `@Roles`, `@CurrentUser`) y jest |
+| Asociación (M10) | `/v1/association/apriori/run`, `/v1/association/fpgrowth/run`, `/v1/association/runs`, `/v1/association/runs/:id` | migrado: Apriori y FP-Growth, corrida completa guardada en MongoDB (D3) con la foto de sus datos (D-15), `/runs` paginado, JSON y XML, Swagger con ejemplos |
 | Elasticidad (M11) | `/v1/elasticity/calculate`, `/v1/elasticity/chart`, `/v1/elasticity/current` | migrado (#56) |
 | Sustitución (M11) | `/v1/substitution/patterns` | migrado (ALG-03) |
 
 ## Levantarlo solo
 
-Requiere Postgres con `db/schema.sql` aplicado y Redis (ver `infra/docker-compose.yml`).
+Requiere Postgres con `db/schema.sql` aplicado, Redis y MongoDB (ver `infra/docker-compose.yml`).
 
 ```bash
 npm install
-cp .env.example .env     # PORT=3105, DB_* y REDIS_* de localhost
+cp .env.example .env     # PORT=3105, DB_*, REDIS_* y MONGO_URL de localhost
 npm run start:dev
 curl localhost:3105/v1/health
 curl -H 'Accept: application/xml' localhost:3105/v1/health
@@ -51,7 +51,7 @@ consultar: cualquier perfil interno).
   montada y `npm run start:dev`. Necesita postgres y redis arriba; la primera vez tarda ~1 min
   por el `npm install`.
   ```bash
-  docker compose -f infra/docker-compose.yml up -d postgres redis algorithms-core
+  docker compose -f infra/docker-compose.yml up -d postgres redis mongodb algorithms-core
   ```
   En Windows el contenedor **no recarga solo** al editar el código (los cambios de la carpeta
   montada no le llegan): después de cambiar algo, `docker restart retail_algorithms_core`
@@ -110,14 +110,23 @@ ALGORITHMS_BASE_URL=http://localhost:3115 npm run test:integracion
 
 ## Datos
 
-Postgres compartido, `synchronize: false`, `db/schema.sql` es la fuente de verdad. Este
-servicio solo escribe sus tablas: `analisis_corridas` y sus hijas
-(`analisis_corrida_parametros`, `analisis_corrida_supuestos`, `analisis_corrida_filtros`),
-`reglas_asociacion`, `regla_asociacion_items`, `reglas_exclusion_asociacion` y
-`elasticidades`.
+Dos almacenes:
 
-`analisis_corridas` también la escribe decision-service (corridas de accesibilidad), así
-que toda consulta de este servicio filtra por `tipo`. Las entidades no tienen relaciones
+- **MongoDB (D3):** las corridas de Apriori y FP-Growth, en la colección `analysis_runs`
+  con `type: "asociacion"` (la misma colección que el clustering de analytics-stats, con
+  `type: "clustering"`). Cada documento es la corrida completa: parámetros, supuestos,
+  filtros, reglas y la foto de los datos (`snapshot.hash`, SHA-256 de las canastas, D-15).
+  El `_id` es un UUID para que el contrato no cambie. Sin Mongo, las rutas de asociación
+  responden `503` y el health sale `degraded` (D-25). Código: `src/association/`
+  (`corrida-asociacion.schema.ts`, `corridas-asociacion.repository.ts`).
+- **Postgres compartido**, `synchronize: false`, `db/schema.sql` es la fuente de verdad.
+  Este servicio solo escribe sus tablas: `analisis_corridas` y sus hijas
+  (`analisis_corrida_parametros`, `analisis_corrida_supuestos`,
+  `analisis_corrida_filtros`) para las corridas de elasticidad,
+  `reglas_exclusion_asociacion` (RN-10) y `elasticidades`.
+
+`analisis_corridas` también la escribe decision-service (corridas de accesibilidad, D-27),
+así que toda consulta de este servicio filtra por `tipo`. Las entidades no tienen relaciones
 TypeORM con tablas de otros servicios (`usuarios`, `productos`): solo guardan el id, y la
 llave foránea sigue en Postgres.
 

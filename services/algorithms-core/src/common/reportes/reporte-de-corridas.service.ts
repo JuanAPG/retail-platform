@@ -13,7 +13,7 @@ export interface ContextoPeticion {
 export interface CorridaTerminada {
   /** null si ni siquiera se pudo registrar la corrida fallida. */
   runId: string | null;
-  /** `analisis_corridas.tipo`. */
+  /** Tipo de corrida; también dice dónde vive (ver `TABLA_DE`). */
   tipo: 'asociacion' | 'elasticidad';
   /** Cómo se le muestra al usuario: "Apriori", "Elasticidad". */
   nombre: string;
@@ -22,6 +22,16 @@ export interface CorridaTerminada {
   resumen: string;
   periodo?: { start: string; end: string };
 }
+
+/**
+ * Dónde vive cada tipo de corrida, para `tabla_afectada` de la bitácora: las
+ * de asociación en la colección de Mongo (D3, mismo nombre que usa
+ * analytics-stats para el clustering) y las de elasticidad en Postgres.
+ */
+const TABLA_DE: Record<CorridaTerminada['tipo'], string> = {
+  asociacion: 'analysis_runs',
+  elasticidad: 'analisis_corridas',
+};
 
 /**
  * ALG-10 (QA-ALG56-03): toda corrida, completada o fallida, deja un evento
@@ -42,7 +52,7 @@ export class ReporteDeCorridas {
     const envios: Promise<void>[] = [
       this.auditoria.reportar(
         {
-          tabla: 'analisis_corridas',
+          tabla: TABLA_DE[corrida.tipo],
           registroId: corrida.runId,
           accion: 'ejecutar_corrida',
           descripcion: `${corrida.nombre} ${corrida.estado}: ${corrida.resumen}`,

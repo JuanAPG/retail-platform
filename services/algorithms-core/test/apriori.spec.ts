@@ -7,14 +7,16 @@
  * un rango de fechas donde dos productos aparezcan en el mismo número de
  * canastas (A→B y B→A empatan en confianza, lift y soporte). Corta los días
  * en UTC y en America/Monterrey y exige el empate en los dos, así no
- * depende de en qué zona corte el servicio. Borra las corridas que crea.
+ * depende de en qué zona corte el servicio. Borra las corridas que crea
+ * (en MongoDB, D3).
  *
- *   docker compose -f infra/docker-compose.yml up -d postgres redis auth-service algorithms-core
+ *   docker compose -f infra/docker-compose.yml up -d postgres redis mongodb auth-service algorithms-core
  *   npm run test:integracion
  */
 import { DataSource } from 'typeorm';
 import { compararReglas, ReglaConProductos } from '../src/association/association.service';
 import databaseConfig from '../src/config/database.config';
+import { CorridasMongo } from './corridas-mongo';
 
 const BASE = process.env.ALGORITHMS_BASE_URL ?? 'http://localhost:3105';
 const AUTH = process.env.AUTH_BASE_URL ?? 'http://localhost:3101';
@@ -55,6 +57,7 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
     password: opciones.password,
     database: opciones.database,
   });
+  const mongo = new CorridasMongo();
   const creadas = new Set<string>();
   let token = '';
 
@@ -71,7 +74,7 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
   }
 
   beforeAll(async () => {
-    await db.initialize();
+    await Promise.all([db.initialize(), mongo.abrir()]);
     const login = await fetch(`${AUTH}/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,7 +87,8 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
   });
 
   afterAll(async () => {
-    if (creadas.size > 0) await db.query('DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[])', [[...creadas]]);
+    await mongo.borrar(creadas);
+    await mongo.cerrar();
     await db.destroy();
   });
 
@@ -135,7 +139,7 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
       body: JSON.stringify({ email: 'admin@retail.mx', password: process.env.ALGORITHMS_TEST_PASSWORD ?? 'Passw0rd123!' }),
     });
     const admin = ((await login.json()) as { accessToken: string }).accessToken;
-    const [{ antes }]: { antes: number }[] = await db.query('SELECT count(*)::int AS antes FROM analisis_corridas');
+    const antes = await mongo.contar();
 
     const r = await fetch(`${BASE}/v1/association/apriori/run`, {
       method: 'POST',
@@ -144,7 +148,7 @@ describe('Apriori (integración, requiere stack y ventas cargadas)', () => {
     });
 
     expect(r.status).toBe(403);
-    const [{ despues }]: { despues: number }[] = await db.query('SELECT count(*)::int AS despues FROM analisis_corridas');
+    const despues = await mongo.contar();
     expect(despues).toBe(antes);
   });
 });

@@ -338,7 +338,7 @@ export class ElasticityService {
     };
   }
 
-  /** Solo corridas de elasticidad completadas: no se grafica una de asociación ni una fallida. */
+  /** Solo corridas de elasticidad completadas: no se grafica una de otro tipo ni una fallida. */
   private async findChartRun(runId: string): Promise<ChartRun> {
     const [run] = await this.dataSource.query(`${CHART_RUN_SQL} AND c.id = $1`, [runId]);
     if (!run) throw new NotFoundException(`No existe una corrida de elasticidad completada con id ${runId}.`);
@@ -489,8 +489,8 @@ export class ElasticityService {
 
   /**
    * Corrida + parámetros + supuestos + elasticidades en UNA transacción:
-   * si algo falla no queda una corrida "completada" a medias. No reutiliza
-   * AssociationService.saveRun porque aquel inserta reglas de asociación.
+   * si algo falla no queda una corrida "completada" a medias. (Las corridas
+   * de asociación no pasan por aquí: van a MongoDB, D3.)
    */
   private async saveElasticityRun(run: {
     user: SesionUsuario;

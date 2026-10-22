@@ -2,7 +2,6 @@ import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } f
 import { AnalysisRunParameter } from './analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from './analysis-run-assumption.entity';
 import { AnalysisRunFilter } from './analysis-run-filter.entity';
-import { AssociationRule } from './association-rule.entity';
 
 /** Valores del enum `tipo_corrida` en Postgres. */
 export type AnalysisRunType =
@@ -19,13 +18,14 @@ export type AnalysisRunStatus = 'en_proceso' | 'completada' | 'fallida';
 
 /**
  * Corrida de análisis (`analisis_corridas`). Compartida: toda salida
- * calculada (Apriori, sustitución, elasticidad, accesibilidad,
- * simulación) cuelga de una corrida para poder responder con qué datos,
- * en qué periodo, quién y bajo qué supuestos se obtuvo (RF-15).
+ * calculada en Postgres (elasticidad, accesibilidad, simulación) cuelga de
+ * una corrida para poder responder con qué datos, en qué periodo, quién y
+ * bajo qué supuestos se obtuvo (RF-15). Las corridas de asociación (Apriori,
+ * FP-Growth) ya no viven aquí: están en MongoDB (D3, `analysis_runs`).
  *
- * En microservicios la escribe algorithms-core (asociación, elasticidad)
- * y también decision-service (accesibilidad): toda consulta de este
- * servicio filtra por `tipo`.
+ * En microservicios la escribe algorithms-core (elasticidad) y también
+ * decision-service (accesibilidad, D-27): toda consulta de este servicio
+ * filtra por `tipo`.
  *
  * El "dataset" de la corrida es el periodo + los conteos + los filtros.
  * `tipo` y `estado` son enums en Postgres; se mapean como varchar
@@ -81,13 +81,4 @@ export class AnalysisRun {
 
   @OneToMany(() => AnalysisRunFilter, (f) => f.run)
   filters: AnalysisRunFilter[];
-
-  /**
-   * Resultados de una corrida de asociación (M10): sus reglas. Nombre
-   * literal del Contrato de Métodos y Endpoints. En corridas de otro tipo
-   * viene vacío: elasticidad, accesibilidad, etc. cuelgan sus resultados
-   * de sus propias tablas.
-   */
-  @OneToMany(() => AssociationRule, (r) => r.run)
-  results: AssociationRule[];
 }

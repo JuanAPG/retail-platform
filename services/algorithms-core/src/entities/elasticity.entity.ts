@@ -10,8 +10,7 @@ export type ElasticityClassification = 'elastica' | 'inelastica' | 'unitaria';
 
 /**
  * NUMERIC llega como texto desde Postgres; la elasticidad y el R² son
- * razones con pocos decimales, así que se leen como número. Mismo
- * transformer que AssociationRule (M10), que no está exportado.
+ * razones con pocos decimales, así que se leen como número.
  */
 const numericAsNumber: ValueTransformer = {
   to: (value: number | null) => value,

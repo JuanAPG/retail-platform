@@ -12,6 +12,7 @@
  */
 import { DataSource } from 'typeorm';
 import databaseConfig from '../src/config/database.config';
+import { CorridasMongo } from './corridas-mongo';
 
 const BASE = process.env.ALGORITHMS_BASE_URL ?? 'http://localhost:3105';
 const AUTH = process.env.AUTH_BASE_URL ?? 'http://localhost:3101';
@@ -28,7 +29,10 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
     password: opciones.password,
     database: opciones.database,
   });
+  const mongo = new CorridasMongo();
+  /** Elasticidad en Postgres; Apriori y FP-Growth en MongoDB (D3). */
   const creadas: string[] = [];
+  const creadasMongo: string[] = [];
 
   async function entrar(email: string): Promise<{ token: string; id: string }> {
     const r = await fetch(`${AUTH}/v1/auth/login`, {
@@ -51,16 +55,16 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
     const json = (await r.json()) as { runId?: string } | { runId: string }[];
     const runId = Array.isArray(json) ? json[0]?.runId : json.runId;
     if (!runId) throw new Error(`${ruta} no devolvió runId (¿sin reglas? se necesitan ventas cargadas)`);
-    creadas.push(runId);
+    (ruta.startsWith('/v1/association/') ? creadasMongo : creadas).push(runId);
     return runId;
   }
 
   /** El evento de la corrida en la bitácora, con sus cambios. */
-  async function evento(runId: string) {
+  async function evento(runId: string, tabla = 'analisis_corridas') {
     const [e]: { id: number; servicio: string; accion: string; usuarioId: string }[] = await db.query(
       `SELECT id, servicio, accion::text AS accion, usuario_id AS "usuarioId"
-       FROM auditoria WHERE tabla_afectada = 'analisis_corridas' AND registro_id = $1`,
-      [runId],
+       FROM auditoria WHERE tabla_afectada = $2 AND registro_id = $1`,
+      [runId, tabla],
     );
     if (!e) return null;
     const cambios: { campo: string; posterior: string }[] = await db.query(
@@ -70,11 +74,12 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
     return { ...e, cambios: Object.fromEntries(cambios.map((c) => [c.campo, c.posterior])) };
   }
 
-  beforeAll(() => db.initialize());
+  beforeAll(() => Promise.all([db.initialize(), mongo.abrir()]));
 
   afterAll(async () => {
     if (creadas.length > 0) await db.query('DELETE FROM analisis_corridas WHERE id = ANY($1::uuid[])', [creadas]);
-    await db.destroy();
+    await mongo.borrar(creadasMongo);
+    await Promise.all([db.destroy(), mongo.cerrar()]);
   });
 
   /** Aviso de la corrida en la bandeja de quien la lanzó. */
@@ -107,7 +112,8 @@ describe('Bitácora y aviso de corridas (integración, ALG-10)', () => {
 
     const runId = await correr(ruta, analista.token, { minSupport: 0.01, minConfidence: 0.01 });
 
-    expect(await evento(runId)).toMatchObject({
+    // D3: la corrida vive en la colección `analysis_runs` de Mongo.
+    expect(await evento(runId, 'analysis_runs')).toMatchObject({
       servicio: 'algorithms-core',
       usuarioId: analista.id,
       cambios: { tipo: 'asociacion', estado: 'completada' },

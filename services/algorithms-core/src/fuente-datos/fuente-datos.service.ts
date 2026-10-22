@@ -153,8 +153,8 @@ const LINEAS_DE_CANASTA_SQL = `
  *
  * Fase B: SQL de solo lectura sobre el Postgres compartido. Fase C: estas
  * mismas firmas pasan a llamar por HTTP a esos servicios, sin tocar a
- * quienes las usan. Las tablas propias (corridas, reglas, exclusiones,
- * elasticidades) NO se leen aquí: se leen con sus entidades.
+ * quienes las usan. Los datos propios (corridas, exclusiones,
+ * elasticidades) NO se leen aquí: se leen con sus entidades o en Mongo.
  */
 @Injectable()
 export class FuenteDatos {
