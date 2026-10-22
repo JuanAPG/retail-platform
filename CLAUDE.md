@@ -63,9 +63,9 @@ SIMULACIÓN → RECOMENDACIONES
 | # | Microservicio | Responsabilidad | Origen | Responsable |
 |---|---|---|---|---|
 | 1 | `auth-service` | Login, JWT, renovación, revocación vía Redis; CRUD de usuarios y roles; alta de proveedores | M01 | Juan Angel |
-| 2 | `catalog-service` | Tiendas, Zonas, Productos y Presentaciones, Segmentos; propuestas de producto del Proveedor | M02–M05 | Pamela |
+| 2 | `catalog-service` | Tiendas, Zonas, Productos y Presentaciones, Segmentos (pasan a `income-segmentation-service`, D-35); propuestas de producto del Proveedor | M02–M05 | Pamela |
 | 3 | `pricing-service` | Precios, histórico, comparación entre zonas; propuestas de precio | M08 | Pamela |
-| 4 | `core-process-service` | Transacciones (manual + CSV), canastas, analítica descriptiva | M06 + M07 + M09 | Juan Angel |
+| 4 | `core-process-service` | Transacciones (manual; la importación CSV pasa a `transactions-ingestion-service`, D-33), canastas, analítica descriptiva | M06 + M07 + M09 | Juan Angel |
 | 5 | `algorithms-core` | Apriori, **FP-Growth** (D2), elasticidad, sustitución (TS, sin reescribir) | M10 + M11 | Leonardo |
 | 6 | `analytics-stats` | Clustering, hipótesis, ANOVA, proporciones (Python/FastAPI) | Nuevo (RF-16, 20–22) | Leonardo |
 | 7 | `decision-service` | Accesibilidad, simulación, escenarios, recomendaciones | M12 + M13 + M14 | Fernando |
@@ -89,7 +89,7 @@ Reglas vigentes:
 - Cada servicio escribe **solo sus tablas** en el Postgres compartido.
 - Los servicios se consultan por HTTP, no leyendo tablas ajenas.
 
-## Estándar transversal (obligatorio en los 10)
+## Estándar transversal (obligatorio en todos los servicios)
 
 - Rutas bajo `/v1/` y `GET /v1/health`.
 - JWT validado **y** sesión activa en Redis en cada petición. Ningún servicio confía
@@ -178,7 +178,7 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
 
 - Cada quien hace commits con **su propia** cuenta de Git. Commits con otra identidad
   no cuentan como participación (observación del profesor en el Parcial 1).
-- Ramas por microservicio: `feature/<servicio>` (orden y dependencias en
+- Ramas: `feature/<servicio>`, `fix/<tema>` o `docs/<tema>`; una tarea del tablero = una rama (orden y dependencias en
   `CONTRIBUTING.md`).
 - PR con al menos 1 aprobación antes de mergear a `main`; la rama se borra al mergear.
 - Conventional Commits con alcance: `feat(catalog-service): …`.
@@ -186,7 +186,7 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
   microservicio → Redis/Mongo/Postgres → web → escritorio (XML) → Swagger.
 - Si falta tiempo, se recorta en este orden: exportación a Excel (D-19), push real en
   móvil, locks en Redis, cobertura fuera de auth/core/algorithms. **No se recorta:**
-  JSON + XML en los 10, ≥ 4 microservicios por app cliente, Redis en la autorización
+  JSON + XML en todos los servicios, ≥ 4 microservicios por app cliente, Redis en la autorización
   de todos, demo de punta a punta.
 
 ## Al trabajar en este repo

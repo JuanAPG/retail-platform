@@ -38,21 +38,21 @@ Fechas = límite de la tarea en el tablero. "Depende de" = no empieces antes.
 |---|---|---|---|---|
 | T-02 | Plantillas `template-nest` y `template-fastapi`: `X-Correlation-Id` (se genera si no viene, se reenvía a otros servicios, logs y auditoría) y health con dependencias, tiempo de respuesta y versión | 22-oct | — | `feature/plantillas-sprint4` |
 | T-04 | Contratos de `transactions-ingestion-service` (3111) y `monitoring-service` (3120) | 23-oct | T-01 | `docs/contratos-ingestion-monitoring` |
-| T-18 | auth-service: recuperar contraseña con token de un solo uso en Redis, 15 min, misma respuesta exista o no el correo; al cambiarla se revocan las sesiones (D-45) | 27-oct | — | `feature/auth-service` |
+| T-18 | auth-service: recuperar contraseña con token de un solo uso en Redis, 15 min, misma respuesta exista o no el correo; al cambiarla se revocan las sesiones (D-45) | 27-oct | T-01 (hecha) | `feature/auth-service` |
 | T-19 | audit-service: guardar el id de correlación y encadenar cada registro con el hash del anterior; ruta que detecte un registro alterado | 28-oct | T-02 | `feature/audit-service` |
-| T-20 | notifications-service: preferencias por usuario; los avisos de aprobación pendiente no se pueden apagar (D-46) | 28-oct | — | `feature/notifications-service` |
+| T-20 | notifications-service: preferencias por usuario; los avisos de aprobación pendiente no se pueden apagar (D-46); avisos nuevos de reportes y tareas | 28-oct | T-01 (hecha) | `feature/notifications-service` |
 | T-08 | `transactions-ingestion-service`: lotes CSV/JSON/XML, validación por fila, duplicados (D-34), vista previa, confirmación hacia core-process por HTTP, conciliación (D-33) | 30-oct | T-02, T-04 | `feature/transactions-ingestion-service` |
 | T-09 | `monitoring-service`: health de los 20 cada 30 s, degradado/caído según D-44, historial 24 h; solo Administrador | 31-oct | T-02, T-04 | `feature/monitoring-service` |
-| T-03 | `infra/docker-compose.yml` con los 20 servicios (3111–3120), sus tablas en `db/schema.sql`, seed en `db/data_retail.sql` y los nuevos en la matriz de `.github/workflows/ci.yml` | 31-oct | T-02, contratos | `feature/infra-sprint4` |
+| T-03 | `infra/docker-compose.yml` con los 20 servicios (3111–3120), sus tablas en `db/schema.sql`y seed en `db/data_retail.sql` | 31-oct | T-02, contratos | `feature/infra-sprint4` |
 
 ### Pamela Rodríguez de la Rosa
 
 | Tarea | Qué | Límite | Depende de | Rama |
 |---|---|---|---|---|
 | T-05 | Contratos de `income-segmentation-service` (3112) y `availability-service` (3114) | 23-oct | T-01 | `docs/contratos-segmentacion-disponibilidad` |
-| T-21 | catalog-service: alta, cambio y baja de categorías (con productos se desactiva, D-07); búsqueda por texto y filtros en productos, tiendas y zonas, paginada | 27-oct | — | `feature/catalog-service` |
+| T-21 | catalog-service: alta, cambio y baja de categorías (con productos se desactiva, D-07); búsqueda por texto y filtros en productos, tiendas y zonas, paginada | 27-oct | T-01 (hecha) | `feature/catalog-service` |
 | T-22 | pricing-service: variación de precio de una presentación entre dos fechas, por tienda y por zona, sin promediar presentaciones (D-06) | 28-oct | — | `feature/pricing-service` |
-| T-23 | documents-service: exportar CSV con los 16 indicadores (no disponibles con motivo, D-20); permiso y bitácora por descarga (D-46) | 29-oct | — | `feature/documents-service` |
+| T-23 | documents-service: exportar CSV con los 16 indicadores (no disponibles con motivo, D-20); permiso y bitácora por descarga (D-46) | 29-oct | T-01 (hecha) | `feature/documents-service` |
 | T-10 | `income-segmentation-service`: segmentos versionados con fuente, clasificación de zonas con su versión, D-10 y D-36 | 30-oct | T-02, T-05 | `feature/income-segmentation-service` |
 | T-11 | `availability-service`: existencias por tienda y presentación, cobertura de básicos, faltantes y datos vencidos a los 7 días (D-38) | 30-oct | T-02, T-05 | `feature/availability-service` |
 
@@ -80,16 +80,17 @@ Fechas = límite de la tarea en el tablero. "Depende de" = no empieces antes.
 |---|---|---|
 | T-24 | Prueba integral con los 20 arriba: importar un lote por ingestion → canastas → canasta típica y pronóstico → promoción → aprobar una recomendación y darle seguimiento → sincronizar capturas → todo visible en monitoreo y en la bitácora con el mismo id de correlación. Sprint review el 3-nov. | 3-nov |
 
-### Consecuencias de las decisiones que todavía no tienen tarea
+### Consecuencias de las decisiones en servicios existentes
 
-Las decisiones de la junta mueven responsabilidades entre servicios existentes. El
-tablero no tiene tarea para estos cambios; cada dueño los coordina con quien recibe:
+Las decisiones de la junta mueven responsabilidades entre servicios existentes. Solo una
+parte tiene tarea en el tablero (columna "Tarea"); lo demás lo coordina cada dueño con
+quien recibe:
 
-| Decisión | Qué cambia | Dueño actual → nuevo |
-|---|---|---|
-| D-33 | core-process deja de importar archivos (`/v1/transactions/import/*`) cuando ingestion funcione; web (`web/src/api/transacciones.ts`) y escritorio pasan a ingestion | Juan Angel |
-| D-35 | catalog entrega `segmentos_ingreso` y `zona_clasificaciones` a income-segmentation; web (`web/src/api/segmentos.ts`) y escritorio (`desktop/src/api/segmentsApi.ts`) cambian de servicio; decision-service lee segmentos por SQL hoy | Pamela → Pamela; avisar a Fernando |
-| D-38 | `inventario` pasa de catalog a availability; decision-service lee `inventario` por SQL en accesibilidad | Pamela → Pamela; avisar a Fernando |
+| Decisión | Qué cambia | Tarea | Quién coordina |
+|---|---|---|---|
+| D-33 | core-process deja de importar archivos (`/v1/transactions/import/*`) cuando ingestion funcione; la web (`web/src/api/transacciones.ts`) pasa a ingestion, y la pantalla `/ventas` del escritorio (todavía sin implementar) se hace contra ingestion | Ninguna | Juan Angel |
+| D-35 | catalog entrega `segmentos_ingreso` y `zona_clasificaciones` a income-segmentation; web (`web/src/api/segmentos.ts`) y escritorio (`desktop/src/api/segmentsApi.ts`) cambian de servicio; decision-service lee por SQL `segmentos_ingreso` (accesibilidad) y `zona_clasificaciones` (simulación) | Ninguna | Pamela; avisar a Fernando |
+| D-38 | `inventario` pasa de catalog a availability; decision-service lee `inventario` por SQL en accesibilidad | T-11 (criterio: "decision-service usa este servicio para el componente de disponibilidad") | Pamela con Fernando |
 
 ## Arquitectura: 20 microservicios + 3 clientes
 
@@ -142,7 +143,7 @@ parte de `web/`). Los archivos compartidos están abajo: avisa antes de tocarlos
 | Archivo | Por qué |
 |---|---|
 | `infra/docker-compose.yml` | Lo coordina Juan Angel (T-03). 20 servicios + postgres/mongo/redis; un cambio de puerto o variable rompe a todos |
-| `.github/workflows/ci.yml` | Matriz de servicios que compilan y corren unitarias en cada PR; los nuevos entran con T-03 |
+| `.github/workflows/ci.yml` | Matriz de servicios que compilan y corren unitarias en cada PR. Hoy lista los 9 NestJS existentes: un servicio nuevo no pasa por CI hasta que alguien lo agregue (ninguna tarea del tablero lo cubre todavía) |
 | Formato de error / logging / health / correlación | Vienen de la plantilla. **No inventes el propio** |
 | `docs/contratos/` | JSON + XSD por servicio, antes que el código y antes que los clientes |
 | `docs/matriz-perfiles-permisos.md` | Decisiones y permisos. Tu fila de §3.2 la completas tú; una decisión nueva entra en §4 con su ID |
@@ -264,7 +265,9 @@ bloquear, Dockerfile, en el compose y README.
   guiones
 - Se borran al hacer merge
 - Actualiza tu rama con `main` cada dos o tres días
-- Una rama = un frente = un PR. No mezcles dos frentes en la misma rama
+- Una rama = un frente = un PR. No mezcles dos frentes en la misma rama. En el Sprint 4,
+  una tarea del tablero es un frente: los contratos de T-04 a T-07 van juntos en su rama
+  aunque cubran 2 o 3 servicios
 
 ## Commits (Conventional Commits con alcance del servicio)
 
