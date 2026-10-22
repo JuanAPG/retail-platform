@@ -2,11 +2,14 @@ import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } fr
 import { randomUUID } from 'crypto';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import { CABECERA_CORRELACION } from '../correlation/correlacion';
 
 /**
  * Interceptor global de logging — NO CAMBIAR su formato.
  * Una línea JSON por operación a stdout:
- * `{ timestamp, level, service, requestId, method, path, statusCode, durationMs, userId? }`.
+ * `{ timestamp, level, service, requestId, correlationId, method, path, statusCode, durationMs, userId? }`.
+ * `correlationId` (T-02) es el de la operación completa entre servicios;
+ * lo pone `middlewareCorrelacion` antes de llegar aquí.
  * `requestId` viene del header `x-request-id` si el llamante lo manda
  * (así se rastrea móvil → servicio → servicio), o se genera aquí; se
  * devuelve en la respuesta para que el cliente pueda citarlo.
@@ -48,7 +51,7 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   private log(
-    request: { method: string; url: string; user?: { id?: string } },
+    request: { method: string; url: string; headers: Record<string, string | undefined>; user?: { id?: string } },
     requestId: string,
     started: number,
     statusCode: number,
@@ -59,6 +62,7 @@ export class LoggingInterceptor implements NestInterceptor {
         level: 'log',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         requestId,
+        correlationId: request.headers[CABECERA_CORRELACION] ?? null,
         method: request.method,
         path: request.url,
         statusCode,

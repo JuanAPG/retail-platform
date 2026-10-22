@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GET /v1/health de las plantillas (T-02): template-nest y template-fastapi.
+     Lo reutilizan los servicios nuevos del Sprint 4 en su contrato.
+
+     Sin autenticación y SIEMPRE 200 si el proceso responde. `status` es
+     `degraded` cuando algún check empieza con "error"; "no configurado"
+     significa que el servicio no usa esa dependencia y no degrada.
+     `latencyMs` (por check) y `durationMs` (total) los usa
+     monitoring-service para marcar degradado o caído (D-44). -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:simpleType name="estadoCheck">
+    <xs:annotation>
+      <xs:documentation>"ok", "no configurado" o "error: motivo".</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="ok|no configurado|error.*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="status">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="ok"/>
+              <xs:enumeration value="degraded"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="service" type="xs:string"/>
+        <xs:element name="version" type="xs:string"/>
+        <xs:element name="checks">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="postgres" type="estadoCheck"/>
+              <xs:element name="mongodb" type="estadoCheck"/>
+              <xs:element name="redis" type="estadoCheck"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="latencyMs">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="postgres" type="xs:nonNegativeInteger"/>
+              <xs:element name="mongodb" type="xs:nonNegativeInteger"/>
+              <xs:element name="redis" type="xs:nonNegativeInteger"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="durationMs" type="xs:nonNegativeInteger"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

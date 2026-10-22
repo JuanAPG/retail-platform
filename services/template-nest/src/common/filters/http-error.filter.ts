@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { CABECERA_CORRELACION } from '../correlation/correlacion';
 import {
   CONTENT_TYPE_XML,
   quiereXml,
@@ -99,6 +100,7 @@ export class HttpErrorFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
           service: process.env.SERVICE_NAME ?? 'unknown-service',
           requestId: request.headers['x-request-id'] ?? null,
+          correlationId: request.headers[CABECERA_CORRELACION] ?? null,
           method: request.method,
           path: request.url,
           statusCode: status,
