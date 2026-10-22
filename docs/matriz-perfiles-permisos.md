@@ -13,7 +13,8 @@
 > Lo marcado **PENDIENTE** no está decidido. Un agente **no lo asume ni lo
 > implementa**: lo reporta como *hallazgo de especificación* y sigue.
 >
-> Última actualización: 2026-10-10 · Responsable: Product Owner (Juan Angel).
+> Última actualización: 2026-10-21 (junta de Sprint 4: D-33 a D-47) · Responsable:
+> Product Owner (Juan Angel).
 
 ---
 
@@ -68,7 +69,7 @@ Leyenda corta: **T** Total · **LA** Lect./Act. · **L** Lectura · **LP** Lectu
 | Zonas | M03 | catalog-service | T | L | L | L | L | L | – |
 | Catálogo de productos | M04 | catalog-service | L | L | T | L | L | L | P |
 | Alta de productos por proveedor | M04 | catalog-service | L | – | A | – | – | L | P |
-| Segmentos de ingreso | M05 | catalog-service | L | T | L | L | L | L | – |
+| Segmentos de ingreso | M05 | catalog-service → `income-segmentation-service` (D-35) | L | T | L | L | L | L | – |
 | Transacciones | M06 | core-process-service | L | T | L | L | L | L | – |
 | Canastas | M07 | core-process-service | L | T | L | L | L | L | – |
 | Precios | M08 | pricing-service | L | L | L | **T + A** ⁽¹⁾ | L | L | P |
@@ -105,8 +106,27 @@ Notas:
 | Clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) | analytics-stats | Resuelto por **D-24** (fila en §3) |
 | Notificaciones (M17) | notifications-service | P-07 · se asume LA de lo propio para todos |
 | Configuración analítica: canasta básica (D-03), periodo de alerta (D-09), umbrales (D-13) | varios | P-07 |
-| Captura de campo: precio observado, disponibilidad, encuestas, ubicación (RF-33 a RF-38) | por definir | P-01, P-03 |
+| Captura de campo: precio observado, encuestas, ubicación (RF-33, RF-37, RF-38). La disponibilidad (RF-36) va en `availability-service` (D-38) | por definir | P-01, P-03 |
 | Portal público (sin sesión) | web | P-09 |
+
+### 3.2 Servicios nuevos del Sprint 4 (D-47)
+
+Cada responsable completa la fila de su servicio, con los 7 perfiles, al escribir su
+contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo demás es
+**PENDIENTE** y no se implementa hasta que la fila esté completa.
+
+| Servicio | Puerto | Responsable | Ya decidido | Pendiente |
+|---|---|---|---|---|
+| `transactions-ingestion-service` | 3111 | Juan Angel | Recibe la importación por archivo que antes hacía core-process (D-33, D-34). | Fila completa. |
+| `income-segmentation-service` | 3112 | Pamela | Recibe segmentos y clasificación de zonas de catalog (D-35); umbral de publicación (D-36). | Fila completa. |
+| `basket-analysis-service` | 3113 | Leonardo | Canasta típica (D-37); umbral de publicación (D-36). | Fila completa. |
+| `availability-service` | 3114 | Pamela | Recibe la disponibilidad (D-38). | Fila completa. |
+| `promotion-service` | 3115 | Fernando | **Gerente de categoría: Propone. Responsable de precios: Aprueba** (D-39). | Los otros 5 perfiles. |
+| `demand-forecast-service` | 3116 | Leonardo | Método y validación (D-40). | Fila completa. |
+| `recommendations-workflow-service` | 3117 | Fernando | **Gerente de categoría: asigna y evalúa. El responsable asignado mueve los estados** (D-41). | Qué roles pueden ser responsables asignados; los demás perfiles. |
+| `offline-sync-service` | 3118 | Fernando | Idempotencia y conflictos (D-42). | Fila completa; depende de P-01 (rol de la app móvil) y P-04 (roles del escritorio, que también sincroniza en XML). |
+| `data-governance-service` | 3119 | Leonardo | Retención, calidad y linaje (D-43). | Fila completa. |
+| `monitoring-service` | 3120 | Juan Angel | **Solo el Administrador** ve el panel (D-44). | — |
 
 ## 4. Decisiones de negocio vigentes
 
@@ -118,7 +138,7 @@ Notas:
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (`analisis_corrida_parametros`), sin columna nueva en `analisis_corridas`, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-27)
+### 4.2 Reglas de negocio (D-01 a D-47)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -149,6 +169,35 @@ Notas:
 | D-25 | Errores | MongoDB caído (o cualquier almacén que el servicio no pueda alcanzar) responde **503 `SERVICE_UNAVAILABLE`**, no 500. Aplica a documents, notifications y a las corridas de algorithms-core y analytics-stats (D3). | Con Mongo detenido, `GET /v1/notifications` → 503 con el error estándar en JSON y XML; `GET /v1/health` → 200 `degraded`. |
 | D-26 | Usuarios | Las respuestas de los servicios traen solo el **id** del usuario. El **nombre** lo resuelve el cliente consultando a `auth-service`; ningún servicio lo copia ni lo inventa. | Una bandeja o un reporte muestran `userId`; la web o el escritorio piden el nombre a auth. |
 | D-27 | Límites del Parcial 2 | Se aceptan y documentan como límites conocidos: (a) el clustering de zonas solo admite **k = 2** mientras el seed tenga 3 zonas; (b) el modo `baskets` de analytics-stats lee como máximo **500 páginas** de canastas por prueba; (c) `analisis_corridas` es de algorithms-core y `decision-service` también escribe en ella (corridas de accesibilidad, `tipo` propio): se corrige después del parcial. | Pedir k = 3 con 3 zonas → 400 con motivo claro; no se interpreta como error del servicio. |
+
+**D-28 a D-32 no están registradas en este archivo** (P-12). D-28 existe solo en la
+rama sin fusionar `fix/matriz-tiendas-zonas` ("el Gerente escribe tiendas y el
+Analista zonas; el Administrador solo lee") y contradice lo que `main` aplicó en el PR
+#72 (el Administrador escribe tiendas y zonas, Matriz §3): rige §3. D-30 (la
+disponibilidad en catalog-service) la sustituye D-38. D-29, D-31 y D-32: sin texto.
+
+#### Sprint 4 (de 10 a 20 microservicios): junta del 21-oct-2026
+
+Se aceptaron las 15 propuestas del tablero del sprint (Q-01 a Q-15) tal como estaban
+escritas. Cada decisión dice de qué duda viene.
+
+| ID | Área | Decisión vigente | Cómo se verifica |
+|---|---|---|---|
+| D-33 | Importación de ventas (Q-01) | La importación por archivo **sale de core-process** y pasa completa a `transactions-ingestion-service`: lotes, vista previa, deduplicación, conciliación y errores (tablas `importaciones*`). core-process conserva el registro manual, las transacciones confirmadas y las canastas. Al confirmar un lote, ingestion envía las transacciones válidas a core-process **por HTTP**. | Un lote confirmado en ingestion aparece como canastas en core-process; core-process ya no expone `import/*`. |
+| D-34 | Duplicados (Q-02) | Dos transacciones son la misma si tienen **misma tienda + mismo folio**. Si además cambia el contenido, la fila se marca como **conflicto** para revisión, no se sobrescribe. Reimportar un lote ya confirmado no crea nada. | Reimportar el mismo lote → 0 transacciones nuevas; misma tienda y folio con otro total → fila en conflicto. |
+| D-35 | Segmentos de ingreso (Q-03) | Los segmentos y la clasificación de zonas **salen de catalog-service** y pasan a `income-segmentation-service`. Cada cambio crea una **versión nueva** con fuente y fecha; la anterior se conserva y cada clasificación guarda con qué versión se hizo. Rangos encimados se siguen rechazando (D-10). | Editar un segmento crea la versión 2 y la 1 sigue consultable; rango encimado → 400. |
+| D-36 | Anonimización (Q-04) | No se publica ningún agregado con **menos de 10 transacciones (o 3 tiendas)** en la combinación zona-segmento: sale como no disponible, con motivo. Nunca se guarda ni se infiere el ingreso de una persona. Cómo se combinan los dos umbrales: P-11. | Una combinación con 9 transacciones y menos de 3 tiendas → `disponible:false` con motivo, nunca un número. |
+| D-37 | Canasta típica (Q-05) | Canasta típica de un grupo (zona + segmento) = los productos presentes en **al menos el 20 %** de sus canastas, con su frecuencia y gasto promedio. core-process conserva sus 5 indicadores; `basket-analysis-service` agrega comparación entre periodos, evolución y mezcla por categoría. | Producto en 20 % de las canastas → entra; en 19 % → no entra. |
+| D-38 | Disponibilidad (Q-06) | La disponibilidad **pasa a `availability-service`** (tabla `inventario` y capturas); **sustituye a D-30**. Faltante = existencia 0 de un producto de la canasta básica (D-03). Un dato vale **7 días**; después sale como vencido. Cobertura = % de básicos con existencia en la tienda. | Dato de hace 8 días → vencido, no disponible; cobertura con caso de control en las pruebas. |
+| D-39 | Promociones (Q-07) | Tipos: **descuento %**, **precio por paquete** (n por $) y **tamaño de empaque**. Las **propone el Gerente de categoría** y las **aprueba el Responsable de precios**. No tocan el histórico de precios ni la elasticidad; el precio unitario se calcula aparte para comparar alternativas. | Aprobar una promoción no anexa nada a `precios`; el Gerente de categoría intenta aprobar una promoción → 403. |
+| D-40 | Pronóstico de demanda (Q-08) | **Holt-Winters** (suavizamiento exponencial con estacionalidad) por **semana** (D-21), horizonte de **8 semanas**, intervalos de **80 % y 95 %**. Se valida dejando fuera las **últimas 4 semanas** y se reporta el **MAPE**. Con **menos de 12 semanas** de historia → **422** con motivo. | 11 semanas → 422; misma entrada → mismo resultado. |
+| D-41 | Seguimiento de recomendaciones (Q-09) | decision-service genera y el Gerente aprueba o rechaza (D-12). Una aprobada pasa al seguimiento en `recommendations-workflow-service`: **Asignada** (el Gerente asigna responsable) → **En implementación** → **Implementada** → **Evaluada** (con métrica de impacto: ventas o precio unitario antes y después). El responsable asignado mueve los estados; el Gerente evalúa. | Una recomendación no aprobada no entra; un salto de estado fuera de orden → 409. |
+| D-42 | Sincronización sin conexión (Q-10) | Cada captura trae un **id único generado en el dispositivo** (idempotencia: reenviarla no la duplica). Si el servidor ya tiene un dato **más reciente** para la misma tienda y presentación, la captura queda como **conflicto** y no sobrescribe. Se acusa al dispositivo con su estado: aceptada, duplicada, conflicto o rechazada. | Enviar el mismo lote dos veces → todas `duplicada` la segunda vez. |
+| D-43 | Gobierno de datos (Q-11) | Retención: transacciones **3 años**, capturas de campo **1 año**, notificaciones **90 días** (ya existe), bitácora **sin borrado**. Calidad: completitud, duplicados, valores fuera de rango y frescura, por fuente. Cada importación, versión de segmento y corrida registra su **linaje** (de qué fuente y versión salió). | Un lote importado aparece con fuente, versión, quién y cuándo. |
+| D-44 | Monitoreo (Q-12) | El panel lo ve **solo el Administrador**. **Degradado**: responde pero alguna dependencia falla o tarda más de 1 s. **Caído**: no responde en 3 s o da error 2 veces seguidas. Se revisa **cada 30 s**. | Detener un servicio lo marca caído en menos de 1 min; otro rol → 403. |
+| D-45 | Recuperación de acceso (Q-13) | Token de **un solo uso en Redis**, vigencia **15 min**. En local se entrega por notifications-service y queda en el log de desarrollo; el correo real se conecta en GCP. La respuesta es **la misma exista o no el correo**. | Reusar el token → rechazado; correo inexistente → misma respuesta que uno existente. |
+| D-46 | Preferencias y descargas (Q-14) | Se pueden **apagar los avisos informativos**; los de **aprobación pendiente no**. El CSV del reporte trae los **16 indicadores** (los no disponibles con motivo, D-20). Cada descarga queda en la bitácora con quién, cuándo y qué formato. | Apagar un aviso de aprobación pendiente → sigue llegando; cada descarga deja un evento en audit-service. |
+| D-47 | Permisos y datos de los servicios nuevos (Q-15) | Cada servicio nuevo tiene **fila en §3.2** antes del 23-oct. **Postgres** para datos de negocio; **MongoDB** para corridas de pronóstico, historial de monitoreo y lotes de sincronización; **Redis** para idempotencia, caché y último estado. Cada uso nuevo de Mongo o Redis se registra como decisión. | Ningún servicio usa Mongo o Redis de una forma nueva sin una decisión registrada. |
 
 ## 5. Flujos con estado
 
@@ -187,7 +236,7 @@ Sin definir (no implementar hasta decidir):
 
 - P-01 rol que usa la app móvil.
 - P-02 si un precio aprobado desde una tienda vale para **toda la zona** o se registra **por tienda**.
-- P-03 qué servicio guarda disponibilidad y encuestas.
+- P-03 qué servicio guarda las encuestas (la disponibilidad quedó en D-38).
 - P-08 qué pasa al escanear un código que no existe (¿propuesta de producto con `origen: campo`?).
 
 ## 6. Pendientes de especificación
@@ -196,7 +245,7 @@ Sin definir (no implementar hasta decidir):
 |---|---|---|
 | P-01 | ¿Se crea el rol `Investigador de mercado`? ¿Qué permisos tiene? | app móvil, auth, Matriz |
 | P-02 | Precio de campo aprobado: ¿precio de la zona o precio por tienda? | pricing, elasticidad, D-09 |
-| P-03 | ¿Qué servicio guarda disponibilidad (RF-36) y encuestas (RF-38)? | catalog/decision, Mongo |
+| P-03 | ¿Qué servicio guarda las encuestas (RF-38)? (La disponibilidad, RF-36, quedó en availability-service por D-38.) | encuestas, Mongo |
 | P-04 | ¿Qué roles usan la app de escritorio? ¿El Analista puede simular (RF-47) y calcular elasticidad (RF-45)? | desktop, Matriz |
 | P-05 | Periodo por defecto de la alerta de precio (D-09) mientras el Responsable no lo configure. | pricing, notifications |
 | P-06 | ¿Qué es un reporte "propio" del Proveedor? | documents (DOC-04) |
@@ -204,10 +253,12 @@ Sin definir (no implementar hasta decidir):
 | P-08 | Código de barras no encontrado en campo: ¿qué flujo sigue? | catalog, móvil |
 | P-09 | ¿Qué muestra el portal público sin sesión? | web |
 | P-10 | Confirmar Auditoría como solo Lectura (bitácora inmutable). | audit |
+| P-11 | D-36: "menos de 10 transacciones (o 3 tiendas)". ¿Se publica solo con **≥ 10 transacciones y ≥ 3 tiendas**, o basta con cumplir una? Con el seed actual (3 zonas) exigir 3 tiendas por zona-segmento puede ocultar casi todo. | income-segmentation, basket-analysis |
+| P-12 | Texto de D-28 a D-32. D-28 vive solo en una rama sin fusionar y contradice a `main`; D-29, D-31 y D-32 no aparecen en ningún lado. ¿Se descartan o se registran? | Matriz |
 
 ## 7. Cómo mantener este archivo
 
 - Toda decisión nueva entra en §4 con su ID y una línea "cómo se verifica".
 - Al resolver un pendiente se mueve de §6 a §4; no se borra el ID.
-- Si cambia un rol o permiso, se actualizan también `roles.ts` (los 10 servicios),
+- Si cambia un rol o permiso, se actualizan también `roles.ts` (todos los servicios),
   `db/data_retail.sql` y se avisa al equipo para el `.docx`.

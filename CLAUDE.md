@@ -3,8 +3,14 @@
 Materia: Integración de Aplicaciones Computacionales. Equipo de 4, metodología SCRUM.
 Repo: `JuanAPG/retail-platform` (GitHub, público).
 
-Sprint 2+3 unificado: 30 de septiembre al 13 de octubre de 2026 (14 días corridos,
-**sin colchón**). Entrega: Parcial 2.
+**Sprint actual: Sprint 4, del 20-oct al 3-nov de 2026: de 10 a 20 microservicios.**
+Antes de trabajar, lee `CONTRIBUTING.md` → "Para el agente de cada integrante" y "Qué le
+toca a cada quien": ahí están las tareas (T-xx), límites y ramas de cada persona. Las
+decisiones del sprint son D-33 a D-47 (`docs/matriz-perfiles-permisos.md` §4.2). Las
+tablas de abajo describen los 10 servicios existentes; los 10 nuevos (3111–3120) están
+en CONTRIBUTING.
+
+Sprint 2+3 (30-sep al 13-oct) se entregó como Parcial 2.
 
 ## Antes de tocar código: documentos de negocio
 
@@ -57,9 +63,9 @@ SIMULACIÓN → RECOMENDACIONES
 | # | Microservicio | Responsabilidad | Origen | Responsable |
 |---|---|---|---|---|
 | 1 | `auth-service` | Login, JWT, renovación, revocación vía Redis; CRUD de usuarios y roles; alta de proveedores | M01 | Juan Angel |
-| 2 | `catalog-service` | Tiendas, Zonas, Productos y Presentaciones, Segmentos; propuestas de producto del Proveedor | M02–M05 | Pamela |
+| 2 | `catalog-service` | Tiendas, Zonas, Productos y Presentaciones, Segmentos (pasan a `income-segmentation-service`, D-35); propuestas de producto del Proveedor | M02–M05 | Pamela |
 | 3 | `pricing-service` | Precios, histórico, comparación entre zonas; propuestas de precio | M08 | Pamela |
-| 4 | `core-process-service` | Transacciones (manual + CSV), canastas, analítica descriptiva | M06 + M07 + M09 | Juan Angel |
+| 4 | `core-process-service` | Transacciones (manual; la importación CSV pasa a `transactions-ingestion-service`, D-33), canastas, analítica descriptiva | M06 + M07 + M09 | Juan Angel |
 | 5 | `algorithms-core` | Apriori, **FP-Growth** (D2), elasticidad, sustitución (TS, sin reescribir) | M10 + M11 | Leonardo |
 | 6 | `analytics-stats` | Clustering, hipótesis, ANOVA, proporciones (Python/FastAPI) | Nuevo (RF-16, 20–22) | Leonardo |
 | 7 | `decision-service` | Accesibilidad, simulación, escenarios, recomendaciones | M12 + M13 + M14 | Fernando |
@@ -83,7 +89,7 @@ Reglas vigentes:
 - Cada servicio escribe **solo sus tablas** en el Postgres compartido.
 - Los servicios se consultan por HTTP, no leyendo tablas ajenas.
 
-## Estándar transversal (obligatorio en los 10)
+## Estándar transversal (obligatorio en todos los servicios)
 
 - Rutas bajo `/v1/` y `GET /v1/health`.
 - JWT validado **y** sesión activa en Redis en cada petición. Ningún servicio confía
@@ -107,6 +113,10 @@ Reglas vigentes:
     clustering (D3), con foto de los datos para reproducir (D-15).
 - **Redis 7:** sesiones activas, tokens revocados, caché de catálogos, contadores y
   límites de login. **Todos** los servicios lo consultan al autorizar.
+
+Usos nuevos del Sprint 4: **D-47** (Mongo: corridas de pronóstico, historial de
+monitoreo, lotes de sincronización; Redis: idempotencia, caché, último estado) y
+**D-45** (token de recuperación de contraseña en Redis).
 
 No uses Mongo ni Redis para otra cosa sin acordarlo y registrarlo como decisión.
 
@@ -168,7 +178,7 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
 
 - Cada quien hace commits con **su propia** cuenta de Git. Commits con otra identidad
   no cuentan como participación (observación del profesor en el Parcial 1).
-- Ramas por microservicio: `feature/<servicio>` (orden y dependencias en
+- Ramas: `feature/<servicio>`, `fix/<tema>` o `docs/<tema>`; una tarea del tablero = una rama (orden y dependencias en
   `CONTRIBUTING.md`).
 - PR con al menos 1 aprobación antes de mergear a `main`; la rama se borra al mergear.
 - Conventional Commits con alcance: `feat(catalog-service): …`.
@@ -176,7 +186,7 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
   microservicio → Redis/Mongo/Postgres → web → escritorio (XML) → Swagger.
 - Si falta tiempo, se recorta en este orden: exportación a Excel (D-19), push real en
   móvil, locks en Redis, cobertura fuera de auth/core/algorithms. **No se recorta:**
-  JSON + XML en los 10, ≥ 4 microservicios por app cliente, Redis en la autorización
+  JSON + XML en todos los servicios, ≥ 4 microservicios por app cliente, Redis en la autorización
   de todos, demo de punta a punta.
 
 ## Al trabajar en este repo
@@ -196,7 +206,8 @@ de Planeación original (sección 5 pendiente de actualizar). Scrum Master rotat
 |---|---|
 | Parcial 1 | 4-sep (entregado, observaciones corregidas en el monolito) |
 | Sprint 2+3 | 30-sep – 13-oct |
-| Parcial 2 | 13-oct |
+| Parcial 2 | 13-oct (entregado) |
+| Sprint 4: 20 microservicios | 20-oct – 3-nov |
 | Parcial 3 (GCP, Locust, dataset grande) | 27-nov |
 | Entrega final | 1-dic |
 
