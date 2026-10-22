@@ -274,7 +274,7 @@ POST). Es lo necesario para reproducirla y explicarla.
 ```
 
 XML: elemento `runResponse`. `:id` no UUID → `400`. Corrida inexistente **o de
-otro tipo** (p. ej. de elasticidad) → `404`.
+otro tipo** (p. ej. un id de una corrida de elasticidad, que vive en Postgres) → `404`.
 
 ### Códigos de error de esta sección
 

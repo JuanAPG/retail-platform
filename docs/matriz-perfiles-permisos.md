@@ -115,7 +115,7 @@ Notas:
 | ID | Decisión |
 |---|---|
 | D1 | Solo el **Responsable de precios** aprueba o rechaza propuestas de precio. |
-| D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (`analisis_corrida_parametros`), sin columna nueva en `analisis_corridas`, y viaja en `parameters` de `/runs` y `/runs/:id`. |
+| D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (en `parameters` del documento de Mongo, D3), sin campo nuevo, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
 ### 4.2 Reglas de negocio (D-01 a D-27)

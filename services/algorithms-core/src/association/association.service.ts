@@ -43,6 +43,12 @@ export type Algoritmo = keyof typeof ALGORITMOS;
 
 const DEFAULT_MAX_ITEMSET_SIZE = 3;
 
+/**
+ * Orden de los filtros en la respuesta: el de declaración del enum
+ * `dimension_analisis`, que es como los ordenaba Postgres antes de D3.
+ */
+const ORDEN_DIMENSION: DimensionFiltro[] = ['tienda', 'zona', 'segmento', 'categoria', 'producto'];
+
 /** Un producto presente en una canasta, con lo necesario para Apriori y RN-10. */
 interface BasketLine {
   basketId: string;
@@ -244,7 +250,7 @@ export class AssociationService {
       ...corrida,
       assumptions: run.assumptions.map((assumption, n) => ({ runId: run._id, order: n + 1, assumption })),
       filters: [...run.filters]
-        .sort((a, b) => a.dimension.localeCompare(b.dimension))
+        .sort((a, b) => ORDEN_DIMENSION.indexOf(a.dimension) - ORDEN_DIMENSION.indexOf(b.dimension))
         .map((f) => ({ runId: run._id, dimension: f.dimension, referenceId: f.referenceId })),
       results: await this.reglasConProductos(run._id, run.results),
     };

@@ -100,7 +100,7 @@
 --     canasta, gasto por categoría…) NO son columnas: son filas de
 --     `indicador_valores`, referidas a un catálogo `indicadores`. Así se
 --     agrega un indicador nuevo sin ALTER TABLE.
---  7. Toda salida analítica cuelga de `analisis_corridas`, que conserva
+--  7. Toda salida analítica en Postgres cuelga de `analisis_corridas`, que conserva
 --     datos usados, periodo, fecha, usuario, parámetros y supuestos.
 --  8. Las corridas de asociación (Apriori, FP-Growth) y sus reglas ya no
 --     están aquí: viven en MongoDB, colección `analysis_runs` (D3). El
@@ -127,8 +127,8 @@
 -- que una de las dos llaves foráneas se cierra después de crear ambas
 -- tablas. Está señalado en su lugar.
 --
--- Decisión de alcance vigente: TODO el modelo analítico vive en
--- PostgreSQL. MongoDB y Redis quedan fuera hasta el Parcial 2.
+-- Decisión de alcance vigente: el modelo analítico vive en PostgreSQL,
+-- salvo las corridas de Apriori, FP-Growth y clustering (MongoDB, D3).
 -- =====================================================================
 
 BEGIN;
@@ -335,7 +335,7 @@ CREATE INDEX idx_usuarios_rol ON usuarios(rol_id);
 
 -- =====================================================================
 -- 4. TRAZABILIDAD ANALÍTICA
---    Toda salida calculada (indicadores, Apriori, elasticidad,
+--    Toda salida calculada en Postgres (indicadores, elasticidad,
 --    accesibilidad, simulación) cuelga de una corrida. Es lo que
 --    permite responder "¿con qué datos, en qué periodo, quién y bajo
 --    qué supuestos se obtuvo esto?" sin adivinar.
@@ -371,12 +371,12 @@ CREATE TABLE analisis_corridas (
         (estado = 'fallida' AND mensaje_error IS NOT NULL) OR estado <> 'fallida'
     )
 );
-COMMENT ON TABLE analisis_corridas IS 'Corrida de análisis: quién, cuándo, sobre qué periodo y con qué resultado. RF-15 exige poder reproducir una corrida de Apriori completa.';
+COMMENT ON TABLE analisis_corridas IS 'Corrida de análisis: quién, cuándo, sobre qué periodo y con qué resultado. Las corridas de Apriori y FP-Growth viven en MongoDB (D3).';
 
 CREATE INDEX idx_corridas_tipo_fecha ON analisis_corridas(tipo, ejecutada_en DESC);
 
 -- Parámetros como filas, no como JSON: se pueden consultar, comparar
--- entre corridas y validar. Ej. ('soporte_minimo','0.05').
+-- entre corridas y validar. Ej. ('granularidad','week').
 CREATE TABLE analisis_corrida_parametros (
     corrida_id      UUID NOT NULL REFERENCES analisis_corridas(id) ON DELETE CASCADE,
     clave           VARCHAR(60) NOT NULL,

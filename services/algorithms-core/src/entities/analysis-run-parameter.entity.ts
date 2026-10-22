@@ -4,7 +4,7 @@ import { AnalysisRun } from './analysis-run.entity';
 /**
  * Parámetro de entrada de una corrida (`analisis_corrida_parametros`),
  * como fila clave/valor y no como JSON: así se pueden consultar y
- * comparar entre corridas. Ej. ('soporte_minimo', '0.05').
+ * comparar entre corridas. Ej. ('granularidad', 'week').
  */
 @Entity({ name: 'analisis_corrida_parametros' })
 export class AnalysisRunParameter {

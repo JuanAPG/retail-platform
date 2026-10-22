@@ -22,7 +22,7 @@ naturaleza: cerrar dependencias funcionales, no partir listas.
 
 ## 2. Alcance y método
 
-Se analizaron las **53 relaciones** de `db/schema.sql`. Para cada una:
+Se analizaron las **53 relaciones** de `db/schema.sql` del Parcial 1 (hoy son 51: `reglas_asociacion` y `regla_asociacion_items` pasaron a MongoDB por D3). Para cada una:
 
 1. Se determinaron sus **llaves candidatas** (no solo la llave primaria sustituta).
 2. Se enumeraron las **dependencias funcionales** (DF) del dominio, incluidas las que
@@ -575,6 +575,6 @@ entorno.
 | RN-05 · tamaño de compra | `tamanos_compra` (antes: un `CASE` en el script de carga) |
 | RN-06 · variación de precios por zona | `precios`, `limites_precio_zona`, `v_variacion_precios` |
 | RN-10 · asociaciones espurias | `reglas_exclusion_asociacion` |
-| RF-15 · corrida de Apriori reproducible | `analisis_corridas` + `_parametros` + `_supuestos` + `_filtros` |
+| RF-15 · corrida de Apriori reproducible | Documento de MongoDB `analysis_runs` (D3), con parámetros, supuestos, filtros, reglas y foto de los datos (D-15) |
 | RF-35 · presentaciones como tabla | `producto_presentaciones` (v3) |
 | M12 · accesibilidad como índice compuesto | `accesibilidad_zona`, `accesibilidad_componentes`, `accesibilidad_pesos`, `v_accesibilidad_desglose` |

@@ -210,8 +210,8 @@ describe('AssociationService — corridas en MongoDB (D3)', () => {
       ],
       assumptions: ['Primero.', 'Segundo.'],
       filters: [
-        { dimension: 'zona', referenceId: 'z-1' },
         { dimension: 'segmento', referenceId: '2' },
+        { dimension: 'zona', referenceId: 'z-1' },
       ],
       results: [
         {
@@ -245,8 +245,9 @@ describe('AssociationService — corridas en MongoDB (D3)', () => {
         { runId: 'run-9', order: 2, assumption: 'Segundo.' },
       ],
       filters: [
-        { runId: 'run-9', dimension: 'segmento', referenceId: '2' },
+        // Orden del enum dimension_analisis (tienda, zona, segmento…), como en Postgres.
         { runId: 'run-9', dimension: 'zona', referenceId: 'z-1' },
+        { runId: 'run-9', dimension: 'segmento', referenceId: '2' },
       ],
     });
     expect(corrida.results?.[0]).toMatchObject({

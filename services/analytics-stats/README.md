@@ -88,6 +88,8 @@ Las corre el CI (`.github/workflows/ci.yml`). Lo que cubren:
 - **Corridas de clustering en MongoDB** (D3), colección `analysis_runs`: la corrida
   completa con su entrada (la foto de D-15), solo el `userId` (D-26) e índice
   `{userId: 1, date: -1}`. Mongo caído → 503 en ~2 s (D-25). No escribe en PostgreSQL.
+  La colección la comparte con algorithms-core (`type: "asociacion"`); aquí solo se toca
+  `type: "clustering"`.
 - **Límites del Parcial 2 (D-27):** con las 3 zonas sembradas, el clustering solo
   admite `k = 2`; el modo `baskets` lee como máximo 500 páginas por prueba (más → 400,
   no se corta).

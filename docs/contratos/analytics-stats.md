@@ -387,7 +387,9 @@ Por **HTTP**, reenviando el `Authorization` del usuario; si no responden en 3 s 
 | catalog-service | `GET /v1/segments/:id`, `GET /v1/zones/:id` | Nombre (`label`) de cada grupo |
 
 Datos propios: colección **`analysis_runs`** de MongoDB (D3), documentos con
-`type: "clustering"`, índice `{ userId: 1, date: -1 }`. No escribe en PostgreSQL.
+`type: "clustering"`, índice `{ userId: 1, date: -1 }`. No escribe en PostgreSQL. La
+colección la comparte con algorithms-core (corridas de Apriori y FP-Growth, `type:
+"asociacion"`); cada servicio solo lee y escribe su `type`.
 
 ---
 
