@@ -1,0 +1,5 @@
+# Pruebas: pip install -r requirements-dev.txt && python -m pytest
+-r requirements.txt
+pytest==8.3.4
+# TestClient de FastAPI
+httpx==0.28.1

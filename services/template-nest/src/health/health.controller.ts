@@ -1,22 +1,26 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { getRedis } from '../common/auth/redis.client';
+import { armarSalud, Salud, sinConfigurar, verificarRedis } from './checks';
 
 /**
  * Salud del servicio — NO CAMBIAR su forma ni su ruta.
  * `GET /v1/health`, sin autenticación y SIEMPRE 200 si el proceso
- * responde: así lo pueden consultar el `healthcheck` de Docker y quien
- * revise la demo, incluso con una dependencia caída.
+ * responde: así lo pueden consultar el `healthcheck` de Docker,
+ * monitoring-service (T-09) y quien revise la demo, incluso con una
+ * dependencia caída. Esquema XML: `docs/contratos/health.xsd`.
  *
- * `status` es `ok` cuando todas las dependencias responden y `degraded`
- * cuando alguna falla; el detalle va en `checks`. Un servicio que agregue
- * dependencias (Postgres, Mongo) añade su propio check aquí.
+ * Siempre reporta `postgres`, `mongodb` y `redis`. Un servicio que use
+ * Postgres o Mongo cambia `sinConfigurar` por su check, p. ej.:
+ *
+ *   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+ *   ...
+ *   postgres: () => verificarPostgres(this.dataSource),
  */
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
   @Get()
-  @ApiOperation({ summary: 'Salud del servicio y de sus dependencias.' })
+  @ApiOperation({ summary: 'Salud del servicio y de sus dependencias, con lo que tardó cada una.' })
   @ApiOkResponse({
     description: 'El servicio responde (200 incluso si una dependencia está caída).',
     schema: {
@@ -24,29 +28,18 @@ export class HealthController {
         status: 'ok',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         version: '1.0.0',
-        checks: { redis: 'ok' },
-        timestamp: '2026-10-03T12:00:00.000Z',
+        checks: { postgres: 'no configurado', mongodb: 'no configurado', redis: 'ok' },
+        latencyMs: { postgres: 0, mongodb: 0, redis: 2 },
+        durationMs: 3,
+        timestamp: '2026-10-22T12:00:00.000Z',
       },
     },
   })
-  async check() {
-    const checks = { redis: await verificarRedis() };
-    return {
-      status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',
-      service: process.env.SERVICE_NAME ?? 'unknown-service',
-      version: process.env.SERVICE_VERSION ?? '1.0.0',
-      checks,
-      timestamp: new Date().toISOString(),
-    };
-  }
-}
-
-/** `ok` o el motivo del fallo. Nunca lanza: el health no debe caerse. */
-export async function verificarRedis(): Promise<string> {
-  try {
-    await getRedis().ping();
-    return 'ok';
-  } catch (error) {
-    return error instanceof Error ? `error: ${error.message}` : 'error';
+  check(): Promise<Salud> {
+    return armarSalud({
+      postgres: sinConfigurar,
+      mongodb: sinConfigurar,
+      redis: verificarRedis,
+    });
   }
 }

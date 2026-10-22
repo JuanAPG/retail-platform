@@ -74,26 +74,73 @@ def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
     return None, ()
 
 
-@app.get("/v1/health", summary="Salud del servicio y de sus dependencias.")
+@app.get("/v1/health", summary="Salud del servicio y de sus dependencias, con lo que tardó cada una.")
 def salud():
     """Sin autenticación y SIEMPRE 200 si el proceso responde.
 
-    `status` es `degraded` cuando una dependencia falla; el detalle va en
-    `checks`. Asi el healthcheck de Docker distingue "proceso muerto" de
-    "base caida".
+    Misma forma que la plantilla Nest (`docs/contratos/health.xsd`): siempre
+    `postgres`, `mongodb` y `redis`; `latencyMs` por check y `durationMs`
+    total (los usa monitoring-service, D-44). `status` es `degraded` cuando
+    una dependencia falla. Asi el healthcheck de Docker distingue "proceso
+    muerto" de "base caida".
     """
-    checks = {"redis": _verificar_redis(), "postgres": _verificar_postgres()}
+    return armar_salud({
+        "postgres": _verificar_postgres,
+        "mongodb": _verificar_mongo,
+        "redis": _verificar_redis,
+    })
+
+
+def armar_salud(checks: dict) -> dict:
+    """Corre los checks en paralelo (cada uno con su propio tope de 2 s)."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    def medir(check):
+        desde = time.monotonic()
+        try:
+            estado = check()
+        except Exception as error:  # noqa: BLE001 - el health reporta, no falla
+            estado = f"error: {error}"
+        return estado, int((time.monotonic() - desde) * 1000)
+
+    inicio = time.monotonic()
+    with ThreadPoolExecutor(max_workers=len(checks) or 1) as hilos:
+        resultados = dict(zip(checks, hilos.map(medir, checks.values())))
+    estados = {nombre: estado for nombre, (estado, _) in resultados.items()}
     # "no configurado" no es una falla: significa que el servicio todavia no
     # usa esa dependencia. Solo un "error:" degrada el estado.
-    degradado = any(v.startswith("error") for v in checks.values())
+    degradado = any(v.startswith("error") for v in estados.values())
     return {
         "status": "degraded" if degradado else "ok",
         "service": os.getenv("SERVICE_NAME", "unknown-service"),
         "version": os.getenv("SERVICE_VERSION", "1.0.0"),
-        "checks": checks,
+        "checks": estados,
+        "latencyMs": {nombre: ms for nombre, (_, ms) in resultados.items()},
+        "durationMs": int((time.monotonic() - inicio) * 1000),
         "timestamp": __import__("datetime").datetime.now(
             __import__("datetime").timezone.utc).isoformat(),
     }
+
+
+def _verificar_mongo() -> str:
+    """`no configurado` si el servicio no usa Mongo (sin pymongo o sin MONGO_URL)."""
+    url = os.getenv("MONGO_URL")
+    try:
+        from pymongo import MongoClient  # type: ignore
+    except ImportError:
+        return "no configurado"
+    if not url:
+        return "no configurado"
+    try:
+        cliente = MongoClient(url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
+        try:
+            cliente.admin.command("ping")
+        finally:
+            cliente.close()
+        return "ok"
+    except Exception as error:  # noqa: BLE001
+        return f"error: {error}"
 
 
 def _verificar_redis() -> str:
@@ -167,8 +214,12 @@ async def negociar_xml(request: Request, call_next):
     else:
         raiz, siempre = _raiz_de(request.url.path)
 
+    # La respuesta XML es nueva: sin copiar estas cabeceras se perdían los ids
+    # que pone LoggingMiddleware (el cliente de escritorio no podría citarlos).
+    ids = {k: v for k, v in respuesta.headers.items() if k.lower() in ("x-request-id", "x-correlation-id")}
     return Response(
         content=serializar_xml(datos, raiz, siempre),
         media_type=CONTENT_TYPE_XML,
         status_code=respuesta.status_code,
+        headers=ids,
     )
