@@ -16,6 +16,10 @@ class ROL:
     PLANEADOR = "Planeador"
     AUDITOR = "Auditor"
     PROVEEDOR = "Proveedor"
+    #: D-28: usuario de la app móvil. NO va en PERFILES_INTERNOS: esa lista abre
+    #: lecturas (recomendaciones, escenarios, bitácora) que D-28 no le da. Se
+    #: nombra explícitamente en cada ruta que sí lo acepta.
+    INVESTIGADOR = "Investigador de mercado"
 
 
 #: Los seis perfiles internos. El Proveedor es externo y va aparte.
