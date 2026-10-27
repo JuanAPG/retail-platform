@@ -21,7 +21,10 @@ INSERT INTO roles (nombre, descripcion) VALUES
     ('Responsable de precios','Gestiona precios del catálogo y calcula la elasticidad precio-demanda.'),
     ('Planeador',             'Diseña y ejecuta simulaciones de formatos, empaques y descuentos.'),
     ('Auditor',               'Consulta bitácoras de auditoría y valida el cumplimiento de reglas.'),
-    ('Proveedor',             'Usuario externo que propone sus propios productos al catálogo.')
+    ('Proveedor',             'Usuario externo que propone sus propios productos al catálogo.'),
+    -- D-28: usuario de la app móvil (RF-32). Lee catálogo, tiendas y zonas,
+    -- y levanta precios observados que pasan a aprobación (D-16/D-29).
+    ('Investigador de mercado','Levanta precios observados, disponibilidad y encuestas en campo desde la app móvil.')
 ON CONFLICT (nombre) DO NOTHING;
 
 -- --------------------------------------------------------------- 2. MÓDULOS
@@ -43,6 +46,39 @@ INSERT INTO modulos (clave, nombre, descripcion) VALUES
     ('M15','Auditoría',              'Bitácora inmutable de operaciones.')
 ON CONFLICT (clave) DO NOTHING;
 
+-- ------------------------------------------- 2.1 PERMISOS POR ROL Y MÓDULO
+-- Solo la columna `Investigador de mercado` de la Matriz §3 (D-28). Las otras
+-- siete columnas siguen SIN SEMBRAR: esta tabla es declarativa y ningún guard
+-- la lee todavía, así que `GET /v1/permissions` reportará al investigador y
+-- `sin_acceso` para los demás hasta que se siembre la Matriz completa.
+--
+-- La tabla guarda UN nivel por (rol, módulo), pero §3 parte dos módulos en dos
+-- filas. Donde hay dos niveles se deja el más alto y se anota cuál se perdió:
+--   M04: L (catálogo de productos) + P (alta origen campo, D-32) -> propone
+--   M08: P (precio observado, D-16/D-29) + – (comparación de precios) -> propone
+INSERT INTO rol_modulo_permiso (rol_id, modulo_id, nivel)
+SELECT r.id, m.id, v.nivel::nivel_permiso
+FROM (VALUES
+    ('M01','sin_acceso'),   -- Usuarios y perfiles: –
+    ('M02','lectura'),      -- Tiendas: L
+    ('M03','lectura'),      -- Zonas: L
+    ('M04','propone'),      -- Productos: L + P (ver nota de arriba)
+    ('M05','sin_acceso'),   -- Segmentos de ingreso: –
+    ('M06','sin_acceso'),   -- Transacciones: –
+    ('M07','sin_acceso'),   -- Canastas: –
+    ('M08','propone'),      -- Precios: P (ver nota de arriba)
+    ('M09','sin_acceso'),   -- Analítica descriptiva: sin fila en §3 -> nota ⁽⁶⁾
+    ('M10','sin_acceso'),   -- Asociación: –
+    ('M11','sin_acceso'),   -- Elasticidad: –
+    ('M12','sin_acceso'),   -- Accesibilidad: –
+    ('M13','sin_acceso'),   -- Simulación: –
+    ('M14','sin_acceso'),   -- Recomendaciones: –
+    ('M15','sin_acceso')    -- Auditoría: –
+) AS v(clave, nivel)
+JOIN roles r   ON r.nombre = 'Investigador de mercado'
+JOIN modulos m ON m.clave  = v.clave
+ON CONFLICT (rol_id, modulo_id) DO NOTHING;
+
 -- --------------------------------------------------------------- 3. USUARIOS
 INSERT INTO usuarios (nombre, email, password_hash, rol_id, activo)
 SELECT v.nombre, v.email, v.password_hash, r.id, v.activo
@@ -54,7 +90,9 @@ FROM (VALUES
     ('Jorge Soto Ramos',     'planeador@retail.mx',       '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Planeador',              TRUE),
     ('Ana Torres Medina',    'auditor@retail.mx',         '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Auditor',                TRUE),
     ('Elena Ruiz Domínguez', 'contacto@bioorganicos.mx',  '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',              TRUE),
-    ('Hugo Cantú Salinas',   'ventas@lacteosdelnorte.mx', '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',              TRUE)
+    ('Hugo Cantú Salinas',   'ventas@lacteosdelnorte.mx', '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Proveedor',              TRUE),
+    -- D-28: el usuario de la app móvil. Misma contraseña que el resto del seed.
+    ('Sofía Nava Garza',     'investigador@retail.mx',    '$2b$12$6Lzfua0Zj9Fq/CrxvRq3eecqyrxGJQkvioIN7795JngPXI3aPvWXi', 'Investigador de mercado', TRUE)
 ) AS v(nombre, email, password_hash, rol_nombre, activo)
 JOIN roles r ON r.nombre = v.rol_nombre
 ON CONFLICT (email) DO NOTHING;
