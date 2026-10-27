@@ -140,6 +140,17 @@ describe('Investigador de mercado en pricing-service (integración, requiere sta
   });
 
   it('la bitácora guarda el origen "observado en campo" con quién lo capturó (D-16)', async () => {
+    // La bitácora se escribe por HTTP contra audit-service y es fire-and-forget:
+    // si ese servicio no está arriba, la observación igual se crea (así está
+    // definido) y aquí no hay nada que comprobar. Saltar, no fallar.
+    const bitacoraArriba = await fetch(`${OTROS.audit}/v1/health`).then((r) => r.ok).catch(() => false);
+    if (!bitacoraArriba) {
+      console.warn('audit-service no responde: no se comprobó la marca de origen de D-16');
+      return;
+    }
+    // El reporte es asíncrono: se le da un respiro antes de leer.
+    await new Promise((r) => setTimeout(r, 2000));
+
     const { rows } = await db.query(
       `SELECT c.campo, c.valor_posterior
          FROM auditoria a JOIN auditoria_cambios c ON c.auditoria_id = a.id
