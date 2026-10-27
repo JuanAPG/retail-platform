@@ -45,7 +45,7 @@ export class StoresController {
 
   @Get()
   @XmlRoot('storeListResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Lista paginada de tiendas, por nombre, con dirección, zona y proveedor.' })
   @ApiRespuesta(200, 'Página de tiendas.', pagina([muestras.tienda]), 'storeListResponse')
   @ApiErrores(400, 401, 403)
@@ -67,7 +67,7 @@ export class StoresController {
 
   @Get(':id')
   @XmlRoot('storeResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Detalle de una tienda.' })
   @ApiRespuesta(200, 'La tienda.', muestras.tienda, 'storeResponse')
   @ApiErrores(400, 401, 403, 404)
