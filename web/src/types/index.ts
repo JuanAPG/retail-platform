@@ -227,7 +227,9 @@ export type RolNombre =
   | 'Responsable de precios'
   | 'Planeador'
   | 'Auditor'
-  | 'Proveedor';
+  | 'Proveedor'
+  // D-28: usuario de la app móvil. No tiene portal web.
+  | 'Investigador de mercado';
 
 /** M06 — Línea de venta: presentación + cantidad + precio congelado. */
 export interface TransactionDetail {
