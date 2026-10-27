@@ -139,9 +139,9 @@ ingreso y sus indicadores cambian con el tiempo y viven en `zona_clasificaciones
 
 | Método | Ruta | Roles |
 |---|---|---|
-| GET | `/v1/zones` | Los 6 perfiles internos |
+| GET | `/v1/zones` | Los 6 perfiles internos; Investigador de mercado (D-28) |
 | GET | `/v1/zones/compare?ids=` | Los 6 perfiles internos |
-| GET | `/v1/zones/:id` | Los 6 perfiles internos |
+| GET | `/v1/zones/:id` | Los 6 perfiles internos; Investigador de mercado (D-28) |
 | POST | `/v1/zones` | Administrador |
 | PATCH | `/v1/zones/:id` | Administrador |
 | DELETE | `/v1/zones/:id` | Administrador |
@@ -275,9 +275,9 @@ Una tienda nace siempre **con su dirección** (se crean en una sola transacción
 
 | Método | Ruta | Roles |
 |---|---|---|
-| GET | `/v1/stores` | Los 6 perfiles internos |
+| GET | `/v1/stores` | Los 6 perfiles internos; Investigador de mercado (D-28) |
 | GET | `/v1/stores/catalog/postal-codes` | Los 6 perfiles internos |
-| GET | `/v1/stores/:id` | Los 6 perfiles internos |
+| GET | `/v1/stores/:id` | Los 6 perfiles internos; Investigador de mercado (D-28) |
 | POST | `/v1/stores` | Administrador |
 | PATCH | `/v1/stores/:id` | Administrador |
 | DELETE | `/v1/stores/:id` | Administrador |
@@ -411,9 +411,9 @@ producto (RF-35). Un producto se da de alta siempre **con su primera presentaci�
 | GET | `/v1/product-categories` | Cualquier usuario autenticado |
 | GET | `/v1/units` | Cualquier usuario autenticado |
 | GET | `/v1/providers` | Administrador, Analista comercial, Gerente de categoría, Auditor |
-| GET | `/v1/products` | Los 7 perfiles (**el Proveedor solo ve los suyos**) |
+| GET | `/v1/products` | Los 8 perfiles (**el Proveedor solo ve los suyos**; el Investigador de mercado solo los activos, D-28) |
 | GET | `/v1/products/pending` | Gerente de categoría, Administrador (solo lectura), Auditor (solo lectura) |
-| GET | `/v1/products/:id` | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| GET | `/v1/products/:id` | Los 6 perfiles internos; Proveedor (solo los suyos); Investigador de mercado (D-28) |
 | POST | `/v1/products` | Gerente de categoría |
 | POST | `/v1/products/proposals` | Proveedor |
 | PATCH | `/v1/products/proposals/:id` | Proveedor (solo la suya, pendiente) |
@@ -421,7 +421,7 @@ producto (RF-35). Un producto se da de alta siempre **con su primera presentaci�
 | DELETE | `/v1/products/:id` | Gerente de categoría |
 | PATCH | `/v1/products/:id/approve` | Gerente de categoría |
 | PATCH | `/v1/products/:id/reject` | Gerente de categoría |
-| GET | `/v1/products/:id/presentations` | Los 6 perfiles internos |
+| GET | `/v1/products/:id/presentations` | Los 6 perfiles internos; Investigador de mercado (D-28) |
 | POST | `/v1/products/:id/presentations` | Gerente de categoría |
 | DELETE | `/v1/presentations/:id` | Gerente de categoría |
 

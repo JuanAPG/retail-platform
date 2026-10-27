@@ -118,7 +118,7 @@ export class ProductsController {
 
   @Get('products/:id')
   @XmlRoot('productResponse')
-  @Roles(...PERFILES_INTERNOS, ROL.PROVEEDOR)
+  @Roles(...PERFILES_INTERNOS, ROL.PROVEEDOR, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Detalle de un producto con sus presentaciones. Un Proveedor solo ve los suyos (404 si es de otro).' })
   @ApiRespuesta(200, 'El producto.', muestras.producto, 'productResponse')
   @ApiErrores(400, 401, 403, 404)
@@ -235,7 +235,7 @@ export class ProductsController {
 
   @Get('products/:id/presentations')
   @XmlRoot('presentationListResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Presentaciones de un producto (arreglo plano, sin paginar).' })
   @ApiRespuesta(200, 'Presentaciones ordenadas por nombre.', [muestras.presentacion], 'presentationListResponse')
   @ApiErrores(400, 401, 403, 404)

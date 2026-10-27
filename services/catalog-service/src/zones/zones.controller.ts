@@ -57,7 +57,7 @@ export class ZonesController {
 
   @Get('zones')
   @XmlRoot('zoneListResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Lista paginada de zonas, por nombre.' })
   @ApiRespuesta(200, 'Página de zonas.', pagina([muestras.zona]), 'zoneListResponse')
   @ApiErrores(400, 401, 403)
@@ -103,7 +103,7 @@ export class ZonesController {
 
   @Get('zones/:id')
   @XmlRoot('zoneResponse')
-  @Roles(...PERFILES_INTERNOS)
+  @Roles(...PERFILES_INTERNOS, ROL.INVESTIGADOR)
   @ApiOperation({ summary: 'Detalle de una zona.' })
   @ApiRespuesta(200, 'La zona.', muestras.zona, 'zoneResponse')
   @ApiErrores(400, 401, 403, 404)

@@ -21,6 +21,9 @@ de negocio.
 
 Según la Matriz §3 (`docs/matriz-perfiles-permisos.md`), que es la fuente. Las lecturas son de
 los 6 perfiles internos en los cuatro módulos; el Proveedor solo entra a productos (propone).
+El **Investigador de mercado** (app móvil, D-28) lee tiendas, zonas, productos y presentaciones
+— solo los activos, como cualquier perfil que no sea Gerente, Administrador o Auditor — y no
+escribe nada aquí. Las visitas de campo de D-30 todavía no existen en este servicio.
 
 | Módulo | Escribe | Nota |
 |---|---|---|
