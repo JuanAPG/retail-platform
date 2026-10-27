@@ -29,7 +29,7 @@
 
 | ID | Requerimiento | Servicio | Decisión / nota |
 |---|---|---|---|
-| RF-06 | El sistema debe gestionar perfiles y permisos diferenciados (Administrador, Analista comercial, Gerente de categoría, Responsable de precios, Planeador, Auditor). | auth-service | Desactualizado: falta `Proveedor` (ya existe) e `Investigador de mercado` (P-01). |
+| RF-06 | El sistema debe gestionar perfiles y permisos diferenciados (Administrador, Analista comercial, Gerente de categoría, Responsable de precios, Planeador, Auditor). | auth-service | Desactualizado: falta `Proveedor` (ya existe) e `Investigador de mercado`, que ya es un rol del sistema (**D-28**). |
 | RF-07 | El sistema deberá permitir la autenticación de usuarios según su perfil, restringiendo el acceso a las funciones correspondientes a cada rol. | auth-service + todos | JWT + sesión activa en Redis en cada servicio. |
 | RF-12 | El sistema deberá permitir la integración de proveedores, para que registren y oferten sus productos. | auth (alta), catalog (productos), pricing (precios) | D-08, D-11, D1. |
 
@@ -80,12 +80,12 @@
 
 | ID | Requerimiento | Servicio | Decisión / nota |
 |---|---|---|---|
-| RF-32 | El sistema deberá permitir la autenticación del personal de investigación de mercado dentro de la aplicación móvil. | auth-service | Rol: P-01. |
-| RF-33 | La aplicación móvil debe permitir levantar precios. | pricing-service | D-16: pasa a aprobación; origen "campo" en auditoría. P-02. |
-| RF-34 | La aplicación móvil debe permitir escanear productos. | catalog-service | `codigo_barras` único por presentación. P-08. |
-| RF-36 | La aplicación móvil debe permitir capturar disponibilidad. | P-03 | Fuente de "baja disponibilidad" (D-13). |
-| RF-37 | La aplicación móvil debe permitir capturar ubicación. | P-03 | |
-| RF-38 | La aplicación móvil debe permitir aplicar encuestas. | P-03 | |
+| RF-32 | El sistema deberá permitir la autenticación del personal de investigación de mercado dentro de la aplicación móvil. | auth-service | Rol: `Investigador de mercado` (**D-28**). |
+| RF-33 | La aplicación móvil debe permitir levantar precios. | pricing-service | **D-16**: pasa a aprobación; origen "campo" en auditoría. **D-29**: aprobado, el precio se registra por tienda. |
+| RF-34 | La aplicación móvil debe permitir escanear productos. | catalog-service | `codigo_barras` único por presentación. **D-32**: código no encontrado → propuesta de producto con origen "campo". |
+| RF-36 | La aplicación móvil debe permitir capturar disponibilidad. | `availability-service` (**D-38**) | Fuente de "baja disponibilidad" (D-13). |
+| RF-37 | La aplicación móvil debe permitir capturar ubicación. | catalog-service (**D-30**) | Visita de campo en MongoDB, colección `visitas_campo`. |
+| RF-38 | La aplicación móvil debe permitir aplicar encuestas. | catalog-service (**D-30**) | Respuestas de la visita en MongoDB, colección `visitas_campo`. |
 | RF-39 | La aplicación móvil debe permitir trabajar sin conexión. | mobile | |
 | RF-40 | La aplicación móvil debe permitir sincronizar resultados. | mobile + servicios destino | |
 
@@ -93,13 +93,13 @@
 
 | ID | Requerimiento | Servicio | Decisión / nota |
 |---|---|---|---|
-| RF-41 | El sistema deberá permitir la autenticación de los analistas dentro de la aplicación de escritorio. | auth-service | Roles: P-04. |
+| RF-41 | El sistema deberá permitir la autenticación de los analistas dentro de la aplicación de escritorio. | auth-service | Roles: Analista comercial, Responsable de precios y Planeador (**D-31**). |
 | RF-42 | La aplicación de escritorio debe permitir importar ventas. | core-process-service | |
 | RF-43 | La aplicación de escritorio debe permitir configurar segmentos. | catalog-service | |
 | RF-44 | La aplicación de escritorio debe permitir ejecutar reglas de asociación. | algorithms-core | |
-| RF-45 | La aplicación de escritorio debe permitir analizar la elasticidad. | algorithms-core | Analista solo tiene Lectura en Elasticidad: P-04. |
+| RF-45 | La aplicación de escritorio debe permitir analizar la elasticidad. | algorithms-core | **D-31**: el Analista consulta; solo el Responsable de precios calcula. |
 | RF-46 | La aplicación de escritorio debe permitir comparar zonas. | catalog / pricing | |
-| RF-47 | La aplicación de escritorio debe permitir simular cambios de empaque y descuentos. | decision-service | Simulación es Total solo para Planeador: P-04. |
+| RF-47 | La aplicación de escritorio debe permitir simular cambios de empaque y descuentos. | decision-service | **D-31**: solo el Planeador simula; el Analista ve los escenarios guardados. |
 | RF-48 | La aplicación de escritorio debe permitir exportar tablas y reportes. | documents-service | |
 
 ## 2. Requerimientos no funcionales

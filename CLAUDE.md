@@ -19,7 +19,7 @@ escritos para agentes y revisores.
 
 | Archivo | Qué contiene |
 |---|---|
-| `docs/matriz-perfiles-permisos.md` | Roles, niveles de permiso, Matriz por módulo y servicio, **decisiones de negocio D1–D3 y D-01 a D-20**, flujos con estado, pendientes P-01 a P-10. |
+| `docs/matriz-perfiles-permisos.md` | Roles, niveles de permiso, Matriz por módulo y servicio, **decisiones de negocio D1–D3 y D-01 a D-47**, flujos con estado, pendientes de especificación (§6). |
 | `docs/requerimientos.md` | RF-01 a RF-48 y RNF-01 a RNF-10 (texto literal), con servicio responsable y decisión aplicable; requisitos no recortables del Parcial 2. |
 | `docs/reglas-negocio.md` | RN-01 a RN-15 (texto literal) con su estado vigente; pendientes PR-1 a PR-8. |
 | `docs/contratos/` | Contrato JSON (`*.md`) y XSD por servicio; `paginacion.md`. |
