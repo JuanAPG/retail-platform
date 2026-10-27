@@ -43,6 +43,10 @@ export interface ModuloDefinicion {
 }
 
 export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
+  // D-28: el Investigador de mercado trabaja en la app móvil y no tiene
+  // portal web. Lista vacía a propósito: al entrar ve "acceso no permitido"
+  // (ver portalPorRol.ts), no un menú sin opciones.
+  'Investigador de mercado': [],
   Administrador: [
     { key: 'usuarios', label: 'Usuarios', icon: <IconUsuarios /> },
     { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas /> },

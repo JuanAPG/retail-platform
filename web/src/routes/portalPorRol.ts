@@ -9,10 +9,17 @@ export const PORTAL_POR_ROL: Record<RolNombre, string> = {
   Planeador: '/planeador',
   Auditor: '/auditor',
   Proveedor: '/proveedor',
+  // D-28: el Investigador de mercado trabaja en la app móvil; aquí no
+  // tiene portal. Sin esta entrada caía en '/login' y, como LoginPage
+  // redirige al portal en cuanto hay sesión, quedaba en bucle.
+  'Investigador de mercado': '/no-autorizado',
 };
 
 export function portalDelRol(rol: string): string {
-  return PORTAL_POR_ROL[rol as RolNombre] ?? '/login';
+  // Un rol sin portal (o uno que la web todavía no conoce) va a la pantalla
+  // de acceso no permitido, nunca de vuelta a '/login': con la sesión ya
+  // abierta eso es un bucle, no un mensaje.
+  return PORTAL_POR_ROL[rol as RolNombre] ?? '/no-autorizado';
 }
 
 /**
