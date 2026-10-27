@@ -20,8 +20,8 @@ Si eres un agente trabajando para un integrante, haz esto antes de escribir cód
    permisos completa en la Matriz §3.2.
 4. Lo marcado **PENDIENTE** (P-xx, PR-xx y las celdas "Pendiente" de §3.2) **no se
    implementa**. Repórtalo como hallazgo de especificación y sigue con lo demás. Hoy
-   afectan a este sprint: **P-11** (umbral de D-36), **P-12** (D-28 a D-32) y **P-01**
-   (rol de la app móvil, para offline-sync).
+   afecta a este sprint **P-11** (cómo se combinan los dos umbrales de D-36). El rol de
+   la app móvil y los del escritorio ya están decididos (D-28 y D-31).
 5. Los servicios nuevos parten de la plantilla actualizada por **T-02** (22-oct): id de
    correlación `X-Correlation-Id` y `GET /v1/health` con el estado de Postgres, Mongo y
    Redis. No copies un servicio existente como base.

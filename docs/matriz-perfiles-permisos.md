@@ -13,8 +13,8 @@
 > Lo marcado **PENDIENTE** no está decidido. Un agente **no lo asume ni lo
 > implementa**: lo reporta como *hallazgo de especificación* y sigue.
 >
-> Última actualización: 2026-10-21 (junta de Sprint 4: D-33 a D-47) · Responsable:
-> Product Owner (Juan Angel).
+> Última actualización: 2026-10-26 (se registran D-28 a D-32; junta de Sprint 4:
+> D-33 a D-47) · Responsable: Product Owner (Juan Angel).
 
 ---
 
@@ -32,7 +32,7 @@ Los nombres son **exactos** (coinciden con la tabla `roles` y con `ROL` en
 | 5 | `Planeador` | Interno | Diseña y ejecuta simulaciones de formatos, empaques y descuentos. |
 | 6 | `Auditor` | Interno | Consulta bitácoras de auditoría y valida el cumplimiento de reglas. |
 | 7 | `Proveedor` | Externo | Empresa que da de alta sus propios productos; no necesariamente ligados a una tienda. |
-| 8 | `Investigador de mercado` | Interno | **PENDIENTE (P-01).** Usuario de la app móvil (RF-32). No existe aún en la tabla `roles`. |
+| 8 | `Investigador de mercado` | Interno | Usuario de la app móvil (RF-32). Permisos en D-28. |
 
 ## 2. Niveles de permiso
 
@@ -61,27 +61,27 @@ Reglas generales:
 Leyenda corta: **T** Total · **LA** Lect./Act. · **L** Lectura · **LP** Lectura
 (propios) · **P** Propone · **A** Aprueba · **–** Sin acceso.
 
-| Módulo / función | Clave | Servicio dueño | Admin | Analista | Gerente | Resp. precios | Planeador | Auditor | Proveedor |
-|---|---|---|---|---|---|---|---|---|---|
-| Usuarios y perfiles | M01 | auth-service | T | – | – | – | – | L | – |
-| Catálogo de proveedores (datos de empresa) | M01 | auth-service | T | L | L | – | – | L | LA (su empresa) |
-| Tiendas | M02 | catalog-service | T | L | L | L | L | L | – |
-| Zonas | M03 | catalog-service | T | L | L | L | L | L | – |
-| Catálogo de productos | M04 | catalog-service | L | L | T | L | L | L | P |
-| Alta de productos por proveedor | M04 | catalog-service | L | – | A | – | – | L | P |
-| Segmentos de ingreso | M05 | catalog-service → `income-segmentation-service` (D-35) | L | T | L | L | L | L | – |
-| Transacciones | M06 | core-process-service | L | T | L | L | L | L | – |
-| Canastas | M07 | core-process-service | L | T | L | L | L | L | – |
-| Precios | M08 | pricing-service | L | L | L | **T + A** ⁽¹⁾ | L | L | P |
-| Comparación de precios | M08 | pricing-service | L | L | T | L | L | L | LP |
-| Reglas de asociación (Apriori, FP-Growth) | M10 | algorithms-core | L | T | L | L | L | L | – |
-| Elasticidad | M11 | algorithms-core | L | L | L | T | L | L | – |
-| Estadística: clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) ⁽⁵⁾ | — | analytics-stats | L | T | L | L | L | L | – |
-| Indicadores de accesibilidad | M12 | decision-service | L | T | L | L | L | L | – |
-| Simulación de formatos y empaques | M13 | decision-service | L | L | L | L | T | L | – |
-| Recomendaciones ⁽²⁾ | M14 | decision-service | L | L | **A** | L | **T** | L | – |
-| Reportes ejecutivos | M16 | documents-service | L | L | T | L | L | L | LP ⁽³⁾ |
-| Auditoría | M15 | audit-service | L | – | – | – | – | **L** ⁽⁴⁾ | – |
+| Módulo / función | Clave | Servicio dueño | Admin | Analista | Gerente | Resp. precios | Planeador | Auditor | Proveedor | Investigador ⁽⁶⁾ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Usuarios y perfiles | M01 | auth-service | T | – | – | – | – | L | – | – |
+| Catálogo de proveedores (datos de empresa) | M01 | auth-service | T | L | L | – | – | L | LA (su empresa) | – |
+| Tiendas | M02 | catalog-service | T | L | L | L | L | L | – | L |
+| Zonas | M03 | catalog-service | T | L | L | L | L | L | – | L |
+| Catálogo de productos | M04 | catalog-service | L | L | T | L | L | L | P | L |
+| Alta de productos por proveedor | M04 | catalog-service | L | – | A | – | – | L | P | P (solo origen campo, D-32) |
+| Segmentos de ingreso | M05 | catalog-service → `income-segmentation-service` (D-35) | L | T | L | L | L | L | – | – |
+| Transacciones | M06 | core-process-service | L | T | L | L | L | L | – | – |
+| Canastas | M07 | core-process-service | L | T | L | L | L | L | – | – |
+| Precios | M08 | pricing-service | L | L | L | **T + A** ⁽¹⁾ | L | L | P | P (precio observado, D-16/D-29) |
+| Comparación de precios | M08 | pricing-service | L | L | T | L | L | L | LP | – |
+| Reglas de asociación (Apriori, FP-Growth) | M10 | algorithms-core | L | T | L | L | L | L | – | – |
+| Elasticidad | M11 | algorithms-core | L | L | L | T | L | L | – | – |
+| Estadística: clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) ⁽⁵⁾ | — | analytics-stats | L | T | L | L | L | L | – | – |
+| Indicadores de accesibilidad | M12 | decision-service | L | T | L | L | L | L | – | – |
+| Simulación de formatos y empaques | M13 | decision-service | L | L | L | L | T | L | – | – |
+| Recomendaciones ⁽²⁾ | M14 | decision-service | L | L | **A** | L | **T** | L | – | – |
+| Reportes ejecutivos | M16 | documents-service | L | L | T | L | L | L | LP ⁽³⁾ | – |
+| Auditoría | M15 | audit-service | L | – | – | – | – | **L** ⁽⁴⁾ | – | – |
 
 Notas:
 
@@ -96,6 +96,12 @@ Notas:
 5. **D-24:** fila agregada (no existía en la Matriz S0; estaba en P-07). Ejecutar una
    prueba o una corrida de clustering es Total del Analista comercial; los demás
    perfiles internos leen las corridas guardadas.
+6. **D-28:** columna agregada (no existía en la Matriz S0; estaba en P-01). El
+   `Investigador de mercado` es el usuario de la app móvil: lee productos,
+   presentaciones, tiendas y zonas, y da de alta precios observados (pasan a
+   aprobación, D-16/D-29), disponibilidad (`availability-service`, D-38), ubicación de
+   la visita y respuestas de encuesta (`catalog-service`, D-30). En los módulos sin
+   fila propia, y en todo lo que no aparece aquí, **no tiene acceso**.
 
 ### 3.1 Módulos sin fila en la Matriz (PENDIENTE)
 
@@ -106,12 +112,13 @@ Notas:
 | Clustering, hipótesis, ANOVA, proporciones (RF-16, 20–22) | analytics-stats | Resuelto por **D-24** (fila en §3) |
 | Notificaciones (M17) | notifications-service | P-07 · se asume LA de lo propio para todos |
 | Configuración analítica: canasta básica (D-03), periodo de alerta (D-09), umbrales (D-13) | varios | P-07 |
-| Captura de campo: precio observado, encuestas, ubicación (RF-33, RF-37, RF-38). La disponibilidad (RF-36) va en `availability-service` (D-38) | por definir | P-01, P-03 |
+| Captura de campo: precio observado, encuestas, ubicación (RF-33, RF-37, RF-38). La disponibilidad (RF-36) va en `availability-service` (D-38) | pricing, catalog, availability | Resuelto por **D-28** (rol y permisos) y **D-30** (visitas de campo) |
 | Portal público (sin sesión) | web | P-09 |
 
 ### 3.2 Servicios nuevos del Sprint 4 (D-47)
 
-Cada responsable completa la fila de su servicio, con los 7 perfiles, al escribir su
+Cada responsable completa la fila de su servicio, con los 8 perfiles (D-28 agregó el
+`Investigador de mercado`), al escribir su
 contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo demás es
 **PENDIENTE** y no se implementa hasta que la fila esté completa.
 
@@ -124,7 +131,7 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | `promotion-service` | 3115 | Fernando | **Gerente de categoría: Propone. Responsable de precios: Aprueba** (D-39). | Los otros 5 perfiles. |
 | `demand-forecast-service` | 3116 | Leonardo | Método y validación (D-40). | Fila completa. |
 | `recommendations-workflow-service` | 3117 | Fernando | **Gerente de categoría: asigna y evalúa. El responsable asignado mueve los estados** (D-41). | Qué roles pueden ser responsables asignados; los demás perfiles. |
-| `offline-sync-service` | 3118 | Fernando | Idempotencia y conflictos (D-42). | Fila completa; depende de P-01 (rol de la app móvil) y P-04 (roles del escritorio, que también sincroniza en XML). |
+| `offline-sync-service` | 3118 | Fernando | Idempotencia y conflictos (D-42). El rol de la app móvil es el `Investigador de mercado` (D-28) y los del escritorio son los de D-31. | Fila completa (la completa su responsable). |
 | `data-governance-service` | 3119 | Leonardo | Retención, calidad y linaje (D-43). | Fila completa. |
 | `monitoring-service` | 3120 | Juan Angel | **Solo el Administrador** ve el panel (D-44). | — |
 
@@ -169,12 +176,15 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | D-25 | Errores | MongoDB caído (o cualquier almacén que el servicio no pueda alcanzar) responde **503 `SERVICE_UNAVAILABLE`**, no 500. Aplica a documents, notifications y a las corridas de algorithms-core y analytics-stats (D3). | Con Mongo detenido, `GET /v1/notifications` → 503 con el error estándar en JSON y XML; `GET /v1/health` → 200 `degraded`. |
 | D-26 | Usuarios | Las respuestas de los servicios traen solo el **id** del usuario. El **nombre** lo resuelve el cliente consultando a `auth-service`; ningún servicio lo copia ni lo inventa. | Una bandeja o un reporte muestran `userId`; la web o el escritorio piden el nombre a auth. |
 | D-27 | Límites del Parcial 2 | Se aceptan y documentan como límites conocidos: (a) el clustering de zonas solo admite **k = 2** mientras el seed tenga 3 zonas; (b) el modo `baskets` de analytics-stats lee como máximo **500 páginas** de canastas por prueba; (c) `analisis_corridas` es de algorithms-core y `decision-service` también escribe en ella (corridas de accesibilidad, `tipo` propio): se corrige después del parcial. | Pedir k = 3 con 3 zonas → 400 con motivo claro; no se interpreta como error del servicio. |
+| D-28 | Rol de la app móvil (resuelve P-01) | Se crea el rol **`Investigador de mercado`** (perfil interno, usuario de la app móvil). Permisos: **Lectura** de productos, presentaciones, tiendas y zonas; **alta** de precios observados (pasan a aprobación, D-16), disponibilidad, ubicación de la visita y respuestas de encuesta. Sin acceso a lo demás. | El investigador hace `POST /v1/price-observations` → 201; `GET /v1/recommendations` → 403. |
+| D-29 | Precio de campo (resuelve P-02) | Un precio de campo aprobado se registra **por tienda** (la observación ya trae `storeId`). La comparación entre zonas no cambia: agrega las tiendas de cada zona. | Observación aprobada en la tienda X → precio nuevo solo en X; las demás tiendas de la zona conservan el suyo. |
+| D-30 | Captura de campo (resuelve P-03) | La **disponibilidad** la sustituye D-38 (pasa a `availability-service`). Las **visitas de campo** (ubicación de la visita y respuestas de encuesta) las guarda `catalog-service` en MongoDB, colección `visitas_campo`. Es un uso nuevo de Mongo y queda registrado con esta decisión. | `POST` de una visita con lat/lng y respuestas → documento en `visitas_campo`; Mongo caído → 503 (D-25). |
+| D-31 | App de escritorio (resuelve P-04) | Entran el **Analista comercial**, el **Responsable de precios** y el **Planeador**. Elasticidad: el Analista consulta y solo el Responsable de precios calcula. Simulación: solo el Planeador simula; el Analista ve escenarios guardados. Importar ventas, segmentos y asociaciones: Analista comercial. | Administrador en el escritorio → mensaje de acceso no permitido; Analista en calcular elasticidad → botón deshabilitado y 403 si se fuerza. |
+| D-32 | Código de barras no encontrado (resuelve P-08) | La app busca con `GET /v1/presentations/by-barcode/{codigo}`. Si responde 404, ofrece crear una **propuesta de producto con origen "campo"** que sigue el flujo §5.1 (pendiente hasta que el Gerente la aprueba). Sin conexión, queda en la cola local. | Código inexistente → 404 → propuesta pendiente visible solo para el Gerente y quien la propuso (D-08). |
 
-**D-28 a D-32 no están registradas en este archivo** (P-12). D-28 existe solo en la
-rama sin fusionar `fix/matriz-tiendas-zonas` ("el Gerente escribe tiendas y el
-Analista zonas; el Administrador solo lee") y contradice lo que `main` aplicó en el PR
-#72 (el Administrador escribe tiendas y zonas, Matriz §3): rige §3. D-30 (la
-disponibilidad en catalog-service) la sustituye D-38. D-29, D-31 y D-32: sin texto.
+D-28 a D-32 se registraron el **26-oct-2026** con el texto que el Product Owner
+aceptó el 15-oct (cierra P-12). La rama `fix/matriz-tiendas-zonas`, que usaba el número
+D-28 para otra cosa y contradecía el PR #72, quedó **descartada**.
 
 #### Sprint 4 (de 10 a 20 microservicios): junta del 21-oct-2026
 
@@ -201,7 +211,7 @@ escritas. Cada decisión dice de qué duda viene.
 
 ## 5. Flujos con estado
 
-### 5.1 Propuesta de producto (Proveedor; Investigador → P-01)
+### 5.1 Propuesta de producto (Proveedor; Investigador de mercado por D-28 y D-32)
 
 ```
 Proveedor propone ──► PENDIENTE ──► Gerente aprueba ──► ACTIVO (visible a todos)
@@ -225,36 +235,37 @@ Propone sobre presentación ACTIVA ──► PENDIENTE (el precio vigente NO cam
 - Notificaciones: `price.proposed` → Responsable de precios · decisión → quien propuso y Auditor.
 - Auditoría: `metadata.origen = "campo"` cuando viene de la app móvil (D-16).
 
-### 5.3 Escaneo en campo ("detectado en campo") — PENDIENTE parcial
-
-Definido:
+### 5.3 Escaneo en campo ("detectado en campo")
 
 - La presentación tiene `codigo_barras` único (`producto_presentaciones`).
-- Un precio capturado en campo sigue el flujo 5.2.
-
-Sin definir (no implementar hasta decidir):
-
-- P-01 rol que usa la app móvil.
-- P-02 si un precio aprobado desde una tienda vale para **toda la zona** o se registra **por tienda**.
-- P-03 qué servicio guarda las encuestas (la disponibilidad quedó en D-38).
-- P-08 qué pasa al escanear un código que no existe (¿propuesta de producto con `origen: campo`?).
+- El rol que usa la app móvil es el `Investigador de mercado` (**D-28**).
+- Un precio capturado en campo sigue el flujo 5.2 y, aprobado, se registra **por
+  tienda** (**D-29**).
+- Las encuestas y la ubicación de la visita las guarda `catalog-service` en la colección
+  `visitas_campo` de MongoDB (**D-30**); la disponibilidad va en `availability-service`
+  (**D-38**).
+- Un código que no existe devuelve 404 y la app ofrece una propuesta de producto con
+  `origen: campo`, que sigue el flujo 5.1 (**D-32**).
 
 ## 6. Pendientes de especificación
 
-| ID | Pregunta | Afecta |
+Un pendiente resuelto no se borra: se queda aquí apuntando a la decisión que lo cerró
+(§7).
+
+| ID | Pregunta | Afecta / estado |
 |---|---|---|
-| P-01 | ¿Se crea el rol `Investigador de mercado`? ¿Qué permisos tiene? | app móvil, auth, Matriz |
-| P-02 | Precio de campo aprobado: ¿precio de la zona o precio por tienda? | pricing, elasticidad, D-09 |
-| P-03 | ¿Qué servicio guarda las encuestas (RF-38)? (La disponibilidad, RF-36, quedó en availability-service por D-38.) | encuestas, Mongo |
-| P-04 | ¿Qué roles usan la app de escritorio? ¿El Analista puede simular (RF-47) y calcular elasticidad (RF-45)? | desktop, Matriz |
+| P-01 | ¿Se crea el rol `Investigador de mercado`? ¿Qué permisos tiene? | **Resuelto por D-28** (§4.2) |
+| P-02 | Precio de campo aprobado: ¿precio de la zona o precio por tienda? | **Resuelto por D-29** (§4.2) |
+| P-03 | ¿Qué servicio guarda las encuestas (RF-38)? (La disponibilidad, RF-36, quedó en availability-service por D-38.) | **Resuelto por D-30** (§4.2) |
+| P-04 | ¿Qué roles usan la app de escritorio? ¿El Analista puede simular (RF-47) y calcular elasticidad (RF-45)? | **Resuelto por D-31** (§4.2) |
 | P-05 | Periodo por defecto de la alerta de precio (D-09) mientras el Responsable no lo configure. | pricing, notifications |
 | P-06 | ¿Qué es un reporte "propio" del Proveedor? | documents (DOC-04) |
 | P-07 | Permisos de los módulos de §3.1. | varios |
-| P-08 | Código de barras no encontrado en campo: ¿qué flujo sigue? | catalog, móvil |
+| P-08 | Código de barras no encontrado en campo: ¿qué flujo sigue? | **Resuelto por D-32** (§4.2) |
 | P-09 | ¿Qué muestra el portal público sin sesión? | web |
 | P-10 | Confirmar Auditoría como solo Lectura (bitácora inmutable). | audit |
 | P-11 | D-36: "menos de 10 transacciones (o 3 tiendas)". ¿Se publica solo con **≥ 10 transacciones y ≥ 3 tiendas**, o basta con cumplir una? Con el seed actual (3 zonas) exigir 3 tiendas por zona-segmento puede ocultar casi todo. | income-segmentation, basket-analysis |
-| P-12 | Texto de D-28 a D-32. D-28 vive solo en una rama sin fusionar y contradice a `main`; D-29, D-31 y D-32 no aparecen en ningún lado. ¿Se descartan o se registran? | Matriz |
+| P-12 | Texto de D-28 a D-32. D-28 vive solo en una rama sin fusionar y contradice a `main`; D-29, D-31 y D-32 no aparecen en ningún lado. ¿Se descartan o se registran? | **Resuelto por D-28 a D-32** (§4.2, registradas el 26-oct; la rama `fix/matriz-tiendas-zonas` se descartó) |
 
 ## 7. Cómo mantener este archivo
 

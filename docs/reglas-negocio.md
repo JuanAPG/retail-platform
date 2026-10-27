@@ -83,7 +83,7 @@ diferencias de precio por periodo; el **periodo mensual** es el default esperado
 
 **Estado vigente:** la composición de la canasta básica la fija **D-03** (referencia
 oficial adaptada al catálogo). El stock alimenta la disponibilidad (RF-36, D-13);
-su fuente está pendiente (P-03).
+su fuente es `availability-service` (**D-38**).
 
 ### RN-05: Representatividad por segmento
 
