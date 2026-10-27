@@ -53,11 +53,19 @@ export const VEN_ALERTAS = [ROL.RESPONSABLE_PRECIOS, ROL.ADMINISTRADOR, ROL.AUDI
 
 /**
  * PRI-09 (D-16): quién captura un precio observado en tienda desde la app móvil.
- * POR CONFIRMAR con el equipo: la Matriz no tiene un perfil "Investigador de mercado". Mientras tanto
- * capturan el Analista comercial (trabajo de campo y análisis) y el Responsable de precios.
- * Cambiarlo es tocar solo esta constante.
+ * Ya no está por confirmar: D-28 creó el perfil `Investigador de mercado` y le dio
+ * el alta de precios observados (Matriz §3, M08: P). Se queda además el Analista
+ * comercial y el Responsable de precios, que ya capturaban antes de que el rol
+ * existiera. Cambiarlo es tocar solo esta constante.
  */
-export const CAPTURAN_OBSERVACIONES = [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS] as const;
+export const CAPTURAN_OBSERVACIONES = [
+  ROL.ANALISTA,
+  ROL.RESPONSABLE_PRECIOS,
+  // D-28: el Investigador de mercado levanta el precio desde la app móvil.
+  // Solo da de alta: la observación nace pendiente y la aprueba el
+  // Responsable de precios (D-16). No lee la bandeja ni aprueba nada.
+  ROL.INVESTIGADOR,
+] as const;
 
 /** Ven las observaciones pendientes y su historial. El Analista solo ve las que capturó. */
 export const VEN_OBSERVACIONES = [ROL.RESPONSABLE_PRECIOS, ROL.ADMINISTRADOR, ROL.AUDITOR, ROL.ANALISTA] as const;
