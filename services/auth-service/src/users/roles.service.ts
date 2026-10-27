@@ -23,7 +23,7 @@ export interface PermisoEntrada {
 }
 
 /**
- * Matriz rol × módulo (`rol_modulo_permiso`). Los 7 roles y los módulos
+ * Matriz rol × módulo (`rol_modulo_permiso`). Los 8 roles y los módulos
  * M01–M15 vienen del seed; aquí solo se consulta y se reemplaza el nivel
  * por rol. Sin filas = `sin_acceso` (default de la tabla).
  */

@@ -116,7 +116,7 @@ o `{ "active": false, "user": null }` (nunca 401: la inactividad no es error).
 
 ## /v1/roles y matriz (Admin; lectura Admin+Auditor para /v1/roles)
 
-`GET /v1/roles` (los 7 perfiles), `GET /v1/roles/:id/permisos` (matriz por rol:
+`GET /v1/roles` (los 8 perfiles, incluido el `Investigador de mercado` de D-28), `GET /v1/roles/:id/permisos` (matriz por rol:
 `[{ modulo: "M06", nivel: "lectura" }]`), `PUT /v1/roles/:id/permisos`
 (reemplaza la matriz: `[{ moduloId | clave, nivel }]` con niveles
 `total | lectura_actualiza | lectura | propone | aprueba | lectura_propios | sin_acceso`).
