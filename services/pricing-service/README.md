@@ -20,6 +20,9 @@ de negocio.
 | GET | `/v1/price-proposals?status=` | Proveedor (solo las suyas), Administrador, Gerente de categoría, Responsable de precios, Auditor |
 | PATCH | `/v1/price-proposals/:id/approve` | Administrador, Gerente de categoría |
 | PATCH | `/v1/price-proposals/:id/reject` | Administrador, Gerente de categoría |
+| POST | `/v1/price-observations` | **Investigador de mercado** (D-28), Analista comercial, Responsable de precios |
+| GET | `/v1/price-observations?status=` | Responsable de precios, Administrador, Auditor; Analista (solo las suyas) |
+| PATCH | `/v1/price-observations/:id/approve` · `/reject` | Responsable de precios (D1) |
 
 Reglas que conviene tener presentes:
 
@@ -28,6 +31,9 @@ Reglas que conviene tener presentes:
   antes) en la misma transacción. No se permite registrar con fecha igual o anterior al vigente (409).
 - Este servicio solo escribe `precios`. Presentaciones, tiendas y zonas son de `catalog-service`
   y aquí se **leen por SQL** (sin mapearlas como entidades).
+- El **Investigador de mercado** (app móvil, D-28) solo da de alta precios observados: no pone
+  precios, no lee el histórico ni la comparación entre zonas, y no ve la bandeja de
+  observaciones. Lo que levanta nace pendiente y lo aprueba el Responsable de precios (D-16).
 
 ## Estado
 

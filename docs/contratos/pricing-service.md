@@ -438,7 +438,7 @@ Un precio **levantado en campo** no es un precio oficial hasta que el Responsabl
 
 | Método | Ruta | Roles |
 |---|---|---|
-| POST | `/v1/price-observations` | Analista comercial, Responsable de precios *(por confirmar: la Matriz no tiene "Investigador")* |
+| POST | `/v1/price-observations` | **Investigador de mercado** (D-28, Matriz §3 M08: P), Analista comercial, Responsable de precios |
 | GET | `/v1/price-observations` | Responsable de precios, Administrador, Auditor; Analista (solo las suyas) |
 | PATCH | `/v1/price-observations/:id/approve` | Responsable de precios |
 | PATCH | `/v1/price-observations/:id/reject` | Responsable de precios |

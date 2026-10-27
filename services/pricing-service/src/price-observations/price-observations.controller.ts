@@ -35,7 +35,7 @@ export class PriceObservationsController {
   @Roles(...CAPTURAN_OBSERVACIONES)
   @ApiOperation({
     summary:
-      'Registra un precio levantado en tienda (app móvil). Nace pendiente y NO cambia el precio actual hasta que el Responsable de precios lo apruebe.',
+      'Registra un precio levantado en tienda (app móvil). Lo capturan el Investigador de mercado (D-28), el Analista comercial y el Responsable de precios. Nace pendiente y NO cambia el precio actual hasta que el Responsable de precios lo apruebe.',
   })
   @ApiRespuesta(201, 'Observación registrada, pendiente.', muestras.observacion, 'priceObservationResponse')
   @ApiErrores(400, 401, 403, 409)
