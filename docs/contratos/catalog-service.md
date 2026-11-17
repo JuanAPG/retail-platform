@@ -174,6 +174,14 @@ Lectura). Antes las tenía el Analista comercial; los **segmentos de ingreso** (
 Paginado (`page`, `limit`). Orden fijo: `nombre` ascendente.
 Response `200`: `{ "data": [Zone], "total": 3, "page": 1, "limit": 20 }`.
 
+Búsqueda y filtros (T-21), todos opcionales y combinables con AND:
+
+| Parámetro | Regla |
+|---|---|
+| `search` | texto ≤ 100: busca en `nombre` y `descripcion` (ver "Búsqueda por texto") |
+| `municipioId` | entero ≥ 1 |
+| `activo` | `true` = solo activas; `false` = solo desactivadas. Sin él, todas (como antes) |
+
 ### GET /v1/zones/:id
 
 Response `200`: objeto Zone. Inexistente → `404`.
@@ -326,6 +334,15 @@ Lectura). Antes las tenía el Gerente de categoría, que escribe el catálogo de
 Paginado (`page`, `limit`). Orden fijo: `nombre` ascendente.
 Response `200`: `{ "data": [Store], "total": n, "page": 1, "limit": 20 }`.
 
+Búsqueda y filtros (T-21), todos opcionales y combinables con AND (siempre sobre las
+tiendas activas):
+
+| Parámetro | Regla |
+|---|---|
+| `search` | texto ≤ 100: busca en `nombre` y `numeroSucursal` (ver "Búsqueda por texto") |
+| `zonaId` | UUID |
+| `formato` | uno de los 5 valores de `formato` |
+
 ### GET /v1/stores/catalog/postal-codes
 
 Catálogo de códigos postales válidos para el formulario de alta. **Arreglo plano, sin
@@ -442,7 +459,7 @@ Planeador) no tienen ninguna ruta de escritura sobre productos.
   "proveedorId": null,
   "createdAt": "2026-09-25T19:21:10.262Z",
   "updatedAt": "2026-09-25T19:21:10.262Z",
-  "categoria": { "id": 1, "nombre": "Abarrotes", "categoriaPadreId": null, "descripcion": null },
+  "categoria": { "id": 1, "nombre": "Abarrotes", "categoriaPadreId": null, "descripcion": null, "activo": true },
   "proveedor": null,
   "presentaciones": [ { "…": "objeto Presentation" } ]
 }
@@ -477,7 +494,8 @@ Planeador) no tienen ninguna ruta de escritura sobre productos.
 ### Catálogos
 
 - `GET /v1/product-categories` → arreglo plano ordenado por `nombre`:
-  `[{ "id", "nombre", "categoriaPadreId", "descripcion" }]`.
+  `[{ "id", "nombre", "categoriaPadreId", "descripcion", "activo" }]`. Solo las **activas**;
+  con `?includeInactive=true` trae también las desactivadas (para administrarlas).
 - `GET /v1/units` → arreglo plano ordenado por `clave`:
   `[{ "id", "clave", "nombre", "tipo", "factorBase" }]`.
   Ambos son catálogos chicos e inmutables en la práctica: **sin paginar**
@@ -486,6 +504,47 @@ Planeador) no tienen ninguna ruta de escritura sobre productos.
 - `GET /v1/providers` → **paginado**, orden `razonSocial` ascendente; cada elemento es
   un Supplier (`id`, `razonSocial`, `rfc`, `contactoNombre`, `email`, `telefono`,
   `activo`, `createdAt`, `updatedAt`).
+
+### Categorías: alta, cambio y baja (T-21)
+
+Las categorías son parte del catálogo de productos (M04): las escribe el **Gerente de
+categoría**. Los demás perfiles solo las leen.
+
+| Método | Ruta | Roles |
+|---|---|---|
+| POST | `/v1/product-categories` | Gerente de categoría |
+| PATCH | `/v1/product-categories/:id` | Gerente de categoría |
+| DELETE | `/v1/product-categories/:id` | Gerente de categoría |
+
+`:id` es entero; otro valor → `400`. XML: `categoryResponse`.
+
+**POST** — `{ "nombre": "Lácteos", "categoriaPadreId": 1, "descripcion": "Opcional" }`
+
+| Campo | Regla |
+|---|---|
+| `nombre` | obligatorio, ≤ 80, único sin distinguir mayúsculas ni espacios de los extremos (`409` si existe) |
+| `categoriaPadreId` | opcional, entero de una categoría existente y activa (si no → `400`); omitir = categoría raíz |
+| `descripcion` | opcional |
+
+Response `201`: la categoría, con `activo: true`.
+
+**PATCH** — mismos campos, todos opcionales, más `activo` (boolean) para desactivar o
+reactivar sin borrar. `categoriaPadreId: null` la vuelve raíz; `descripcion: null` la borra.
+Una categoría no puede colgar de sí misma ni de una de sus subcategorías (`400`).
+Response `200`. Inexistente → `404`; nombre de otra → `409`.
+
+**DELETE** — inexistente → `404`. **Nunca se pierde el historial (D-07):**
+
+- Sin productos, sin subcategorías y sin que nada dependa de ella: se borra y responde
+  `204` sin cuerpo.
+- Con productos, con subcategorías o usada por otro servicio (indicadores, reglas de
+  exclusión): **no se borra**; queda `activo: false` y responde `200` con la categoría.
+
+Una categoría desactivada:
+
+- sale de `GET /v1/product-categories` (salvo con `?includeInactive=true`);
+- sus productos la **conservan** y la siguen mostrando en `categoria`;
+- **no** se puede asignar a un producto nuevo ni al editar uno (`400`), ni usar como padre.
 
 ### GET /v1/products
 
@@ -503,6 +562,26 @@ catálogo). Un Proveedor sin empresa vinculada → `403`.
 (también `pendiente_aprobacion`, `inactivo` o `activo`). Solo lo aceptan el Gerente de categoría,
 el Administrador y el Auditor; otro perfil recibe `403`, y un valor fuera de esos cuatro, `400`.
 Un Proveedor ignora el filtro: siempre ve únicamente los suyos.
+
+**Búsqueda y filtros (T-21)**, todos opcionales y combinables con AND. Se **suman** al
+recorte por perfil de arriba, nunca lo sustituyen (un Proveedor busca solo entre los suyos;
+un perfil interno, solo entre los activos):
+
+| Parámetro | Regla |
+|---|---|
+| `search` | texto ≤ 100: busca en `nombre`, `sku` y `descripcion` (ver "Búsqueda por texto") |
+| `categoriaId` | entero ≥ 1 |
+| `esCanastaBasica` | `true` = solo canasta básica (D-03); `false` = solo los que no lo son |
+
+### Búsqueda por texto (`search`) en productos, tiendas y zonas
+
+- Busca el texto **en cualquier parte** del campo y **sin distinguir mayúsculas**
+  (`ILIKE`). Sí distingue acentos: `cafe` no encuentra `café`.
+- Se buscan tal cual los caracteres `%`, `_` y `\` (no son comodines).
+- Se ignoran los espacios de los extremos; vacío o solo espacios = sin búsqueda.
+- Más de 100 caracteres → `400`. El resultado sigue paginado y con el orden fijo de la ruta.
+- Un parámetro de filtro mal formado (`categoriaId=abc`, `zonaId` no UUID, `activo=quizá`)
+  o desconocido → `400`.
 
 ### GET /v1/products/pending
 
@@ -652,8 +731,10 @@ pantalla y la app móvil los piden para llenar listas y casi nunca cambian:
 | `GET /v1/municipalities` | `catalog:municipalities` |
 | `GET /v1/stores/catalog/postal-codes` | `catalog:postal-codes` |
 
-- Son de **solo lectura** en este servicio (ninguna ruta los modifica), así que no hay invalidación al
-  escribir: un cambio manual en la base se ve al caducar el TTL (o borrando la llave).
+- Unidades, municipios y códigos postales son de **solo lectura** (ninguna ruta los modifica): un cambio
+  manual en la base se ve al caducar el TTL (o borrando la llave). Las **categorías** sí se escriben
+  (T-21): cada alta, cambio o baja borra `catalog:categories`, así que el cambio se ve de inmediato.
+  La llave guarda solo las activas; `?includeInactive=true` no usa caché.
 - **No** se cachean zonas, tiendas, productos, presentaciones ni segmentos: cambian con las escrituras
   del propio servicio y se paginan/filtran.
 - La caché **no se salta la seguridad**: el token, la sesión en Redis y el rol se validan antes que la caché.

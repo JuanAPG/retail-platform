@@ -6,7 +6,13 @@ import { mergeMap } from 'rxjs/operators';
 import { AuditReporter } from './audit-reporter.service';
 
 /** Tablas que este servicio audita. Es una lista cerrada: el nombre se interpola en SQL. */
-export type TablaAuditada = 'productos' | 'producto_presentaciones' | 'tiendas' | 'zonas' | 'segmentos_ingreso';
+export type TablaAuditada =
+  | 'productos'
+  | 'producto_presentaciones'
+  | 'tiendas'
+  | 'zonas'
+  | 'segmentos_ingreso'
+  | 'categorias_producto';
 export type AccionAudit = 'insert' | 'update' | 'delete' | 'aprobar' | 'rechazar';
 
 export const AUDITAR_KEY = 'auditar';

@@ -9,6 +9,8 @@ import { ProductoPresentacionEntity } from '../entities/producto-presentacion.en
 import { ProductoRevisionEntity } from '../entities/producto-revision.entity';
 import { ProveedorEntity } from '../entities/proveedor.entity';
 import { UnidadMedidaEntity } from '../entities/unidad-medida.entity';
+import { CategoriesController } from '../categories/categories.controller';
+import { CategoriesService } from '../categories/categories.service';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
@@ -30,8 +32,8 @@ import { ProductsService } from './products.service';
     ]),
     JwtModule.register({}),
   ],
-  controllers: [ProductsController],
-  providers: [ProductsService, SessionGuard, CacheService],
+  controllers: [CategoriesController, ProductsController],
+  providers: [ProductsService, CategoriesService, SessionGuard, CacheService],
   exports: [ProductsService],
 })
 export class ProductsModule {}

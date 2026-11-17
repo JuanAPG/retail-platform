@@ -592,7 +592,9 @@ CREATE TABLE categorias_producto (
     id                  SMALLSERIAL PRIMARY KEY,
     nombre              VARCHAR(80) NOT NULL UNIQUE,
     categoria_padre_id  SMALLINT REFERENCES categorias_producto(id),
-    descripcion         TEXT
+    descripcion         TEXT,
+    -- T-21 / D-07: una categoría con productos no se borra, se desactiva.
+    activo              BOOLEAN NOT NULL DEFAULT TRUE
 );
 COMMENT ON TABLE categorias_producto IS 'Categorías y subcategorías; soporta criterios de sustituibilidad (RN-11).';
 

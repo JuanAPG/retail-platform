@@ -10,6 +10,7 @@ import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalog
 import { Pagina } from '../common/dto/pagination.dto';
 import { ResultadoBaja, tiendaTieneHistorial } from '../common/helpers/historial.helper';
 import { paginar } from '../common/helpers/pagination.helper';
+import { patronDeBusqueda } from '../common/helpers/busqueda.helper';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { StoreFilterDto } from './dto/store-filter.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -45,6 +46,14 @@ export class StoresService {
       .where('t.activo = true')
       .orderBy('t.nombre', 'ASC')
       .addOrderBy('t.id', 'ASC');
+
+    // T-21: búsqueda por texto y filtros, combinados con AND.
+    const patron = patronDeBusqueda(filtros.search);
+    if (patron) {
+      qb.andWhere("(t.nombre ILIKE :patron ESCAPE '\\' OR t.numeroSucursal ILIKE :patron ESCAPE '\\')", { patron });
+    }
+    if (filtros.zonaId) qb.andWhere('t.zonaId = :zonaId', { zonaId: filtros.zonaId });
+    if (filtros.formato) qb.andWhere('t.formato = :formato', { formato: filtros.formato });
     return paginar(qb, filtros);
   }
 
