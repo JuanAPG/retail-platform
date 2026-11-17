@@ -54,6 +54,7 @@ jobs:
           - audit-service
           # Sprint 4
           - income-segmentation-service
+          - availability-service
     steps:
       - uses: actions/checkout@v4
 

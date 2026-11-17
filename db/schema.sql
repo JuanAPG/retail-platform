@@ -168,7 +168,7 @@ DROP TABLE IF EXISTS
     zona_clasificaciones, indicadores, tiendas, tienda_canal_web,
     categorias_producto, unidades_medida, productos, indicador_valores,
     producto_presentaciones, producto_imagenes, producto_revisiones,
-    inventario, precios, precios_propuestos_proveedor, limites_precio_zona,
+    inventario, disponibilidad_capturas, precios, precios_propuestos_proveedor, limites_precio_zona,
     config_alertas_precio, precios_observados,
     reglas_exclusion_asociacion, clientes, importaciones,
     importacion_filas, importacion_errores, transacciones,
@@ -809,9 +809,32 @@ CREATE TABLE inventario (
     actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tienda_id, presentacion_id)
 );
-COMMENT ON TABLE inventario IS 'Stock por tienda y presentación. Insumo de la disponibilidad que usa M12 Accesibilidad (RN-04).';
+COMMENT ON TABLE inventario IS 'Existencia ACTUAL por tienda y presentación; actualizado_en es cuándo se VIO el dato, que vale 7 días (D-38). Insumo de la disponibilidad que usa M12 Accesibilidad (RN-04). Dueño: availability-service.';
 
 CREATE INDEX idx_inventario_presentacion ON inventario(presentacion_id);
+
+-- D-38 (Sprint 4). Dueño: availability-service.
+-- Bitácora de capturas de existencia: solo se anexa. `captura_id` lo genera
+-- el dispositivo, así reenviar un lote no duplica (D-42). Una captura más
+-- vieja que el dato del servidor queda como `conflicto` y no lo sobrescribe.
+CREATE TABLE disponibilidad_capturas (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    captura_id          UUID NOT NULL UNIQUE,
+    tienda_id           UUID NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+    presentacion_id     UUID NOT NULL REFERENCES producto_presentaciones(id) ON DELETE CASCADE,
+    stock               NUMERIC(12,2) NOT NULL CHECK (stock >= 0),
+    capturado_en        TIMESTAMPTZ NOT NULL,              -- cuándo se vio
+    recibido_en         TIMESTAMPTZ NOT NULL DEFAULT now(), -- cuándo llegó al servidor
+    origen              VARCHAR(12) NOT NULL DEFAULT 'web' CHECK (origen IN ('movil','escritorio','web')),
+    estado              VARCHAR(12) NOT NULL CHECK (estado IN ('aceptada','conflicto')),
+    motivo              TEXT,
+    capturado_por       UUID REFERENCES usuarios(id)
+);
+COMMENT ON TABLE disponibilidad_capturas IS 'Capturas de existencia (campo, escritorio o web), aceptadas o en conflicto (D-38, D-42). Solo se anexa. Dueño: availability-service.';
+
+CREATE INDEX idx_dispcapturas_tienda_presentacion
+    ON disponibilidad_capturas(tienda_id, presentacion_id, capturado_en DESC);
+CREATE INDEX idx_dispcapturas_recibido ON disponibilidad_capturas(recibido_en DESC);
 
 CREATE TYPE origen_precio AS ENUM ('interno','propuesta_proveedor_aprobada');
 
