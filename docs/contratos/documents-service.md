@@ -18,7 +18,7 @@ de servicio de Docker).
 | GET | `/v1/reports` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | GET | `/v1/reports/stats/by-user-month` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | GET | `/v1/reports/:id` | Los 6 perfiles internos; Proveedor (solo los suyos) |
-| GET | `/v1/reports/:id/export?format=pdf\|xlsx` | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| GET | `/v1/reports/:id/export?format=pdf\|xlsx\|csv` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | PATCH | `/v1/reports/:id` | Gerente de categoría |
 
 **Aislamiento del Proveedor (DOC-04):** en el listado y la agregación se filtra por su
@@ -86,10 +86,14 @@ XML: `reportStatsResponse`.
 `GET`: Report. `PATCH` body `{ "estado": "generado" | "exportado" }` (solo el Gerente).
 `:id` mal formado → `400`; inexistente (o ajeno, para un Proveedor) → `404`.
 
-## GET /v1/reports/:id/export?format=pdf|xlsx
+## GET /v1/reports/:id/export?format=pdf|xlsx|csv
 
-Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el reporte como `exportado` solo si quien exporta es el Gerente de categoría (mismo rol que el `PATCH`); los perfiles de solo lectura descargan sin alterar el estado. En ambos casos se audita `exportar`.
-`format` ausente o distinto de `pdf` y `xlsx` → `400`.
+Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el reporte como `exportado` solo si quien exporta es el Gerente de categoría (mismo rol que el `PATCH`); los perfiles de solo lectura descargan sin alterar el estado.
+`format` ausente o distinto de `pdf`, `xlsx` y `csv` → `400`.
+
+**Bitácora de cada descarga (D-46):** toda exportación, en cualquier formato y por cualquier perfil, se reporta a
+audit-service como `exportar` sobre `reportes`, con el id del reporte. Quién y cuándo los pone audit-service (sale del
+token); el formato va en la descripción: `Reporte ejecutivo exportado a CSV (formato=csv) por Auditor.`
 
 - **`pdf`** (obligatorio, D-19): `Content-Type: application/pdf` y `Content-Disposition: attachment; filename="reporte-ejecutivo-<fecha>.pdf"`.
   Con acentos, ñ, `$` y `%`. Un reporte vacío o sin datos produce un PDF, nunca `500`.
@@ -97,6 +101,14 @@ Sale del documento guardado en MongoDB (mismos números que el JSON). Marca el r
   archivo `reporte-ejecutivo-<fecha>.xlsx`. Dos hojas: `Reporte` (periodo, zona, segmento, id) e `Indicadores`
   (servicio, indicador, valor, estado, nota). **Las cifras van como celdas numéricas**; un indicador no disponible va
   con estado `No disponible`, su motivo en la nota y la celda de valor vacía (nunca 0). Las listas dan una fila por elemento.
+- **`csv`** (T-23, D-46): `Content-Type: text/csv; charset=utf-8`, archivo `reporte-ejecutivo-<fecha>.csv`.
+  RFC 4180: separador coma, fin de línea CRLF, UTF-8 **con BOM** (Excel abre bien acentos y ñ). Encabezado
+  `clave,indicador,servicio,disponible,valor,motivo` y **una fila por indicador: los 16**, en el orden del reporte.
+  - `disponible`: `si` o `no`. Un indicador no disponible va con `valor` **vacío** y su `motivo` (D-20: nunca 0);
+    uno disponible sin datos en el periodo, con `valor` y `motivo` vacíos.
+  - Los números van tal cual, con punto decimal. Una lista u objeto se resume en la misma celda
+    (`clave: valor · clave: valor | …`), para que siga siendo una fila por indicador.
+  - Un texto que empieza con `=`, `+`, `-` o `@` se antepone con `'` para que la hoja no lo ejecute como fórmula.
 
 ## MongoDB
 

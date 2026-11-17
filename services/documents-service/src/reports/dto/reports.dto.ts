@@ -17,6 +17,9 @@ import { ESTADO_REPORTE } from '../schemas/report.schema';
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
+export const FORMATOS_EXPORTACION = ['pdf', 'xlsx', 'csv'] as const;
+export type FormatoExportacion = (typeof FORMATOS_EXPORTACION)[number];
+
 @ValidatorConstraint({ name: 'rangoValido', async: false })
 class RangoValido implements ValidatorConstraintInterface {
   validate(dateTo: string, args: ValidationArguments) {
@@ -75,7 +78,7 @@ export class ActualizarReporteDto {
 
 /** Query de `GET /v1/reports/:id/export`. */
 export class ExportarReporteDto {
-  // D-19: el PDF es obligatorio; el Excel (xlsx) es opcional y también se ofrece.
-  @IsIn(['pdf', 'xlsx'], { message: 'format debe ser pdf o xlsx' })
-  format!: 'pdf' | 'xlsx';
+  // D-19: el PDF es obligatorio; el Excel (xlsx) es opcional. T-23 / D-46: CSV con los 16 indicadores.
+  @IsIn(FORMATOS_EXPORTACION, { message: 'format debe ser pdf, xlsx o csv' })
+  format!: FormatoExportacion;
 }

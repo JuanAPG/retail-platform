@@ -10,7 +10,7 @@ import { GENERAN_REPORTES, LEEN_REPORTES } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { ActualizarReporteDto, ExportarReporteDto, GenerarReporteEjecutivoDto, ListarReportesDto } from './dto/reports.dto';
 import { muestras } from './muestras';
-import { ReportsService } from './reports.service';
+import { ReportsService, TIPO_CONTENIDO } from './reports.service';
 
 /** M16 — Reportes ejecutivos. Contrato: docs/contratos/documents-service.md */
 @ApiTags('M16 Reports')
@@ -81,8 +81,12 @@ export class ReportsController {
 
   @Get(':id/export')
   @Roles(...LEEN_REPORTES)
-  @ApiOperation({ summary: 'Exporta el reporte guardado a PDF (format=pdf) o Excel (format=xlsx, cifras como celdas numéricas). Mismos números que el JSON.' })
-  @ApiSinCuerpo(200, 'Archivo PDF (application/pdf) o Excel (.xlsx) con Content-Disposition: attachment.')
+  @ApiOperation({
+    summary:
+      'Exporta el reporte guardado a PDF (format=pdf), Excel (format=xlsx, cifras como celdas numéricas) o CSV (format=csv, los 16 indicadores, los no disponibles con motivo). Mismos números que el JSON.',
+    description: 'Cada descarga queda en la bitácora con quién, cuándo y qué formato (D-46). Un Proveedor solo descarga los suyos (404 con el de otro).',
+  })
+  @ApiSinCuerpo(200, 'Archivo PDF (application/pdf), Excel (.xlsx) o CSV (text/csv, UTF-8 con BOM) con Content-Disposition: attachment.')
   @ApiErrores(400, 401, 403, 404)
   async exportar(
     @Param('id') id: string,
@@ -94,7 +98,7 @@ export class ReportsController {
   ) {
     const { buffer, nombre, formato } = await this.reportes.exportar(id, query.format, usuario, authorization, ip);
     res.set({
-      'Content-Type': formato === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf',
+      'Content-Type': TIPO_CONTENIDO[formato],
       'Content-Disposition': `attachment; filename="${nombre}"`,
     });
     return new StreamableFile(buffer);
