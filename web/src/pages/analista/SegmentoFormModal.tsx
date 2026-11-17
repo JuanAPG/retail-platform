@@ -60,8 +60,19 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
     setGuardando(true);
     try {
       if (esEdicion) {
-        await actualizarSegmento(segmento.id, payload);
-        onGuardado('Segmento actualizado correctamente.');
+        // D-35: editar crea una versión nueva. El código no cambia entre versiones (la API rechaza
+        // `code` en el PATCH) y un campo vaciado se manda como null para quitarlo de verdad.
+        const { code: _codigo, ...cambios } = payload;
+        const actualizado = await actualizarSegmento(segmento.id, {
+          ...cambios,
+          incomeRangeMax: incomeRangeMax === '' ? null : cambios.incomeRangeMax,
+          description: description.trim() === '' ? null : cambios.description,
+        });
+        onGuardado(
+          actualizado.version && actualizado.version !== segmento.version
+            ? `Segmento actualizado: ahora va en la versión ${actualizado.version} y la anterior se conserva.`
+            : 'Segmento actualizado correctamente.',
+        );
       } else {
         await crearSegmento(payload);
         onGuardado('Segmento creado correctamente.');
@@ -88,6 +99,8 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
             maxLength={20}
             value={code}
             onChange={(e) => setCode(e.target.value)}
+            // D-35: el código identifica al segmento entre versiones; no se edita.
+            disabled={esEdicion}
             placeholder="ING_1"
             dataFont
           />
