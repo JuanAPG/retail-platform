@@ -135,7 +135,65 @@ const aprobacion = {
   prices: [{ ...precio, price: '38.00', origen: 'propuesta_proveedor_aprobada' }],
 };
 
+/** T-22: caso de control del contrato (tiendas A y B comparables; C abrió después). */
+const ZONA_MUESTRA = { zoneId: 'f2670df2-94bd-494e-b4ac-04f7e7c02476', zoneName: 'Zona Centro' };
+const variacion = {
+  presentationId: '5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77',
+  productId: 'c9a1f0bb-7777-4888-9999-aaaabbbbcccc',
+  dateFrom: '2026-09-01',
+  dateTo: '2026-10-01',
+  byStore: [
+    {
+      storeId: '27f05c81-c6bf-456a-a273-150e4edb9900',
+      storeName: 'Abarrotes Constitución',
+      ...ZONA_MUESTRA,
+      disponible: true,
+      priceFrom: 20,
+      priceTo: 22,
+      change: 2,
+      changePercent: 10,
+      motivo: null,
+    },
+    {
+      storeId: '8f3b2a10-5c4d-4e6f-9a7b-1c2d3e4f5a6b',
+      storeName: 'Mercado Juárez',
+      ...ZONA_MUESTRA,
+      disponible: true,
+      priceFrom: 30,
+      priceTo: 27,
+      change: -3,
+      changePercent: -10,
+      motivo: null,
+    },
+    {
+      storeId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+      storeName: 'Super Nuevo',
+      ...ZONA_MUESTRA,
+      disponible: false,
+      priceFrom: null,
+      priceTo: 40,
+      change: null,
+      changePercent: null,
+      motivo: 'La tienda no tenía precio de esta presentación el 2026-09-01.',
+    },
+  ],
+  byZone: [
+    {
+      ...ZONA_MUESTRA,
+      stores: 3,
+      comparableStores: 2,
+      disponible: true,
+      averageFrom: 25,
+      averageTo: 24.5,
+      change: -0.5,
+      changePercent: -2,
+      motivo: null,
+    },
+  ],
+};
+
 export const muestras = {
+  variacion,
   precio,
   precioCerrado,
   comparacion,

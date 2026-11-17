@@ -9,7 +9,13 @@ import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { CreatePriceDto } from './dto/create-price.dto';
-import { PriceComparisonQueryDto, PriceCurrentQueryDto, PriceHistoryQueryDto, PriceSeriesQueryDto } from './dto/price-queries.dto';
+import {
+  PriceComparisonQueryDto,
+  PriceCurrentQueryDto,
+  PriceHistoryQueryDto,
+  PriceSeriesQueryDto,
+  PriceVariationQueryDto,
+} from './dto/price-queries.dto';
 import { PricesService } from './prices.service';
 
 /**
@@ -78,6 +84,21 @@ export class PricesController {
   @ApiErrores(400, 401, 403, 404)
   findSeries(@Query() filtros: PriceSeriesQueryDto) {
     return this.pricesService.findSeries(filtros);
+  }
+
+  @Get('variation')
+  @XmlRoot('priceVariationResponse')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({
+    summary: 'Variación de precio de UNA presentación entre dos fechas, por tienda y por zona (T-22). Sin paginar.',
+    description:
+      'El precio de cada fecha es el del histórico que cubre ese día. No se mezclan presentaciones (D-06). ' +
+      'La zona promedia solo las tiendas con precio en las dos fechas. Sin precio en alguna fecha: `disponible: false` con motivo, nunca 0.',
+  })
+  @ApiRespuesta(200, 'Cambio en pesos y en porcentaje, por tienda y por zona.', muestras.variacion, 'priceVariationResponse')
+  @ApiErrores(400, 401, 403)
+  findVariation(@Query() filtros: PriceVariationQueryDto) {
+    return this.pricesService.findVariation(filtros);
   }
 
   @Get('compare-zones')

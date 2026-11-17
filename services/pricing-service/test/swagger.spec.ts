@@ -21,9 +21,9 @@ describe('Swagger (integración, requiere stack)', () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
     // 5 de precios (POST, history, current, series, compare-zones) + 2 de alertas (GET, PUT) + 4 de propuestas
-    // (POST, GET, approve, reject) + 4 de observaciones (POST, GET, approve, reject).
+    // (POST, GET, approve, reject) + 4 de observaciones (POST, GET, approve, reject) + variación entre dos fechas (T-22).
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(15);
+    expect(operaciones).toBe(16);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
