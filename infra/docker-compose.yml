@@ -665,6 +665,55 @@ services:
     networks:
       - retail_net
 
+  availability-service:
+    image: node:20
+    container_name: retail_availability_service
+    working_dir: /app
+    volumes:
+      - ../services/availability-service:/app
+      - /app/node_modules
+    environment:
+      PORT: 3114
+      SERVICE_NAME: availability-service
+      SERVICE_VERSION: 1.0.0
+      # targetNamespace de su XSD: el XmlInterceptor lo pone como
+      # xmlns en la raiz para que el XML valide contra docs/contratos/.
+      XML_NAMESPACE: availability/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AUTH_SERVICE_URL: http://auth-service:3101
+      # Llamada en caliente: canasta basica, tiendas y zonas salen de
+      # catalog. Si no responde, cobertura y faltantes dan 503.
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      # Bitacora: no bloqueante.
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      # D-38: un dato de existencia vale 7 dias; despues sale vencido.
+      AVAILABILITY_VALID_DAYS: 7
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+    ports:
+      - "3114:3114"
+    command: sh -c "npm install && npm run start:dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3114/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    networks:
+      - retail_net
+
   # ---------------------------------------------------------------
   # MongoDB y Redis (en uso; ver el encabezado para quién usa Mongo)
   # ---------------------------------------------------------------
