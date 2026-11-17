@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de income-segmentation-service (T-05, D-35 y D-36).
+     Espacio de nombres fijo `segmentation/v1`. Los endpoints responden estas
+     raíces cuando `Accept: application/xml`. Los nulos se OMITEN (por eso los
+     campos opcionales llevan minOccurs="0"). `GET /v1/health` usa health.xsd. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="segmentation/v1"
+           xmlns:seg="segmentation/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="fecha">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="origenClasificacion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="manual"/>
+      <xs:enumeration value="cluster"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="reglaPublicacion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ambos"/>
+      <xs:enumeration value="cualquiera"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Segmento en su versión vigente. -->
+  <xs:complexType name="segment">
+    <xs:sequence>
+      <xs:element name="id" type="xs:integer"/>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="incomeRangeMin" type="xs:decimal"/>
+      <!-- Sin tope superior: se omite. -->
+      <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="updateFrequency" type="xs:string"/>
+      <xs:element name="zoneRelation" type="xs:string"/>
+      <xs:element name="limitations" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="version" type="xs:positiveInteger"/>
+      <xs:element name="versionValidFrom" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Una versión del segmento (D-35). Solo se anexan. -->
+  <xs:complexType name="segmentVersion">
+    <xs:sequence>
+      <xs:element name="segmentId" type="xs:integer"/>
+      <xs:element name="version" type="xs:positiveInteger"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="incomeRangeMin" type="xs:decimal"/>
+      <xs:element name="incomeRangeMax" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="updateFrequency" type="xs:string"/>
+      <xs:element name="zoneRelation" type="xs:string"/>
+      <xs:element name="limitations" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="validFrom" type="xs:dateTime"/>
+      <!-- Vigente: se omite. -->
+      <xs:element name="validTo" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="current" type="xs:boolean"/>
+      <xs:element name="createdBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="changeReason" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Clasificación de una zona, con la versión del segmento con la que se hizo. -->
+  <xs:complexType name="zoneClassification">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="segmentId" type="xs:integer"/>
+      <xs:element name="segmentCode" type="xs:string"/>
+      <xs:element name="segmentName" type="xs:string"/>
+      <xs:element name="segmentVersion" type="xs:positiveInteger"/>
+      <xs:element name="segmentCurrentVersion" type="xs:positiveInteger"/>
+      <xs:element name="origin" type="seg:origenClasificacion"/>
+      <xs:element name="validFrom" type="seg:fecha"/>
+      <xs:element name="validTo" type="seg:fecha" minOccurs="0"/>
+      <xs:element name="current" type="xs:boolean"/>
+      <xs:element name="assignedBy" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Una combinación zona-segmento y si se puede publicar (D-36).
+       Si disponible=false no hay averageTicket: NUNCA un número. -->
+  <xs:complexType name="zoneSegmentPublication">
+    <xs:sequence>
+      <xs:element name="zoneId" type="xs:string"/>
+      <xs:element name="segmentId" type="xs:integer"/>
+      <xs:element name="segmentCode" type="xs:string"/>
+      <xs:element name="segmentVersion" type="xs:positiveInteger"/>
+      <xs:element name="transactions" type="xs:nonNegativeInteger"/>
+      <xs:element name="stores" type="xs:nonNegativeInteger"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <xs:element name="averageTicket" type="xs:decimal" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/segments, GET y PATCH /v1/segments/:id -->
+  <xs:element name="segmentResponse" type="seg:segment"/>
+
+  <!-- GET /v1/segments -->
+  <xs:element name="segmentListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="seg:segment" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/segments/:id/versions/:version -->
+  <xs:element name="segmentVersionResponse" type="seg:segmentVersion"/>
+
+  <!-- GET /v1/segments/:id/versions -->
+  <xs:element name="segmentVersionListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="seg:segmentVersion" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET y PUT /v1/zones/:zoneId/classification -->
+  <xs:element name="zoneClassificationResponse" type="seg:zoneClassification"/>
+
+  <!-- GET /v1/zone-classifications, GET /v1/zones/:zoneId/classification/history -->
+  <xs:element name="zoneClassificationListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="seg:zoneClassification" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/publication/zone-segments -->
+  <xs:element name="publicationResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="minTransactions" type="xs:positiveInteger"/>
+        <xs:element name="minStores" type="xs:positiveInteger"/>
+        <xs:element name="rule" type="seg:reglaPublicacion"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="seg:zoneSegmentPublication" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
