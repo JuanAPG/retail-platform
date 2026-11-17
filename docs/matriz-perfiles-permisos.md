@@ -125,9 +125,9 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | Servicio | Puerto | Responsable | Ya decidido | Pendiente |
 |---|---|---|---|---|
 | `transactions-ingestion-service` | 3111 | Juan Angel | Recibe la importación por archivo que antes hacía core-process (D-33, D-34). | Fila completa. |
-| `income-segmentation-service` | 3112 | Pamela | Recibe segmentos y clasificación de zonas de catalog (D-35); umbral de publicación (D-36). | Fila completa. |
+| `income-segmentation-service` | 3112 | Pamela | Recibe segmentos y clasificación de zonas de catalog (D-35); umbral de publicación (D-36). **Fila (igual que M05): Admin L · Analista T · Gerente L · Resp. precios L · Planeador L · Auditor L · Proveedor – · Investigador –.** El Analista comercial crea segmentos, sus versiones y clasifica zonas. Contrato: `docs/contratos/income-segmentation-service.md`. | Confirmar que la clasificación de zonas pasa del Administrador (catalog) al Analista; P-11. |
 | `basket-analysis-service` | 3113 | Leonardo | Canasta típica (D-37); umbral de publicación (D-36). | Fila completa. |
-| `availability-service` | 3114 | Pamela | Recibe la disponibilidad (D-38). | Fila completa. |
+| `availability-service` | 3114 | Pamela | Recibe la disponibilidad (D-38). **Fila: Admin L · Analista T · Gerente L · Resp. precios L · Planeador L · Auditor L · Proveedor – · Investigador: solo alta de capturas (D-28), sin lectura.** Contrato: `docs/contratos/availability-service.md`. | Confirmar que el Analista comercial es quien corrige existencias; registrar como decisión los casos de control de cobertura del contrato. |
 | `promotion-service` | 3115 | Fernando | **Gerente de categoría: Propone. Responsable de precios: Aprueba** (D-39). | Los otros 5 perfiles. |
 | `demand-forecast-service` | 3116 | Leonardo | Método y validación (D-40). | Fila completa. |
 | `recommendations-workflow-service` | 3117 | Fernando | **Gerente de categoría: asigna y evalúa. El responsable asignado mueve los estados** (D-41). | Qué roles pueden ser responsables asignados; los demás perfiles. |
