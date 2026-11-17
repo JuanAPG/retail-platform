@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de availability-service (T-05, D-38).
+     Espacio de nombres fijo `availability/v1`. Los endpoints responden estas
+     raíces cuando `Accept: application/xml`. Los nulos se OMITEN (por eso los
+     campos opcionales llevan minOccurs="0"). `GET /v1/health` usa health.xsd. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="availability/v1"
+           xmlns:av="availability/v1"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="estadoCaptura">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="aceptada"/>
+      <xs:enumeration value="conflicto"/>
+      <xs:enumeration value="duplicada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="origenCaptura">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="movil"/>
+      <xs:enumeration value="escritorio"/>
+      <xs:enumeration value="web"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Estado de una existencia (D-38: más de 7 días = vencido). -->
+  <xs:simpleType name="estadoExistencia">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="disponible"/>
+      <xs:enumeration value="agotado"/>
+      <xs:enumeration value="vencido"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Estado de un básico en una tienda o en una zona. -->
+  <xs:simpleType name="estadoBasico">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="cubierto"/>
+      <xs:enumeration value="faltante"/>
+      <xs:enumeration value="vencido"/>
+      <xs:enumeration value="sin_dato"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="existencia">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="porcentaje">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Una captura. currentStock/currentCapturedAt solo salen en la respuesta
+       del POST (la existencia que quedó en el servidor). -->
+  <xs:complexType name="capture">
+    <xs:sequence>
+      <xs:element name="captureId" type="xs:string"/>
+      <xs:element name="status" type="av:estadoCaptura"/>
+      <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="stock" type="av:existencia"/>
+      <xs:element name="capturedAt" type="xs:dateTime"/>
+      <xs:element name="receivedAt" type="xs:dateTime"/>
+      <xs:element name="origin" type="av:origenCaptura"/>
+      <xs:element name="capturedBy" type="xs:string" minOccurs="0"/>
+      <xs:element name="currentStock" type="av:existencia" minOccurs="0"/>
+      <xs:element name="currentCapturedAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="reason" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="stockRow">
+    <xs:sequence>
+      <xs:element name="storeId" type="xs:string"/>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="stock" type="av:existencia"/>
+      <xs:element name="capturedAt" type="xs:dateTime"/>
+      <xs:element name="ageDays" type="xs:nonNegativeInteger"/>
+      <xs:element name="status" type="av:estadoExistencia"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/availability/captures -->
+  <xs:element name="captureResponse" type="av:capture"/>
+
+  <!-- GET /v1/availability/captures -->
+  <xs:element name="captureListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="av:capture" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/availability/stock -->
+  <xs:element name="stockListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="av:stockRow" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/availability/stores/:storeId/coverage.
+       Si disponible=false no hay `coverage`: NUNCA un 0. -->
+  <xs:element name="storeCoverageResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="storeId" type="xs:string"/>
+        <xs:element name="validDays" type="xs:positiveInteger"/>
+        <xs:element name="basics" type="xs:nonNegativeInteger"/>
+        <xs:element name="covered" type="xs:nonNegativeInteger"/>
+        <xs:element name="missing" type="xs:nonNegativeInteger"/>
+        <xs:element name="expired" type="xs:nonNegativeInteger"/>
+        <xs:element name="noData" type="xs:nonNegativeInteger"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="coverage" type="av:porcentaje" minOccurs="0"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="items">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="productId" type="xs:string"/>
+                    <xs:element name="productName" type="xs:string"/>
+                    <xs:element name="status" type="av:estadoBasico"/>
+                    <xs:element name="presentationsWithStock" type="xs:nonNegativeInteger"/>
+                    <xs:element name="lastCapturedAt" type="xs:dateTime" minOccurs="0"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/availability/zones/:zoneId/coverage -->
+  <xs:element name="zoneCoverageResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="validDays" type="xs:positiveInteger"/>
+        <xs:element name="stores" type="xs:nonNegativeInteger"/>
+        <xs:element name="basics" type="xs:nonNegativeInteger"/>
+        <xs:element name="covered" type="xs:nonNegativeInteger"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="coverage" type="av:porcentaje" minOccurs="0"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="items">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="productId" type="xs:string"/>
+                    <xs:element name="productName" type="xs:string"/>
+                    <xs:element name="status" type="av:estadoBasico"/>
+                    <xs:element name="storesWithStock" type="xs:nonNegativeInteger"/>
+                    <xs:element name="storeShare" type="av:porcentaje"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="byStore">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="storeId" type="xs:string"/>
+                    <xs:element name="disponible" type="xs:boolean"/>
+                    <xs:element name="coverage" type="av:porcentaje" minOccurs="0"/>
+                    <xs:element name="covered" type="xs:nonNegativeInteger"/>
+                    <xs:element name="missing" type="xs:nonNegativeInteger"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/availability/shortages: trae storeId O zoneId, según el filtro. -->
+  <xs:element name="shortageListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:choice>
+          <xs:element name="storeId" type="xs:string"/>
+          <xs:element name="zoneId" type="xs:string"/>
+        </xs:choice>
+        <xs:element name="validDays" type="xs:positiveInteger"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="productId" type="xs:string"/>
+                    <xs:element name="productName" type="xs:string"/>
+                    <xs:element name="storeId" type="xs:string"/>
+                    <xs:element name="lastCapturedAt" type="xs:dateTime" minOccurs="0"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
