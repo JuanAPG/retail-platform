@@ -27,6 +27,7 @@ abre el nuevo. De ese historial se calcula elasticidad y variación de precios.
 | GET | `/v1/prices/history` | Los 6 perfiles internos |
 | GET | `/v1/prices/current` | Los 6 perfiles internos |
 | GET | `/v1/prices/series` | Los 6 perfiles internos |
+| GET | `/v1/prices/variation` | Los 6 perfiles internos |
 | GET | `/v1/prices/compare-zones` | Los 6 perfiles internos; Proveedor solo de productos suyos (`404` si es de otro) |
 | GET | `/v1/prices/alert-settings` | Responsable de precios, Administrador, Auditor |
 | PUT | `/v1/prices/alert-settings` | Responsable de precios |
@@ -161,6 +162,63 @@ paginar** (excepción declarada en `paginacion.md`): es lo que necesita la elast
 | `dateFrom`, `dateTo` | opcionales, `YYYY-MM-DD`; traen los precios cuya vigencia se **cruza** con el rango. `dateFrom > dateTo` → `400` |
 
 Response `200` (`priceSeriesResponse`): `{ data: [Price], total }`.
+
+### GET /v1/prices/variation (T-22)
+
+Cuánto cambió el precio de **una presentación** entre dos fechas, **por tienda y por zona**.
+**Sin paginar** (agregado acotado por la presentación obligatoria; excepción de
+`paginacion.md`). No se mezclan presentaciones (D-06): 500 g y 1 kg del mismo producto se
+consultan por separado.
+
+| Query | Regla |
+|---|---|
+| `presentationId` | **obligatorio**, UUID de una presentación existente (si no → `400`) |
+| `dateFrom`, `dateTo` | **obligatorios**, `YYYY-MM-DD`. `dateFrom > dateTo` → `400`. Iguales: variación 0 |
+| `zoneId`, `storeId` | opcionales, UUID: limitan las tiendas |
+
+```json
+{
+  "presentationId": "uuid", "productId": "uuid",
+  "dateFrom": "2026-09-01", "dateTo": "2026-10-01",
+  "byStore": [
+    { "storeId": "uuid", "storeName": "Abarrotes Constitución", "zoneId": "uuid", "zoneName": "Zona Centro",
+      "disponible": true, "priceFrom": 20, "priceTo": 22, "change": 2, "changePercent": 10, "motivo": null }
+  ],
+  "byZone": [
+    { "zoneId": "uuid", "zoneName": "Zona Centro", "stores": 3, "comparableStores": 2,
+      "disponible": true, "averageFrom": 25, "averageTo": 24.5, "change": -0.5, "changePercent": -2, "motivo": null }
+  ]
+}
+```
+
+- **Precio en una fecha** = el del histórico cuya vigencia cubre ese día
+  (`effectiveDate ≤ fecha` y sin cerrar, o `effectiveUntil ≥ fecha`). No se usa la bandera
+  `vigente`. Con una fecha futura cuenta el precio ya programado para ese día (D-05).
+- `change` = `priceTo − priceFrom` en pesos; `changePercent` = `change / priceFrom × 100`.
+  Ambos a 2 decimales. Los importes de esta ruta son **números**, no cadenas.
+- `byStore`: una fila por tienda que alguna vez tuvo precio de la presentación, ordenada por
+  zona y tienda. Si la tienda no tenía precio en alguna de las dos fechas:
+  `disponible: false`, `change` y `changePercent` en `null` (se omiten en XML) y `motivo`.
+  **Nunca sale 0 por falta de dato.**
+- `byZone`: el promedio de cada fecha se toma **solo de las tiendas con precio en las dos**
+  (`comparableStores`). Así una tienda que abrió o cerró entre las fechas no aparenta un
+  cambio de precio. Sin tiendas comparables: `disponible: false` con `motivo`.
+- Presentación sin ningún precio: `200` con `byStore: []` y `byZone: []`.
+
+**Caso de control** (prueba unitaria `variacion.spec.ts`). Una presentación, tres tiendas de
+la misma zona:
+
+| Tienda | 1-sep | 1-oct | `change` | `changePercent` |
+|---|---|---|---|---|
+| A | 20.00 | 22.00 | 2.00 | 10 |
+| B | 30.00 | 27.00 | −3.00 | −10 |
+| C | sin precio | 40.00 | — | — (`disponible: false`) |
+
+Zona: promedia A y B → **25.00 → 24.50, `change` −0.50, `changePercent` −2**,
+`stores 3`, `comparableStores 2`. Si C entrara al promedio de la segunda fecha daría
+29.67 (+18.67 %), que no es un cambio de precio real.
+
+XML: `priceVariationResponse`.
 
 ### GET /v1/prices/alert-settings · PUT /v1/prices/alert-settings
 

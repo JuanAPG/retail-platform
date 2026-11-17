@@ -16,6 +16,7 @@ de negocio.
 | POST | `/v1/prices` | Administrador, Responsable de precios |
 | GET | `/v1/prices/history?productId=&presentationId=` | Los 6 perfiles internos (paginado) |
 | GET | `/v1/prices/compare-zones?productId=` | Los 6 perfiles internos (agregado, sin paginar) |
+| GET | `/v1/prices/variation?presentationId=&dateFrom=&dateTo=[&zoneId=&storeId=]` | Los 6 perfiles internos (T-22, sin paginar) |
 | POST | `/v1/price-proposals` | Proveedor |
 | GET | `/v1/price-proposals?status=` | Proveedor (solo las suyas), Administrador, Gerente de categoría, Responsable de precios, Auditor |
 | PATCH | `/v1/price-proposals/:id/approve` | Administrador, Gerente de categoría |
@@ -34,6 +35,10 @@ Reglas que conviene tener presentes:
 - El **Investigador de mercado** (app móvil, D-28) solo da de alta precios observados: no pone
   precios, no lee el histórico ni la comparación entre zonas, y no ve la bandeja de
   observaciones. Lo que levanta nace pendiente y lo aprueba el Responsable de precios (D-16).
+- **Variación entre dos fechas (T-22):** cambio en pesos y en % de UNA presentación, por tienda y
+  por zona; nunca mezcla presentaciones (D-06). La zona promedia solo las tiendas con precio en las
+  dos fechas, y una tienda sin precio en alguna sale `disponible: false` con motivo, nunca 0. Caso de
+  control en `src/prices/variacion.spec.ts`; integración en `test/variation.spec.ts`.
 
 ## Estado
 

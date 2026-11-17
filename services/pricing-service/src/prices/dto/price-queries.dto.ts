@@ -39,6 +39,31 @@ export class PriceCurrentQueryDto extends PaginationDto {
   storeId?: string;
 }
 
+/** Query de `GET /v1/prices/variation` (T-22): UNA presentación entre dos fechas. */
+export class PriceVariationQueryDto {
+  @ApiProperty({ description: 'Id de la presentación (UUID). Nunca se mezclan presentaciones (D-06).' })
+  @IsUUID(undefined, { message: 'presentationId es obligatorio y debe ser un UUID.' })
+  presentationId: string;
+
+  @ApiProperty({ example: '2026-09-01', description: 'Fecha inicial (YYYY-MM-DD).' })
+  @IsFechaCalendario({ message: 'dateFrom es obligatoria y debe ser una fecha válida YYYY-MM-DD.' })
+  dateFrom: string;
+
+  @ApiProperty({ example: '2026-10-01', description: 'Fecha final (YYYY-MM-DD), igual o posterior a la inicial.' })
+  @IsFechaCalendario({ message: 'dateTo es obligatoria y debe ser una fecha válida YYYY-MM-DD.' })
+  dateTo: string;
+
+  @ApiPropertyOptional({ description: 'Solo las tiendas de esta zona (UUID).' })
+  @IsOptional()
+  @IsUUID(undefined, { message: 'zoneId debe ser un UUID.' })
+  zoneId?: string;
+
+  @ApiPropertyOptional({ description: 'Solo esta tienda (UUID).' })
+  @IsOptional()
+  @IsUUID(undefined, { message: 'storeId debe ser un UUID.' })
+  storeId?: string;
+}
+
 /** Query de `GET /v1/prices/series`: historial completo de una presentación, sin paginar. */
 export class PriceSeriesQueryDto {
   @ApiProperty({ description: 'Id de la presentación (UUID).' })
