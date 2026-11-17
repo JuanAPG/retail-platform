@@ -131,6 +131,20 @@ VALUES
      'Hogares por encima del tercer cuartil.')
 ON CONFLICT (nombre) DO NOTHING;
 
+-- D-35: cada segmento nace con su versión 1 (income-segmentation-service).
+-- Las clasificaciones de zona de abajo quedan ligadas a esa versión
+-- (`zona_clasificaciones.segmento_version` vale 1 por omisión).
+INSERT INTO segmento_versiones
+    (segmento_id, version, nombre, ingreso_min, ingreso_max, fuente,
+     frecuencia_actualizacion, relacion_zona, limitaciones, descripcion)
+SELECT s.id, s.version_actual, s.nombre, s.ingreso_min, s.ingreso_max, s.fuente,
+       s.frecuencia_actualizacion, s.relacion_zona, s.limitaciones, s.descripcion
+FROM segmentos_ingreso s
+WHERE NOT EXISTS (
+    SELECT 1 FROM segmento_versiones v
+    WHERE v.segmento_id = s.id AND v.version = s.version_actual
+);
+
 INSERT INTO zonas (nombre, municipio_id, descripcion, activo)
 SELECT v.nombre, m.id, v.descripcion, TRUE
 FROM (VALUES

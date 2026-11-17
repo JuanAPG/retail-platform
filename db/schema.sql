@@ -164,7 +164,7 @@ DROP TABLE IF EXISTS
     roles, modulos, rol_modulo_permiso, municipios, codigos_postales,
     direcciones, proveedores, usuarios, analisis_corridas,
     analisis_corrida_parametros, analisis_corrida_supuestos,
-    analisis_corrida_filtros, segmentos_ingreso, corrida_clusters, zonas,
+    analisis_corrida_filtros, segmentos_ingreso, segmento_versiones, corrida_clusters, zonas,
     zona_clasificaciones, indicadores, tiendas, tienda_canal_web,
     categorias_producto, unidades_medida, productos, indicador_valores,
     producto_presentaciones, producto_imagenes, producto_revisiones,
@@ -425,9 +425,42 @@ CREATE TABLE segmentos_ingreso (
     relacion_zona               TEXT NOT NULL,
     limitaciones                TEXT NOT NULL,
     descripcion                 TEXT,
+    -- D-35 (Sprint 4). Esta tabla guarda los valores VIGENTES; cada versión
+    -- vive en `segmento_versiones`. Dueño: income-segmentation-service.
+    version_actual              INTEGER NOT NULL DEFAULT 1 CHECK (version_actual >= 1),
     CONSTRAINT chk_segmento_rango CHECK (ingreso_max IS NULL OR ingreso_max > ingreso_min)
 );
-COMMENT ON TABLE segmentos_ingreso IS 'Rangos de clasificación por nivel de ingreso (RN-01), con la justificación de fuente/actualización/relación con zona/limitaciones que exige la retroalimentación del profesor.';
+COMMENT ON TABLE segmentos_ingreso IS 'Rangos de clasificación por nivel de ingreso (RN-01), con la justificación de fuente/actualización/relación con zona/limitaciones que exige la retroalimentación del profesor. Valores vigentes; el historial está en segmento_versiones (D-35). Dueño: income-segmentation-service.';
+
+-- D-35 (Sprint 4). Dueño: income-segmentation-service.
+-- Cada cambio a un segmento crea una versión nueva; la anterior se conserva.
+-- Solo se anexa: lo único que se actualiza es `vigente_hasta` al cerrarla.
+-- Así un análisis del año pasado sigue diciendo con qué rango se hizo.
+CREATE TABLE segmento_versiones (
+    id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    segmento_id                 SMALLINT NOT NULL REFERENCES segmentos_ingreso(id) ON DELETE CASCADE,
+    version                     INTEGER NOT NULL CHECK (version >= 1),
+    nombre                      VARCHAR(60) NOT NULL,
+    ingreso_min                 NUMERIC(12,2) NOT NULL,
+    ingreso_max                 NUMERIC(12,2),
+    fuente                      TEXT NOT NULL,
+    frecuencia_actualizacion    VARCHAR(60) NOT NULL,
+    relacion_zona               TEXT NOT NULL,
+    limitaciones                TEXT NOT NULL,
+    descripcion                 TEXT,
+    vigente_desde               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    vigente_hasta               TIMESTAMPTZ,
+    creado_por                  UUID REFERENCES usuarios(id),
+    motivo_cambio               VARCHAR(300),
+    UNIQUE (segmento_id, version),
+    CONSTRAINT chk_segversion_rango CHECK (ingreso_max IS NULL OR ingreso_max > ingreso_min),
+    CONSTRAINT chk_segversion_vigencia CHECK (vigente_hasta IS NULL OR vigente_hasta >= vigente_desde)
+);
+COMMENT ON TABLE segmento_versiones IS 'Versiones de cada segmento de ingreso, con su fuente y fecha (D-35). Solo se anexa. Dueño: income-segmentation-service.';
+
+-- Una sola versión vigente por segmento.
+CREATE UNIQUE INDEX uq_segmento_version_vigente
+    ON segmento_versiones(segmento_id) WHERE vigente_hasta IS NULL;
 
 -- FNBC (v4). El clustering de M05 no asigna segmentos zona por zona:
 -- asigna un segmento a cada CLUSTER, y la zona hereda el del cluster que
@@ -478,6 +511,9 @@ CREATE TABLE zona_clasificaciones (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     zona_id                 UUID NOT NULL REFERENCES zonas(id) ON DELETE CASCADE,
     segmento_manual_id      SMALLINT REFERENCES segmentos_ingreso(id),
+    -- D-35: con qué versión del segmento se clasificó. Editar el segmento
+    -- después no mueve las clasificaciones ya hechas.
+    segmento_version        INTEGER NOT NULL DEFAULT 1 CHECK (segmento_version >= 1),
     corrida_id              UUID,
     cluster_valor           INTEGER,
     vigente_desde           DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -497,7 +533,7 @@ CREATE TABLE zona_clasificaciones (
         vigente_hasta IS NULL OR vigente_hasta >= vigente_desde
     )
 );
-COMMENT ON TABLE zona_clasificaciones IS 'Clasificación de una zona en un segmento de ingreso, con su trazabilidad (RN-02). Manual o por cluster, nunca las dos.';
+COMMENT ON TABLE zona_clasificaciones IS 'Clasificación de una zona en un segmento de ingreso, con su trazabilidad (RN-02) y la versión del segmento con la que se hizo (D-35). Manual o por cluster, nunca las dos. Dueño: income-segmentation-service.';
 
 -- Una sola clasificación vigente por zona.
 CREATE UNIQUE INDEX uq_zona_clasificacion_vigente
