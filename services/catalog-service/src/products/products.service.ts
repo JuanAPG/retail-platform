@@ -13,6 +13,7 @@ import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalog
 import { Pagina } from '../common/dto/pagination.dto';
 import { presentacionTieneHistorial, ResultadoBaja } from '../common/helpers/historial.helper';
 import { paginar } from '../common/helpers/pagination.helper';
+import { patronDeBusqueda } from '../common/helpers/busqueda.helper';
 import { ROL, VEN_NO_ACTIVOS } from '../common/roles';
 import { CategoriaProductoEntity } from '../entities/categoria-producto.entity';
 import { ProductoEntity } from '../entities/producto.entity';
@@ -95,10 +96,15 @@ export class ProductsService {
     );
   }
 
-  /** Catálogo chico e inmutable: arreglo plano, sin paginar. Cacheado en Redis (ver common/cache/catalogos.ts). */
-  findCategories() {
+  /**
+   * Catálogo chico: arreglo plano, sin paginar. Por omisión solo las ACTIVAS (una categoría
+   * desactivada no se ofrece para productos nuevos, D-07), cacheadas en Redis; las escrituras de
+   * `CategoriesService` borran la llave. Con `incluirInactivas` se lee directo de Postgres.
+   */
+  findCategories(incluirInactivas = false) {
+    if (incluirInactivas) return this.categoriasRepo.find({ order: { nombre: 'ASC' } });
     return this.cache.obtener(LLAVES_CATALOGO.categorias, TTL_CATALOGOS_SEGUNDOS, () =>
-      this.categoriasRepo.find({ order: { nombre: 'ASC' } }),
+      this.categoriasRepo.find({ where: { activo: true }, order: { nombre: 'ASC' } }),
     );
   }
 
@@ -140,6 +146,21 @@ export class ProductsService {
       // D-08: para el resto del equipo un producto pendiente o rechazado no
       // existe hasta aprobarse. Los pendientes solo viven en /products/pending.
       qb.where('p.estatus = :activo', { activo: ESTATUS_PRODUCTO.ACTIVO });
+    }
+
+    // T-21: búsqueda y filtros se SUMAN (AND) al recorte por perfil de arriba, nunca lo sustituyen.
+    const patron = patronDeBusqueda(filtros.search);
+    if (patron) {
+      qb.andWhere(
+        "(p.nombre ILIKE :patron ESCAPE '\\' OR p.sku ILIKE :patron ESCAPE '\\' OR p.descripcion ILIKE :patron ESCAPE '\\')",
+        { patron },
+      );
+    }
+    if (filtros.categoriaId !== undefined) {
+      qb.andWhere('p.categoriaId = :categoriaId', { categoriaId: filtros.categoriaId });
+    }
+    if (filtros.esCanastaBasica !== undefined) {
+      qb.andWhere('p.esCanastaBasica = :esCanastaBasica', { esCanastaBasica: filtros.esCanastaBasica });
     }
     return paginar(qb, filtros);
   }
@@ -532,6 +553,10 @@ export class ProductsService {
     const categoria = await this.categoriasRepo.findOne({ where: { id: categoriaId } });
     if (!categoria) {
       throw new BadRequestException('La categoría indicada no existe.');
+    }
+    // T-21: una categoría desactivada conserva sus productos, pero no recibe nuevos.
+    if (categoria.activo === false) {
+      throw new BadRequestException('La categoría indicada está desactivada.');
     }
   }
 

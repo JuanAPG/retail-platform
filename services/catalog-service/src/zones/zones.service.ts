@@ -7,6 +7,7 @@ import { CacheService } from '../common/cache/cache.service';
 import { LLAVES_CATALOGO, TTL_CATALOGOS_SEGUNDOS } from '../common/cache/catalogos';
 import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
+import { patronDeBusqueda } from '../common/helpers/busqueda.helper';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { ZoneFilterDto } from './dto/zone-filter.dto';
@@ -42,6 +43,14 @@ export class ZonesService {
       .leftJoinAndSelect('z.municipio', 'm')
       .orderBy('z.nombre', 'ASC')
       .addOrderBy('z.id', 'ASC');
+
+    // T-21: búsqueda por texto y filtros, combinados con AND. Sin filtros la lista es la de siempre.
+    const patron = patronDeBusqueda(filtros.search);
+    if (patron) {
+      qb.andWhere("(z.nombre ILIKE :patron ESCAPE '\\' OR z.descripcion ILIKE :patron ESCAPE '\\')", { patron });
+    }
+    if (filtros.municipioId !== undefined) qb.andWhere('z.municipioId = :municipioId', { municipioId: filtros.municipioId });
+    if (filtros.activo !== undefined) qb.andWhere('z.activo = :activo', { activo: filtros.activo });
     return paginar(qb, filtros);
   }
 

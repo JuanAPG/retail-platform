@@ -105,7 +105,7 @@ const proveedor = {
 
 const unidad = { id: 1, clave: 'kg', nombre: 'Kilogramo', tipo: 'masa', factorBase: '1.000000' };
 
-const categoria = { id: 1, nombre: 'Abarrotes', categoriaPadreId: null, descripcion: null };
+const categoria = { id: 1, nombre: 'Abarrotes', categoriaPadreId: null, descripcion: null, activo: true };
 
 const presentacion = {
   id: 'b7d2e0aa-1111-4222-8333-444455556666',
