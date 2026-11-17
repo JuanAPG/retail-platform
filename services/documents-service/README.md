@@ -48,3 +48,9 @@ como no disponibles: es el comportamiento esperado.
 - Variables opcionales: `CORE_PROCESS_SERVICE_URL`, `CATALOG_SERVICE_URL`, `PRICING_SERVICE_URL`,
   `ALGORITHMS_CORE_URL`, `DECISION_SERVICE_URL`, `AUDIT_SERVICE_URL` (por defecto, el nombre del servicio en Docker).
 - Pendiente: avisos a notifications-service (hoy el reporte no emite notificaciones).
+
+## Sprint 4 · T-23: exportar a CSV
+
+`GET /v1/reports/:id/export?format=csv` descarga los **16 indicadores** (una fila por indicador; los no disponibles con
+su motivo y el valor vacío, nunca 0), en UTF-8 con BOM. Cada descarga, en cualquier formato, queda en la bitácora
+con quién, cuándo y qué formato (D-46). Pruebas: `src/reports/csv.spec.ts` y `test/reports.spec.ts`.

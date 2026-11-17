@@ -12,13 +12,23 @@ import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { GENERAN_REPORTES, ROL } from '../common/roles';
-import { ActualizarReporteDto, GenerarReporteEjecutivoDto, ListarReportesDto } from './dto/reports.dto';
+import { generarCsv } from './csv';
+import { ActualizarReporteDto, FormatoExportacion, GenerarReporteEjecutivoDto, ListarReportesDto } from './dto/reports.dto';
 import { ExcelService } from './excel.service';
 import { IndicatorsService } from './indicators.service';
 import { PdfService } from './pdf.service';
 import { ESTADO_REPORTE, Indicador, ParametrosReporte, Reporte, ReporteDocument } from './schemas/report.schema';
 
 export const TIPO_EJECUTIVO = 'ejecutivo';
+
+const NOMBRE_FORMATO: Record<FormatoExportacion, string> = { pdf: 'PDF', xlsx: 'Excel', csv: 'CSV' };
+
+/** Content-Type de cada formato de exportación. */
+export const TIPO_CONTENIDO: Record<FormatoExportacion, string> = {
+  pdf: 'application/pdf',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv; charset=utf-8',
+};
 
 /** Forma pública de un reporte (JSON y XML). */
 export interface ReporteDto {
@@ -156,10 +166,11 @@ export class ReportsService {
    * PDF o Excel a partir del documento guardado (idéntico al JSON). Marca el reporte como exportado.
    * El PDF es obligatorio (D-19); el Excel es opcional y lleva las cifras como celdas numéricas.
    */
-  async exportar(id: string, formato: 'pdf' | 'xlsx', usuario: SesionUsuario, authorization: string | undefined, ip?: string) {
+  async exportar(id: string, formato: FormatoExportacion, usuario: SesionUsuario, authorization: string | undefined, ip?: string) {
     const doc = await this.buscar(id, usuario);
     const dto = this.aDto(doc);
-    const buffer = formato === 'xlsx' ? await this.excel.generar(dto) : await this.pdf.generar(dto);
+    const buffer =
+      formato === 'xlsx' ? await this.excel.generar(dto) : formato === 'csv' ? generarCsv(dto) : await this.pdf.generar(dto);
 
     // QA-DOC54-04: descargar es lectura. Solo quien puede cambiar el estado (mismo rol que el PATCH)
     // lo marca "exportado" al exportar; un perfil de solo lectura descarga sin alterar el reporte.
@@ -168,8 +179,15 @@ export class ReportsService {
       doc.estado = ESTADO_REPORTE.EXPORTADO;
       await doc.save();
     }
+    // D-46: cada descarga queda en la bitácora con quién (el token), cuándo y qué formato.
     await this.audit.reportar(
-      { tabla: 'reportes', registroId: dto.id, accion: 'exportar', descripcion: `Reporte ejecutivo exportado a ${formato === 'xlsx' ? 'Excel' : 'PDF'}.`, ip: ip ?? null },
+      {
+        tabla: 'reportes',
+        registroId: dto.id,
+        accion: 'exportar',
+        descripcion: `Reporte ejecutivo exportado a ${NOMBRE_FORMATO[formato]} (formato=${formato}) por ${usuario.rol}.`,
+        ip: ip ?? null,
+      },
       authorization,
     );
     const fecha = dto.creadoEn.toISOString().slice(0, 10);
