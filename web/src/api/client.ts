@@ -7,7 +7,7 @@ import { claseDeError } from './errores';
  * El web es CLIENTE de los 10 microservicios (CLAUDE.md): un cliente axios por
  * servicio, todos bajo `/v1/` y con el mismo manejo de sesión y de errores.
  * La URL de cada uno sale de `VITE_<NOMBRE>_URL`; sin ella, localhost con el
- * puerto del docker-compose (3101–3110).
+ * puerto del docker-compose (3101–3110; 3112 para income-segmentation-service, Sprint 4).
  */
 export const SERVICIOS = {
   auth: { etiqueta: 'auth-service', puerto: 3101, env: 'VITE_AUTH_URL' },
@@ -20,6 +20,8 @@ export const SERVICIOS = {
   documents: { etiqueta: 'documents-service', puerto: 3108, env: 'VITE_DOCUMENTS_URL' },
   notifications: { etiqueta: 'notifications-service', puerto: 3109, env: 'VITE_NOTIFICATIONS_URL' },
   audit: { etiqueta: 'audit-service', puerto: 3110, env: 'VITE_AUDIT_URL' },
+  // Sprint 4 (D-35): los segmentos de ingreso salieron de catalog-service.
+  segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
 } as const;
 
 type NombreServicio = keyof typeof SERVICIOS;
@@ -204,3 +206,4 @@ export const decisionApi = crearCliente('decision');
 export const documentsApi = crearCliente('documents');
 export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
+export const segmentationApi = crearCliente('segmentation');

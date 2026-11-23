@@ -1,7 +1,11 @@
-import { catalogApi, traerTodo } from './client';
+import { segmentationApi, traerTodo } from './client';
 import { IncomeSegment } from '../types';
 
-/** M05 — nombres de campo en inglés: así quedaron en el Contrato del backend. */
+/**
+ * Segmentos de ingreso. Desde el Sprint 4 viven en income-segmentation-service (D-35), no en
+ * catalog-service: mismas rutas y campos, más `version`. Editar un segmento crea una versión
+ * nueva y la anterior se conserva. Contrato: docs/contratos/income-segmentation-service.md
+ */
 export interface CrearSegmentoPayload {
   code: string;
   name: string;
@@ -14,19 +18,27 @@ export interface CrearSegmentoPayload {
   description?: string;
 }
 
-export type ActualizarSegmentoPayload = Partial<CrearSegmentoPayload>;
+/**
+ * Edición: sin `code` (la API lo rechaza: identifica al segmento entre versiones). `null` en
+ * `incomeRangeMax` quita el tope y en `description` la borra; omitirlos los deja como están.
+ */
+export type ActualizarSegmentoPayload = Partial<Omit<CrearSegmentoPayload, 'code' | 'incomeRangeMax' | 'description'>> & {
+  incomeRangeMax?: number | null;
+  description?: string | null;
+  changeReason?: string;
+};
 
 export const getSegmentos = () =>
-  traerTodo<IncomeSegment>(catalogApi, '/segments');
+  traerTodo<IncomeSegment>(segmentationApi, '/segments');
 
 export const getSegmento = (id: number) =>
-  catalogApi.get<IncomeSegment>(`/segments/${id}`).then((r) => r.data);
+  segmentationApi.get<IncomeSegment>(`/segments/${id}`).then((r) => r.data);
 
 export const crearSegmento = (payload: CrearSegmentoPayload) =>
-  catalogApi.post<IncomeSegment>('/segments', payload).then((r) => r.data);
+  segmentationApi.post<IncomeSegment>('/segments', payload).then((r) => r.data);
 
 export const actualizarSegmento = (id: number, payload: ActualizarSegmentoPayload) =>
-  catalogApi.patch<IncomeSegment>(`/segments/${id}`, payload).then((r) => r.data);
+  segmentationApi.patch<IncomeSegment>(`/segments/${id}`, payload).then((r) => r.data);
 
 export const eliminarSegmento = (id: number) =>
-  catalogApi.delete<void>(`/segments/${id}`).then((r) => r.data);
+  segmentationApi.delete<void>(`/segments/${id}`).then((r) => r.data);

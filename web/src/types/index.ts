@@ -217,6 +217,9 @@ export interface IncomeSegment {
   zoneRelation: string;
   limitations: string;
   description: string | null;
+  /** D-35: versión vigente del segmento; cada edición crea una nueva y la anterior se conserva. */
+  version?: number;
+  versionValidFrom?: string;
 }
 
 /** Nombres de rol EXACTOS como están sembrados en la tabla roles. */
