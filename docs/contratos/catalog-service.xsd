@@ -306,8 +306,13 @@
       <xs:element name="nombre" type="xs:string"/>
       <xs:element name="categoriaPadreId" type="xs:integer" minOccurs="0"/>
       <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
+      <!-- T-21 / D-07: una categoría con productos se desactiva, no se borra. -->
+      <xs:element name="activo" type="xs:boolean"/>
     </xs:sequence>
   </xs:complexType>
+
+  <!-- POST /v1/product-categories, PATCH y DELETE /v1/product-categories/:id (T-21) -->
+  <xs:element name="categoryResponse" type="cat:category"/>
 
   <xs:complexType name="unit">
     <xs:sequence>

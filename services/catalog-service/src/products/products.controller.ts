@@ -22,6 +22,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { APRUEBAN_PRODUCTOS, PERFILES_INTERNOS, ROL, VEN_NO_ACTIVOS } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
+import { CategoryQueryDto } from '../categories/dto/category.dto';
 import { CrearPropuestaProductoDto } from './dto/crear-propuesta-producto.dto';
 import { CreatePresentationDto } from './dto/create-presentation.dto';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -59,11 +60,14 @@ export class ProductsController {
   // necesita el catálogo de categorías para elegir una al proponer.
   @Get('product-categories')
   @XmlRoot('categoryListResponse')
-  @ApiOperation({ summary: 'Catálogo de categorías (arreglo plano, sin paginar). Abierto a todo usuario autenticado.' })
+  @ApiOperation({
+    summary: 'Catálogo de categorías activas (arreglo plano, sin paginar). Abierto a todo usuario autenticado.',
+    description: 'Con `includeInactive=true` trae también las desactivadas (D-07), para administrarlas.',
+  })
   @ApiRespuesta(200, 'Categorías ordenadas por nombre.', [muestras.categoria], 'categoryListResponse')
-  @ApiErrores(401)
-  findCategories() {
-    return this.productsService.findCategories();
+  @ApiErrores(400, 401)
+  findCategories(@Query() query: CategoryQueryDto) {
+    return this.productsService.findCategories(query.includeInactive === true);
   }
 
   // También abierta: el Proveedor la necesita para elegir unidad al

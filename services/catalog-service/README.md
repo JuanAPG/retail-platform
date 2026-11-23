@@ -32,11 +32,26 @@ escribe nada aquí. Las visitas de campo de D-30 todavía no existen en este ser
 | Productos (M04) | Gerente de categoría | También aprueba/rechaza propuestas del Proveedor (D-08). |
 | Segmentos (M05) | Analista comercial | Rangos encimados → `400` (D-10). |
 
+## Sprint 4 · T-21: categorías y búsqueda
+
+- **Categorías** (`src/categories/`): `POST`, `PATCH` y `DELETE /v1/product-categories[/:id]`, solo el Gerente
+  de categoría (M04). Una categoría con productos o subcategorías **no se borra, se desactiva** (D-07): sus
+  productos la conservan, pero ya no acepta productos nuevos. `GET /v1/product-categories` trae solo las
+  activas; `?includeInactive=true`, todas.
+- **Búsqueda y filtros**, paginados y combinables: productos (`search`, `categoriaId`, `esCanastaBasica`),
+  tiendas (`search`, `zonaId`, `formato`) y zonas (`search`, `municipioId`, `activo`). En productos se suman
+  al recorte por perfil (D-08), no lo sustituyen.
+- Una base creada antes de T-21 necesita la columna `categorias_producto.activo`:
+  `docker exec -i retail_postgres psql -U retail_user -d retaildb < db/migraciones/sprint4_catalog_categorias.sql`
+- Pruebas: `src/categories/categories.service.spec.ts`, `src/common/helpers/busqueda.helper.spec.ts` y
+  `test/categories-search.spec.ts` (integración).
+
 ## Caché en Redis
 
 Los cuatro catálogos planos se cachean 1 hora (prefijo `catalog:`): `catalog:categories`, `catalog:units`,
-`catalog:municipalities` y `catalog:postal-codes` (`src/common/cache/catalogos.ts`). Son de solo lectura en
-este servicio, así que no hay invalidación al escribir; lo mutable (zonas, tiendas, productos, segmentos)
+`catalog:municipalities` y `catalog:postal-codes` (`src/common/cache/catalogos.ts`). Unidades, municipios y
+códigos postales son de solo lectura; las categorías se escriben (T-21) y cada escritura borra su llave.
+Lo mutable (zonas, tiendas, productos, segmentos)
 **no** se cachea. La caché va después del token, la sesión y el rol (no los salta) y, **si Redis falla, el
 servicio responde desde Postgres** (`src/common/cache/cache.service.ts`, el mismo de `pricing-service`).
 

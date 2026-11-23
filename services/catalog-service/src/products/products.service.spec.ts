@@ -24,7 +24,7 @@ const errorSql = (code: string) =>
 
 function crearQb() {
   const qb: Record<string, jest.Mock> = {};
-  for (const m of ['leftJoinAndSelect', 'orderBy', 'addOrderBy', 'where', 'skip', 'take']) {
+  for (const m of ['leftJoinAndSelect', 'orderBy', 'addOrderBy', 'where', 'andWhere', 'skip', 'take']) {
     qb[m] = jest.fn().mockReturnValue(qb);
   }
   qb.getManyAndCount = jest.fn().mockResolvedValue([[{ id: 'p-1' }], 1]);
@@ -585,7 +585,8 @@ describe('ProductsService — caché de catálogos', () => {
     const resultado = await servicio.findCategories();
 
     expect(cache.obtener).toHaveBeenCalledWith('catalog:categories', 3600, expect.any(Function));
-    expect(categorias.find).toHaveBeenCalledWith({ order: { nombre: 'ASC' } });
+    // T-21: el catálogo cacheado trae solo las categorías activas.
+    expect(categorias.find).toHaveBeenCalledWith({ where: { activo: true }, order: { nombre: 'ASC' } });
     expect(resultado).toEqual([{ id: 1, nombre: 'Abarrotes' }]);
   });
 
