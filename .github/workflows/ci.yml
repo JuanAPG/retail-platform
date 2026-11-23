@@ -52,6 +52,8 @@ jobs:
           - documents-service
           - notifications-service
           - audit-service
+          # Sprint 4
+          - income-segmentation-service
     steps:
       - uses: actions/checkout@v4
 
