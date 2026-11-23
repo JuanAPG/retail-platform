@@ -220,6 +220,69 @@ describe('/v1/reports (integración, requiere stack + MongoDB)', () => {
     expect((await http('GET', `/v1/reports/${reporteId}/export?format=xlsx`, provA)).estado).toBe(404);
   });
 
+  it('T-23 / D-46: exporta a CSV con los 16 indicadores, iguales al JSON; los no disponibles con motivo y sin valor', async () => {
+    const r = await fetch(`${BASE}/v1/reports/${reporteId}/export?format=csv`, { headers: { Authorization: `Bearer ${analista}` } });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('text/csv; charset=utf-8');
+    expect(r.headers.get('content-disposition')).toMatch(/^attachment; filename="reporte-ejecutivo-\d{4}-\d{2}-\d{2}\.csv"$/);
+
+    const bytes = Buffer.from(await r.arrayBuffer());
+    expect(bytes.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf])); // BOM: Excel abre bien los acentos
+    const lineas = bytes.toString('utf8').replace(/^﻿/, '').split('\r\n').filter(Boolean);
+    expect(lineas[0]).toBe('clave,indicador,servicio,disponible,valor,motivo');
+    expect(lineas).toHaveLength(17); // encabezado + los 16 indicadores
+    expect(lineas.slice(1).map((l) => l.split(',')[0])).toEqual(reporte.secciones.map((s: any) => s.clave));
+
+    for (const s of reporte.secciones) {
+      const linea = lineas.find((l) => l.startsWith(`${s.clave},`))!;
+      if (!s.disponible) {
+        expect(linea).toContain(',no,,'); // sin valor: nunca 0
+        expect(linea).toContain(s.motivo.slice(0, 20));
+      } else if (typeof s.valor === 'number') {
+        expect(linea).toContain(`,si,${s.valor},`);
+      }
+    }
+  });
+
+  it('D-46: cada descarga queda en la bitácora con el formato; un perfil de lectura no cambia el estado', async () => {
+    const nuevo = await http('POST', '/v1/reports/executive', gerente, PERIODO);
+    const id = nuevo.cuerpo.id;
+    expect((await http('GET', `/v1/reports/${id}/export?format=csv`, auditor)).estado).toBe(200);
+    expect((await http('GET', `/v1/reports/${id}`, gerente)).cuerpo.estado).toBe('generado');
+    expect((await http('GET', `/v1/reports/${id}/export?format=csv`, gerente)).estado).toBe(200);
+    expect((await http('GET', `/v1/reports/${id}`, gerente)).cuerpo.estado).toBe('exportado');
+
+    // La bitácora guarda el usuario como UUID de `usuarios`: con los tokens de prueba (ids
+    // inventados) audit-service no puede registrar. Para revisarla se entra como usuarios REALES
+    // del seed por auth-service; si auth o audit no están arriba, esta parte se salta.
+    const AUTH = process.env.AUTH_BASE_URL ?? 'http://localhost:3101';
+    const AUDIT = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
+    const entrar = async (email: string) => {
+      const r = await http('POST', '/v1/auth/login', undefined, { email, password: 'Passw0rd123!' }, undefined, AUTH).catch(() => null);
+      return r?.estado === 200 ? (r.cuerpo.accessToken as string) : null;
+    };
+    const [gerenteReal, auditorReal] = [await entrar('gercategoria@retail.mx'), await entrar('auditor@retail.mx')];
+    if (!gerenteReal || !auditorReal) {
+      console.warn('auth-service no está arriba: no se revisó la bitácora de descargas.');
+      return;
+    }
+    expect((await http('GET', `/v1/reports/${id}/export?format=csv`, auditorReal)).estado).toBe(200);
+    expect((await http('GET', `/v1/reports/${id}/export?format=pdf`, gerenteReal)).estado).toBe(200);
+    const bitacora = await http('GET', `/v1/auditoria?tabla=reportes&registroId=${id}&limit=50`, auditorReal, undefined, undefined, AUDIT).catch(() => null);
+    if (!bitacora || bitacora.estado !== 200) {
+      console.warn('audit-service no está arriba: no se revisó la bitácora de descargas.');
+      return;
+    }
+    const exportaciones = (bitacora.cuerpo.data as Array<{ accion: string; descripcion: string }>).filter((e) => e.accion === 'exportar');
+    expect(exportaciones.some((e) => /CSV \(formato=csv\) por Auditor/.test(e.descripcion))).toBe(true);
+    expect(exportaciones.some((e) => /PDF \(formato=pdf\) por Gerente de categoría/.test(e.descripcion))).toBe(true);
+  });
+
+  it('T-23: el Proveedor no descarga el CSV de otro (404) y el formato desconocido es 400', async () => {
+    expect((await http('GET', `/v1/reports/${reporteId}/export?format=csv`, provA)).estado).toBe(404);
+    expect((await http('GET', `/v1/reports/${reporteId}/export?format=txt`, gerente)).estado).toBe(400);
+  });
+
   it('DOC-03: la agregación por usuario y mes cuenta lo guardado', async () => {
     const r = await http('GET', '/v1/reports/stats/by-user-month', admin);
     expect(r.estado).toBe(200);
