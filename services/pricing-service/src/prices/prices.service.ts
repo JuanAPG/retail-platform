@@ -11,7 +11,18 @@ import { HOY_SQL, hoyOperacion } from '../common/fecha';
 import { PriceHistory } from '../entities/price-history.entity';
 import { CreatePriceDto } from './dto/create-price.dto';
 import { PriceAlertsService } from '../price-alerts/price-alerts.service';
-import { PriceCurrentQueryDto, PriceHistoryQueryDto, PriceSeriesQueryDto } from './dto/price-queries.dto';
+import { PriceCurrentQueryDto, PriceHistoryQueryDto, PriceSeriesQueryDto, PriceVariationQueryDto } from './dto/price-queries.dto';
+import { StoreVariation, variacionDeTienda, variacionPorZona, ZoneVariation } from './variacion';
+
+/** `GET /v1/prices/variation` (T-22). El orden de los campos es el del XSD. */
+export interface PriceVariationResult {
+  presentationId: string;
+  productId: string;
+  dateFrom: string;
+  dateTo: string;
+  byStore: StoreVariation[];
+  byZone: ZoneVariation[];
+}
 
 /** Un precio con el resumen de su presentación y su tienda (ver contrato). */
 export interface PriceDto {
@@ -375,6 +386,66 @@ export class PricesService {
     );
     const data = await this.detallar(filas.map((f) => f.id));
     return { data, total: data.length };
+  }
+
+  /**
+   * T-22 — Variación de precio de UNA presentación entre dos fechas, por tienda y por zona.
+   * El precio "en una fecha" es el del histórico cuya vigencia cubre ese día (no la bandera
+   * `vigente`). D-06: no se mezclan presentaciones. Sin paginar (agregado acotado por la
+   * presentación obligatoria; excepción de `paginacion.md`).
+   */
+  async findVariation(filtros: PriceVariationQueryDto): Promise<PriceVariationResult> {
+    if (filtros.dateFrom > filtros.dateTo) {
+      throw new BadRequestException('dateFrom no puede ser posterior a dateTo.');
+    }
+    const [presentacion] = await this.dataSource.query(
+      'SELECT producto_id FROM producto_presentaciones WHERE id = $1',
+      [filtros.presentationId],
+    );
+    if (!presentacion) throw new BadRequestException('La presentación indicada no existe.');
+
+    const params: unknown[] = [filtros.presentationId, filtros.dateFrom, filtros.dateTo];
+    const where = ['EXISTS (SELECT 1 FROM precios p WHERE p.presentacion_id = $1 AND p.tienda_id = t.id)'];
+    if (filtros.storeId) { params.push(filtros.storeId); where.push(`t.id = $${params.length}`); }
+    if (filtros.zoneId) { params.push(filtros.zoneId); where.push(`t.zona_id = $${params.length}`); }
+    // El precio de la tienda en un día: el del histórico que cubre esa fecha.
+    const precioEn = (n: number) => `(
+      SELECT p.precio FROM precios p
+       WHERE p.presentacion_id = $1 AND p.tienda_id = t.id
+         AND p.fecha_vigencia_desde <= $${n}::date
+         AND (p.fecha_vigencia_hasta IS NULL OR p.fecha_vigencia_hasta >= $${n}::date)
+       ORDER BY p.fecha_vigencia_desde DESC, p.created_at DESC LIMIT 1)`;
+    const filas: Record<string, unknown>[] = await this.dataSource.query(
+      `SELECT t.id AS tienda_id, t.nombre AS tienda, t.zona_id, z.nombre AS zona,
+              ${precioEn(2)} AS precio_desde, ${precioEn(3)} AS precio_hasta
+         FROM tiendas t JOIN zonas z ON z.id = t.zona_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY z.nombre ASC, t.nombre ASC, t.id ASC`,
+      params,
+    );
+    const numero = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+    const byStore = filas.map((f) =>
+      variacionDeTienda(
+        {
+          storeId: f.tienda_id as string,
+          storeName: f.tienda as string,
+          zoneId: f.zona_id as string,
+          zoneName: f.zona as string,
+          priceFrom: numero(f.precio_desde),
+          priceTo: numero(f.precio_hasta),
+        },
+        filtros.dateFrom,
+        filtros.dateTo,
+      ),
+    );
+    return {
+      presentationId: filtros.presentationId,
+      productId: presentacion.producto_id as string,
+      dateFrom: filtros.dateFrom,
+      dateTo: filtros.dateTo,
+      byStore,
+      byZone: variacionPorZona(byStore),
+    };
   }
 
   // -------------------------------------------------------------------

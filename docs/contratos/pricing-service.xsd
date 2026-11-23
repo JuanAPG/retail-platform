@@ -144,6 +144,63 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- GET /v1/prices/variation (T-22): UNA presentación entre dos fechas, por tienda y por zona.
+       Sin paginar. Cuando disponible=false no hay change ni changePercent: NUNCA un 0. -->
+  <xs:element name="priceVariationResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="presentationId" type="xs:string"/>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="dateFrom" type="xs:string"/>
+        <xs:element name="dateTo" type="xs:string"/>
+        <xs:element name="byStore">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="storeId" type="xs:string"/>
+                    <xs:element name="storeName" type="xs:string"/>
+                    <xs:element name="zoneId" type="xs:string"/>
+                    <xs:element name="zoneName" type="xs:string"/>
+                    <xs:element name="disponible" type="xs:boolean"/>
+                    <xs:element name="priceFrom" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="priceTo" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="change" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="changePercent" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="byZone">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="zoneId" type="xs:string"/>
+                    <xs:element name="zoneName" type="xs:string"/>
+                    <xs:element name="stores" type="xs:nonNegativeInteger"/>
+                    <xs:element name="comparableStores" type="xs:nonNegativeInteger"/>
+                    <xs:element name="disponible" type="xs:boolean"/>
+                    <xs:element name="averageFrom" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="averageTo" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="change" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="changePercent" type="xs:decimal" minOccurs="0"/>
+                    <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
   <!-- GET /v1/prices/series (PRI-11): sin paginar, por eso no lleva page/limit -->
   <xs:element name="priceSeriesResponse">
     <xs:complexType>
