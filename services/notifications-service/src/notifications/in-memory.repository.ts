@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { avisoObligatorio } from './notification.types';
 import {
   CrearNotificacion,
   NOTIFICATIONS_REPOSITORY,
@@ -16,6 +17,8 @@ export { NOTIFICATIONS_REPOSITORY };
 @Injectable()
 export class InMemoryNotificationsRepository implements NotificationsRepository {
   private readonly filas = new Map<string, NotificacionGuardada>();
+
+  private readonly preferences = new Map<string, boolean>();
 
   async crear(datos: CrearNotificacion): Promise<NotificacionGuardada> {
     const fila: NotificacionGuardada = {
@@ -54,6 +57,7 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
     userId: string;
     rol?: string;
     incluirArchivadas: boolean;
+    soloObligatorias?: boolean;
     dateFrom?: string;
     dateTo?: string;
     skip: number;
@@ -65,6 +69,7 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
           fila.recipientUserId === filtros.userId ||
           (filtros.rol != null && fila.recipientRole === filtros.rol),
       )
+      .filter((fila) => !filtros.soloObligatorias || avisoObligatorio(fila.eventType, fila.priority))
       .filter((fila) => filtros.incluirArchivadas || !fila.archived)
       .filter((fila) => !filtros.dateFrom || fila.createdAt >= new Date(filtros.dateFrom))
       .filter(
@@ -88,15 +93,23 @@ export class InMemoryNotificationsRepository implements NotificationsRepository 
     return fila;
   }
 
-  async contarNoLeidas(userId: string, rol?: string): Promise<number> {
+  async contarNoLeidas(userId: string, rol?: string, soloObligatorias?: boolean): Promise<number> {
     let total = 0;
     for (const fila of this.filas.values()) {
-      if (fila.archived) continue;
+      if (fila.archived || (soloObligatorias && !avisoObligatorio(fila.eventType, fila.priority))) continue;
       if (fila.recipientUserId !== userId && (rol == null || fila.recipientRole !== rol)) continue;
       if (fila.readBy.some((marca) => marca.userId === userId)) continue;
       total++;
     }
     return total;
+  }
+
+  async aceptaInformativas(userId: string): Promise<boolean> {
+    return this.preferences.get(userId) ?? true;
+  }
+
+  async guardarPreferencia(userId: string, informational: boolean): Promise<void> {
+    this.preferences.set(userId, informational);
   }
 
   async archivarAnteriores(corte: Date): Promise<number> {

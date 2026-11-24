@@ -2,58 +2,37 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Connection } from 'mongoose';
-import { getRedis } from '../common/auth/redis.client';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
+import { serializarXml } from '../common/interceptors/xml.interceptor';
+import { armarSalud, sinConfigurar, verificarMongo, verificarRedis } from './checks';
 
-/**
- * Salud del servicio — NO CAMBIAR su forma ni su ruta.
- * `GET /v1/health`, sin autenticación y SIEMPRE 200 si el proceso
- * responde: así lo pueden consultar el `healthcheck` de Docker y quien
- * revise la demo, incluso con una dependencia caída.
- *
- * `status` es `ok` cuando todas las dependencias responden y `degraded`
- * cuando alguna falla; el detalle va en `checks`. Un servicio que agregue
- * dependencias (Postgres, Mongo) añade su propio check aquí.
- */
+const ejemplo = {
+  status: 'ok',
+  service: 'notifications-service',
+  version: '1.0.0',
+  checks: { postgres: 'no configurado', mongodb: 'ok', redis: 'ok' },
+  latencyMs: { postgres: 0, mongodb: 5, redis: 2 },
+  durationMs: 5,
+  timestamp: '2026-11-23T19:00:00.000Z',
+};
+
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectConnection() private readonly mongo: Connection) {}
+  constructor(@InjectConnection() private readonly conexion: Connection) {}
 
   @Get()
-  @ApiOperation({ summary: 'Salud del servicio y de sus dependencias.' })
-  @ApiOkResponse({
-    description: 'El servicio responde (200 incluso si una dependencia está caída).',
-    schema: {
-      example: {
-        status: 'ok',
-        service: process.env.SERVICE_NAME ?? 'unknown-service',
-        version: '1.0.0',
-        checks: { redis: 'ok', mongodb: 'ok' },
-        timestamp: '2026-10-03T12:00:00.000Z',
-      },
-    },
-  })
-  async check() {
-    const checks = {
-      redis: await verificarRedis(),
-      mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB',
-    };
-    return {
-      status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',
-      service: process.env.SERVICE_NAME ?? 'unknown-service',
-      version: process.env.SERVICE_VERSION ?? '1.0.0',
-      checks,
-      timestamp: new Date().toISOString(),
-    };
-  }
-}
-
-/** `ok` o el motivo del fallo. Nunca lanza: el health no debe caerse. */
-export async function verificarRedis(): Promise<string> {
-  try {
-    await getRedis().ping();
-    return 'ok';
-  } catch (error) {
-    return error instanceof Error ? `error: ${error.message}` : 'error';
+  @XmlRoot('response', { namespace: '' })
+  @ApiOperation({ summary: 'Salud del proceso, MongoDB y Redis.' })
+  @ApiOkResponse({ content: {
+    'application/json': { example: ejemplo },
+    'application/xml': { example: serializarXml(ejemplo, { namespace: '' }) },
+  } })
+  check() {
+    return armarSalud({
+      postgres: sinConfigurar,
+      mongodb: () => verificarMongo(this.conexion),
+      redis: verificarRedis,
+    });
   }
 }

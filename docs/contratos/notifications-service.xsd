@@ -30,6 +30,9 @@
       <xs:enumeration value="escenario.generado"/>
       <xs:enumeration value="recomendacion.generada"/>
       <xs:enumeration value="recomendacion.resuelta"/>
+      <xs:enumeration value="reporte.generado"/>
+      <xs:enumeration value="tarea.asignada"/>
+      <xs:enumeration value="ingesta.confirmada"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -63,6 +66,7 @@
       <xs:element name="relatedEntityType" type="xs:string" minOccurs="0"/>
       <xs:element name="relatedEntityId" type="xs:string" minOccurs="0"/>
       <xs:element name="priority" type="notif:priority"/>
+      <xs:element name="correlationId" type="xs:string" minOccurs="0"/>
       <xs:element name="readBy">
         <xs:complexType>
           <xs:sequence>
@@ -81,6 +85,14 @@
       <xs:element name="createdAt" type="xs:dateTime"/>
     </xs:sequence>
   </xs:complexType>
+
+  <xs:element name="notificationPreferences">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="informational" type="xs:boolean"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
 
   <!-- POST /v1/notifications (201 o 200 si dedup) y PATCH /v1/notifications/:id/read -->
   <xs:element name="notificationResponse" type="notif:notification"/>
