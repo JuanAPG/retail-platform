@@ -29,6 +29,7 @@ import { Pagina } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { aTransaccionRespuesta, TransaccionRespuesta } from '../common/respuestas';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ImportedSaleDto } from './dto/imported-sale.dto';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { MapaColumnas, parsearCsv } from './csv.util';
 import { calcularTotal } from './money.util';
@@ -41,6 +42,11 @@ export interface ArchivoSubido {
   originalname: string;
   mimetype: string;
   size: number;
+}
+
+export interface ImportedSaleReceipt {
+  status: 'insertada' | 'repetida';
+  transactionId: string;
 }
 
 export interface CsvPreviewError {
@@ -239,6 +245,74 @@ export class TransactionsService {
     token?: string,
     ip?: string,
   ): Promise<TransaccionRespuesta> {
+    const id = await this.registrarVenta(dto, usuario, token, ip);
+    return this.findOne(id);
+  }
+
+  async confirmImportedSale(
+    input: ImportedSaleDto,
+    usuario: SesionUsuario,
+    token?: string,
+    ip?: string,
+  ): Promise<ImportedSaleReceipt> {
+    const dto = {
+      ...input,
+      storeId: input.storeId.toLowerCase(),
+      details: input.details.map((detail) => ({ ...detail, presentationId: detail.presentationId.toLowerCase() })),
+    };
+    const fecha = parsearFecha(dto.fecha);
+    if (!fecha) throw new BadRequestException('fecha debe ser una fecha ISO válida.');
+
+    const previamenteRegistrada = await this.comprobarVentaExistente(dto, fecha);
+    if (previamenteRegistrada) return previamenteRegistrada;
+
+    try {
+      const transactionId = await this.registrarVenta(dto, usuario, token, ip, dto.batchId);
+      return { status: 'insertada', transactionId };
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        // La restricción única arbitra la carrera con otra confirmación.
+        const confirmadaEnParalelo = await this.comprobarVentaExistente(dto, fecha);
+        if (confirmadaEnParalelo) return confirmadaEnParalelo;
+      }
+      throw error;
+    }
+  }
+
+  private async comprobarVentaExistente(
+    dto: CreateTransactionDto,
+    fecha: Date,
+  ): Promise<ImportedSaleReceipt | undefined> {
+    const venta = await this.transactionsRepo.findOne({
+      where: { storeId: dto.storeId, folio: dto.folio },
+      relations: { details: true },
+      loadEagerRelations: false,
+    });
+    if (!venta) return undefined;
+
+    const detalles = new Map(venta.details.map((detalle) => [detalle.presentationId, detalle]));
+    const coincide =
+      venta.fecha.getTime() === fecha.getTime() &&
+      detalles.size === dto.details.length &&
+      new Set(dto.details.map((linea) => linea.presentationId)).size === detalles.size &&
+      dto.details.every((linea) => {
+        const persistida = detalles.get(linea.presentationId);
+        return persistida && Number(persistida.quantity) === linea.quantity &&
+          Number(persistida.unitPrice) === linea.unitPrice;
+      });
+    if (!coincide) {
+      throw new ConflictException('El folio ya existe en la tienda con un contenido distinto.');
+    }
+    return { status: 'repetida', transactionId: venta.id };
+  }
+
+  private async registrarVenta(
+    dto: CreateTransactionDto,
+    usuario: SesionUsuario,
+    token?: string,
+    ip?: string,
+    batchId?: string,
+  ): Promise<string> {
     const [tiendas, productos] = await Promise.all([
       this.catalogos.listarTiendas(token),
       this.catalogos.listarProductos(token),
@@ -326,8 +400,9 @@ export class TransactionsService {
           storeId: dto.storeId,
           fecha,
           total,
-          canal: 'punto_venta',
+          canal: batchId ? 'importacion_archivo' : 'punto_venta',
           importacionId: null,
+          loteIngestaId: batchId ?? null,
           capturadaPor: usuario.id,
         });
         await manager.save(
@@ -358,22 +433,26 @@ export class TransactionsService {
       throw error;
     }
 
-    await this.auditoria.reportar(
+    const evento = this.auditoria.reportar(
       {
         tabla: 'transacciones',
         registroId: guardadaId,
-        accion: 'insert',
-        descripcion: `Transacción manual ${dto.folio} en ${tienda.nombre}.`,
+        accion: batchId ? 'importacion' : 'insert',
+        descripcion: batchId
+          ? `Venta ${dto.folio} importada en ${tienda.nombre}.`
+          : `Transacción manual ${dto.folio} en ${tienda.nombre}.`,
         ip,
         cambios: [
           { campo: 'folio', posterior: dto.folio },
           { campo: 'total', posterior: total },
+          ...(batchId ? [{ campo: 'lote_ingesta_id', posterior: batchId }] : []),
         ],
       },
       token,
     );
 
-    return this.findOne(guardadaId);
+    if (!batchId) await evento;
+    return guardadaId;
   }
 
   // --- CSV: preview --------------------------------------------------

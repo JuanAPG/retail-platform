@@ -20,11 +20,13 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nes
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { TransactionsService, ArchivoSubido } from './transactions.service';
+import { ImportedSaleDto } from './dto/imported-sale.dto';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { ConfirmCsvImportDto } from './dto/confirm-csv-import.dto';
@@ -71,6 +73,24 @@ export class TransactionsController {
     @Ip() ip: string,
   ) {
     return this.transactionsService.createManual(dto, usuario, token, ip);
+  }
+
+  @Post('internal/imported-sales')
+  @HttpCode(HttpStatus.OK)
+  @Roles(ROL.ANALISTA)
+  @XmlRoot('importedSaleReceipt')
+  @ApiOperation({ summary: 'Confirma una venta de ingesta o devuelve el acuse de una venta repetida.' })
+  @ApiRespuesta(200, 'Venta insertada o repetida.', {
+    status: 'repetida', transactionId: '05dbdf5a-8342-4d61-bfce-e04e2b644f9b',
+  }, 'importedSaleReceipt')
+  @ApiErrores(400, 401, 403, 404, 409, 503)
+  confirmarVenta(
+    @Body() dto: ImportedSaleDto,
+    @CurrentUser() usuario: SesionUsuario,
+    @Headers('authorization') token: string | undefined,
+    @Ip() ip: string,
+  ) {
+    return this.transactionsService.confirmImportedSale(dto, usuario, token, ip);
   }
 
   @Post('import/preview')

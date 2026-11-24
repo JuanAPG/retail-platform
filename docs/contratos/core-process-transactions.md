@@ -273,3 +273,27 @@ navegar el anidamiento.
 
 Respuesta paginada (`xsd/core-process/baskets-page.xsd`) y detalle
 (`xsd/core-process/basket.xsd`).
+
+## Confirmación desde ingesta (D-33/D-34)
+
+`POST /v1/transactions/internal/imported-sales` recibe una venta por
+petición JSON desde `transactions-ingestion-service`, con JWT del Analista
+comercial y sesión activa. Reenvía `X-Correlation-Id` y agrega el UUID v4 del
+lote de ingesta a los campos del registro manual.
+
+```json
+{"batchId":"05dbdf5a-8342-4d61-bfce-e04e2b644f9b","storeId":"b5ae5b0c-a3db-4bb7-a6ac-219c3e5d91a0","folio":"DEMO-001","fecha":"2026-11-20","details":[{"presentationId":"f1efdea4-84b6-4579-bd48-eb12381458c1","quantity":2,"unitPrice":42.50}]}
+```
+
+El acuse 200 devuelve `{"status":"insertada","transactionId":"<uuid>"}`.
+Si la misma tienda y folio ya tienen esa fecha y las mismas
+presentaciones, cantidades y precios, devuelve el mismo ID con
+`status:"repetida"`, incluso al reintentar con otro lote. El orden de
+las líneas no influye. Un contenido distinto con la misma tienda y folio
+devuelve el error estándar 409 sin sobrescribir. El lote original se
+registra en `lote_ingesta_id` y la venta y su canasta se confirman juntas.
+
+El XML del acuse usa la raíz `importedSaleReceipt` y el
+[XSD](xsd/core-process/imported-sale-receipt.xsd). El punto de entrada
+interno convive con el alta manual y con la importación CSV existente
+durante la migración de clientes.
