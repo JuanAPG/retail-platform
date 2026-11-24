@@ -1,8 +1,9 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { XmlRoot } from '../common/decorators/xml-root.decorator';
+import { LoginRateLimitGuard } from './login-rate-limit.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -35,6 +36,11 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @XmlRoot('loginResponse')
+  @UseGuards(LoginRateLimitGuard)
+  @ApiResponse({ status: 429, description: 'Límite de intentos alcanzado.', headers: {
+    'Retry-After': { description: 'Segundos hasta que termina la ventana.', schema: { type: 'integer' } },
+  } })
+  @ApiResponse({ status: 503, description: 'Redis no permite verificar el límite.' })
   @ApiOperation({ summary: 'Inicia sesión y abre sesión en Redis.' })
   login(@Body() dto: LoginDto, @Ip() ip: string) {
     return this.authService.login(dto, ip);
