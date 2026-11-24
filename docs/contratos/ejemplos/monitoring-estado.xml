@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<monitorServices xmlns="monitoring/v1">
+  <data>
+    <item>
+      <service>availability-service</service>
+      <port>3114</port>
+      <version>1.0.0</version>
+      <status>degradado</status>
+      <checkedAt>2026-11-23T19:00:00Z</checkedAt>
+      <latencyMs>46</latencyMs>
+      <probeErrorsConsecutive>0</probeErrorsConsecutive>
+      <dependencies>
+        <item><name>postgres</name><status>error</status><latencyMs>44</latencyMs></item>
+        <item><name>mongodb</name><status>no configurado</status><latencyMs>0</latencyMs></item>
+        <item><name>redis</name><status>ok</status><latencyMs>2</latencyMs></item>
+        <item><name>bucket</name><status>no configurado</status><latencyMs>0</latencyMs></item>
+      </dependencies>
+    </item>
+  </data>
+</monitorServices>
