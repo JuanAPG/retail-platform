@@ -101,6 +101,95 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- ===================== Archivos privados (registro-archivos.md v1) ===================== -->
+
+  <xs:simpleType name="fileState">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pendiente"/>
+      <xs:enumeration value="disponible"/>
+      <xs:enumeration value="fallido"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="exportFormat">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pdf"/>
+      <xs:enumeration value="xlsx"/>
+      <xs:enumeration value="csv"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Registro de archivo. Nulos se omiten: un archivo pendiente o fallido no trae
+       ruta, tamanoBytes, sha256 ni disponibleEn. Nunca trae la URL firmada. -->
+  <xs:complexType name="file">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="versionContrato" type="xs:integer"/>
+      <xs:element name="dominio" type="xs:string"/>
+      <xs:element name="recursoTipo" type="xs:string"/>
+      <xs:element name="recursoId" type="xs:string"/>
+      <xs:element name="formato" type="doc:exportFormat"/>
+      <xs:element name="almacen" type="xs:string"/>
+      <xs:element name="bucket" type="xs:string"/>
+      <xs:element name="ruta" type="xs:string" minOccurs="0"/>
+      <xs:element name="tipoContenido" type="xs:string"/>
+      <xs:element name="tamanoBytes" type="xs:nonNegativeInteger" minOccurs="0"/>
+      <xs:element name="sha256" minOccurs="0">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[0-9a-f]{64}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="propietarioId" type="xs:string"/>
+      <xs:element name="privacidad" type="xs:string"/>
+      <xs:element name="estado" type="doc:fileState"/>
+      <xs:element name="intentos" type="xs:nonNegativeInteger"/>
+      <xs:element name="ultimoError" type="xs:string" minOccurs="0"/>
+      <xs:element name="urlsEmitidas" type="xs:nonNegativeInteger"/>
+      <xs:element name="lecturas" type="xs:nonNegativeInteger"/>
+      <xs:element name="correlationId" type="xs:string" minOccurs="0"/>
+      <xs:element name="metadatos" type="xs:anyType" minOccurs="0"/>
+      <xs:element name="creadoEn" type="xs:dateTime"/>
+      <xs:element name="actualizadoEn" type="xs:dateTime"/>
+      <xs:element name="disponibleEn" type="xs:dateTime" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/reports/:id/files, GET /v1/reports/:id/files/:fileId -->
+  <xs:element name="fileResponse" type="doc:file"/>
+
+  <!-- GET /v1/reports/:id/files -->
+  <xs:element name="fileListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="doc:file" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- POST /v1/reports/:id/files/:fileId/download-url -->
+  <xs:element name="downloadUrlResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="archivoId" type="xs:string"/>
+        <xs:element name="url" type="xs:anyURI"/>
+        <xs:element name="expiraEn" type="xs:dateTime"/>
+        <xs:element name="ttlSegundos" type="xs:positiveInteger"/>
+        <xs:element name="nombre" type="xs:string"/>
+        <xs:element name="tipoContenido" type="xs:string"/>
+        <xs:element name="tamanoBytes" type="xs:nonNegativeInteger"/>
+        <xs:element name="sha256" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="error">
     <xs:complexType>
       <xs:sequence>

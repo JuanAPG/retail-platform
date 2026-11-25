@@ -23,14 +23,19 @@ const RAICES: Record<string, string> = {
   'GET /v1/reports/stats/by-user-month': 'reportStatsResponse',
   'GET /v1/reports/{id}': 'reportResponse',
   'PATCH /v1/reports/{id}': 'reportResponse',
+  'POST /v1/reports/{id}/files': 'fileResponse',
+  'GET /v1/reports/{id}/files': 'fileListResponse',
+  'GET /v1/reports/{id}/files/{fileId}': 'fileResponse',
+  'POST /v1/reports/{id}/files/{fileId}/download-url': 'downloadUrlResponse',
 };
 
 describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // POST executive, GET lista, GET stats, GET :id, PATCH :id y GET :id/export.
-    expect(rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0)).toBe(6);
+    // POST executive, GET lista, GET stats, GET :id, PATCH :id y GET :id/export, más los 4 de archivos
+    // (POST/GET files, GET files/:fileId, POST download-url). La descarga del doble local no se documenta.
+    expect(rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0)).toBe(10);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
