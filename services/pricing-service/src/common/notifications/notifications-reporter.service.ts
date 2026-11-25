@@ -1,4 +1,5 @@
 import { Global, Injectable, Logger, Module } from '@nestjs/common';
+import { conCorrelacion } from '../correlation/correlacion';
 
 /** Evento a emitir (ver docs/contratos/notifications-service.md). El destinatario lo fija el receptor según el evento. */
 export interface EventoNotificacion {
@@ -31,10 +32,10 @@ export class NotificationsReporter {
       try {
         const r = await fetch(`${base}/v1/notifications`, {
           method: 'POST',
-          headers: {
+          headers: conCorrelacion({
             'Content-Type': 'application/json',
             ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-          },
+          }),
           body: JSON.stringify({ ...evento, sourceService: 'pricing-service', priority: evento.priority ?? 'info' }),
           signal: control.signal,
         });
