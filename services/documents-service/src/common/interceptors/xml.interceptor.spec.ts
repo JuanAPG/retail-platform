@@ -2,6 +2,7 @@ import { Reflector } from '@nestjs/core';
 import { normalizar, quiereXml, serializarXml, XmlInterceptor } from './xml.interceptor';
 import { XML_ROOT_KEY } from '../decorators/xml-root.decorator';
 import { of, lastValueFrom } from 'rxjs';
+import { StreamableFile } from '@nestjs/common';
 
 function contexto(accept: string) {
   const cabeceras: Record<string, string> = {};
@@ -200,5 +201,17 @@ describe('serializarXml (compartida con el filtro de errores)', () => {
       interceptor.intercept(ctx, { handle: () => of({ id: 1 }) }),
     );
     expect(String(salida)).toContain('<response>');
+  });
+});
+
+describe('XmlInterceptor — archivos', () => {
+  it('un archivo (StreamableFile o Buffer) no se serializa aunque el Accept del navegador incluya XML', async () => {
+    const accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+    for (const datos of [new StreamableFile(Buffer.from('%PDF-1.3')), Buffer.from('a,b')]) {
+      const { ctx, cabeceras } = contexto(accept);
+      const salida = await lastValueFrom(new XmlInterceptor().intercept(ctx, { handle: () => of(datos) }));
+      expect(salida).toBe(datos);
+      expect(cabeceras['Content-Type']).toBeUndefined();
+    }
   });
 });
