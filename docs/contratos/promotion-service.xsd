@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de promotion-service (T-07, D-39).
+     Espacio de nombres fijo `promotion/v1`. Las peticiones XML usan
+     `Content-Type: application/xml` y la raíz indicada en el .md; las
+     respuestas salen en XML con `Accept: application/xml`. Los nulos se OMITEN
+     (campos opcionales con minOccurs="0"). Listas como <item> (paginacion.md).
+     `GET /v1/health` usa health.xsd. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="promotion/v1"
+           xmlns:pr="promotion/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===================== Tipos simples ===================== -->
+
+  <xs:simpleType name="uuid">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Instante en UTC que devuelve el servidor. -->
+  <xs:simpleType name="instanteUtc">
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value=".+Z"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="tipoPromocion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="descuento_porcentual"/>
+      <xs:enumeration value="paquete"/>
+      <xs:enumeration value="tamano_empaque"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="estadoPromocion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pendiente"/>
+      <xs:enumeration value="aprobada"/>
+      <xs:enumeration value="rechazada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Calculada por fecha (día local America/Monterrey). -->
+  <xs:simpleType name="vigencia">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="programada"/>
+      <xs:enumeration value="vigente"/>
+      <xs:enumeration value="vencida"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Unidad base del precio unitario: la de su tipo en unidades_medida. -->
+  <xs:simpleType name="unidadBase">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="kg"/>
+      <xs:enumeration value="l"/>
+      <xs:enumeration value="pza"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="moneda">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="MXN"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Importe en MXN, > 0, hasta 2 decimales. -->
+  <xs:simpleType name="importe">
+    <xs:restriction base="xs:decimal">
+      <xs:minExclusive value="0"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Descuento: mayor a 0 y menor a 100, hasta 2 decimales. -->
+  <xs:simpleType name="porcentajeDescuento">
+    <xs:restriction base="xs:decimal">
+      <xs:minExclusive value="0"/>
+      <xs:maxExclusive value="100"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Ahorro: puede ser negativo (la promoción sale más cara por unidad). -->
+  <xs:simpleType name="porcentaje">
+    <xs:restriction base="xs:decimal">
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="cantidadPaquete">
+    <xs:restriction base="xs:integer">
+      <xs:minInclusive value="2"/>
+      <xs:maxInclusive value="99"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="contenido">
+    <xs:restriction base="xs:decimal">
+      <xs:minExclusive value="0"/>
+      <xs:fractionDigits value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Clave de unidades_medida (catalog `GET /v1/units`): kg, g, l, ml, pza... -->
+  <xs:simpleType name="claveUnidad">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="10"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== Peticiones ===================== -->
+
+  <!-- POST /v1/promotions. Orden fijo (xs:sequence). Qué campos exige cada
+       `type` lo valida el servicio (400 si sobra o falta alguno). -->
+  <xs:element name="promocionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="name" type="xs:string"/>
+        <xs:element name="type" type="pr:tipoPromocion"/>
+        <xs:element name="productId" type="pr:uuid"/>
+        <xs:element name="presentationId" type="pr:uuid"/>
+        <xs:element name="storeId" type="pr:uuid" minOccurs="0"/>
+        <xs:element name="zoneId" type="pr:uuid" minOccurs="0"/>
+        <xs:element name="discountPct" type="pr:porcentajeDescuento" minOccurs="0"/>
+        <xs:element name="packQuantity" type="pr:cantidadPaquete" minOccurs="0"/>
+        <xs:element name="packPrice" type="pr:importe" minOccurs="0"/>
+        <xs:element name="promoContent" type="pr:contenido" minOccurs="0"/>
+        <xs:element name="promoUnit" type="pr:claveUnidad" minOccurs="0"/>
+        <xs:element name="promoPrice" type="pr:importe" minOccurs="0"/>
+        <xs:element name="validFrom" type="xs:date"/>
+        <xs:element name="validTo" type="xs:date"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/promotions/:id/reject -->
+  <xs:element name="rechazoPromocionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="reason">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="10"/>
+              <xs:maxLength value="500"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===================== Respuestas ===================== -->
+
+  <xs:complexType name="promocion">
+    <xs:sequence>
+      <xs:element name="id" type="pr:uuid"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="type" type="pr:tipoPromocion"/>
+      <xs:element name="productId" type="pr:uuid"/>
+      <xs:element name="presentationId" type="pr:uuid"/>
+      <xs:element name="storeId" type="pr:uuid" minOccurs="0"/>
+      <xs:element name="zoneId" type="pr:uuid" minOccurs="0"/>
+      <xs:element name="discountPct" type="pr:porcentajeDescuento" minOccurs="0"/>
+      <xs:element name="packQuantity" type="pr:cantidadPaquete" minOccurs="0"/>
+      <xs:element name="packPrice" type="pr:importe" minOccurs="0"/>
+      <xs:element name="promoContent" type="pr:contenido" minOccurs="0"/>
+      <xs:element name="promoUnit" type="pr:claveUnidad" minOccurs="0"/>
+      <xs:element name="promoPrice" type="pr:importe" minOccurs="0"/>
+      <xs:element name="currency" type="pr:moneda"/>
+      <xs:element name="validFrom" type="xs:date"/>
+      <xs:element name="validTo" type="xs:date"/>
+      <xs:element name="status" type="pr:estadoPromocion"/>
+      <xs:element name="validity" type="pr:vigencia" minOccurs="0"/>
+      <xs:element name="proposedBy" type="pr:uuid"/>
+      <xs:element name="proposedAt" type="pr:instanteUtc"/>
+      <xs:element name="resolvedBy" type="pr:uuid" minOccurs="0"/>
+      <xs:element name="resolvedAt" type="pr:instanteUtc" minOccurs="0"/>
+      <xs:element name="rejectionReason" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST, GET /:id, PATCH /:id/approve, PATCH /:id/reject -->
+  <xs:element name="promocionResponse" type="pr:promocion"/>
+
+  <!-- GET /v1/promotions -->
+  <xs:element name="promocionListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="pr:promocion" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Precio regular (pricing-service) de la presentación en la tienda. -->
+  <xs:complexType name="precioRegular">
+    <xs:sequence>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="price" type="pr:importe" minOccurs="0"/>
+      <xs:element name="effectiveDate" type="xs:date" minOccurs="0"/>
+      <xs:element name="contentBase" type="pr:contenido" minOccurs="0"/>
+      <xs:element name="unitPrice" type="pr:importe" minOccurs="0"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="precioPromocional">
+    <xs:sequence>
+      <xs:element name="purchasePrice" type="pr:importe"/>
+      <xs:element name="items" type="xs:positiveInteger"/>
+      <xs:element name="contentBase" type="pr:contenido"/>
+      <xs:element name="unitPrice" type="pr:importe"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GET /v1/promotions/:id/unit-price. Si disponible=false no hay
+       `promotional` ni `savingsPct`: NUNCA un 0. -->
+  <xs:element name="precioUnitarioResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="promotionId" type="pr:uuid"/>
+        <xs:element name="type" type="pr:tipoPromocion"/>
+        <xs:element name="status" type="pr:estadoPromocion"/>
+        <xs:element name="productId" type="pr:uuid"/>
+        <xs:element name="presentationId" type="pr:uuid"/>
+        <xs:element name="storeId" type="pr:uuid"/>
+        <xs:element name="baseUnit" type="pr:unidadBase"/>
+        <xs:element name="currency" type="pr:moneda"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="regular" type="pr:precioRegular"/>
+        <xs:element name="promotional" type="pr:precioPromocional" minOccurs="0"/>
+        <xs:element name="savingsPct" type="pr:porcentaje" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/promotions/compare (no se pagina: 2 a 10 ids). -->
+  <xs:element name="comparacionPromocionesResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="productId" type="pr:uuid"/>
+        <xs:element name="storeId" type="pr:uuid"/>
+        <xs:element name="baseUnit" type="pr:unidadBase"/>
+        <xs:element name="currency" type="pr:moneda"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="promotionId" type="pr:uuid"/>
+                    <xs:element name="type" type="pr:tipoPromocion"/>
+                    <xs:element name="presentationId" type="pr:uuid"/>
+                    <xs:element name="status" type="pr:estadoPromocion"/>
+                    <xs:element name="disponible" type="xs:boolean"/>
+                    <xs:element name="unitPrice" type="pr:importe" minOccurs="0"/>
+                    <xs:element name="regularUnitPrice" type="pr:importe" minOccurs="0"/>
+                    <xs:element name="savingsPct" type="pr:porcentaje" minOccurs="0"/>
+                    <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Error estándar, igual que en los demás XSD. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
