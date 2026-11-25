@@ -512,4 +512,38 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- ===== Visitas de campo (D-30): POST /v1/field-visits ===== -->
+  <xs:element name="fieldVisitResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="visitId" type="xs:string"/>
+        <xs:element name="storeId" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="visitedAt" type="xs:dateTime"/>
+        <xs:element name="lat" type="xs:decimal"/>
+        <xs:element name="lng" type="xs:decimal"/>
+        <xs:element name="accuracyM" type="xs:decimal" minOccurs="0"/>
+        <xs:element name="answers" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="preguntaId" type="xs:string"/>
+                    <xs:element name="pregunta" type="xs:string"/>
+                    <!-- Texto, número o booleano: en XML viaja como texto. -->
+                    <xs:element name="respuesta" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="notes" type="xs:string" minOccurs="0"/>
+        <xs:element name="capturedBy" type="xs:string"/>
+        <xs:element name="receivedAt" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
 </xs:schema>
