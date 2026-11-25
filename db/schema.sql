@@ -945,6 +945,8 @@ CREATE TABLE precios_observados (
     revisado_por        UUID REFERENCES usuarios(id),
     revisado_en         TIMESTAMPTZ,
     precio_id           UUID REFERENCES precios(id),
+    -- D-42: id generado en el dispositivo; un reenvío por offline-sync no crea otra fila.
+    observacion_id      UUID UNIQUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_precio_obs_rechazo CHECK (
         (estatus = 'rechazado' AND motivo_rechazo IS NOT NULL) OR estatus <> 'rechazado'

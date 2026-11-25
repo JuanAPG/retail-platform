@@ -57,7 +57,21 @@ export class PriceObservationsService {
     private readonly notificaciones: NotificationsReporter,
   ) {}
 
-  async create(dto: CreatePriceObservationDto, solicitante: SesionUsuario, ip?: string, token?: string): Promise<PriceObservationDto> {
+  /**
+   * Alta de una observación. Con `observationId` (D-42) es idempotente: un reenvío del mismo
+   * usuario devuelve la original con `duplicada: true` (sin otra auditoría ni otro aviso); el
+   * mismo id de otro usuario es 409 sin revelar la ajena.
+   */
+  async create(
+    dto: CreatePriceObservationDto,
+    solicitante: SesionUsuario,
+    ip?: string,
+    token?: string,
+  ): Promise<{ observacion: PriceObservationDto; duplicada: boolean }> {
+    if (dto.observationId) {
+      const previa = await this.porIdDeDispositivo(dto.observationId, solicitante);
+      if (previa) return { observacion: previa, duplicada: true };
+    }
     const [fila] = await this.dataSource.query(
       `SELECT prod.estatus::text AS estatus, pres.activo AS activa FROM producto_presentaciones pres
        JOIN productos prod ON prod.id = pres.producto_id WHERE pres.id = $1`,
@@ -79,11 +93,18 @@ export class PriceObservationsService {
       throw new BadRequestException('lat y lng van juntas: manda las dos o ninguna.');
     }
 
+    // ON CONFLICT: dos reenvíos simultáneos del mismo id no crean dos filas; el que pierde lee la del que ganó.
     const [creada] = await this.dataSource.query(
-      `INSERT INTO precios_observados (presentacion_id, tienda_id, precio, observado_en, latitud, longitud, capturado_por)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [dto.presentationId, dto.storeId, dto.price, observadoEn, dto.lat ?? null, dto.lng ?? null, solicitante.id],
+      `INSERT INTO precios_observados (presentacion_id, tienda_id, precio, observado_en, latitud, longitud, capturado_por, observacion_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (observacion_id) DO NOTHING RETURNING id`,
+      [dto.presentationId, dto.storeId, dto.price, observadoEn, dto.lat ?? null, dto.lng ?? null, solicitante.id, dto.observationId ?? null],
     );
+    if (!creada) {
+      const ganadora = await this.porIdDeDispositivo(dto.observationId!, solicitante);
+      if (ganadora) return { observacion: ganadora, duplicada: true };
+      throw new ConflictException('No se pudo registrar la observación; reintenta.');
+    }
     const creada_ = (await this.detallar([creada.id]))[0];
     // Auditoría y aviso en paralelo: con un servicio colgado se espera un timeout, no la suma (QA-PRI53-06).
     await Promise.all([
@@ -115,7 +136,17 @@ export class PriceObservationsService {
         token,
       ),
     ]);
-    return creada_;
+    return { observacion: creada_, duplicada: false };
+  }
+
+  /** La observación con ese id de dispositivo si es del solicitante; 409 si es de otro; `null` si no existe. */
+  private async porIdDeDispositivo(observacionId: string, solicitante: SesionUsuario): Promise<PriceObservationDto | null> {
+    const [previa] = await this.dataSource.query('SELECT id, capturado_por FROM precios_observados WHERE observacion_id = $1', [observacionId]);
+    if (!previa) return null;
+    if (previa.capturado_por !== solicitante.id) {
+      throw new ConflictException('Ese observationId ya se usó en otra captura. Genera uno nuevo en el dispositivo.');
+    }
+    return (await this.detallar([previa.id]))[0];
   }
 
   /** Un perfil con permiso ve todas; el Analista, solo las que capturó. Cola de trabajo: la más antigua primero. */
