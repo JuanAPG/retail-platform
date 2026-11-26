@@ -1,0 +1,60 @@
+{
+  "group": {
+    "zone": {
+      "id": "97925ca4-3845-4e68-9660-46f781957b8c",
+      "name": "Zona Centro"
+    },
+    "segment": {
+      "id": 2,
+      "code": "ING_2",
+      "name": "Ingreso medio",
+      "versions": [
+        1
+      ]
+    }
+  },
+  "granularity": "month",
+  "asOf": "2026-11-25T18:20:00.000000+00:00",
+  "publicationRule": "ambos",
+  "data": [
+    {
+      "periodStart": "2026-08-01",
+      "periodEnd": "2026-08-31",
+      "coverage": {
+        "baskets": 9,
+        "stores": 3
+      },
+      "disponible": false,
+      "motivo": "La combinación zona-segmento tiene 9 transacciones (mínimo 10) en 3 tiendas (D-36, regla ambos).",
+      "averageTicket": null,
+      "productsPerBasket": null,
+      "typicalSize": null
+    },
+    {
+      "periodStart": "2026-09-01",
+      "periodEnd": "2026-09-30",
+      "coverage": {
+        "baskets": 100,
+        "stores": 4
+      },
+      "disponible": true,
+      "motivo": null,
+      "averageTicket": 100.64,
+      "productsPerBasket": 2.13,
+      "typicalSize": 5
+    },
+    {
+      "periodStart": "2026-10-01",
+      "periodEnd": "2026-10-31",
+      "coverage": {
+        "baskets": 100,
+        "stores": 4
+      },
+      "disponible": true,
+      "motivo": null,
+      "averageTicket": 109.83,
+      "productsPerBasket": 2.3,
+      "typicalSize": 5
+    }
+  ]
+}
