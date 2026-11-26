@@ -1,5 +1,8 @@
 # Preparación de staging en GCP
 
+Los resultados y la evidencia de seguridad se registran en
+[Pruebas de fallos](pruebas-de-fallos.md).
+
 ## Rutas por ambiente
 
 El origen público es `https://<STAGING_HOST>`. Al desplegar, comunica a
