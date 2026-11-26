@@ -1,8 +1,52 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp") // necesario para que Room genere código en compilación
 }
+
+// ---------------------------------------------------------------------------------------------
+// URLs de los microservicios POR VARIANTE (BuildConfig). Nada de esto va escrito en el código.
+//  - debug: servicios locales del docker-compose vistos desde el emulador (10.0.2.2), HTTP.
+//  - release (la variante de entrega): HTTPS, sin 10.0.2.2, sin localhost y sin puertos.
+//    Los valores de abajo son MARCADORES (dominio .invalid, que no existe): los llena Juan Ángel
+//    con las URLs de GCP, en mobile/gradle.properties o al compilar, por ejemplo:
+//      gradle assembleRelease -Pretail.release.syncUrl=https://sync.ejemplo.com/
+// ---------------------------------------------------------------------------------------------
+val urlsLocales = mapOf(
+    "API_BASE_URL" to "http://10.0.2.2:3101/", // auth-service
+    "CATALOG_BASE_URL" to "http://10.0.2.2:3102/", // catalog-service
+    "PRICING_BASE_URL" to "http://10.0.2.2:3103/", // pricing-service
+    "SYNC_BASE_URL" to "http://10.0.2.2:3118/", // offline-sync-service
+)
+
+fun urlDeEntrega(propiedad: String, marcador: String): String =
+    (project.findProperty(propiedad) as String?)?.takeIf { it.isNotBlank() } ?: marcador
+
+val urlsEntrega = mapOf(
+    "API_BASE_URL" to urlDeEntrega("retail.release.authUrl", "https://auth-service.PENDIENTE-GCP.invalid/"),
+    "CATALOG_BASE_URL" to urlDeEntrega("retail.release.catalogUrl", "https://catalog-service.PENDIENTE-GCP.invalid/"),
+    "PRICING_BASE_URL" to urlDeEntrega("retail.release.pricingUrl", "https://pricing-service.PENDIENTE-GCP.invalid/"),
+    "SYNC_BASE_URL" to urlDeEntrega("retail.release.syncUrl", "https://offline-sync-service.PENDIENTE-GCP.invalid/"),
+)
+
+/** La variante de entrega no compila con una URL local o sin HTTPS. */
+fun validarUrlsDeEntrega(urls: Map<String, String>) {
+    val prohibidos = listOf("10.0.2.2", "localhost", "127.0.0.1", "0.0.0.0")
+    urls.forEach { (nombre, url) ->
+        val uri = URI(url)
+        val problema = when {
+            uri.scheme != "https" -> "debe usar https://"
+            prohibidos.any { url.contains(it, ignoreCase = true) } -> "no puede apuntar a un host local"
+            uri.port != -1 -> "no lleva puerto (el balanceador de GCP expone 443)"
+            !url.endsWith("/") -> "debe terminar en / (Retrofit lo exige)"
+            else -> null
+        }
+        if (problema != null) throw GradleException("release: $nombre = $url $problema.")
+    }
+}
+validarUrlsDeEntrega(urlsEntrega)
 
 android {
     namespace = "com.udem.retaildecision"
@@ -14,23 +58,26 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
-
-        // La URL base del decision-service / gateway se inyecta como BuildConfig
-        // para no hardcodear el host en el código y poder cambiarlo por build type
-        // (ej. emulador vs. dispositivo físico vs. demo en clase).
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3101/\"")     // auth-service
-        buildConfigField("String", "CATALOG_BASE_URL", "\"http://10.0.2.2:3102/\"") // catalog-service
-        buildConfigField("String", "PRICING_BASE_URL", "\"http://10.0.2.2:3103/\"")
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
+            urlsLocales.forEach { (nombre, url) -> buildConfigField("String", nombre, "\"$url\"") }
+            // HTTP plano solo en debug (servicios locales). Ver android:usesCleartextTraffic en el manifiesto.
+            manifestPlaceholders["usarHttpPlano"] = "true"
         }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            urlsEntrega.forEach { (nombre, url) -> buildConfigField("String", nombre, "\"$url\"") }
+            manifestPlaceholders["usarHttpPlano"] = "false"
         }
+    }
+
+    testOptions {
+        // Las pruebas unitarias corren en la JVM; si algo toca una clase de Android, recibe un valor vacío.
+        unitTests.isReturnDefaultValues = true
     }
 
     buildFeatures {
@@ -92,6 +139,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
+    // SQLite en la JVM, para probar la migración de Room 1 → 2 sin emulador (MigracionTest).
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     implementation("androidx.compose.material:material-icons-extended")
 }

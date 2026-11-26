@@ -29,14 +29,17 @@ data class ScannerUiState(
     /** Precios vigentes de ESTA presentación, del más barato al más caro. */
     val precios: List<PriceHistoryDto> = emptyList(),
     val errorPrecios: String? = null,
+    /** false para el Investigador de mercado: no puede leer precios (Matriz §3 M08, D-28). */
+    val muestraPrecios: Boolean = true,
 )
 
 class ScannerViewModel(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
+    private val puedeVerPrecios: Boolean = true,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ScannerUiState())
+    private val _state = MutableStateFlow(ScannerUiState(muestraPrecios = puedeVerPrecios))
     val state: StateFlow<ScannerUiState> = _state.asStateFlow()
 
     /** Código de barras (sin ceros a la izquierda) -> producto y presentación a la que pertenece. */
@@ -81,6 +84,7 @@ class ScannerViewModel(
                     escaneando = false,
                     codigo = codigo,
                     noEncontrado = true,
+                    muestraPrecios = puedeVerPrecios,
                 )
             }
             return
@@ -94,9 +98,11 @@ class ScannerViewModel(
                 codigo = codigo,
                 producto = producto,
                 presentacion = presentacion,
-                cargandoPrecios = true,
+                cargandoPrecios = puedeVerPrecios,
+                muestraPrecios = puedeVerPrecios,
             )
         }
+        if (!puedeVerPrecios) return
         viewModelScope.launch {
             pricingRepository.cargar(producto.id)
                 .onSuccess { datos ->
@@ -113,7 +119,7 @@ class ScannerViewModel(
 
     /** Botón "Escanear otro": limpia el resultado y vuelve a abrir la cámara. */
     fun escanearOtro() {
-        _state.update { ScannerUiState(cargandoCatalogo = false, escaneando = true) }
+        _state.update { ScannerUiState(cargandoCatalogo = false, escaneando = true, muestraPrecios = puedeVerPrecios) }
     }
 
     /**
@@ -126,9 +132,10 @@ class ScannerViewModel(
 class ScannerViewModelFactory(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
+    private val puedeVerPrecios: Boolean = true,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return ScannerViewModel(catalogRepository, pricingRepository) as T
+        return ScannerViewModel(catalogRepository, pricingRepository, puedeVerPrecios) as T
     }
 }
