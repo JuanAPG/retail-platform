@@ -1,0 +1,49 @@
+{
+  "id": "674a20819e2b4d0012ab34ce",
+  "type": "forecast",
+  "userId": "5b1e7d3c-2a4f-4e6b-8c9d-0e1f2a3b4c5d",
+  "date": "2026-11-25T18:06:40.051000+00:00",
+  "durationMs": 212.4,
+  "parameters": {
+    "productId": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+    "zoneId": "f2670df2-5c1a-4b7e-9d3f-2a6b8c0d1e4f",
+    "dateFrom": null,
+    "dateTo": null,
+    "horizonWeeks": 8,
+    "holdoutWeeks": 4,
+    "seasonalPeriod": 4,
+    "intervalLevels": [
+      80,
+      95
+    ],
+    "model": "ETS(A,A,A)",
+    "publicationRule": "ambos",
+    "minTransactions": 10,
+    "minStores": 3
+  },
+  "product": {
+    "id": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+    "name": "Leche entera",
+    "unit": "l",
+    "unitType": "volumen"
+  },
+  "zone": {
+    "id": "f2670df2-5c1a-4b7e-9d3f-2a6b8c0d1e4f",
+    "name": "Zona Oriente"
+  },
+  "disponible": false,
+  "motivo": "Menos de 10 transacciones y menos de 3 tiendas con el producto en la zona (D-36).",
+  "coverage": {
+    "transactions": 9,
+    "stores": 2
+  },
+  "excludedPresentations": [],
+  "limitations": [],
+  "assumptions": [
+    "Semanas de lunes a domingo, hora de America/Monterrey; la semana en curso no entra.",
+    "Cantidades en la unidad base del producto (l): cantidad × contenido × factor de la unidad.",
+    "Holt-Winters aditivo (ETS A,A,A) de statsmodels; intervalos 80 % y 95 % analíticos.",
+    "El ajuste que valida no ve las 4 semanas reservadas; el pronóstico final usa toda la historia.",
+    "Es una proyección de demanda agregada de la zona, no una causa ni un dato de personas."
+  ]
+}
