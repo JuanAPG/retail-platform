@@ -73,14 +73,43 @@ def xml_root(ruta: str, elemento: str, siempre_presentes: tuple[str, ...] = ()) 
     XML_ROOTS[ruta] = (elemento, siempre_presentes)
 
 
-def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
-    if ruta in XML_ROOTS:
-        return XML_ROOTS[ruta]
-    # Coincidencia por prefijo para las rutas con parametros.
-    for patron, valor in XML_ROOTS.items():
-        if patron.endswith("*") and ruta.startswith(patron[:-1]):
-            return valor
-    return None, ()
+def _raiz_de(metodo: str, ruta: str) -> tuple[str | None, tuple[str, ...]]:
+    """Raíz XML de la petición. En este servicio una misma ruta puede tener dos raíces según el
+    método (`GET /v1/sources` lista, `POST /v1/sources` da una fuente), así que la llave puede
+    llevar el método: `"POST /v1/sources"`. `*` es un segmento cualquiera; gana lo más específico.
+    """
+    for llave in (f"{metodo} {ruta}", ruta):
+        if llave in XML_ROOTS:
+            return XML_ROOTS[llave]
+    return _raiz_por_patron(metodo, ruta)
+
+
+def _raiz_por_patron(metodo: str, ruta: str) -> tuple[str | None, tuple[str, ...]]:
+    from fnmatch import fnmatchcase
+
+    candidatos = []
+    for llave, valor in XML_ROOTS.items():
+        if "*" not in llave:
+            continue
+        con_metodo = " " in llave
+        patron_metodo, patron = llave.split(" ", 1) if con_metodo else (None, llave)
+        if patron_metodo not in (None, metodo) or patron.count("/") != ruta.count("/"):
+            continue
+        if fnmatchcase(ruta, patron):
+            candidatos.append(((con_metodo, len(patron)), valor))
+    return max(candidatos, key=lambda c: c[0])[1] if candidatos else (None, ())
+
+
+def _rutas() -> None:
+    # Importado aquí: el router usa `xml_root`, que se define arriba.
+    from .gobierno_api import RAICES_XML, router
+
+    app.include_router(router)
+    for ruta, raiz in RAICES_XML.items():
+        xml_root(ruta, raiz)
+
+
+_rutas()
 
 
 @app.get("/v1/health", summary="Salud del servicio y de sus dependencias, con lo que tardó cada una.")
@@ -221,7 +250,7 @@ async def negociar_xml(request: Request, call_next):
         if isinstance(datos, dict):
             datos = {k: v for k, v in datos.items() if k != "details"}
     else:
-        raiz, siempre = _raiz_de(request.url.path)
+        raiz, siempre = _raiz_de(request.method, request.url.path)
 
     # La respuesta XML es nueva: sin copiar estas cabeceras se perdían los ids
     # que pone LoggingMiddleware (el cliente de escritorio no podría citarlos).
