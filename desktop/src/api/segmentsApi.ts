@@ -1,7 +1,11 @@
 import { API_BASE_URL, httpClient } from './httpClient';
 import { asList, nullIfEmpty, text, unwrap } from './xml';
 
-const CATALOG_URL = import.meta.env.VITE_CATALOG_BASE_URL ?? deriveUrl(3102);
+/**
+ * D-35: los segmentos de ingreso salieron de catalog-service a income-segmentation-service (3112).
+ * Editar crea una versión nueva y el código ya no se cambia (PATCH sin `code`).
+ */
+const SEGMENTATION_URL = import.meta.env.VITE_SEGMENTATION_BASE_URL ?? deriveUrl(3112);
 
 function deriveUrl(port: number): string {
   try {
@@ -25,6 +29,8 @@ export interface Segment {
   zoneRelation: string;
   limitations: string;
   description: string | null;
+  /** Versión vigente del segmento (D-35); cada edición crea una nueva. */
+  version: number | null;
 }
 
 export interface SegmentInput {
@@ -59,6 +65,7 @@ export function parseSegment(s: any): Segment {
     zoneRelation: text(s.zoneRelation),
     limitations: text(s.limitations),
     description: description === null ? null : text(description),
+    version: numberOrNull(s.version),
   };
 }
 
@@ -66,7 +73,7 @@ export async function listSegments(): Promise<Segment[]> {
   const all: Segment[] = [];
   let page = 1;
   for (;;) {
-    const res = await httpClient.get('v1/segments', { baseURL: CATALOG_URL, params: { page, limit: 100 } });
+    const res = await httpClient.get('v1/segments', { baseURL: SEGMENTATION_URL, params: { page, limit: 100 } });
     const root = unwrap(res.data);
     const items = asList(root.data?.item).map(parseSegment);
     all.push(...items);
@@ -77,15 +84,17 @@ export async function listSegments(): Promise<Segment[]> {
 }
 
 export async function createSegment(input: SegmentInput): Promise<Segment> {
-  const res = await httpClient.post('v1/segments', input, { baseURL: CATALOG_URL });
+  const res = await httpClient.post('v1/segments', input, { baseURL: SEGMENTATION_URL });
   return parseSegment(unwrap(res.data));
 }
 
+/** Crea una versión nueva. income-segmentation rechaza `code` (400): se quita aquí. */
 export async function updateSegment(id: number, input: Partial<SegmentInput>): Promise<Segment> {
-  const res = await httpClient.patch(`v1/segments/${id}`, input, { baseURL: CATALOG_URL });
+  const { code: _codigo, ...cambios } = input;
+  const res = await httpClient.patch(`v1/segments/${id}`, cambios, { baseURL: SEGMENTATION_URL });
   return parseSegment(unwrap(res.data));
 }
 
 export async function deleteSegment(id: number): Promise<void> {
-  await httpClient.delete(`v1/segments/${id}`, { baseURL: CATALOG_URL });
+  await httpClient.delete(`v1/segments/${id}`, { baseURL: SEGMENTATION_URL });
 }
