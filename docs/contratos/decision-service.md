@@ -50,7 +50,8 @@ el Postgres compartido. **Nunca escribe tablas ajenas.**
 
 | Dueño | Lo que lee |
 |---|---|
-| catalog-service | `productos`, `producto_presentaciones`, `zonas`, `tiendas`, `segmentos_ingreso`, `unidades_medida`, `zona_clasificaciones`, `indicadores`, `indicador_valores`, `inventario`; vista `v_zona_indicadores` |
+| catalog-service | `productos`, `producto_presentaciones`, `zonas`, `tiendas`, `segmentos_ingreso`, `unidades_medida`, `zona_clasificaciones`, `indicadores`, `indicador_valores`; vista `v_zona_indicadores` |
+| availability-service | `inventario` solo como **respaldo** si availability no responde; lo normal es su API de cobertura (D-38) |
 | pricing-service | `precios` |
 | core-process-service | `transacciones_detalle`, `canastas` |
 | algorithms-core | `elasticidades`, `corrida_clusters`, y las corridas de elasticidad en `analisis_corridas` |
@@ -111,6 +112,15 @@ Response `200`:
 `indexValue` en 0–1: NUNCA se lee como "precio bajo"; es el promedio
 ponderado de precio, ingreso del segmento, disponibilidad y cobertura de
 básicos. Zona o segmento inexistente → 404 `NOT_FOUND`.
+
+**Cobertura de básicos (D-38).** Sale de availability-service por HTTP
+(`GET {AVAILABILITY_SERVICE_URL}/v1/availability/zones/:zoneId/coverage`,
+reenviando el `Authorization`, timeout 3 s): `coverage / 100`. Esa cobertura ya
+aplica la vigencia de 7 días. Si availability responde `disponible: false`
+(zona sin tiendas, sin básicos o sin datos vigentes) el componente vale **0**,
+igual que los otros componentes sin datos. Si availability no responde, se usa
+el cálculo anterior (SQL sobre `inventario`, sin vigencia) y queda en el log,
+para que el índice no se caiga en la demo.
 
 ## GET /v1/accessibility/by-zone/:zoneId
 

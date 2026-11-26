@@ -324,9 +324,9 @@ No emite notificaciones: ninguna decisión define un aviso para estos eventos.
 
 No son parte de este contrato; las coordina cada dueño:
 
-- **decision-service** hoy lee `inventario` por SQL en accesibilidad. Debe pasar a
-  `GET /v1/availability/zones/:zoneId/coverage`. La columna que lee no cambia, así que
-  sigue funcionando mientras migra.
+- **decision-service** ya usa `GET /v1/availability/zones/:zoneId/coverage` para la
+  cobertura de básicos de la accesibilidad. Solo si availability no responde vuelve a su
+  cálculo SQL anterior sobre `inventario` (respaldo, sin vigencia).
 - **offline-sync-service** (T-17) envía cada captura de disponibilidad a
   `POST /v1/availability/captures` con su `captureId` y traduce `status` a su acuse
   (`aceptada`, `duplicada`, `conflicto`; un `400` es `rechazada`).
