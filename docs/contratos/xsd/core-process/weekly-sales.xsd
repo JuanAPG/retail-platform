@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M09: GET /v1/analytics/weekly-sales (ruta nueva, T-13).
+     Ventas de UN producto agregadas por semana (lunes, hora de Monterrey) y
+     presentación, para el pronóstico de demand-forecast-service. Las
+     cantidades van en la unidad de la PRESENTACIÓN: la conversión a kg/l/pza
+     la hace quien consume. `transactions` y `stores` del encabezado son
+     distintos en toda la ventana (cobertura de D-36): no se suman desde las
+     filas. Los nulos se omiten (filtros que no vinieron). -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:include schemaLocation="_comun.xsd"/>
+
+  <xs:simpleType name="dia">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="productId" type="xs:string"/>
+        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+        <xs:element name="dateFrom" type="dia" minOccurs="0"/>
+        <xs:element name="dateTo" type="dia" minOccurs="0"/>
+        <xs:element name="timezone" type="xs:string"/>
+        <xs:element name="weekStartsOn">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="monday"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <!-- Instantánea: solo cuentan las canastas construidas hasta aquí. -->
+        <xs:element name="asOf" type="xs:dateTime"/>
+        <xs:element name="transactions" type="xs:nonNegativeInteger"/>
+        <xs:element name="stores" type="xs:nonNegativeInteger"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="weekStart" type="dia"/>
+                    <xs:element name="presentationId" type="xs:string"/>
+                    <xs:element name="quantity" type="xs:decimal"/>
+                    <xs:element name="transactions" type="xs:positiveInteger"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
