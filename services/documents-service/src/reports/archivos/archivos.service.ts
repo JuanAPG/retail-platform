@@ -12,6 +12,7 @@ import { Connection, Model } from 'mongoose';
 import { AuditReporter } from '../../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../../common/auth/session.guard';
 import { correlacionActual } from '../../common/correlation/correlacion';
+import { ROL } from '../../common/roles';
 import { NotificationsReporter } from '../../common/notifications/notifications-reporter.service';
 import { FormatoExportacion } from '../dto/reports.dto';
 import { nombreDescarga, ReporteDto, ReportsService, TIPO_CONTENIDO } from '../reports.service';
@@ -114,7 +115,7 @@ export class ArchivosService {
         throw new ServiceUnavailableException(`El almacén de archivos no responde: ${motivoSeguro(error)}`);
       }
       if (presente) {
-        await this.avisarUnaVez(doc, authorization);
+        await this.avisarUnaVez(doc, usuario, authorization);
         return { archivo: this.aDto(doc), status: 200 };
       }
       // El objeto desapareció del almacén: el registro deja de anunciarlo y se regenera.
@@ -185,7 +186,7 @@ export class ArchivosService {
         },
         authorization,
       );
-      await this.avisarUnaVez(listo!, authorization);
+      await this.avisarUnaVez(listo!, usuario, authorization);
       return { archivo: this.aDto(listo!), status: 201 };
     } catch (error) {
       const motivo = motivoSeguro(error);
@@ -351,21 +352,29 @@ export class ArchivosService {
   }
 
   /**
-   * Aviso de "archivo disponible" UNA sola vez: se reclama atómicamente
+   * Aviso de "ya se puede descargar" UNA sola vez: se reclama atómicamente
    * (`avisoEmitidoEn: null → ahora`) y si notifications lo rechaza se libera
    * para que una petición posterior lo intente de nuevo.
+   *
+   * Usa el evento `reporte.generado` de T-20: lo origina solo el Gerente de
+   * categoría y le llega al mismo usuario que hizo la acción (destino `actor`).
+   * Con otro perfil no se emite (notifications lo rechazaría con 403) y el
+   * aviso queda pendiente para cuando lo pida un Gerente; la web ya muestra
+   * "ya se puede descargar" a quien lo preparó.
    */
-  private async avisarUnaVez(doc: ArchivoDocument, authorization: string | undefined): Promise<void> {
+  private async avisarUnaVez(doc: ArchivoDocument, usuario: SesionUsuario, authorization: string | undefined): Promise<void> {
+    if (usuario.rol !== ROL.GERENTE_CATEGORIA) return;
     const reclamado = await this.modelo.updateOne({ _id: doc._id, avisoEmitidoEn: null }, { $set: { avisoEmitidoEn: new Date() } });
     if (reclamado.modifiedCount !== 1) return;
     const aceptado = await this.avisos.emitir(
       {
-        eventType: 'reporte.disponible',
+        eventType: 'reporte.generado',
         relatedEntityType: 'reporte',
         relatedEntityId: doc.recursoId,
         title: 'Tu reporte ya se puede descargar',
         message: `El reporte ejecutivo en ${doc.formato.toUpperCase()} está listo para descargar.`,
-        recipientUserId: doc.solicitadoPor,
+        // Destino `actor`: notifications exige que sea quien hizo la acción.
+        recipientUserId: usuario.id,
       },
       authorization,
     );

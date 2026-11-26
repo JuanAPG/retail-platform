@@ -4,14 +4,11 @@ import { conCorrelacion } from '../correlation/correlacion';
 /**
  * Evento a emitir (docs/contratos/notifications-service.md).
  *
- * `reporte.disponible` es la PROPUESTA de documents-service para T-20: lo
- * origina quien pidió el archivo (Gerente de categoría u otro perfil que lee
- * reportes) y le llega a ese mismo usuario (`recipientUserId`). Hasta que
- * notifications-service lo agregue a su catálogo cerrado responde 400/403;
- * eso queda en el log y la operación sigue (fire-and-forget).
+ * `reporte.generado` (T-20): emisor documents-service, origen Gerente de
+ * categoría, destino el mismo usuario que hizo la acción (`actor`).
  */
 export interface EventoNotificacion {
-  eventType: 'reporte.disponible';
+  eventType: 'reporte.generado';
   relatedEntityType: string;
   relatedEntityId: string;
   title: string;
