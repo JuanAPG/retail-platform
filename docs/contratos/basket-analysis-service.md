@@ -60,7 +60,7 @@ Decididas por el dueño del dominio (guía del Parcial 3), dentro de D-37 y D-36
 | **BA-2** | **Un producto cuenta una vez por canasta**, aunque la canasta lleve varias presentaciones de él (500 ml y 1 l son el mismo producto). |
 | **BA-3** | **Umbral (D-37):** un producto es típico si `canastasConProducto × 5 ≥ canastasDelGrupo`. Se compara con **enteros** (20 % = 1/5) para que 20 % entre siempre y 19 % nunca, sin errores de redondeo. Frontera: 20 de 100 → entra; 19 de 100 → no entra. |
 | **BA-4** | **Frecuencia** = canastas con el producto / canastas del grupo (0 a 1). **Gasto promedio** = lo gastado en el producto (suma de sus subtotales) / canastas que lo llevan, en MXN a 2 decimales. |
-| **BA-5** | **Publicación (D-36):** el grupo se publica solo si tiene **al menos 10 transacciones** (una canasta = una transacción) **y al menos 3 tiendas** con venta en el periodo. Si no, `disponible: false` con `motivo` y **sin ningún número del agregado**. Los conteos `coverage` sí salen, como en income-segmentation-service. Combinación de los umbrales (P-11): variable `PUBLICATION_RULE`, `ambos` por defecto. Un grupo **sin canastas** responde `200` con `disponible: false` y su motivo, no `404`. |
+| **BA-5** | **Publicación (D-36):** el grupo se publica solo si tiene **al menos 10 transacciones** (una canasta = una transacción) **y al menos 3 tiendas** con venta en el periodo. Si no, `disponible: false` con `motivo` y **sin ningún número del agregado**. Los conteos `coverage` sí salen, como en income-segmentation-service. **P-11, decidido en este dominio:** hacen falta **los dos** umbrales (`PUBLICATION_RULE=ambos`), porque el riesgo de D-36 es describir a una sola tienda y es la lectura que más protege; además coincide con income-segmentation-service. Frontera: 10 transacciones en 2 tiendas → no disponible; 10 en 3 → disponible. La variable permite cambiar a `cualquiera` sin tocar código. Un grupo **sin canastas** responde `200` con `disponible: false` y su motivo, no `404`. |
 | **BA-6** | **Cambio de segmento:** si la zona se reclasifica a mitad del periodo, sus canastas quedan repartidas entre los dos grupos (cada una con el segmento con que nació). Ninguna se cuenta dos veces: la suma de canastas de los dos grupos es la de la zona. `group.segment.versions` lista las versiones del segmento con que la zona estuvo clasificada en el periodo (D-35). |
 | **BA-7** | **Orden:** productos por frecuencia descendente y, a igual frecuencia, por `productId`. El resultado no depende del orden en que lleguen los datos. |
 | **BA-8** | **Instantánea (D-15):** `asOf` (opcional) fija hasta qué instante cuentan las ventas registradas. Sin `asOf`, el servicio toma "ahora" y lo devuelve; repetir con ese `asOf` da el mismo resultado y el mismo `dataVersion.sha256`. |
@@ -241,7 +241,7 @@ resultados; el origen de cada respuesta va en `dataVersion`.
 
 | Status | `code` | Cuándo |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Falta `zoneId` o `segmentId` (`ejemplos/basket-analysis-error-400.json`); parámetro desconocido o mal formado; `dateFrom > dateTo`; faltan fechas en `compare` o `basket-evolution`; más de 104 semanas o 36 meses; con lectura por páginas, más de 500 páginas (ver abajo) |
+| 400 | `VALIDATION_ERROR` | Falta `zoneId` o `segmentId` (`ejemplos/basket-analysis-error-400.json`); parámetro desconocido o mal formado; `dateFrom > dateTo`; faltan fechas en `compare` o `basket-evolution`; más de 104 semanas o 36 meses |
 | 401 | `UNAUTHORIZED` | Sin token, token revocado o sin sesión en Redis |
 | 403 | `FORBIDDEN` | Proveedor o Investigador de mercado |
 | 404 | `NOT_FOUND` | Zona o segmento inexistente |
@@ -256,21 +256,22 @@ responden en 3 s → `503`. No lee tablas de otros servicios.
 
 | Servicio | Ruta | Estado | Para qué |
 |---|---|---|---|
-| core-process-service | `GET /v1/analytics/basket-products` | **Se pide a Juan Ángel** | Canastas, tiendas y canastas con cada producto del grupo |
+| core-process-service | `GET /v1/analytics/basket-products` | **Ruta nueva**, la implementa Leonardo (rama `feature/core-process-lecturas-analiticas`, avisado a Juan Ángel) | Canastas, tiendas y canastas con cada producto del grupo |
 | core-process-service | `GET /v1/analytics/spend-by-category` | Existe | `category-mix` |
-| core-process-service | `GET /v1/baskets`, `GET /v1/transactions` | Existen | Plan B mientras no exista la primera |
 | catalog-service | `GET /v1/zones/:id` | Existe | Nombre de la zona; `404` |
 | catalog-service | `GET /v1/product-categories` | Existe | Nombres de categoría |
 | income-segmentation-service | `GET /v1/segments/:id` | Existe | Código y nombre del segmento; `404` |
 | income-segmentation-service | `GET /v1/zones/:zoneId/classification/history` | Existe | `segment.versions` (BA-6, D-35) |
 
-### Lectura pedida a core-process-service (Juan Ángel)
+### Lectura nueva en core-process-service
 
 `GET /v1/analytics/basket-products?zoneId=&segmentId=&dateFrom=&dateTo=&asOf=&groupBy=`:
 por producto, **en cuántas canastas distintas** del grupo aparece y cuánto se gastó en él.
 Agregado del servidor, sin paginar (excepción de `paginacion.md`: agregado acotado por el
 catálogo). Con 500 mil transacciones, paginar las líneas una por una no es viable; el
-conteo con `COUNT(DISTINCT canasta)` en Postgres sí.
+conteo con `COUNT(DISTINCT canasta)` en Postgres sí. Es un cambio mínimo en el dominio de
+core-process (solo lectura, no toca rutas existentes), como permite `CONTRIBUTING.md`; su
+contrato vive en `core-process-analytics.md`.
 
 | Parámetro | Regla |
 |---|---|
@@ -284,25 +285,17 @@ Respuesta esperada (`ejemplos/core-process-basket-products.json`):
 ```json
 { "zoneId": "9792…", "segmentId": 2, "dateFrom": "2026-10-01", "dateTo": "2026-10-31",
   "groupBy": null, "timezone": "America/Monterrey", "asOf": "2026-11-25T18:20:00.000000+00:00",
-  "periods": [ { "periodStart": null, "baskets": 100, "stores": 4, "totalSpend": "10983.50" } ],
+  "periods": [ { "periodStart": null, "baskets": 100, "stores": 4, "totalSpend": 10983.5 } ],
   "data": [ { "periodStart": null, "productId": "a3f1…c01", "productName": "Leche entera",
-              "categoryId": 2, "basketsWithProduct": 62, "spend": "3534.00" }, "…" ] }
+              "categoryId": 2, "basketsWithProduct": 62, "spend": 3534 }, "…" ] }
 ```
 
 - `periods`: un elemento por periodo (uno solo sin `groupBy`), con canastas, tiendas
   **distintas** con venta y gasto total. Son la cobertura de D-36 y la base del resumen.
 - `data`: una fila por periodo y producto. `basketsWithProduct` cuenta **canastas
   distintas** (BA-2), aunque la canasta lleve varias presentaciones.
-- Importes como cadena decimal (igual que el resto de core-process). XML con su XSD.
-
-**Plan B (mientras no exista):** `GET /v1/baskets?zoneId&segmentId&dateFrom&dateTo`
-(canastas del grupo, con `transactionId` y `storeId`) y `GET /v1/transactions?zoneId&dateFrom&dateTo`
-(líneas con `productId` y `subtotal`), en páginas de 100, unidas por `transactionId`.
-Variable `SALES_SOURCE=pages`. Tope de **500 páginas** entre las dos lecturas: si hacen
-falta más → `400` antes de calcular, con cuántas hay y pidiendo acotar las fechas. No se
-corta, porque una muestra parcial cambiaría las frecuencias sin que se note. El plan B
-no ofrece `asOf`: la respuesta lo devuelve como el instante de la lectura y lo dice en
-`assumptions`.
+- Importes como número a 2 decimales, como los demás indicadores de core-process. XML con
+  `xsd/core-process/basket-products.xsd`.
 
 ### Lo que se confirma con Pamela
 
@@ -321,7 +314,6 @@ histórica trae `segmentVersion` (BA-6).
 | `REDIS_URL`, `JWT_ACCESS_SECRET` | — | Sesión (plantilla) |
 | `CORE_PROCESS_SERVICE_URL`, `CATALOG_SERVICE_URL`, `INCOME_SEGMENTATION_SERVICE_URL` | — | Lecturas |
 | `PUBLICATION_RULE` | `ambos` | BA-5 (P-11) |
-| `SALES_SOURCE` | `basket-products` | `pages` = plan B |
 
 ## Limitaciones conocidas
 
@@ -333,6 +325,6 @@ histórica trae `segmentVersion` (BA-6).
 
 ## Por confirmar
 
-1. **Juan Ángel:** `GET /v1/analytics/basket-products` en core-process (forma de arriba) y
-   su XSD. Mientras tanto se trabaja con el ejemplo y el plan B.
-2. **P-11** sigue PENDIENTE: `PUBLICATION_RULE=ambos` hasta que el Product Owner decida.
+1. **Juan Ángel:** revisar `GET /v1/analytics/basket-products` en el PR de core-process.
+2. **Juan Ángel (Matriz):** P-11 se decidió en este dominio (BA-5, `ambos`); falta
+   incorporarlo a la Matriz §4, junto con la misma regla del pronóstico (DF-8).

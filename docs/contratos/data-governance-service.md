@@ -96,7 +96,7 @@ Decididas por el dueño del dominio (guía del Parcial 3), dentro de D-43 y D-47
 | **DG-5** | **Origen.** `GET /v1/lineage/:id/origin` recorre `inputs` hacia atrás hasta **5 niveles** (`truncated: true` si hay más). Un ciclo se corta. Un insumo sin linaje registrado sale con `registered: false`, sin inventarle fuente. |
 | **DG-6** | **Solo lo propio.** Para Analista, Gerente, Responsable de precios y Planeador, el listado filtra `userId` = quien consulta y un registro ajeno es `404`. En el árbol de origen, un insumo ajeno sale con `restricted: true` y solo su `reference` (servicio, tipo e id), sin quién ni cuándo. |
 | **DG-7** | **Calidad.** Cuatro métricas por fuente (tabla de abajo), cada una con numerador y denominador. Si una métrica no se puede medir con lo que expone el dueño, sale `disponible: false` con motivo y sin valor: **nunca 0** (D-20). Un servicio que no responde afecta solo a su fuente, no al reporte completo. |
-| **DG-8** | **Frescura.** Ventas: días desde el último lote confirmado; vencida (`stale: true`) con **más de 7 días**, el mismo plazo de D-38. Capturas: proporción de existencias **vigentes** (`status` distinto de `vencido` en availability, D-38). Segmentos: días desde la versión vigente más vieja; vencida con más de **365 días**, porque su frecuencia de actualización declarada es anual. |
+| **DG-8** | **Frescura.** Ventas: días desde el último lote confirmado; vencida (`stale: true`) con **más de 7 días**, el mismo plazo de D-38. Capturas: proporción de existencias **vigentes** (`status` distinto de `vencido` en availability, D-38). Segmentos: días desde la versión vigente más vieja; vencida con más de **365 días**, porque su frecuencia de actualización declarada es anual. **Decidido en este dominio** (ninguna decisión fijaba estos umbrales): se toman los plazos que el propio sistema ya declara (D-38 para datos de campo y la frecuencia "anual" de los segmentos), en lugar de inventar uno nuevo. Frontera: último lote hace 7 días → vigente; hace 8 → `stale: true`. Variables `FRESHNESS_SALES_DAYS` y `FRESHNESS_SEGMENTS_DAYS` para cambiarlos sin tocar código. |
 | **DG-9** | **Vencimiento.** `expiresOn = fecha del dato + plazo` (calendario: un 29 de febrero más años cae el 1 de marzo). Un dato está **vencido si `expiresOn ≤ asOf`**: vence el mismo día en que se cumple el plazo. La bitácora no vence nunca. |
 | **DG-10** | **Evaluación.** Para cada conjunto se pide al dueño **cuántos** datos vencerían en `asOf`. Si el dueño no expone ese conteo, sale `disponible: false` con motivo, nunca 0. Un `asOf` futuro **simula** el vencimiento sobre los datos reales sin tocar nada. |
 | **DG-11** | **Simulación.** `POST /v1/retention/simulate` aplica DG-9 a registros sintéticos del cuerpo (máximo 1 000). No lee ni escribe nada: demuestra la regla con datos de prueba. |
@@ -373,6 +373,8 @@ Más `summary`: por conjunto, cuántos registros y cuántos vencidos.
 | Gerente intenta `POST /v1/lineage` | `403` |
 | Calidad: lote con 1 fila con `FECHA_VACIA` y 4 inválidas de 254 | `completeness` 253/254, `outOfRange` 4/254 |
 | Calidad: availability no responde | Esa fuente con métricas `disponible: false`; las demás sí salen |
+| Frescura de ventas: último lote hace 7 días / hace 8 días | `stale: false` / `stale: true` (DG-8) |
+| Frescura de segmentos: versión vigente de hace 365 / 366 días | `stale: false` / `stale: true` (DG-8) |
 | Retención: frontera (2023-11-25 al 2026-11-25) | Vencido |
 | Retención: 29 de febrero + 3 años | Vence el 1 de marzo |
 | Retención: bitácora | Nunca vence |
@@ -464,6 +466,5 @@ de límite. No lee tablas de otros servicios.
    registro de linaje al confirmar.
 2. **Pamela:** filtro por fecha en capturas, conteos por fecha en observaciones y visitas,
    y registro de linaje en versiones de segmento.
-3. **Product Owner:** los umbrales de frescura de DG-8 (7 y 365 días) no están en ninguna
-   decisión; se proponen aquí con su razón y quedan en variables para cambiarlos sin tocar
-   código.
+3. **Juan Ángel (Matriz):** los umbrales de frescura de DG-8 (7 y 365 días) se decidieron
+   en este dominio; falta incorporarlos a la Matriz §4.

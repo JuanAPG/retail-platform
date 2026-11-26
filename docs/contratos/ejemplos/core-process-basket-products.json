@@ -11,7 +11,7 @@
       "periodStart": null,
       "baskets": 100,
       "stores": 4,
-      "totalSpend": "10983.50"
+      "totalSpend": 10983.5
     }
   ],
   "data": [
@@ -21,7 +21,7 @@
       "productName": "Leche entera",
       "categoryId": 2,
       "basketsWithProduct": 62,
-      "spend": "3534.00"
+      "spend": 3534
     },
     {
       "periodStart": null,
@@ -29,7 +29,7 @@
       "productName": "Tortilla de maíz",
       "categoryId": 5,
       "basketsWithProduct": 55,
-      "spend": "1265.00"
+      "spend": 1265
     },
     {
       "periodStart": null,
@@ -37,7 +37,7 @@
       "productName": "Frijol negro",
       "categoryId": 1,
       "basketsWithProduct": 41,
-      "spend": "1742.50"
+      "spend": 1742.5
     },
     {
       "periodStart": null,
@@ -45,7 +45,7 @@
       "productName": "Huevo blanco",
       "categoryId": 4,
       "basketsWithProduct": 33,
-      "spend": "1584.00"
+      "spend": 1584
     },
     {
       "periodStart": null,
@@ -53,7 +53,7 @@
       "productName": "Queso panela",
       "categoryId": 2,
       "basketsWithProduct": 20,
-      "spend": "1110.00"
+      "spend": 1110
     },
     {
       "periodStart": null,
@@ -61,7 +61,7 @@
       "productName": "Quinoa orgánica",
       "categoryId": 1,
       "basketsWithProduct": 19,
-      "spend": "1748.00"
+      "spend": 1748
     }
   ]
 }

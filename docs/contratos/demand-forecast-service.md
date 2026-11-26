@@ -67,7 +67,7 @@ Respetan D-40; las que afecten a otro dominio las incorpora el Product Owner a l
 | **DF-5** | **Modelo:** Holt-Winters aditivo (**ETS A,A,A**: error, tendencia y estacionalidad aditivos) de statsmodels, con **periodo estacional de 4 semanas** (≈ un mes; variable `SEASONAL_PERIOD`). statsmodels exige **dos ciclos completos** para estimar la estacionalidad, así que con el mínimo de D-40 (12 − 4 reservadas = 8 semanas para ajustar) el ciclo máximo es 4. Si las semanas para ajustar son menos de `2 × SEASONAL_PERIOD` → `422` con la limitación explícita. La estacionalidad **anual** (52) necesitaría al menos 108 semanas: queda como limitación. |
 | **DF-6** | **Validación (D-40):** se ajusta con las primeras `n − 4` semanas, **sin ver** las 4 reservadas, y se pronostican esas 4. `mape` (en %) se calcula solo sobre las reservadas con venta > 0; las que valen 0 se excluyen y se cuentan en `zeroWeeksExcluded`. Si las 4 son 0 → `mape` nulo con `motivo`. |
 | **DF-7** | **Pronóstico (D-40):** se vuelve a ajustar con **toda** la historia y se proyectan **8 semanas** con intervalos de **80 % y 95 %** **analíticos** (fórmula del modelo, no simulación: misma entrada, mismo intervalo). Un límite inferior negativo se recorta a **0** y la semana sale con `clipped: true`. |
-| **DF-8** | **Publicación (D-36):** si en la ventana hay **menos de 10 transacciones** con el producto o **menos de 3 tiendas** que lo vendieron (en la zona; sin zona, en total), la corrida sale `disponible: false` con `motivo` y **sin ningún número del agregado** (ni historia, ni validación, ni pronóstico). Cómo se combinan los dos umbrales (P-11): variable `PUBLICATION_RULE`, `ambos` por defecto (no publica si falla cualquiera), igual que income-segmentation-service. |
+| **DF-8** | **Publicación (D-36):** si en la ventana hay **menos de 10 transacciones** con el producto o **menos de 3 tiendas** que lo vendieron (en la zona; sin zona, en total), la corrida sale `disponible: false` con `motivo` y **sin ningún número del agregado** (ni historia, ni validación, ni pronóstico). **P-11, decidido en este dominio:** se publica solo si se cumplen **los dos** umbrales (`PUBLICATION_RULE=ambos`). Motivo: el riesgo de D-36 es describir a una sola tienda, así que se elige la lectura que protege más; además coincide con income-segmentation-service. Frontera: 10 transacciones en 2 tiendas → no disponible; 10 en 3 → disponible. La variable permite cambiar a `cualquiera` sin tocar código. |
 | **DF-9** | **Reproducible (D-15):** la corrida guarda la serie semanal exacta que usó, su SHA-256, los parámetros y la versión de statsmodels. `POST /v1/forecast/runs/:id/replay` recalcula desde esa foto y dice si salió idéntico. |
 
 ---
@@ -255,7 +255,7 @@ Un `4xx` no se reporta. Sin `AUDIT_SERVICE_URL`, `NOTIFICATIONS_SERVICE_URL` o
 
 | Status | `code` | Cuándo |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Cuerpo o query inválidos, campo desconocido, UUID mal formado, `dateFrom > dateTo`, `:id` que no es ObjectId; con lectura por transacciones, más de 500 páginas (ver abajo) |
+| 400 | `VALIDATION_ERROR` | Cuerpo o query inválidos, campo desconocido, UUID mal formado, `dateFrom > dateTo`, `:id` que no es ObjectId |
 | 401 | `UNAUTHORIZED` | Sin token, token revocado o sin sesión en Redis |
 | 403 | `FORBIDDEN` | Rol sin permiso sobre la ruta |
 | 404 | `NOT_FOUND` | Producto, zona o corrida inexistente |
@@ -275,19 +275,20 @@ responden en 3 s → `503`. No lee tablas de otros servicios.
 | catalog-service | `GET /v1/products/:id` | Existe | Nombre del producto; `404` |
 | catalog-service | `GET /v1/zones/:id` | Existe | Nombre de la zona; `404` |
 | catalog-service | `GET /v1/products/:id/presentations` | Existe (solo activas) | `contenido`, `unidadMedida.tipo` y `factorBase` (DF-2) |
-| core-process-service | `GET /v1/analytics/weekly-sales` | **Se pide a Juan Ángel** | La serie semanal |
-| core-process-service | `GET /v1/transactions` | Existe | Plan B mientras no exista la anterior |
+| core-process-service | `GET /v1/analytics/weekly-sales` | **Ruta nueva**, la implementa Leonardo (rama `feature/core-process-lecturas-analiticas`, avisado a Juan Ángel) | La serie semanal |
 
-### Lectura pedida a core-process-service (Juan Ángel)
+### Lectura nueva en core-process-service
 
 `GET /v1/analytics/weekly-sales?productId=&zoneId=&dateFrom=&dateTo=&asOf=`: ventas de
 un producto **agregadas por semana y presentación**. Sin paginar: es una serie completa
-acotada por el filtro obligatorio `productId` (excepción de `paginacion.md`).
+acotada por el filtro obligatorio `productId` (excepción de `paginacion.md`). Es un
+cambio mínimo en el dominio de core-process (solo lectura, no toca rutas existentes),
+como permite `CONTRIBUTING.md`; su contrato vive en `core-process-analytics.md`.
 
 | Parámetro | Regla |
 |---|---|
 | `productId` | obligatorio, UUID |
-| `zoneId` | opcional, UUID (zona de la tienda de la transacción) |
+| `zoneId` | opcional, UUID (zona congelada en la canasta, igual que los demás indicadores de core-process) |
 | `dateFrom`, `dateTo` | opcionales, día local de Monterrey, inclusivos (mismo criterio que `/v1/transactions`) |
 | `asOf` | opcional, instante ISO 8601: solo transacciones registradas hasta ese instante (instantánea repetible). Sin `asOf`, el servidor usa "ahora" y lo devuelve |
 
@@ -297,24 +298,17 @@ Respuesta esperada (`ejemplos/core-process-weekly-sales.json`):
 { "productId": "3f6c…", "zoneId": "9792…", "timezone": "America/Monterrey",
   "weekStartsOn": "monday", "asOf": "2026-11-25T18:04:11.902000+00:00",
   "transactions": 1184, "stores": 4,
-  "data": [ { "weekStart": "2026-07-06", "presentationId": "a1b2…", "quantity": "214.00", "transactions": 61 },
-            { "weekStart": "2026-07-06", "presentationId": "b2c3…", "quantity": "79.00", "transactions": 48 } ] }
+  "data": [ { "weekStart": "2026-07-06", "presentationId": "a1b2…", "quantity": 214, "transactions": 61 },
+            { "weekStart": "2026-07-06", "presentationId": "b2c3…", "quantity": 79, "transactions": 48 } ] }
 ```
 
 - `weekStart`: lunes de la semana en hora de Monterrey. Solo semanas con venta (el
   relleno con 0 lo hace este servicio, DF-3).
-- `quantity`: cadena decimal, en la unidad de la **presentación** (la conversión la hace
-  este servicio).
+- `quantity`: número a 2 decimales (como los demás indicadores de core-process), en la
+  unidad de la **presentación** (la conversión la hace este servicio).
 - `transactions` y `stores` de arriba son **distintos** en toda la ventana (no se pueden
   sumar desde las filas): son la cobertura de D-36.
-- XML con el XSD de core-process.
-
-**Plan B (mientras no exista):** `GET /v1/transactions?zoneId&dateFrom&dateTo` en páginas
-de 100; se toman las líneas con `productId` del producto. Variable
-`SALES_SOURCE=transactions`. Tope de **500 páginas** (50 000 transacciones, como D-27 b):
-si hacen falta más → `400` antes de calcular, con cuántas hay y pidiendo acotar con
-fechas. No se corta, porque core-process entrega de la más reciente a la más antigua y
-cortar dejaría solo el final de la serie.
+- XML con el XSD de core-process (`xsd/core-process/weekly-sales.xsd`).
 
 ### Ajuste pedido a catalog-service (Pamela)
 
@@ -336,7 +330,6 @@ exista, esas ventas quedan en `excludedPresentations` con su motivo.
 | `AUDIT_SERVICE_URL`, `NOTIFICATIONS_SERVICE_URL`, `DATA_GOVERNANCE_SERVICE_URL` | — | Bitácora, aviso y linaje |
 | `SEASONAL_PERIOD` | `4` | DF-5 |
 | `PUBLICATION_RULE` | `ambos` | DF-8 (P-11) |
-| `SALES_SOURCE` | `weekly-sales` | `transactions` = plan B |
 
 ## Limitaciones conocidas
 
@@ -349,7 +342,7 @@ exista, esas ventas quedan en `excludedPresentations` con su motivo.
 
 ## Por confirmar
 
-1. **Juan Ángel:** `GET /v1/analytics/weekly-sales` en core-process (forma de arriba) y su
-   XSD. Mientras tanto se trabaja con el ejemplo y el plan B.
-2. **Pamela:** `?includeInactive=true` en las presentaciones.
-3. **P-11** sigue PENDIENTE: `PUBLICATION_RULE=ambos` hasta que el Product Owner decida.
+1. **Pamela:** `?includeInactive=true` en las presentaciones.
+2. **Juan Ángel:** revisar `GET /v1/analytics/weekly-sales` en el PR de core-process.
+3. **Juan Ángel (Matriz):** P-11 se decidió en este dominio (DF-8, `ambos`); falta
+   incorporarlo a la Matriz §4, junto con la misma regla de basket-analysis (BA-5).
