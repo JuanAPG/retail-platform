@@ -94,7 +94,7 @@ const LINEAS = [
 
 function crearServicio() {
   const corridas = {
-    exigirMongo: jest.fn(),
+    exigirMongo: jest.fn(async () => undefined),
     guardar: jest.fn(
       async (c: NuevaCorrida): Promise<CorridaAsociacionMongo> => ({ ...c, _id: `run-${c.status}`, type: 'asociacion', date: new Date(FECHA) }),
     ),
@@ -161,9 +161,7 @@ describe('AssociationService — corridas en MongoDB (D3)', () => {
 
   it('D-25: sin Mongo responde 503 antes de leer las canastas y no corre nada', async () => {
     const { servicio, corridas, fuente, reporte } = crearServicio();
-    corridas.exigirMongo.mockImplementation(() => {
-      throw new ServiceUnavailableException('Mongo caído');
-    });
+    corridas.exigirMongo.mockRejectedValue(new ServiceUnavailableException('Mongo caído'));
 
     await expect(servicio.runApriori(PARAMS, ANALISTA)).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(fuente.lineasDeCanasta).not.toHaveBeenCalled();

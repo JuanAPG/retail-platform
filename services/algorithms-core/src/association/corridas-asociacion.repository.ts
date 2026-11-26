@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import { Paginable } from '../common/helpers/pagination.helper';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 import { CorridaAsociacionDocument, CorridaAsociacionMongo } from './corrida-asociacion.schema';
 
 /** Lo que se guarda: el documento sin `_id` (lo genera el esquema) ni `type`. */
@@ -24,7 +25,7 @@ export class CorridasAsociacion {
   ) {}
 
   async guardar(corrida: NuevaCorrida): Promise<CorridaAsociacionMongo> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await sinMongo(() => this.modelo.create({ ...corrida, type: 'asociacion', date: new Date() }));
     return doc.toObject();
   }
@@ -35,9 +36,9 @@ export class CorridasAsociacion {
    * supuestos: pueden ser cientos por corrida y se piden con `porId`.
    */
   historial(): Paginable<CorridaAsociacionMongo> {
-    this.exigirMongo();
     const filtro = { type: 'asociacion' };
     const modelo = this.modelo;
+    const exigir = () => this.exigirMongo();
     let saltar = 0;
     let limite = 0;
     const consulta: Paginable<CorridaAsociacionMongo> = {
@@ -49,8 +50,9 @@ export class CorridasAsociacion {
         limite = n;
         return this;
       },
-      getManyAndCount: () =>
-        sinMongo(() =>
+      getManyAndCount: async () => {
+        await exigir();
+        return sinMongo(() =>
           Promise.all([
             modelo
               .find(filtro, { results: 0, assumptions: 0, filters: 0, snapshot: 0 })
@@ -60,19 +62,24 @@ export class CorridasAsociacion {
               .lean<CorridaAsociacionMongo[]>(),
             modelo.countDocuments(filtro),
           ]),
-        ),
+        );
+      },
     };
     return consulta;
   }
 
   async porId(id: string): Promise<CorridaAsociacionMongo | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     return sinMongo(() => this.modelo.findOne({ _id: id, type: 'asociacion' }).lean<CorridaAsociacionMongo>().exec());
   }
 
-  /** 503 si Mongo no está conectado. Se llama también antes de correr el algoritmo. */
-  exigirMongo(): void {
-    if (this.conexion.readyState !== 1) {
+  /**
+   * 503 si Mongo no está conectado. Antes intenta reabrir la conexión (`asegurarMongo`): con
+   * `lazyConnection`, si Mongo estaba caído al arrancar y ya volvió, aquí se recupera sin reiniciar.
+   * Se llama también antes de correr el algoritmo.
+   */
+  async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.conexion))) {
       throw new ServiceUnavailableException(NO_DISPONIBLE);
     }
   }
