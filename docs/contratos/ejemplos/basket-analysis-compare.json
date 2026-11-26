@@ -1,0 +1,124 @@
+{
+  "group": {
+    "zone": {
+      "id": "97925ca4-3845-4e68-9660-46f781957b8c",
+      "name": "Zona Centro"
+    },
+    "segment": {
+      "id": 2,
+      "code": "ING_2",
+      "name": "Ingreso medio",
+      "versions": [
+        1
+      ]
+    }
+  },
+  "asOf": "2026-11-25T18:20:00.000000+00:00",
+  "threshold": 0.2,
+  "publicationRule": "ambos",
+  "periodA": {
+    "dateFrom": "2026-09-01",
+    "dateTo": "2026-09-30",
+    "disponible": true,
+    "motivo": null,
+    "coverage": {
+      "baskets": 100,
+      "stores": 4
+    }
+  },
+  "periodB": {
+    "dateFrom": "2026-10-01",
+    "dateTo": "2026-10-31",
+    "disponible": true,
+    "motivo": null,
+    "coverage": {
+      "baskets": 100,
+      "stores": 4
+    }
+  },
+  "disponible": true,
+  "motivo": null,
+  "entering": [
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c05",
+      "productName": "Queso panela",
+      "frequencyA": 0.0,
+      "frequencyB": 0.2,
+      "averageSpendA": null,
+      "averageSpendB": 55.5,
+      "frequencyChange": 0.2
+    }
+  ],
+  "leaving": [
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c06",
+      "productName": "Quinoa orgánica",
+      "frequencyA": 0.22,
+      "frequencyB": 0.19,
+      "averageSpendA": 92.0,
+      "averageSpendB": 92.0,
+      "frequencyChange": -0.03
+    }
+  ],
+  "staying": [
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01",
+      "productName": "Leche entera",
+      "frequencyA": 0.59,
+      "frequencyB": 0.62,
+      "averageSpendA": 57.0,
+      "averageSpendB": 57.0,
+      "frequencyChange": 0.030000000000000027
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c02",
+      "productName": "Tortilla de maíz",
+      "frequencyA": 0.58,
+      "frequencyB": 0.55,
+      "averageSpendA": 23.0,
+      "averageSpendB": 23.0,
+      "frequencyChange": -0.029999999999999916
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c03",
+      "productName": "Frijol negro",
+      "frequencyA": 0.38,
+      "frequencyB": 0.41,
+      "averageSpendA": 42.5,
+      "averageSpendB": 42.5,
+      "frequencyChange": 0.02999999999999997
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c04",
+      "productName": "Huevo blanco",
+      "frequencyA": 0.36,
+      "frequencyB": 0.33,
+      "averageSpendA": 48.0,
+      "averageSpendB": 48.0,
+      "frequencyChange": -0.02999999999999997
+    }
+  ],
+  "indicators": [
+    {
+      "indicator": "averageTicket",
+      "a": 100.64,
+      "b": 109.83,
+      "change": 9.189999999999998,
+      "changePercent": 9.13155802861685
+    },
+    {
+      "indicator": "productsPerBasket",
+      "a": 2.13,
+      "b": 2.3,
+      "change": 0.16999999999999993,
+      "changePercent": 7.981220657276992
+    },
+    {
+      "indicator": "typicalSize",
+      "a": 5,
+      "b": 5,
+      "change": 0,
+      "changePercent": 0.0
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import {
   IconCanastas,
   IconElasticidad,
   IconHistorial,
+  IconMonitoreo,
   IconPerfil,
   IconPrecios,
   IconProductos,
@@ -53,6 +54,7 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'zonas', label: 'Zonas', icon: <IconZonas /> },
     { key: 'proveedores', label: 'Proveedores', icon: <IconProveedores /> },
     { key: 'auditoria', label: 'Auditoría', icon: <IconAuditoria />, permiso: 'lectura' },
+    { key: 'monitoreo', label: 'Monitoreo', icon: <IconMonitoreo />, permiso: 'lectura' },
   ],
   'Gerente de categoría': [
     { key: 'catalogo-productos', label: 'Catálogo de productos', icon: <IconProductos /> },

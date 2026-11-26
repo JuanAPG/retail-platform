@@ -1,0 +1,73 @@
+{
+  "data": [
+    {
+      "key": "ventas-archivo",
+      "name": "Importación de ventas por archivo (CSV, JSON, XML)",
+      "type": "importacion",
+      "ownerService": "transactions-ingestion-service",
+      "description": null,
+      "active": true,
+      "currentVersion": null,
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    },
+    {
+      "key": "ventas-core-process",
+      "name": "Transacciones confirmadas y canastas",
+      "type": "operacion",
+      "ownerService": "core-process-service",
+      "description": null,
+      "active": true,
+      "currentVersion": "be303c96b5d5e8779e0b1523319e456ef247713341192eedbc6af536c56876ad",
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    },
+    {
+      "key": "capturas-campo",
+      "name": "Capturas de campo: disponibilidad, precio observado y visitas",
+      "type": "captura",
+      "ownerService": "availability-service",
+      "description": null,
+      "active": true,
+      "currentVersion": null,
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    },
+    {
+      "key": "inegi-enigh",
+      "name": "INEGI ENIGH: ingreso corriente trimestral por hogar",
+      "type": "referencia_externa",
+      "ownerService": "income-segmentation-service",
+      "description": null,
+      "active": true,
+      "currentVersion": "ENIGH 2022",
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    },
+    {
+      "key": "generador-sintetico",
+      "name": "Generador de datos del Parcial 3 (con semilla)",
+      "type": "sintetico",
+      "ownerService": "data-governance-service",
+      "description": null,
+      "active": true,
+      "currentVersion": "v1 semilla 42",
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    },
+    {
+      "key": "seed-demo",
+      "name": "Datos de prueba del repositorio (data_retail.sql y CSV de 100 canastas)",
+      "type": "sintetico",
+      "ownerService": "data-governance-service",
+      "description": null,
+      "active": true,
+      "currentVersion": "ca8903c",
+      "createdAt": "2026-11-26T09:00:00.000000+00:00",
+      "createdBy": null
+    }
+  ],
+  "total": 6,
+  "page": 1,
+  "limit": 20
+}

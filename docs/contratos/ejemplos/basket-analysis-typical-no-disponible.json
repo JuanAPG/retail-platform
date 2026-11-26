@@ -1,0 +1,36 @@
+{
+  "group": {
+    "zone": {
+      "id": "1c9e5f2a-7b3d-4e8f-a1b2-c3d4e5f6a7b8",
+      "name": "Zona Valle"
+    },
+    "segment": {
+      "id": 3,
+      "code": "ING_3",
+      "name": "Ingreso alto",
+      "versions": [
+        1
+      ]
+    }
+  },
+  "period": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-09-30"
+  },
+  "asOf": "2026-11-25T18:20:00.000000+00:00",
+  "threshold": 0.2,
+  "publicationRule": "ambos",
+  "minTransactions": 10,
+  "minStores": 3,
+  "coverage": {
+    "baskets": 40,
+    "stores": 1
+  },
+  "disponible": false,
+  "motivo": "La combinación zona-segmento tiene 1 tienda (mínimo 3) con 40 canastas (D-36, regla ambos).",
+  "summary": null,
+  "products": null,
+  "typicalSize": null,
+  "dataVersion": null,
+  "assumptions": []
+}
