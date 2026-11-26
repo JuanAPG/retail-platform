@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionEscenariosResponse xmlns="decision/v1">
+  <data>
+    <item>
+      <id>3f2e1d0c-aaaa-4bbb-8ccc-1234567890ab</id>
+      <name>Cambio de precio - Leche entera 1 L</name>
+      <type>price</type>
+      <zoneId>27f05c81-c6bf-456a-a273-150e4edb9900</zoneId>
+      <currentPrice>25</currentPrice>
+      <newPrice>27.5</newPrice>
+      <elasticity>-2</elasticity>
+      <createdAt>2026-11-20T15:30:00.000Z</createdAt>
+    </item>
+  </data>
+  <total>1</total>
+  <page>1</page>
+  <limit>50</limit>
+</simulacionEscenariosResponse>

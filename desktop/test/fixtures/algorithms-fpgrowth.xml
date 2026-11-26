@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fpgrowthRunResponse xmlns="algorithms/v1">
+  <item>
+    <id>9a1b2c3d-1111-4222-8333-944455556666</id>
+    <runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId>
+    <support>0.24000</support>
+    <confidence>0.75000</confidence>
+    <lift>1.8000</lift>
+    <transactionCount>24</transactionCount>
+    <items>
+      <item>
+        <ruleId>9a1b2c3d-1111-4222-8333-944455556666</ruleId>
+        <productId>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</productId>
+        <side>antecedente</side>
+        <product><id>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</id><sku>LAC-001</sku><nombre>Leche entera</nombre><categoriaId>2</categoriaId></product>
+      </item>
+      <item>
+        <ruleId>9a1b2c3d-1111-4222-8333-944455556666</ruleId>
+        <productId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</productId>
+        <side>consecuente</side>
+        <product><id>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</id><sku>PAN-003</sku><nombre>Pan de caja</nombre><categoriaId>5</categoriaId></product>
+      </item>
+    </items>
+  </item>
+</fpgrowthRunResponse>

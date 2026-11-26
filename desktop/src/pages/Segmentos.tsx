@@ -2,13 +2,16 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from '
 import {
   Segment,
   SegmentInput,
+  SegmentVersion,
+  SegmentVersionInput,
   createSegment,
   deleteSegment,
   listSegments,
-  updateSegment,
+  listVersions,
+  versionSegment,
 } from '../api/segmentsApi';
 import { extractErrorMessage } from '../api/httpClient';
-import { puedeEscribir } from '../config/menu';
+import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna } from '../utils/exportar';
@@ -24,7 +27,15 @@ const COLUMNAS_SEGMENTOS: Columna<Segment>[] = [
   { clave: 'relacion_zona', titulo: 'Relación con la zona', valor: (s) => s.zoneRelation },
   { clave: 'limitaciones', titulo: 'Limitaciones', valor: (s) => s.limitations },
   { clave: 'descripcion', titulo: 'Descripción', valor: (s) => s.description },
+  { clave: 'version', titulo: 'Versión vigente', valor: (s) => s.version },
+  { clave: 'vigente_desde', titulo: 'Vigente desde', valor: (s) => s.versionValidFrom },
 ];
+
+const fechaHora = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('es-MX');
+};
 const dinero = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 
 function normalizar(texto: string): string {
@@ -41,6 +52,8 @@ interface FormState {
   zoneRelation: string;
   limitations: string;
   description: string;
+  /** Solo al crear una versión nueva: por qué cambió (opcional, máx. 300). */
+  changeReason: string;
 }
 
 const FORM_VACIO: FormState = {
@@ -53,6 +66,7 @@ const FORM_VACIO: FormState = {
   zoneRelation: 'Se asigna a la ZONA agregada (RN-02); nunca a una persona ni compra individual.',
   limitations: '',
   description: '',
+  changeReason: '',
 };
 
 function formDesde(s: Segment): FormState {
@@ -66,10 +80,11 @@ function formDesde(s: Segment): FormState {
     zoneRelation: s.zoneRelation,
     limitations: s.limitations,
     description: s.description ?? '',
+    changeReason: '',
   };
 }
 
-function rango(s: Segment): string {
+function rango(s: { incomeRangeMin: number; incomeRangeMax: number | null }): string {
   return s.incomeRangeMax === null
     ? `${dinero(s.incomeRangeMin)} en adelante`
     : `${dinero(s.incomeRangeMin)} – ${dinero(s.incomeRangeMax)}`;
@@ -78,8 +93,9 @@ function rango(s: Segment): string {
 export default function Segmentos() {
   const { usuario } = useAuth();
   const rol = usuario?.rol ?? null;
-  const puedeEditar = puedeEscribir(rol);
-  const puedeBorrar = rol === 'Administrador';
+  // D-31 y Matriz §3.2: el Analista comercial crea, versiona y borra; los demás consultan.
+  const puedeEditar = puede(rol, 'editarSegmentos');
+  const puedeBorrar = puedeEditar;
 
   const [segmentos, setSegmentos] = useState<Segment[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -92,6 +108,9 @@ export default function Segmentos() {
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [errorForm, setErrorForm] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  const [versiones, setVersiones] = useState<{ segmento: Segment; lista: SegmentVersion[] } | null>(null);
+  const [errorVersiones, setErrorVersiones] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -132,13 +151,24 @@ export default function Segmentos() {
     setForm((previo) => ({ ...previo, [campo]: valor }));
   }
 
+  async function verVersiones(s: Segment) {
+    setErrorVersiones(null);
+    try {
+      setVersiones({ segmento: s, lista: await listVersions(s.id) });
+    } catch (err) {
+      setVersiones(null);
+      setErrorVersiones(extractErrorMessage(err));
+    }
+  }
+
   function validar(editando: Segment | null): string | null {
-    if (!form.code.trim()) return 'El código es obligatorio.';
-    if (form.code.trim().length > 20) return 'El código admite máximo 20 caracteres.';
+    if (!editando && !form.code.trim()) return 'El código es obligatorio.';
+    if (!editando && form.code.trim().length > 20) return 'El código admite máximo 20 caracteres.';
     if (!form.name.trim()) return 'El nombre es obligatorio.';
     if (form.name.trim().length > 60) return 'El nombre admite máximo 60 caracteres.';
     const min = Number(form.incomeRangeMin);
     if (form.incomeRangeMin.trim() === '' || Number.isNaN(min)) return 'El ingreso mínimo debe ser un número.';
+    if (min < 0) return 'El ingreso mínimo no puede ser negativo.';
     if (form.incomeRangeMax.trim() !== '') {
       const max = Number(form.incomeRangeMax);
       if (Number.isNaN(max) || max <= 0) return 'El ingreso máximo debe ser un número positivo.';
@@ -151,6 +181,7 @@ export default function Segmentos() {
     if (form.updateFrequency.trim().length > 60) return 'La frecuencia admite máximo 60 caracteres.';
     if (!form.zoneRelation.trim()) return 'La relación con la zona es obligatoria.';
     if (!form.limitations.trim()) return 'Las limitaciones son obligatorias.';
+    if (form.changeReason.trim().length > 300) return 'El motivo del cambio admite máximo 300 caracteres.';
     return null;
   }
 
@@ -169,6 +200,14 @@ export default function Segmentos() {
     return cuerpo;
   }
 
+  /** Cuerpo del PATCH: lo mismo que el alta, SIN `code` (no se edita, D-35) y con el motivo. */
+  function armarVersion(): SegmentVersionInput {
+    const { code: _code, ...resto } = armarCuerpo();
+    const cuerpo: SegmentVersionInput = resto;
+    if (form.changeReason.trim() !== '') cuerpo.changeReason = form.changeReason.trim();
+    return cuerpo;
+  }
+
   async function guardar(e: FormEvent) {
     e.preventDefault();
     const editando = formAbierto !== 'nuevo' && formAbierto !== null ? formAbierto : null;
@@ -181,8 +220,12 @@ export default function Segmentos() {
     setGuardando(true);
     try {
       if (editando) {
-        await updateSegment(editando.id, armarCuerpo());
-        setAviso(`Segmento «${form.name.trim()}» actualizado.`);
+        const nuevo = await versionSegment(editando.id, armarVersion());
+        setAviso(
+          nuevo.version > editando.version
+            ? `Segmento «${nuevo.name}»: se creó la versión ${nuevo.version}; la ${editando.version} se conserva.`
+            : `Segmento «${nuevo.name}»: no cambió ningún valor, así que no se creó versión.`,
+        );
       } else {
         await createSegment(armarCuerpo());
         setAviso(`Segmento «${form.name.trim()}» creado.`);
@@ -197,7 +240,7 @@ export default function Segmentos() {
   }
 
   async function borrar(s: Segment) {
-    if (!window.confirm(`¿Eliminar el segmento «${s.name}»? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar el segmento «${s.name}» y sus versiones? Si alguna zona se clasificó con él, el servicio no lo permite.`)) return;
     setAviso(null);
     try {
       await deleteSegment(s.id);
@@ -214,8 +257,8 @@ export default function Segmentos() {
     <div>
       <h1>Segmentos de ingreso</h1>
       <p className="muted">
-        Un segmento clasifica zonas agregadas (nunca personas ni compras). Cada uno justifica su fuente, su frecuencia
-        de actualización y sus limitaciones.
+        Un segmento clasifica zonas agregadas (nunca personas ni compras). Cada cambio crea una versión nueva con su
+        fuente y fecha; la anterior se conserva (D-35). Servicio: income-segmentation-service.
       </p>
 
       {!puedeEditar && (
@@ -245,8 +288,13 @@ export default function Segmentos() {
       {formAbierto && (
         <form className="panel form-grid" onSubmit={guardar}>
           <label>
-            Código (máx. 20)
-            <input value={form.code} onChange={(e) => cambiar('code', e.target.value)} />
+            Código (máx. 20{formAbierto === 'nuevo' ? '' : '; no se edita'})
+            <input
+              value={form.code}
+              onChange={(e) => cambiar('code', e.target.value)}
+              readOnly={formAbierto !== 'nuevo'}
+              disabled={formAbierto !== 'nuevo'}
+            />
           </label>
           <label>
             Nombre (máx. 60)
@@ -292,9 +340,15 @@ export default function Segmentos() {
             Descripción (opcional)
             <textarea rows={2} value={form.description} onChange={(e) => cambiar('description', e.target.value)} />
           </label>
+          {formAbierto !== 'nuevo' && (
+            <label className="wide">
+              Motivo del cambio (opcional, máx. 300): queda en la versión nueva
+              <textarea rows={2} value={form.changeReason} onChange={(e) => cambiar('changeReason', e.target.value)} />
+            </label>
+          )}
           <div className="form-actions wide">
             <button type="submit" disabled={guardando}>
-              {guardando ? 'Guardando...' : formAbierto === 'nuevo' ? 'Crear segmento' : 'Guardar cambios'}
+              {guardando ? 'Guardando...' : formAbierto === 'nuevo' ? 'Crear segmento' : 'Guardar como versión nueva'}
             </button>
             <button type="button" className="btn-secondary" onClick={() => setFormAbierto(null)} disabled={guardando}>
               Cancelar
@@ -312,13 +366,14 @@ export default function Segmentos() {
               <th>Nombre</th>
               <th>Rango de ingreso</th>
               <th>Frecuencia de actualización</th>
+              <th>Versión</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {visibles.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   {segmentos.length === 0 ? 'Todavía no hay segmentos.' : 'Ningún segmento coincide con la búsqueda.'}
                 </td>
               </tr>
@@ -330,13 +385,17 @@ export default function Segmentos() {
                   <td>{s.name}</td>
                   <td>{rango(s)}</td>
                   <td>{s.updateFrequency || vacio}</td>
+                  <td title={`Vigente desde ${fechaHora(s.versionValidFrom)}`}>v{s.version}</td>
                   <td className="row-actions">
                     <button className="btn-secondary" onClick={() => setExpandido(expandido === s.id ? null : s.id)}>
                       {expandido === s.id ? 'Ocultar' : 'Detalle'}
                     </button>
+                    <button className="btn-secondary" onClick={() => verVersiones(s)}>
+                      Versiones
+                    </button>
                     {puedeEditar && (
                       <button className="btn-secondary" onClick={() => abrirEdicion(s)}>
-                        Editar
+                        Nueva versión
                       </button>
                     )}
                     {puedeBorrar && (
@@ -348,7 +407,7 @@ export default function Segmentos() {
                 </tr>
                 {expandido === s.id && (
                   <tr className="detalle">
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <p>
                         <strong>Fuente:</strong> {s.source}
                       </p>
@@ -374,6 +433,49 @@ export default function Segmentos() {
       <p className="muted">
         {visibles.length} de {segmentos.length} segmentos
       </p>
+
+      {errorVersiones && <p className="alert-error">{errorVersiones}</p>}
+      {versiones && (
+        <section className="panel">
+          <h2>
+            Versiones de {versiones.segmento.code} ({versiones.lista.length})
+          </h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Versión</th>
+                  <th>Nombre</th>
+                  <th>Rango</th>
+                  <th>Fuente</th>
+                  <th>Vigente</th>
+                  <th>Motivo del cambio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versiones.lista.map((v) => (
+                  <tr key={v.version}>
+                    <td>
+                      v{v.version}
+                      {v.current && <strong> (vigente)</strong>}
+                    </td>
+                    <td>{v.name}</td>
+                    <td>{rango(v)}</td>
+                    <td>{v.source}</td>
+                    <td>
+                      {fechaHora(v.validFrom)} – {v.validTo ? fechaHora(v.validTo) : 'hoy'}
+                    </td>
+                    <td>{v.changeReason ?? vacio}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="btn-secondary" onClick={() => setVersiones(null)}>
+            Cerrar
+          </button>
+        </section>
+      )}
     </div>
   );
 }

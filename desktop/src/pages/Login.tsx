@@ -1,10 +1,10 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { extractErrorMessage } from '../api/httpClient';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, aviso, isLoggedIn } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -12,11 +12,13 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Con sesión válida no tiene caso ver el login.
+  if (isLoggedIn) return <Navigate to="/" replace />;
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    // Validación de formulario antes de gastar una llamada de red.
     if (!email.trim() || !password.trim()) {
       setError('Correo y contraseña son obligatorios');
       return;
@@ -27,16 +29,20 @@ export default function Login() {
       await login(email, password);
       navigate('/');
     } catch (err) {
+      // Un perfil fuera de D-31 llega aquí con "Acceso no permitido" y se queda en el login.
       setError(extractErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  const mensaje = error ?? aviso;
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <form onSubmit={handleSubmit} style={{ width: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <form onSubmit={handleSubmit} style={{ width: 360, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1>Retail Decision — Escritorio</h1>
+        <p className="muted">Para Analista comercial, Responsable de precios y Planeador.</p>
 
         <label>
           Correo
@@ -48,11 +54,16 @@ export default function Login() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
 
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {mensaje && (
+          <p className="alert-error" role="alert">
+            {mensaje}
+          </p>
+        )}
 
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
         </button>
+        <p className="muted">Servicio: auth-service</p>
       </form>
     </div>
   );

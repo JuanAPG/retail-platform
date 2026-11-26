@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="ingestion/v1">
+  <statusCode>413</statusCode>
+  <message>El archivo excede 8388608 bytes.</message>
+  <code>VALIDATION_ERROR</code>
+  <path>/v1/transaction-imports</path>
+  <timestamp>2026-11-25T18:00:00.000Z</timestamp>
+</error>

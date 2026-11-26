@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<productListResponse xmlns="catalog/v1">
+  <data>
+    <item>
+      <id>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</id>
+      <sku>007</sku>
+      <nombre>Leche entera</nombre>
+      <categoriaId>2</categoriaId>
+      <esCanastaBasica>true</esCanastaBasica>
+      <estatus>activo</estatus>
+      <createdAt>2026-09-01T10:00:00.000Z</createdAt>
+      <updatedAt>2026-09-01T10:00:00.000Z</updatedAt>
+      <categoria><id>2</id><nombre>Lácteos</nombre><activo>true</activo></categoria>
+      <presentaciones>
+        <item>
+          <id>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</id>
+          <productoId>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</productoId>
+          <nombre>1 L</nombre>
+          <contenido>1.000</contenido>
+          <unidadMedidaId>3</unidadMedidaId>
+          <esPredeterminada>true</esPredeterminada>
+          <activo>true</activo>
+          <createdAt>2026-09-01T10:00:00.000Z</createdAt>
+          <updatedAt>2026-09-01T10:00:00.000Z</updatedAt>
+          <unidadMedida><id>3</id><clave>l</clave><nombre>Litro</nombre><tipo>volumen</tipo><factorBase>1</factorBase></unidadMedida>
+        </item>
+      </presentaciones>
+    </item>
+  </data>
+  <total>1</total>
+  <page>1</page>
+  <limit>100</limit>
+</productListResponse>
