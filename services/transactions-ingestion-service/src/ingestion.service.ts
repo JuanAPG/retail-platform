@@ -172,11 +172,15 @@ export class IngestionService implements OnModuleDestroy {
         const pending = await client.query<{ sale_no: number; payload: Sale }>(`SELECT sale_no,payload FROM ventas_en_lote
           WHERE batch_id=$1 AND result='valida' ORDER BY sale_no LIMIT 5`, [id]);
         if (!pending.rowCount) break;
-        const outcomes = await Promise.allSettled(pending.rows.map(async (sale) => {
-          const result = await this.sendSale(id, sale.payload, token);
+        const outcomes = await Promise.allSettled(pending.rows.map(async (sale) => ({
+          row: sale.sale_no, ...await this.sendSale(id, sale.payload, token),
+        })));
+        for (const outcome of outcomes) {
+          if (outcome.status !== 'fulfilled') continue;
+          const { row, status, transactionId, code, message } = outcome.value;
           await client.query(`UPDATE ventas_en_lote SET result=$3,transaction_id=$4,code=$5,message=$6
-            WHERE batch_id=$1 AND sale_no=$2`, [id, sale.sale_no, result.status, result.transactionId, result.code, result.message]);
-        }));
+            WHERE batch_id=$1 AND sale_no=$2`, [id, row, status, transactionId, code, message]);
+        }
         const failed = outcomes.find((result) => result.status === 'rejected');
         if (failed) throw failed.reason;
       }
