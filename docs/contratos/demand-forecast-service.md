@@ -245,7 +245,7 @@ respuesta**; si fallan, queda una línea de log con el id de la corrida para rei
 
 | Qué | audit-service `POST /v1/auditoria` | notifications-service `POST /v1/notifications` | data-governance-service `POST /v1/lineage` |
 |---|---|---|---|
-| Corrida guardada (disponible o no) | `accion: ejecutar_corrida`, `tabla: forecast_runs`, `registroId: id`; `cambios`: `tipo: pronostico`, `disponible`, `mape` | `corrida.terminada` a quien la lanzó, `relatedEntityType: corrida`, `relatedEntityId: id` | `resourceType: corrida`, `resourceId: id`, fuente `ventas` con la versión `dataVersion.sha256` (formato en `data-governance-service.md`) |
+| Corrida guardada (disponible o no) | `accion: ejecutar_corrida`, `tabla: forecast_runs`, `registroId: id`; `cambios`: `tipo: pronostico`, `disponible`, `mape` | `corrida.terminada` a quien la lanzó, `relatedEntityType: corrida`, `relatedEntityId: id` | `resourceType: corrida`, `resourceId: id`, fuente `ventas-core-process` con la versión `dataVersion.sha256` (formato en `data-governance-service.md`). Solo las corridas disponibles: una no disponible no tiene foto de datos |
 | Replay | `accion: ejecutar_corrida`, `cambios`: `tipo: repeticion`, `identical` | — | — |
 
 Un `4xx` no se reporta. Sin `AUDIT_SERVICE_URL`, `NOTIFICATIONS_SERVICE_URL` o
