@@ -83,6 +83,18 @@ def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
     return None, ()
 
 
+def _rutas() -> None:
+    # Importado aquí: el router usa `xml_root`, que se define arriba.
+    from .basket_api import RAICES_XML, router
+
+    app.include_router(router)
+    for ruta, raiz in RAICES_XML.items():
+        xml_root(ruta, raiz)
+
+
+_rutas()
+
+
 @app.get("/v1/health", summary="Salud del servicio y de sus dependencias, con lo que tardó cada una.")
 def salud():
     """Sin autenticación y SIEMPRE 200 si el proceso responde.
