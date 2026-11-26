@@ -54,18 +54,6 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="resultadoItem">
-    <xs:complexType>
-      <xs:sequence>
-        <xs:element name="indicatorKey" type="xs:string"/>
-        <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
-        <xs:element name="baseValue" type="xs:decimal"/>
-        <xs:element name="simulatedValue" type="xs:decimal"/>
-        <xs:element name="variacionPct" type="xs:decimal" minOccurs="0"/>
-      </xs:sequence>
-    </xs:complexType>
-  </xs:element>
-
   <xs:element name="recomendacionRequest">
     <xs:complexType>
       <xs:sequence>
