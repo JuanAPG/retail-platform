@@ -321,19 +321,19 @@ Query: `dateFrom`, `dateTo` (`YYYY-MM-DD`, opcionales; `dateFrom > dateTo` → `
   sale un número**, ni `0`.
 - Nunca se guarda ni se devuelve dato alguno de una persona o de una compra individual.
 
-**Cómo se combinan los dos umbrales — P-11 sigue PENDIENTE.** D-36 dice "menos de 10
-transacciones (o 3 tiendas)" y no fija si hacen falta las dos condiciones o basta una.
-Mientras el Product Owner no lo decida:
+**Cómo se combinan los dos umbrales — D-48 (resuelve P-11).** Se publica solo si se cumplen
+**los dos**: ≥ 10 transacciones **y** ≥ 3 tiendas.
 
 | Caso | Resultado |
 |---|---|
 | ≥ 10 transacciones **y** ≥ 3 tiendas | `disponible: true` (vale con cualquiera de las dos lecturas) |
 | < 10 transacciones **y** < 3 tiendas | `disponible: false` (caso de control de D-36) |
-| Solo se cumple una | Lo decide la variable `PUBLICATION_RULE`: `ambos` (por defecto, no publica) o `cualquiera` (publica) |
+| Solo se cumple una | `disponible: false` con motivo (D-48, `PUBLICATION_RULE=ambos`, el valor por defecto) |
 
-El valor por defecto es el que **no** publica, porque el riesgo de D-36 es describir a una
-sola tienda. El campo `rule` de la respuesta dice con cuál se calculó. Cuando se cierre
-P-11 se cambia la variable, no el código.
+Se eligió la regla que **no** publica en la duda, porque el riesgo de D-36 es describir a una
+sola tienda. Es reversible: `PUBLICATION_RULE=cualquiera` publica con un solo umbral, sin
+cambiar código. El campo `rule` de la respuesta dice con cuál se calculó. Fronteras probadas
+en `publicacion.spec.ts`: 9 tx y 3 tiendas → no; 10 tx y 2 tiendas → no; 10 tx y 3 tiendas → sí.
 
 Casos de control (prueba unitaria):
 
@@ -382,7 +382,7 @@ No son parte de este contrato; las coordina cada dueño:
 
 ## Por confirmar con el Product Owner
 
-1. **P-11** (arriba): regla para combinar los dos umbrales de D-36.
+1. ~~P-11~~: resuelto por **D-48** (arriba).
 2. La clasificación de una zona pasa del Administrador (como estaba en catalog-service) al
    **Analista comercial**, por ser parte de M05. Si debe seguir siendo del Administrador,
    cambia solo la fila de permisos.

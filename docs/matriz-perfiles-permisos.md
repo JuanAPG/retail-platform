@@ -89,7 +89,7 @@ Notas:
    propuestos. Gerente y Administrador no aprueban precios.
 2. **D-12:** fila agregada (no existía en la Matriz S0). Genera el Planeador; acepta o
    rechaza el Gerente de categoría; al decidir se notifica al Auditor.
-3. Qué es un reporte "propio" del Proveedor: **PENDIENTE (P-06).**
+3. Qué es un reporte "propio" del Proveedor: el que lleva su `usuarioId` (**D-49**).
 4. La Matriz S0 dice "Total", pero M15 está definida como **bitácora inmutable**
    (`db/data_retail.sql`): nadie actualiza ni borra registros. Se trata como Lectura
    (más el alta automática que hacen los servicios). **Confirmar (P-10).**
@@ -125,7 +125,7 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | Servicio | Puerto | Responsable | Ya decidido | Pendiente |
 |---|---|---|---|---|
 | `transactions-ingestion-service` | 3111 | Juan Angel | Recibe la importación por archivo que antes hacía core-process (D-33, D-34). | Fila completa. |
-| `income-segmentation-service` | 3112 | Pamela | Recibe segmentos y clasificación de zonas de catalog (D-35); umbral de publicación (D-36). **Fila (igual que M05): Admin L · Analista T · Gerente L · Resp. precios L · Planeador L · Auditor L · Proveedor – · Investigador –.** El Analista comercial crea segmentos, sus versiones y clasifica zonas. Contrato: `docs/contratos/income-segmentation-service.md`. | Confirmar que la clasificación de zonas pasa del Administrador (catalog) al Analista; P-11. |
+| `income-segmentation-service` | 3112 | Pamela | Recibe segmentos y clasificación de zonas de catalog (D-35); umbral de publicación (D-36). **Fila (igual que M05): Admin L · Analista T · Gerente L · Resp. precios L · Planeador L · Auditor L · Proveedor – · Investigador –.** El Analista comercial crea segmentos, sus versiones y clasifica zonas. Contrato: `docs/contratos/income-segmentation-service.md`. | Confirmar que la clasificación de zonas pasa del Administrador (catalog) al Analista. Umbral de publicación: D-48. |
 | `basket-analysis-service` | 3113 | Leonardo | Canasta típica (D-37); umbral de publicación (D-36). | Fila completa. |
 | `availability-service` | 3114 | Pamela | Recibe la disponibilidad (D-38). **Fila: Admin L · Analista T · Gerente L · Resp. precios L · Planeador L · Auditor L · Proveedor – · Investigador: solo alta de capturas (D-28), sin lectura.** Contrato: `docs/contratos/availability-service.md`. | Confirmar que el Analista comercial es quien corrige existencias; registrar como decisión los casos de control de cobertura del contrato. |
 | `promotion-service` | 3115 | Fernando | **Gerente de categoría: Propone. Responsable de precios: Aprueba** (D-39). | Los otros 5 perfiles. |
@@ -145,7 +145,7 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (en `parameters` del documento de Mongo, D3), sin campo nuevo, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-47)
+### 4.2 Reglas de negocio (D-01 a D-51)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -157,7 +157,7 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | D-06 | Comparación de precios | **Dos vistas**: por presentación (una fila por zona y presentación) y normalizada por kg/L. | Nunca se promedian presentaciones distintas. |
 | D-07 | Catálogo | Tienda o presentación con historial de precios **solo se desactiva**, nunca se borra. | El historial queda intacto. |
 | D-08 | Alta de productos | Producto pendiente o rechazado: lo ven **solo el Gerente** (en su bandeja) y el **Proveedor que lo propuso**. Para el resto no existe hasta aprobarse; no se puede preciar ni vender. | Ver `VEN_NO_ACTIVOS` en catalog-service. |
-| D-09 | Alertas de precio | Se avisa al Responsable de precios y al Auditor con cambio **≥ 5 %** dentro de un **periodo que define el Responsable de precios**. | Valor por defecto del periodo: **PENDIENTE (P-05)**. |
+| D-09 | Alertas de precio | Se avisa al Responsable de precios y al Auditor con cambio **≥ 5 %** dentro de un **periodo que define el Responsable de precios**. | Valor por defecto del periodo: **30 días (D-51)**. |
 | D-10 | Segmentos | Rangos que se enciman → **rechazar**. Ingreso negativo o mínimo > máximo → `400`. | Nunca `500`. |
 | D-11 | Proveedor | Puede **editar mientras esté pendiente**. Si se rechaza, hace una propuesta nueva. | Rechazado no se reabre. |
 | D-12 | Recomendaciones | **Genera el Planeador, decide el Gerente**; se avisa al Auditor. | Ver §3. |
@@ -196,7 +196,7 @@ escritas. Cada decisión dice de qué duda viene.
 | D-33 | Importación de ventas (Q-01) | La importación por archivo **sale de core-process** y pasa completa a `transactions-ingestion-service`: lotes, vista previa, deduplicación, conciliación y errores (tablas `importaciones*`). core-process conserva el registro manual, las transacciones confirmadas y las canastas. Al confirmar un lote, ingestion envía las transacciones válidas a core-process **por HTTP**. | Un lote confirmado en ingestion aparece como canastas en core-process; core-process ya no expone `import/*`. |
 | D-34 | Duplicados (Q-02) | Dos transacciones son la misma si tienen **misma tienda + mismo folio**. Si además cambia el contenido, la fila se marca como **conflicto** para revisión, no se sobrescribe. Reimportar un lote ya confirmado no crea nada. | Reimportar el mismo lote → 0 transacciones nuevas; misma tienda y folio con otro total → fila en conflicto. |
 | D-35 | Segmentos de ingreso (Q-03) | Los segmentos y la clasificación de zonas **salen de catalog-service** y pasan a `income-segmentation-service`. Cada cambio crea una **versión nueva** con fuente y fecha; la anterior se conserva y cada clasificación guarda con qué versión se hizo. Rangos encimados se siguen rechazando (D-10). | Editar un segmento crea la versión 2 y la 1 sigue consultable; rango encimado → 400. |
-| D-36 | Anonimización (Q-04) | No se publica ningún agregado con **menos de 10 transacciones (o 3 tiendas)** en la combinación zona-segmento: sale como no disponible, con motivo. Nunca se guarda ni se infiere el ingreso de una persona. Cómo se combinan los dos umbrales: P-11. | Una combinación con 9 transacciones y menos de 3 tiendas → `disponible:false` con motivo, nunca un número. |
+| D-36 | Anonimización (Q-04) | No se publica ningún agregado con **menos de 10 transacciones (o 3 tiendas)** en la combinación zona-segmento: sale como no disponible, con motivo. Nunca se guarda ni se infiere el ingreso de una persona. Cómo se combinan los dos umbrales: **D-48** (deben cumplirse los dos). | Una combinación con 9 transacciones y menos de 3 tiendas → `disponible:false` con motivo, nunca un número. |
 | D-37 | Canasta típica (Q-05) | Canasta típica de un grupo (zona + segmento) = los productos presentes en **al menos el 20 %** de sus canastas, con su frecuencia y gasto promedio. core-process conserva sus 5 indicadores; `basket-analysis-service` agrega comparación entre periodos, evolución y mezcla por categoría. | Producto en 20 % de las canastas → entra; en 19 % → no entra. |
 | D-38 | Disponibilidad (Q-06) | La disponibilidad **pasa a `availability-service`** (tabla `inventario` y capturas); **sustituye a D-30**. Faltante = existencia 0 de un producto de la canasta básica (D-03). Un dato vale **7 días**; después sale como vencido. Cobertura = % de básicos con existencia en la tienda. | Dato de hace 8 días → vencido, no disponible; cobertura con caso de control en las pruebas. |
 | D-39 | Promociones (Q-07) | Tipos: **descuento %**, **precio por paquete** (n por $) y **tamaño de empaque**. Las **propone el Gerente de categoría** y las **aprueba el Responsable de precios**. No tocan el histórico de precios ni la elasticidad; el precio unitario se calcula aparte para comparar alternativas. | Aprobar una promoción no anexa nada a `precios`; el Gerente de categoría intenta aprobar una promoción → 403. |
@@ -208,6 +208,10 @@ escritas. Cada decisión dice de qué duda viene.
 | D-45 | Recuperación de acceso (Q-13) | Token de **un solo uso en Redis**, vigencia **15 min**. En local se entrega por notifications-service y queda en el log de desarrollo; el correo real se conecta en GCP. La respuesta es **la misma exista o no el correo**. | Reusar el token → rechazado; correo inexistente → misma respuesta que uno existente. |
 | D-46 | Preferencias y descargas (Q-14) | Se pueden **apagar los avisos informativos**; los de **aprobación pendiente no**. El CSV del reporte trae los **16 indicadores** (los no disponibles con motivo, D-20). Cada descarga queda en la bitácora con quién, cuándo y qué formato. | Apagar un aviso de aprobación pendiente → sigue llegando; cada descarga deja un evento en audit-service. Preferencia por cuenta (predeterminada activa), almacenada por notifications-service en MongoDB. Al apagarla se ocultan los informativos de la bandeja y el contador, manteniendo alertas y aprobaciones pendientes. |
 | D-47 | Permisos y datos de los servicios nuevos (Q-15) | Cada servicio nuevo tiene **fila en §3.2** antes del 23-oct. **Postgres** para datos de negocio; **MongoDB** para corridas de pronóstico, historial de monitoreo y lotes de sincronización; **Redis** para idempotencia, caché y último estado. Cada uso nuevo de Mongo o Redis se registra como decisión. | Ningún servicio usa Mongo o Redis de una forma nueva sin una decisión registrada. |
+| D-48 | Umbral de publicación zona-segmento (resuelve P-11) | Un agregado zona-segmento se publica solo si cumple **los dos** umbrales de D-36: **≥ 10 transacciones y ≥ 3 tiendas** (`PUBLICATION_RULE=ambos`, valor por defecto). Si falta uno sale `disponible:false` con motivo. Es la opción más conservadora y reversible: cambiar a `cualquiera` solo requiere la variable. Lo aplican income-segmentation y basket-analysis. | 9 tx y 3 tiendas → no; 10 tx y 2 tiendas → no; 10 tx y 3 tiendas → sí (`publicacion.spec.ts`). |
+| D-49 | Reporte "propio" del Proveedor (resuelve P-06) | Un reporte es propio del Proveedor cuando su `usuarioId` es el del Proveedor (quien lo generó). Sus archivos heredan ese dueño (`propietarioId`). Cualquier otro reporte, o un archivo de otro reporte, le responde **404**, no 403. Hoy solo el Gerente genera reportes, así que en la práctica el Proveedor no tiene propios; la regla no amplía su acceso. | Proveedor con reporte ajeno → 404 en reporte, archivos y URL firmada; con uno sembrado a su nombre → 200 (`test/archivos.spec.ts`). |
+| D-50 | Vigencia de los enlaces de descarga | La URL firmada de un archivo privado (reportes, y lotes de ingesta con el mismo contrato) vale **300 s por defecto** y como máximo **900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`; un valor inválido vuelve al defecto). Se emite después de autorizar y no se guarda ni se escribe en logs; se pide otra en cada descarga. | Enlace con TTL 1 s, usado a los 2 s → 404; TTL 99999 → 900 (`almacen.spec.ts`, `archivos.spec.ts`). |
+| D-51 | Periodo por defecto de la alerta de precio (resuelve P-05) | Mientras el Responsable de precios no configure la alerta (D-09), se usan **5 % en una ventana de 30 días** (default de `config_alertas_precio`). El Responsable puede cambiar la ventana entre 1 y 365 días. | Sin configuración: cambio acumulado ≥ 5 % en 30 días → alerta (`price-alerts.service.spec.ts`). |
 
 ## 5. Flujos con estado
 
@@ -258,13 +262,13 @@ Un pendiente resuelto no se borra: se queda aquí apuntando a la decisión que l
 | P-02 | Precio de campo aprobado: ¿precio de la zona o precio por tienda? | **Resuelto por D-29** (§4.2) |
 | P-03 | ¿Qué servicio guarda las encuestas (RF-38)? (La disponibilidad, RF-36, quedó en availability-service por D-38.) | **Resuelto por D-30** (§4.2) |
 | P-04 | ¿Qué roles usan la app de escritorio? ¿El Analista puede simular (RF-47) y calcular elasticidad (RF-45)? | **Resuelto por D-31** (§4.2) |
-| P-05 | Periodo por defecto de la alerta de precio (D-09) mientras el Responsable no lo configure. | pricing, notifications |
-| P-06 | ¿Qué es un reporte "propio" del Proveedor? | documents (DOC-04) |
+| P-05 | Periodo por defecto de la alerta de precio (D-09) mientras el Responsable no lo configure. | **Resuelto por D-51** (§4.2) |
+| P-06 | ¿Qué es un reporte "propio" del Proveedor? | **Resuelto por D-49** (§4.2) |
 | P-07 | Permisos de los módulos de §3.1. | varios |
 | P-08 | Código de barras no encontrado en campo: ¿qué flujo sigue? | **Resuelto por D-32** (§4.2) |
 | P-09 | ¿Qué muestra el portal público sin sesión? | web |
 | P-10 | Confirmar Auditoría como solo Lectura (bitácora inmutable). | audit |
-| P-11 | D-36: "menos de 10 transacciones (o 3 tiendas)". ¿Se publica solo con **≥ 10 transacciones y ≥ 3 tiendas**, o basta con cumplir una? Con el seed actual (3 zonas) exigir 3 tiendas por zona-segmento puede ocultar casi todo. | income-segmentation, basket-analysis |
+| P-11 | D-36: "menos de 10 transacciones (o 3 tiendas)". ¿Se publica solo con **≥ 10 transacciones y ≥ 3 tiendas**, o basta con cumplir una? Con el seed actual (3 zonas) exigir 3 tiendas por zona-segmento puede ocultar casi todo. | **Resuelto por D-48** (§4.2) |
 | P-12 | Texto de D-28 a D-32. D-28 vive solo en una rama sin fusionar y contradice a `main`; D-29, D-31 y D-32 no aparecen en ningún lado. ¿Se descartan o se registran? | **Resuelto por D-28 a D-32** (§4.2, registradas el 26-oct; la rama `fix/matriz-tiendas-zonas` se descartó) |
 
 ## 7. Cómo mantener este archivo
