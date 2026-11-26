@@ -8,7 +8,9 @@ Salida (carpeta `--salida`, fuera de git):
   catalogo.json      tiendas, zonas, categorías y productos que el cargador da de alta en catalog
   ventas-0001.csv …  ventas en el formato de la importación CSV de core-process
                      (folio,fecha,tienda,sku,presentacion,cantidad,precio), partidas por folio
-                     completo y con un tope de `--max-mb` por archivo (el importador acepta 5 MB)
+                     completo y con dos topes por archivo: `--max-mb` (el importador acepta 5 MB) y
+                     `--max-lineas` (la vista previa de core-process guarda el staging en un solo
+                     INSERT de 16 valores por línea; Postgres acepta 65,535, o sea 4,095 líneas)
   manifiesto.json    parámetros, filas, tamaños y SHA-256 de cada archivo, y los casos de control
                      sembrados con su valor esperado
 
@@ -31,8 +33,12 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 ENCABEZADO = 'folio,fecha,tienda,sku,presentacion,cantidad,precio\n'
+# Tope real de la vista previa de core-process hoy: 65,535 parámetros por consulta / 16 por línea.
+# Con 0 se desactiva el tope de líneas (cuando core-process guarde el staging en bloques).
+LIMITE_LINEAS_CORE = 65535 // 16
+MAX_LINEAS_DEFAULT = 4000
 HUSO = '-06'  # America/Monterrey, sin horario de verano desde 2022
 
 # ----------------------------------------------------------------------------- catálogo
@@ -436,12 +442,31 @@ class Generador:
 
 # ----------------------------------------------------------------------------- escritura
 
-def escribir(ventas: list[Venta], salida: Path, max_bytes: int) -> list[dict]:
-    """CSV partido por folio completo; ningún archivo pasa de `max_bytes`."""
+def escribir(ventas: list[Venta], salida: Path, max_bytes: int, max_lineas: int = 0) -> list[dict]:
+    """CSV partido por folio completo; ningún archivo pasa de `max_bytes` ni de `max_lineas` líneas
+    de datos (sin contar el encabezado; 0 = sin tope de líneas). Se cierra al llegar al primero.
+
+    Si una sola venta no cabe en un tope, falla antes de escribir: partirla rompería la venta en el
+    importador y dejarla pasar generaría un archivo que el importador rechaza.
+    """
+    def renglones(v: Venta) -> list[str]:
+        return [f'{v.folio},{v.instante},{v.tienda},{l.sku},{l.presentacion},{l.cantidad},{l.precio:.2f}\n'
+                for l in v.lineas]
+
+    encabezado = len(ENCABEZADO.encode())
+    if max_lineas < 0:
+        raise ValueError('--max-lineas no puede ser negativo (0 desactiva el tope).')
+    mayor = max(ventas, key=lambda v: len(v.lineas))
+    if max_lineas and len(mayor.lineas) > max_lineas:
+        raise ValueError(f'--max-lineas {max_lineas} es menor que la venta más grande '
+                         f'({mayor.folio}, {len(mayor.lineas)} líneas).')
+    pesada = max(ventas, key=lambda v: len(''.join(renglones(v)).encode('utf-8')))
+    if encabezado + len(''.join(renglones(pesada)).encode('utf-8')) > max_bytes:
+        raise ValueError(f'--max-mb es menor que la venta más pesada ({pesada.folio}) con su encabezado.')
     salida.mkdir(parents=True, exist_ok=True)
     for viejo in salida.glob('ventas-*.csv'):
         viejo.unlink()
-    archivos, bloque, tamano, transacciones, lineas = [], [], len(ENCABEZADO.encode()), 0, 0
+    archivos, bloque, tamano, transacciones, lineas = [], [], encabezado, 0, 0
 
     def cerrar():
         nombre = f'ventas-{len(archivos) + 1:04d}.csv'
@@ -451,12 +476,12 @@ def escribir(ventas: list[Venta], salida: Path, max_bytes: int) -> list[dict]:
                          'bytes': len(contenido), 'sha256': hashlib.sha256(contenido).hexdigest()})
 
     for v in ventas:
-        filas = [f'{v.folio},{v.instante},{v.tienda},{l.sku},{l.presentacion},{l.cantidad},{l.precio:.2f}\n'
-                 for l in v.lineas]
+        filas = renglones(v)
         peso = len(''.join(filas).encode('utf-8'))
-        if bloque and tamano + peso > max_bytes:
+        excede_lineas = max_lineas and lineas + len(filas) > max_lineas
+        if bloque and (tamano + peso > max_bytes or excede_lineas):
             cerrar()
-            bloque, tamano, transacciones, lineas = [], len(ENCABEZADO.encode()), 0, 0
+            bloque, tamano, transacciones, lineas = [], encabezado, 0, 0
         bloque.extend(filas)
         tamano += peso
         transacciones += 1
@@ -523,20 +548,24 @@ def main(argv: list[str] | None = None) -> dict:
     parser.add_argument('--tiendas-por-zona', type=int, default=4)
     parser.add_argument('--semilla', type=int, default=42)
     parser.add_argument('--max-mb', type=float, default=4.5, help='Tope por archivo (el importador acepta 5 MB).')
+    parser.add_argument('--max-lineas', type=int, default=MAX_LINEAS_DEFAULT,
+                        help=f'Tope de líneas de datos por archivo; 0 lo desactiva. Default {MAX_LINEAS_DEFAULT}: '
+                             f'la vista previa de core-process falla arriba de {LIMITE_LINEAS_CORE} líneas.')
     parser.add_argument('--salida', type=Path, default=None, help='Default: db/generados/<transacciones>')
     args = parser.parse_args(argv)
 
     gen = Generador(args.transacciones, args.semanas, args.hasta, args.tiendas_por_zona, args.semilla)
     ventas = gen.generar()
     salida = args.salida or Path(__file__).resolve().parent / 'generados' / str(args.transacciones)
-    archivos = escribir(ventas, salida, int(args.max_mb * 1024 * 1024))
+    archivos = escribir(ventas, salida, int(args.max_mb * 1024 * 1024), args.max_lineas)
     (salida / 'catalogo.json').write_text(json.dumps(catalogo(gen), ensure_ascii=False, indent=2) + '\n',
                                           encoding='utf-8', newline='\n')
     manifiesto = {
         'generador': f'db/generar_datos_parcial3.py {VERSION}',
         'parametros': {'transacciones': args.transacciones, 'semanas': args.semanas,
                        'desde': gen.inicio.isoformat(), 'hasta': args.hasta.isoformat(),
-                       'tiendasPorZona': args.tiendas_por_zona, 'semilla': args.semilla, 'maxMb': args.max_mb},
+                       'tiendasPorZona': args.tiendas_por_zona, 'semilla': args.semilla, 'maxMb': args.max_mb,
+                       'maxLineas': args.max_lineas},
         'totales': {'transacciones': sum(a['transacciones'] for a in archivos),
                     'lineas': sum(a['lineas'] for a in archivos),
                     'bytes': sum(a['bytes'] for a in archivos), 'archivos': len(archivos),

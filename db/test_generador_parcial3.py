@@ -118,6 +118,80 @@ class GeneradorTest(unittest.TestCase):
         self.assertTrue(all(len(a) == 1 for a in archivos_por_folio.values()))
         self.assertEqual(len(ventas), TRANSACCIONES)
 
+    # --- tope de líneas por archivo (límite de la vista previa de core-process)
+
+    def lineas_de_datos(self, carpeta: Path) -> dict[str, int]:
+        return {a.name: len(a.read_text(encoding='utf-8').splitlines()) - 1
+                for a in sorted(carpeta.glob('ventas-*.csv'))}
+
+    def test_default_bajo_el_limite_de_core(self):
+        self.assertLessEqual(gen.MAX_LINEAS_DEFAULT, gen.LIMITE_LINEAS_CORE)
+        self.assertEqual(gen.LIMITE_LINEAS_CORE, 4095)
+        self.assertEqual(self.manifiesto['parametros']['maxLineas'], gen.MAX_LINEAS_DEFAULT)
+        self.assertTrue(all(n <= gen.MAX_LINEAS_DEFAULT for n in self.lineas_de_datos(self.dir).values()))
+
+    def test_tope_de_lineas_respetado(self):
+        carpeta = Path(self.tmp.name) / 'tope500'
+        m = generar(carpeta, '--max-lineas', '500')
+        lineas = self.lineas_de_datos(carpeta)
+        self.assertGreater(len(lineas), 1)
+        self.assertTrue(all(n <= 500 for n in lineas.values()), lineas)
+        # No corta de más: cada archivo, salvo el último, quedó cerca del tope.
+        self.assertTrue(all(n > 450 for n in list(lineas.values())[:-1]), lineas)
+        self.assertEqual(m['parametros']['maxLineas'], 500)
+
+    def test_tope_de_lineas_no_parte_folios(self):
+        carpeta = Path(self.tmp.name) / 'tope300'
+        m = generar(carpeta, '--max-lineas', '300')
+        archivos_por_folio = defaultdict(set)
+        for archivo in carpeta.glob('ventas-*.csv'):
+            with archivo.open(encoding='utf-8', newline='') as f:
+                for fila in csv.DictReader(f):
+                    archivos_por_folio[fila['folio']].add(archivo.name)
+        self.assertTrue(all(len(a) == 1 for a in archivos_por_folio.values()))
+        self.assertEqual(len(archivos_por_folio), TRANSACCIONES)
+        self.assertEqual(m['totales']['transacciones'], TRANSACCIONES)
+        # El tope solo reparte: las mismas ventas, línea por línea, que sin tope.
+        self.assertEqual(leer_ventas(carpeta).keys(), self.ventas.keys())
+        self.assertEqual(m['totales']['lineas'], self.manifiesto['totales']['lineas'])
+
+    def test_lineas_del_manifiesto_cuadran(self):
+        reales = self.lineas_de_datos(self.dir)
+        self.assertEqual({a['archivo']: a['lineas'] for a in self.manifiesto['archivos']}, reales)
+        self.assertEqual(self.manifiesto['totales']['lineas'], sum(reales.values()))
+
+    def test_los_dos_topes_juntos(self):
+        # Gana el MB: 0.05 MB son ~650 líneas, menos que el tope de 1000.
+        por_mb = Path(self.tmp.name) / 'gana-mb'
+        m = generar(por_mb, '--max-mb', '0.05', '--max-lineas', '1000')
+        self.assertTrue(all(a['bytes'] <= 0.05 * 1024 * 1024 for a in m['archivos']))
+        self.assertLess(max(self.lineas_de_datos(por_mb).values()), 1000)
+        # Gana el de líneas: 300 líneas pesan mucho menos que 4.5 MB.
+        por_lineas = Path(self.tmp.name) / 'gana-lineas'
+        m = generar(por_lineas, '--max-mb', '4.5', '--max-lineas', '300')
+        self.assertTrue(all(n <= 300 for n in self.lineas_de_datos(por_lineas).values()))
+        self.assertGreater(len(m['archivos']), self.manifiesto['totales']['lineas'] // 300)
+
+    def test_max_lineas_cero_desactiva(self):
+        carpeta = Path(self.tmp.name) / 'sin-tope'
+        m = generar(carpeta, '--max-lineas', '0')
+        # 6,000 transacciones caben en un solo archivo de menos de 4.5 MB.
+        self.assertEqual(len(m['archivos']), 1)
+        self.assertGreater(m['archivos'][0]['lineas'], gen.LIMITE_LINEAS_CORE)
+        self.assertEqual(m['totales']['lineas'], self.manifiesto['totales']['lineas'])
+
+    def test_tope_menor_a_una_venta(self):
+        # Falla antes de escribir: una corrida previa en la misma carpeta queda intacta.
+        carpeta = Path(self.tmp.name) / 'invalido'
+        previo = generar(carpeta, '--max-lineas', '2000')
+        for extra in (['--max-lineas', '1'], ['--max-lineas', '-5'], ['--max-mb', '0.0001']):
+            with self.subTest(extra=extra):
+                with self.assertRaises(ValueError):
+                    generar(carpeta, *extra)
+                for a in previo['archivos']:
+                    self.assertEqual(hashlib.sha256((carpeta / a['archivo']).read_bytes()).hexdigest(), a['sha256'])
+                self.assertEqual(len(list(carpeta.glob('ventas-*.csv'))), len(previo['archivos']))
+
     def test_folio_unico_por_tienda(self):
         vistos = set()
         for folio, v in self.ventas.items():
