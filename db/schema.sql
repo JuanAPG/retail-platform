@@ -1101,7 +1101,7 @@ CREATE INDEX idx_imperrores_importacion ON importacion_errores(importacion_id, s
 --     La vista v_transaccion_detalle de abajo entrega ambos.
 -- =====================================================================
 
-CREATE TYPE canal_transaccion AS ENUM ('punto_venta','app_movil','web','importacion_csv','otro');
+CREATE TYPE canal_transaccion AS ENUM ('punto_venta','app_movil','web','importacion_csv','otro','importacion_archivo');
 
 CREATE TABLE transacciones (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1113,11 +1113,14 @@ CREATE TABLE transacciones (
     total               NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
     -- Trazabilidad de origen: de qué carga CSV salió, si vino de una.
     importacion_id      UUID REFERENCES importaciones(id),
+    lote_ingesta_id     UUID,
     capturada_por       UUID REFERENCES usuarios(id),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tienda_id, folio)
 );
 COMMENT ON TABLE transacciones IS 'Encabezado de venta. Una transacción = una canasta (RN-03).';
+COMMENT ON COLUMN transacciones.lote_ingesta_id IS
+    'Identificador del lote en transactions-ingestion-service. La referencia se obtiene por HTTP.';
 
 CREATE INDEX idx_transacciones_tienda_fecha ON transacciones(tienda_id, fecha);
 CREATE INDEX idx_transacciones_fecha ON transacciones(fecha);

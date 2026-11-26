@@ -1,3 +1,4 @@
+import { conCorrelacion } from '../correlation/correlacion';
 import { Injectable, Logger } from '@nestjs/common';
 
 /** Timeout del reporte: la operación que lo origina no debe esperar más. */
@@ -63,11 +64,11 @@ export class AuditReporter {
       try {
         const respuesta = await fetch(`${base}/v1/auditoria`, {
           method: 'POST',
-          headers: {
+          headers: conCorrelacion({
             'Content-Type': 'application/json',
             Accept: 'application/json',
             ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-          },
+          }),
           body: JSON.stringify({ ...evento, servicio: SERVICIO }),
           signal: controller.signal,
         });
