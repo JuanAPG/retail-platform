@@ -9,7 +9,7 @@ const reporte = {
   creadoEn: '2026-10-08T18:00:00.000Z',
   secciones: [
     { clave: 'ticket_promedio', nombre: 'Ticket promedio (MXN por canasta)', servicio: 'core-process-service', disponible: true, valor: 86.4, motivo: null },
-    { clave: 'elasticidad_promedio', nombre: 'Elasticidad promedio', servicio: 'algorithms-core', disponible: false, valor: null, motivo: 'algorithms-core no respondió en 3 s.' },
+    { clave: 'elasticidad_promedio', nombre: 'Elasticidad promedio (valores vigentes hoy, no del periodo)', servicio: 'algorithms-core', disponible: false, valor: null, motivo: 'algorithms-core no respondió en 3 s.' },
   ],
 };
 
