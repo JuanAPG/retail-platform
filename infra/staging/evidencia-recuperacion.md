@@ -32,7 +32,7 @@ de Docker VFS con espacio restringido.
 | Respuesta lenta / pérdida de acuse | Core confirmó y se retuvo su respuesta. 3111 devolvió 503 a los 10,01 s y conservó el lote `confirmando`. Al reintentar devolvió 200, 1 repetida, 0 insertadas. PostgreSQL conservó exactamente una venta y una canasta. Correlación `qa-acuse-25ee4e8a53`. |
 | Redis detenido | 3111 devolvió 503 en 0,45 s para la petición protegida. Después de iniciar Redis y abrir sesión, devolvió 200 y se pudieron consultar los lotes. Correlación `qa-fault-28d45c2d41`. |
 | PostgreSQL detenido | El health de 3111 cambió a `degraded` y la consulta devolvió 503 en 0,04 s. Al iniciar PostgreSQL, los lotes quedaron disponibles. Correlación `qa-fault-0f774303c1`. |
-| MongoDB sin responder | La consulta de historial superaba 14 s en la primera prueba. Con el plazo de aplicación, devolvió 503 en 2,55 s. Al reanudar MongoDB volvieron a verse los 14 puntos previos. Correlación `qa-fault-327efd62eb`. |
+| MongoDB sin responder | La consulta de historial superaba 14 s en la primera prueba. Con el plazo de aplicación, devolvió 503 en 2,51 s. Al reanudar MongoDB volvieron a verse los 15 puntos previos. Correlación `qa-fault-5fdede7e24`. |
 | Referencia a objeto sin bucket en local | 3111 devolvió 503 para una referencia sintética válida. Correlación `qa-fault-7a22121ec2`. La operación real sobre objetos privados queda para staging. |
 | Restauración PostgreSQL | `pg_dump -Fc` y `pg_restore --exit-on-error` a otra base en el entorno aislado. Coincidieron 9 usuarios, 8 ventas, 8 canastas, 4 lotes, 5.006 filas de ingesta y 6 fuentes. El folio del acuse perdido conservó una venta y una canasta. |
 
