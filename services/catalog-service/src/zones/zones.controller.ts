@@ -27,9 +27,10 @@ import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { PERFILES_INTERNOS, ROL } from '../common/roles';
 import { ApiErrores, ApiRespuesta, ApiSinCuerpo, pagina } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
+import { escrituraMovidaASegmentation } from '../common/retirado';
 import { ZonesService } from './zones.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
-import { ZoneClassificationDto, ZoneIndicatorsDto } from './dto/zone-indicators.dto';
+import { ZoneIndicatorsDto } from './dto/zone-indicators.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { ZoneFilterDto } from './dto/zone-filter.dto';
 import { Auditar, AuditarInterceptor } from '../common/audit/auditar.interceptor';
@@ -169,34 +170,15 @@ export class ZonesController {
   }
 
   @Put('zones/:id/classification')
-  @XmlRoot('zoneClassificationResponse')
-  @Roles(ROL.ADMINISTRADOR)
+  @Roles(ROL.ADMINISTRADOR, ROL.ANALISTA)
   @ApiOperation({
     summary:
-      'Clasifica la zona en un segmento de ingreso (solo Administrador). Cierra la clasificación vigente y crea la nueva; el historial se conserva.',
+      'RETIRADA (D-35): clasificar zonas es de income-segmentation-service, PUT :3112/v1/zones/:zoneId/classification (Analista comercial). Responde 409.',
+    deprecated: true,
   })
-  @ApiRespuesta(200, 'Clasificación vigente.', muestras.clasificacionZona, 'zoneClassificationResponse')
-  @ApiErrores(400, 401, 403, 404)
-  async setClassification(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ZoneClassificationDto,
-    @CurrentUser() usuario: SesionUsuario,
-    @Headers('authorization') token: string | undefined,
-    @Ip() ip: string,
-  ) {
-    const r = await this.zonesService.setClassification(id, dto, usuario.id);
-    await this.audit.reportar(
-      {
-        tabla: 'zonas',
-        registroId: id,
-        accion: 'update',
-        descripcion: `Zona clasificada en el segmento ${r.segmentCode}.`,
-        cambios: [{ campo: 'segmento', previo: r.previousSegmentId != null ? String(r.previousSegmentId) : null, posterior: String(r.segmentId) }],
-        ip,
-      },
-      token,
-    );
-    return r;
+  @ApiErrores(401, 403, 409)
+  setClassification() {
+    throw escrituraMovidaASegmentation('PUT /v1/zones/:zoneId/classification');
   }
 
   @Delete('zones/:id')

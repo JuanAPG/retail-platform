@@ -17,6 +17,13 @@ Rutas y campos en **inglés**, igual que `Contrato_Metodos_Endpoints` (Sprint 1)
 
 ## /v1/segments — Segmentos de ingreso (M05)
 
+> **D-35: escrituras retiradas.** `POST`, `PATCH` y `DELETE /v1/segments` y
+> `PUT /v1/zones/:id/classification` responden **409 `CONFLICT`** con la ruta nueva en
+> income-segmentation-service (3112), que guarda versiones y es dueño de `segmentos_ingreso` y
+> `zona_clasificaciones`. Para Analista y Administrador el mensaje dice a dónde ir; el resto de los perfiles sigue
+> recibiendo 403. Las **lecturas** (`GET /v1/segments`, `GET /v1/segments/:id`) siguen aquí sin cambios.
+> Requiere que la web y el escritorio ya escriban en 3112 (PRs `feature/web-clasificacion-3112` y `fix/desktop-segmentos`).
+
 Un segmento clasifica **zonas agregadas**, nunca personas ni compras individuales
 (RN-02). `source`, `updateFrequency`, `zoneRelation` y `limitations` son obligatorios:
 cada segmento debe justificar de dónde sale su rango, cada cuánto se actualiza, cómo
