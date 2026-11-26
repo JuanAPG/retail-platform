@@ -99,6 +99,7 @@ export class HttpErrorFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
           service: process.env.SERVICE_NAME ?? 'unknown-service',
           requestId: request.headers['x-request-id'] ?? null,
+          correlationId: request.headers['x-correlation-id'] ?? null,
           method: request.method,
           path: request.url,
           statusCode: status,
@@ -142,6 +143,8 @@ function codeForStatus(status: number): string {
       return 'NOT_FOUND';
     case HttpStatus.CONFLICT:
       return 'CONFLICT';
+    case HttpStatus.TOO_MANY_REQUESTS:
+      return 'TOO_MANY_REQUESTS';
     case HttpStatus.SERVICE_UNAVAILABLE:
       return 'SERVICE_UNAVAILABLE';
     default:
