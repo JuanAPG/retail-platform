@@ -145,7 +145,7 @@ contrato (límite 23-oct). Aquí solo está lo que ya fijó una decisión; lo de
 | D2 | **FP-Growth** vive en `algorithms-core` (Leonardo), junto a Apriori: `POST /v1/association/fpgrowth/run`. `AnalysisRun.algorithm ∈ {apriori, fpgrowth}`: se guarda como el parámetro `algoritmo` de la corrida (en `parameters` del documento de Mongo, D3), sin campo nuevo, y viaja en `parameters` de `/runs` y `/runs/:id`. |
 | D3 | Las corridas de Apriori, FP-Growth y clustering se guardan en **MongoDB**, no en PostgreSQL. |
 
-### 4.2 Reglas de negocio (D-01 a D-51)
+### 4.2 Reglas de negocio (D-01 a D-52)
 
 | ID | Área | Decisión vigente | Cómo se verifica |
 |---|---|---|---|
@@ -212,6 +212,7 @@ escritas. Cada decisión dice de qué duda viene.
 | D-49 | Reporte "propio" del Proveedor (resuelve P-06) | Un reporte es propio del Proveedor cuando su `usuarioId` es el del Proveedor (quien lo generó). Sus archivos heredan ese dueño (`propietarioId`). Cualquier otro reporte, o un archivo de otro reporte, le responde **404**, no 403. Hoy solo el Gerente genera reportes, así que en la práctica el Proveedor no tiene propios; la regla no amplía su acceso. | Proveedor con reporte ajeno → 404 en reporte, archivos y URL firmada; con uno sembrado a su nombre → 200 (`test/archivos.spec.ts`). |
 | D-50 | Vigencia de los enlaces de descarga | La URL firmada de un archivo privado (reportes, y lotes de ingesta con el mismo contrato) vale **300 s por defecto** y como máximo **900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`; un valor inválido vuelve al defecto). Se emite después de autorizar y no se guarda ni se escribe en logs; se pide otra en cada descarga. | Enlace con TTL 1 s, usado a los 2 s → 404; TTL 99999 → 900 (`almacen.spec.ts`, `archivos.spec.ts`). |
 | D-51 | Periodo por defecto de la alerta de precio (resuelve P-05) | Mientras el Responsable de precios no configure la alerta (D-09), se usan **5 % en una ventana de 30 días** (default de `config_alertas_precio`). El Responsable puede cambiar la ventana entre 1 y 365 días. | Sin configuración: cambio acumulado ≥ 5 % en 30 días → alerta (`price-alerts.service.spec.ts`). |
+| D-52 | Lectura de visitas de campo (D-30) | Las visitas de campo (ubicación GPS y respuestas de encuesta) las **leen el Analista comercial, el Administrador y el Auditor**. El Investigador de mercado solo las da de alta (D-28) y no las lee; el resto de los perfiles no tiene acceso. Se exponen como datos de la visita a una tienda (zona agregada), nunca como seguimiento de una persona. Aprobado por el Product Owner el 26-nov-2026. | Analista → 200; Investigador, Gerente o Proveedor → 403; visita inexistente → 404. |
 
 ## 5. Flujos con estado
 

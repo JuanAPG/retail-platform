@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Connection, Model } from 'mongoose';
@@ -8,6 +8,8 @@ import { SesionUsuario } from '../common/auth/session.guard';
 import { correlacionActual } from '../common/correlation/correlacion';
 import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 import { CreateFieldVisitDto } from './dto/create-field-visit.dto';
+import { FieldVisitFilterDto } from './dto/field-visit-filter.dto';
+import { LIMITE_DEFAULT, LIMITE_MAXIMO, PAGINA_DEFAULT, Pagina } from '../common/dto/pagination.dto';
 import { VisitaCampo, VisitaCampoDocument } from './visita-campo.schema';
 
 /** Forma pública de una visita (JSON y XML `fieldVisitResponse`). */
@@ -98,6 +100,44 @@ export class FieldVisitsService {
   }
 
   /** El mismo id de otro usuario es 409 y NO revela la visita ajena. */
+  /** D-52: lista paginada, la más reciente primero, por tienda, zona y fecha de visita (UTC). */
+  async listar(filtros: FieldVisitFilterDto): Promise<Pagina<FieldVisitDto>> {
+    await this.exigirMongo();
+    if (filtros.dateFrom && filtros.dateTo && filtros.dateFrom > filtros.dateTo) {
+      throw new BadRequestException('dateFrom no puede ser posterior a dateTo');
+    }
+    const page = filtros.page ?? PAGINA_DEFAULT;
+    const limit = Math.min(filtros.limit ?? LIMITE_DEFAULT, LIMITE_MAXIMO);
+    const criterio: Record<string, unknown> = {};
+    if (filtros.storeId) criterio.tiendaId = filtros.storeId;
+    if (filtros.zoneId) criterio.zonaId = filtros.zoneId;
+    if (filtros.dateFrom || filtros.dateTo) {
+      criterio.visitadaEn = {
+        ...(filtros.dateFrom ? { $gte: new Date(`${filtros.dateFrom}T00:00:00.000Z`) } : {}),
+        ...(filtros.dateTo ? { $lte: new Date(`${filtros.dateTo}T23:59:59.999Z`) } : {}),
+      };
+    }
+    const [docs, total] = await Promise.all([
+      this.modelo.find(criterio).sort({ visitadaEn: -1, _id: 1 }).skip((page - 1) * limit).limit(limit),
+      this.modelo.countDocuments(criterio),
+    ]);
+    return { data: docs.map((d) => this.aDto(d)), total, page, limit };
+  }
+
+  /** D-52: una visita por su id; inexistente → 404. */
+  async obtener(visitId: string): Promise<FieldVisitDto> {
+    await this.exigirMongo();
+    const doc = await this.modelo.findById(visitId);
+    if (!doc) throw new NotFoundException('La visita no existe.');
+    return this.aDto(doc);
+  }
+
+  private async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.mongo))) {
+      throw new ServiceUnavailableException('Las visitas de campo (MongoDB) no están disponibles. Intenta más tarde.');
+    }
+  }
+
   private revisarDueno(doc: VisitaCampoDocument, usuario: SesionUsuario): FieldVisitDto {
     if (doc.capturadoPor !== usuario.id) {
       throw new ConflictException('Ese visitId ya se usó en otra captura. Genera uno nuevo en el dispositivo.');

@@ -734,8 +734,20 @@ Ubicación GPS de la visita y respuestas de encuesta capturadas en la app móvil
 | Método | Ruta | Roles |
 |---|---|---|
 | POST | `/v1/field-visits` | **Investigador de mercado** (D-28: alta de ubicación de la visita y respuestas de encuesta) |
+| GET | `/v1/field-visits` | Analista comercial, Administrador, Auditor (**D-52**) |
+| GET | `/v1/field-visits/:visitId` | Analista comercial, Administrador, Auditor (**D-52**) |
 
-No hay lectura todavía: ningún documento dice quién lee las visitas (hallazgo de especificación).
+### GET /v1/field-visits (D-52)
+
+Paginado (`paginacion.md`), la más reciente primero. Filtros opcionales: `storeId`, `zoneId` (UUID),
+`dateFrom`, `dateTo` (`YYYY-MM-DD`, sobre `visitedAt`, UTC; `dateFrom > dateTo` → `400`).
+Response `200`: `{ data: [FieldVisit], total, page, limit }`, XML `fieldVisitListResponse`.
+No hay filtro por quién capturó: las visitas se consultan por tienda y zona, no por persona.
+
+### GET /v1/field-visits/:visitId (D-52)
+
+Response `200`: `fieldVisitResponse`. Inexistente → `404`. `visitId` no UUID → `400`.
+
 
 ### POST /v1/field-visits
 
