@@ -99,6 +99,7 @@ export class HttpErrorFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
           service: process.env.SERVICE_NAME ?? 'unknown-service',
           requestId: request.headers['x-request-id'] ?? null,
+          correlationId: request.headers['x-correlation-id'] ?? null,
           method: request.method,
           path: request.url,
           statusCode: status,

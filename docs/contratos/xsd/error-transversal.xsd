@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Incluido en el namespace de cada servicio. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:complexType name="standardError">
+    <xs:sequence>
+      <xs:element name="statusCode" type="xs:integer"/>
+      <xs:element name="message" type="xs:string"/>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="details" minOccurs="0"><xs:complexType><xs:sequence><xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType></xs:element>
+      <xs:element name="path" type="xs:string"/>
+      <xs:element name="timestamp" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="error" type="standardError"/>
+</xs:schema>

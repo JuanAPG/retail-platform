@@ -59,6 +59,7 @@ export class XmlInterceptor implements NestInterceptor {
         response.setHeader('Content-Type', CONTENT_TYPE_XML);
         return serializarXml(data, {
           raiz: meta?.elemento,
+          namespace: meta?.namespace,
           siemprePresentes: meta?.siemprePresentes,
         });
       }),

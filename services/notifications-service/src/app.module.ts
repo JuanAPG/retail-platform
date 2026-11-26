@@ -11,6 +11,7 @@ import { crearMiddlewareCuerpoXml } from './common/middleware/xml-body.middlewar
 import { MongooseModule } from '@nestjs/mongoose';
 import { NOTIFICATIONS_REPOSITORY } from './notifications/notifications.repository';
 import { MongoNotificationsRepository } from './notifications/mongo.repository';
+import { NotificationPreference, NotificationPreferenceSchema } from './notifications/schemas/preference.schema';
 import { NotificacionMongo, NotificacionSchema } from './notifications/schemas/notification.schema';
 
 /**
@@ -31,7 +32,10 @@ import { NotificacionMongo, NotificacionSchema } from './notifications/schemas/n
       serverSelectionTimeoutMS: 2000,
       bufferCommands: false,
     }),
-    MongooseModule.forFeature([{ name: NotificacionMongo.name, schema: NotificacionSchema }]),
+    MongooseModule.forFeature([
+      { name: NotificacionMongo.name, schema: NotificacionSchema },
+      { name: NotificationPreference.name, schema: NotificationPreferenceSchema },
+    ]),
   ],
   controllers: [HealthController, NotificationsController],
   providers: [
@@ -51,5 +55,8 @@ export class AppModule implements NestModule {
     consumer
       .apply(crearMiddlewareCuerpoXml('notificacionRequest'))
       .forRoutes({ path: 'notifications', method: RequestMethod.POST });
+    consumer
+      .apply(crearMiddlewareCuerpoXml('notificationPreferences'))
+      .forRoutes({ path: 'notifications/preferences', method: RequestMethod.PUT });
   }
 }

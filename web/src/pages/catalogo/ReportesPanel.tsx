@@ -4,7 +4,6 @@ import { useFetch } from '../../hooks/useFetch';
 import { mensajeDeError } from '../../api/errores';
 import { getZonas } from '../../api/catalogo';
 import {
-  exportarReporte,
   generarReporteEjecutivo,
   getReporte,
   getEstadisticasReportes,
@@ -22,6 +21,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { listaSegura } from '../../api/seguro';
+import { ArchivosReporte } from './ArchivosReporte';
 
 const GERENTE = 'Gerente de categoría';
 
@@ -68,23 +68,8 @@ function DetalleValor({ valor }: { valor: unknown }) {
 }
 
 function DetalleReporte({ reporte, alExportado }: { reporte: Reporte; alExportado: () => void }) {
-  const [exportando, setExportando] = useState<'pdf' | 'xlsx' | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const secciones = listaSegura<IndicadorReporte>(reporte.secciones);
   const noDisponibles = secciones.filter((s) => !s.disponible).length;
-
-  async function exportar(formato: 'pdf' | 'xlsx') {
-    setError(null);
-    setExportando(formato);
-    try {
-      await exportarReporte(reporte.id, formato, reporte.creadoEn);
-      alExportado();
-    } catch (err) {
-      setError(mensajeDeError(err, 'No se pudo exportar el reporte.'));
-    } finally {
-      setExportando(null);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -116,15 +101,7 @@ function DetalleReporte({ reporte, alExportado }: { reporte: Reporte; alExportad
         ))}
       </div>
 
-      {error && <ErrorText>{error}</ErrorText>}
-      <div className="flex flex-wrap gap-3">
-        <CtaButton onClick={() => exportar('pdf')} disabled={exportando !== null}>
-          {exportando === 'pdf' ? 'Generando PDF…' : 'Descargar PDF'}
-        </CtaButton>
-        <CtaButton onClick={() => exportar('xlsx')} disabled={exportando !== null}>
-          {exportando === 'xlsx' ? 'Generando Excel…' : 'Descargar Excel'}
-        </CtaButton>
-      </div>
+      <ArchivosReporte reporteId={reporte.id} creadoEn={reporte.creadoEn} alDescargar={alExportado} />
     </div>
   );
 }

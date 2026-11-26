@@ -12,7 +12,7 @@
       <xs:sequence>
         <xs:element name="tabla" type="xs:string"/>
         <xs:element name="registroId" type="xs:string" minOccurs="0"/>
-        <xs:element name="servicio" type="xs:string"/>
+        <xs:element name="servicio" type="audit:servicio"/>
         <xs:element name="accion" type="audit:accion"/>
         <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
         <xs:element name="cambios" minOccurs="0">
@@ -23,6 +23,46 @@
           </xs:complexType>
         </xs:element>
         <xs:element name="ip" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="servicio">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="auth-service"/>
+      <xs:enumeration value="catalog-service"/>
+      <xs:enumeration value="pricing-service"/>
+      <xs:enumeration value="core-process-service"/>
+      <xs:enumeration value="algorithms-core"/>
+      <xs:enumeration value="analytics-stats"/>
+      <xs:enumeration value="decision-service"/>
+      <xs:enumeration value="documents-service"/>
+      <xs:enumeration value="notifications-service"/>
+      <xs:enumeration value="audit-service"/>
+      <xs:enumeration value="transactions-ingestion-service"/>
+      <xs:enumeration value="income-segmentation-service"/>
+      <xs:enumeration value="basket-analysis-service"/>
+      <xs:enumeration value="availability-service"/>
+      <xs:enumeration value="promotion-service"/>
+      <xs:enumeration value="demand-forecast-service"/>
+      <xs:enumeration value="recommendations-workflow-service"/>
+      <xs:enumeration value="offline-sync-service"/>
+      <xs:enumeration value="data-governance-service"/>
+      <xs:enumeration value="monitoring-service"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="correlationId">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Za-z0-9._:\-]{1,100}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="auditIntegrityResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="integra" type="xs:boolean"/>
+        <xs:element name="primerIdAlterado" type="xs:positiveInteger" minOccurs="0"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>
@@ -94,11 +134,12 @@
       <xs:element name="rolId" type="xs:integer" minOccurs="0"/>
       <xs:element name="tablaAfectada" type="xs:string"/>
       <xs:element name="registroId" type="xs:string" minOccurs="0"/>
-      <xs:element name="servicio" type="xs:string"/>
+      <xs:element name="servicio" type="audit:servicio"/>
       <xs:element name="accion" type="audit:accion"/>
       <xs:element name="descripcion" type="xs:string" minOccurs="0"/>
       <xs:element name="direccionIp" type="xs:string" minOccurs="0"/>
       <xs:element name="fecha" type="xs:dateTime"/>
+      <xs:element name="correlationId" type="audit:correlationId" minOccurs="0"/>
       <xs:element name="cambios" minOccurs="0">
         <xs:complexType>
           <xs:sequence>

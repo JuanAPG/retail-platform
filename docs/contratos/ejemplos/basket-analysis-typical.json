@@ -1,0 +1,113 @@
+{
+  "group": {
+    "zone": {
+      "id": "97925ca4-3845-4e68-9660-46f781957b8c",
+      "name": "Zona Centro"
+    },
+    "segment": {
+      "id": 2,
+      "code": "ING_2",
+      "name": "Ingreso medio",
+      "versions": [
+        1
+      ]
+    }
+  },
+  "period": {
+    "dateFrom": "2026-10-01",
+    "dateTo": "2026-10-31"
+  },
+  "asOf": "2026-11-25T18:20:00.000000+00:00",
+  "threshold": 0.2,
+  "publicationRule": "ambos",
+  "minTransactions": 10,
+  "minStores": 3,
+  "coverage": {
+    "baskets": 100,
+    "stores": 4
+  },
+  "disponible": true,
+  "motivo": null,
+  "summary": {
+    "baskets": 100,
+    "totalSpend": 10983.5,
+    "averageTicket": 109.83,
+    "productsPerBasket": 2.3,
+    "basketsPerWeek": 22.58064516129032
+  },
+  "products": [
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01",
+      "productName": "Leche entera",
+      "categoryId": 2,
+      "categoryName": "Lácteos",
+      "basketsWithProduct": 62,
+      "frequency": 0.62,
+      "averageSpend": 57.0,
+      "typical": true
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c02",
+      "productName": "Tortilla de maíz",
+      "categoryId": 5,
+      "categoryName": "Tortillería",
+      "basketsWithProduct": 55,
+      "frequency": 0.55,
+      "averageSpend": 23.0,
+      "typical": true
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c03",
+      "productName": "Frijol negro",
+      "categoryId": 1,
+      "categoryName": "Abarrotes",
+      "basketsWithProduct": 41,
+      "frequency": 0.41,
+      "averageSpend": 42.5,
+      "typical": true
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c04",
+      "productName": "Huevo blanco",
+      "categoryId": 4,
+      "categoryName": "Huevo",
+      "basketsWithProduct": 33,
+      "frequency": 0.33,
+      "averageSpend": 48.0,
+      "typical": true
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c05",
+      "productName": "Queso panela",
+      "categoryId": 2,
+      "categoryName": "Lácteos",
+      "basketsWithProduct": 20,
+      "frequency": 0.2,
+      "averageSpend": 55.5,
+      "typical": true
+    },
+    {
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c06",
+      "productName": "Quinoa orgánica",
+      "categoryId": 1,
+      "categoryName": "Abarrotes",
+      "basketsWithProduct": 19,
+      "frequency": 0.19,
+      "averageSpend": 92.0,
+      "typical": false
+    }
+  ],
+  "typicalSize": 5,
+  "dataVersion": {
+    "sha256": "6709f6904ec90a31513dae7bbb9501eb5cc936dcb91b041df9b5de177d39c69b",
+    "source": "core-process-service",
+    "asOf": "2026-11-25T18:20:00.000000+00:00"
+  },
+  "assumptions": [
+    "Grupo = zona + segmento congelado en cada canasta al construirla (RN-02).",
+    "Un producto cuenta una vez por canasta aunque lleve varias presentaciones.",
+    "Canasta típica: productos en al menos el 20 % de las canastas del grupo (D-37).",
+    "Gasto promedio: lo gastado en el producto entre las canastas que lo llevan (MXN).",
+    "Describe al grupo agregado, nunca a una persona."
+  ]
+}

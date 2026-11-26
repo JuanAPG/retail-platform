@@ -9,21 +9,21 @@ import { LIMITE_DEFAULT, PAGINA_DEFAULT } from '../dto/pagination.dto';
  * exactamente lo que el servicio emite con `Accept: application/xml`, sin
  * escribir ni mantener XML a mano.
  */
-export function ejemploXml(ejemplo: unknown): string {
-  return serializarXml(ejemplo);
+export function ejemploXml(ejemplo: unknown, raiz?: string): string {
+  return serializarXml(ejemplo, { raiz });
 }
 
 /**
  * Documenta una respuesta exitosa con ejemplo en JSON **y** en XML
  * (gate del PR). Uso: `@ApiRespuesta(200, 'Ticket promedio.', 152.4)`.
  */
-export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown) {
+export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown, raiz?: string) {
   return ApiResponse({
     status,
     description: descripcion,
     content: {
       'application/json': { example: ejemplo },
-      'application/xml': { example: ejemploXml(ejemplo) },
+      'application/xml': { example: ejemploXml(ejemplo, raiz) },
     },
   });
 }

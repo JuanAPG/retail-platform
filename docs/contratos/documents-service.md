@@ -20,6 +20,10 @@ de servicio de Docker).
 | GET | `/v1/reports/:id` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | GET | `/v1/reports/:id/export?format=pdf\|xlsx\|csv` | Los 6 perfiles internos; Proveedor (solo los suyos) |
 | PATCH | `/v1/reports/:id` | Gerente de categoría |
+| POST | `/v1/reports/:id/files` **(nueva)** | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| GET | `/v1/reports/:id/files` **(nueva)** | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| GET | `/v1/reports/:id/files/:fileId` **(nueva)** | Los 6 perfiles internos; Proveedor (solo los suyos) |
+| POST | `/v1/reports/:id/files/:fileId/download-url` **(nueva)** | Los 6 perfiles internos; Proveedor (solo los suyos) |
 
 **Aislamiento del Proveedor (DOC-04):** en el listado y la agregación se filtra por su
 `usuarioId` (ignora `?usuarioId=`); pedir el reporte de otro es `404`, no `403`.
@@ -110,7 +114,18 @@ token); el formato va en la descripción: `Reporte ejecutivo exportado a CSV (fo
     (`clave: valor · clave: valor | …`), para que siga siendo una fila por indicador.
   - Un texto que empieza con `=`, `+`, `-` o `@` se antepone con `'` para que la hoja no lo ejecute como fórmula.
 
+## Archivos privados (Parcial 3)
+
+El reporte guardado se convierte en un **archivo privado** en GCS (o en el doble local) con un
+registro propio y se descarga con una **URL firmada de vida corta** emitida después de autorizar.
+Contrato completo, estados, ejemplos JSON/XML, variables y permisos de GCP:
+[`registro-archivos.md`](registro-archivos.md). XML: `fileResponse`, `fileListResponse`,
+`downloadUrlResponse`. `GET /v1/reports/:id/export` sigue funcionando igual (compatibilidad).
+
 ## MongoDB
+
+Colección `archivos` (registro de archivo, ver `registro-archivos.md`): índice único
+`{ dominio, recursoTipo, recursoId, formato }` y `{ propietarioId, creadoEn: -1 }`.
 
 Colección `reportes`: `{ _id, tipo, parametros, formato, usuarioId, estado, creadoEn, secciones }`.
 Índices: `{ usuarioId: 1, creadoEn: -1 }` y `{ tipo: 1, creadoEn: -1 }`.
@@ -118,7 +133,10 @@ Colección `reportes`: `{ _id, tipo, parametros, formato, usuarioId, estado, cre
 ## Auditoría
 
 Se reportan a audit-service (sin romper la operación si está caído): la generación
-(`insert` sobre `reportes`) y la exportación (`exportar`).
+(`insert` sobre `reportes`), la exportación (`exportar`), el archivo guardado (`insert` sobre
+`archivos`) y cada URL firmada emitida (`exportar` sobre `archivos`, sin la URL). Avisos:
+`reporte.disponible` a quien pidió el archivo, una sola vez (propuesta para T-20). Las llamadas
+llevan el `X-Correlation-Id` de la operación (T-02).
 
 ## Códigos de error
 
@@ -128,4 +146,5 @@ Se reportan a audit-service (sin romper la operación si está caído): la gener
 | 401 | Sin token, token revocado o sin sesión en Redis |
 | 403 | Rol sin permiso sobre la ruta |
 | 404 | Reporte inexistente o de otro usuario (Proveedor) |
-| 503 | MongoDB no disponible |
+| 409 | URL pedida para un archivo que no está `disponible` (o cuyo objeto ya no existe) |
+| 503 | MongoDB o el almacén de archivos no disponible (el archivo queda `fallido` y se reintenta con la misma petición) |

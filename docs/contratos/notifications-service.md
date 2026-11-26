@@ -188,3 +188,33 @@ Raíz por endpoint, declarada con `@XmlRoot` en el controller:
 `eventType` es un `xs:enumeration` cerrado con los 12 eventos de la tabla
 de permisos de arriba. Un `eventType` fuera de él responde `400`
 (`VALIDATION_ERROR`), igual en JSON y en XML (raíz `error`).
+
+## Preferencias y eventos D-46
+
+`GET /v1/notifications/preferences` devuelve la preferencia del usuario
+de la sesión. `PUT /v1/notifications/preferences` la reemplaza con
+`{"informational":false}` o su equivalente XML.
+
+```xml
+<notificationPreferences xmlns="notif/v1"><informational>false</informational></notificationPreferences>
+```
+
+Ambas rutas devuelven 200 con la preferencia guardada. La cuenta viene
+del JWT y la sesión de Redis. El valor por defecto es `true`.
+Con `false` los avisos `info` se ocultan de la lista, detalle, marcado y
+contador. Se conservan en la colección de notificaciones y vuelven a
+verse al activar la preferencia. Alertas `warning` y `critical` y eventos
+de aprobación pendiente siguen visibles con cualquier preferencia.
+Las preferencias se guardan por UUID en `notificaciones_preferencias`.
+
+| Evento | Emisor | Rol que origina | Destino |
+|---|---|---|---|
+| `reporte.generado` | documents-service | Gerente de categoría | Usuario que generó el reporte |
+| `tarea.asignada` | recommendations-workflow-service | Gerente de categoría | Usuario asignado |
+| `ingesta.confirmada` | transactions-ingestion-service | Analista comercial | Usuario que confirmó el lote |
+
+Para estos eventos se verifica `sourceService` y el rol del actor. Los
+productores deben conectar y verificar el envío con el responsable del
+servicio. El destinatario de `tarea.asignada` se toma de la asignación
+validada por el servicio emisor. Las notificaciones guardan
+`correlationId` con el ID de la operación y lo reenvían a audit-service.

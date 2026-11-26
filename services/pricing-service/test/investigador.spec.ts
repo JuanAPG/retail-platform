@@ -13,6 +13,7 @@
  * servicio no está arriba, el caso se salta en vez de dar un falso rojo.
  */
 import Redis from 'ioredis';
+import { randomUUID } from 'crypto';
 import { sign } from 'jsonwebtoken';
 import { Client } from 'pg';
 import { crearPresentaciones, PresentacionPropia } from './fixtures';
@@ -161,6 +162,29 @@ describe('Investigador de mercado en pricing-service (integración, requiere sta
     const porCampo = Object.fromEntries(rows.map((r) => [r.campo, r.valor_posterior]));
     expect(porCampo.origen).toBe('observado_en_campo');
     expect(porCampo.capturado_por).toBe(investigadorId);
+  });
+
+  // ------------------------------------------------- D-42: reenvío de offline-sync
+  it('reenvío con el mismo observationId: 200 con la original, sin duplicar; otro usuario con ese id → 409', async () => {
+    const { presentacion_id, tienda_id } = propias[0];
+    const observationId = randomUUID();
+    const cuerpo = { observationId, presentationId: presentacion_id, storeId: tienda_id, price: 29.9, observedAt: '2026-10-21T10:00:00Z' };
+
+    const primera = await http('POST', '/v1/price-observations', investigador, cuerpo);
+    expect(primera.estado).toBe(201);
+    // Simultáneos y repetidos: ninguno crea otra fila.
+    const reenvios = await Promise.all([1, 2, 3].map(() => http('POST', '/v1/price-observations', investigador, cuerpo)));
+    expect(reenvios.map((r) => r.estado)).toEqual([200, 200, 200]);
+    expect(new Set(reenvios.map((r) => r.cuerpo.id))).toEqual(new Set([primera.cuerpo.id]));
+    const { rows } = await db.query('SELECT count(*)::int AS n FROM precios_observados WHERE observacion_id = $1', [observationId]);
+    expect(rows[0].n).toBe(1);
+
+    // El Responsable de precios también captura (CAPTURAN_OBSERVACIONES): con el id ajeno, 409 sin revelar nada.
+    const ajeno = await http('POST', '/v1/price-observations', precios, cuerpo);
+    expect(ajeno.estado).toBe(409);
+    expect(JSON.stringify(ajeno.cuerpo)).not.toContain(primera.cuerpo.id);
+    // Un id mal formado es 400.
+    expect((await http('POST', '/v1/price-observations', investigador, { ...cuerpo, observationId: 'no-uuid' })).estado).toBe(400);
   });
 
   // ----------------------------------------------------------------- 403

@@ -40,6 +40,9 @@ export class NotificacionMongo {
   @Prop({ required: true, enum: ['info', 'warning', 'critical'] })
   priority!: Priority;
 
+  @Prop({ type: String, default: null })
+  correlationId!: string | null;
+
   @Prop({ type: [{ _id: false, userId: String, readAt: Date }], default: [] })
   readBy!: ReadMark[];
 

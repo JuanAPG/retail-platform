@@ -23,6 +23,9 @@ export function getRedis(): Redis {
     client = new Redis({
       host: process.env.REDIS_HOST ?? 'localhost',
       port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+      // Local sin auth a propósito; en GCP (Memorystore con AUTH/TLS) llegan por secreto, nunca en el código.
+      password: process.env.REDIS_PASSWORD || undefined,
+      tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       // Tope por comando: si Redis acepta la conexión pero no responde,

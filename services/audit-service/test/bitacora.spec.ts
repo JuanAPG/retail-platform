@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Integración POST → GET (corre en la VM con Docker).
  *
@@ -24,11 +25,12 @@ const BASE = process.env.AUDIT_BASE_URL ?? 'http://localhost:3110';
 const TOKEN = process.env.AUDIT_TOKEN ?? '';
 const TOKEN_PROVEEDOR = process.env.AUDIT_TOKEN_PROVEEDOR;
 
-async function postEvento(cuerpo: object, token?: string) {
+async function postEvento(cuerpo: object, token?: string, correlationId?: string) {
   const respuesta = await fetch(`${BASE}/v1/auditoria`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(correlationId ? { 'X-Correlation-Id': correlationId } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(cuerpo),
@@ -79,6 +81,30 @@ describe('bitácora de punta a punta (integración, requiere stack)', () => {
     expect(bitacora.cuerpo.data[0]).toMatchObject({ tablaAfectada: 'prueba', servicio: 'audit-service' });
     // El actor es el del token, no uno inventado por el cliente.
     expect(bitacora.cuerpo.data[0].usuarioId).toBeDefined();
+  });
+
+  it('encadena escrituras concurrentes y reúne emisores por su correlación', async () => {
+    const correlationId = randomUUID();
+    const emisores = ['income-segmentation-service', 'availability-service'];
+    const resultados = await Promise.all(emisores.map((servicio) => postEvento({
+      tabla: 'prueba',
+      servicio,
+      accion: 'update',
+      cambios: [{ campo: 'estado', previo: 'anterior', posterior: 'nuevo' }],
+    }, TOKEN, correlationId)));
+    expect(resultados.map((resultado) => resultado.estado)).toEqual([201, 201]);
+
+    const consulta = await getBitacora(`?correlationId=${correlationId}`);
+    expect(consulta.estado).toBe(200);
+    expect(consulta.cuerpo.total).toBe(2);
+    expect(consulta.cuerpo.data.map((evento: { servicio: string }) => evento.servicio).sort()).toEqual(emisores.sort());
+    const integridad = await getBitacora('/integridad');
+    expect(integridad.estado).toBe(200);
+    expect(integridad.cuerpo).toEqual({ integra: true, primerIdAlterado: null });
+
+    const xml = await getXml('/v1/auditoria/integridad');
+    expect(xml.estado).toBe(200);
+    esperarXmlValido(xml.texto, 'auditIntegrityResponse');
   });
 
   it('sin token el POST es 401: no existe forma de registrar un evento sin sesión', async () => {

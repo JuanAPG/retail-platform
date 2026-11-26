@@ -1,3 +1,4 @@
+import { conCorrelacion } from '../correlation/correlacion';
 import {
   ForbiddenException,
   HttpException,
@@ -112,13 +113,13 @@ export class CatalogClient {
       const limite = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
         respuesta = await fetch(url, {
-          headers: {
+          headers: conCorrelacion({
             // El catálogo negocia JSON/XML: se pide JSON explícitamente.
             Accept: 'application/json',
             ...(token
               ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` }
               : {}),
-          },
+          }),
           signal: controller.signal,
         });
       } finally {

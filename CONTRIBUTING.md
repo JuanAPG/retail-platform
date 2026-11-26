@@ -12,16 +12,9 @@ Si eres un agente trabajando para un integrante, haz esto antes de escribir cód
 1. Lee `CLAUDE.md` y los documentos de negocio que lista, en su orden de precedencia.
    Las decisiones D-33 a D-47 (§4.2 de la Matriz, "Sprint 4") **ganan** sobre lo que
    digan los READMEs o el código actual.
-2. Averigua para quién trabajas: `git config user.name` y `git config user.email`. Busca
-   su nombre en la tabla **"Qué le toca a cada quien"** de abajo. Trabaja **solo** en sus
-   tareas y en sus carpetas; si algo necesita un servicio de otro, pídelo, no lo escribas.
-3. Respeta el orden: **contrato antes que código.** Ningún servicio nuevo se programa sin
-   su `docs/contratos/<servicio>.md` + `.xsd` revisados (límite 23-oct) y sin su fila de
-   permisos completa en la Matriz §3.2.
-4. Lo marcado **PENDIENTE** (P-xx, PR-xx y las celdas "Pendiente" de §3.2) **no se
-   implementa**. Repórtalo como hallazgo de especificación y sigue con lo demás. Hoy
-   afecta a este sprint **P-11** (cómo se combinan los dos umbrales de D-36). El rol de
-   la app móvil y los del escritorio ya están decididos (D-28 y D-31).
+2. Trabaja en el dominio asignado y consulta la última versión de `main` y los PR del frente antes de editar. Reutiliza contratos y adaptadores existentes. Si necesitas tocar otro dominio, limita el cambio a la interfaz indispensable, conserva los consumidores actuales y señala el cambio al responsable en el PR. Continúa las tareas independientes.
+3. Define el contrato Markdown, su XSD y los permisos antes de implementar un servicio nuevo. Puedes entregar contrato, decisión e implementación en el mismo PR. Usa ejemplos de entrada, salida y error para que el consumidor avance en paralelo.
+4. Si surge una duda o encuentras un P-xx o PR-xx abierto, el agente responsable del dominio decide y continúa. Aplica primero la Matriz vigente. Entre las opciones compatibles elige la más sencilla y reversible que complete el flujo y respete permisos y datos. Registra la regla, su motivo y un caso de frontera en el contrato o la Matriz, y compruébalo con una prueba. Para un conflicto de commits, incorpora los cambios recientes en tu rama, conserva la intención de ambos y verifica a los consumidores afectados. Escala únicamente la parte que implique pérdida irreversible de datos, ampliar acceso sensible o elegir entre requisitos vigentes incompatibles. La revisión del PR ocurre antes de integrar a `main`.
 5. Los servicios nuevos parten de la plantilla actualizada por **T-02** (22-oct): id de
    correlación `X-Correlation-Id` y `GET /v1/health` con el estado de Postgres, Mongo y
    Redis. No copies un servicio existente como base.
@@ -30,7 +23,7 @@ Si eres un agente trabajando para un integrante, haz esto antes de escribir cód
 
 ## Qué le toca a cada quien (Sprint 4)
 
-Fechas = límite de la tarea en el tablero. "Depende de" = no empieces antes.
+Fechas = límite de la tarea en el tablero. Las dependencias indican qué debe estar integrado para validar el flujo. Avanza con el contrato y sus ejemplos mientras llega el proveedor.
 
 ### Juan Angel Galván Navarro (Product Owner)
 
@@ -299,9 +292,9 @@ git config user.name && git config user.email
 ### Al revisar el PR de alguien más
 
 - Descarga la rama y córrela, no solo leas el diff
-- Revisa que no haya tocado carpetas de otros frentes ni inventado su propio formato de
-  error, versionado, health o correlación
-- Revisa que aplique las decisiones que cita y no implemente nada PENDIENTE
+- Comprueba que los cambios entre frentes sean mínimos, compatibles y usen el formato común de
+  error, versionado, health y correlación
+- Revisa las decisiones vigentes y el caso de prueba de cada duda resuelta en el PR
 - Si agregó tablas, que sean solo las suyas y estén en `db/schema.sql`
 - Comenta lo que veas raro; aprobar sin leer no cuenta como participación
 

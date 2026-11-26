@@ -1,5 +1,5 @@
 /**
- * Los 10 microservicios de la plataforma, EXACTAMENTE como cada uno se
+ * Los microservicios de la plataforma, EXACTAMENTE como cada uno se
  * nombra a sí mismo: es el valor que su `AuditReporter` manda en
  * `servicio` (una constante hardcodeada por servicio) y el mismo
  * `SERVICE_NAME` que fija `infra/docker-compose.yml`.
@@ -23,6 +23,16 @@ export const SERVICIOS = [
   'documents-service',
   'notifications-service',
   'audit-service',
+  'transactions-ingestion-service',
+  'income-segmentation-service',
+  'basket-analysis-service',
+  'availability-service',
+  'promotion-service',
+  'demand-forecast-service',
+  'recommendations-workflow-service',
+  'offline-sync-service',
+  'data-governance-service',
+  'monitoring-service',
 ] as const;
 
 export type NombreServicio = (typeof SERVICIOS)[number];

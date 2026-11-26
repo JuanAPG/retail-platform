@@ -74,6 +74,9 @@ export class Auditoria {
   @CreateDateColumn({ name: 'fecha', type: 'timestamptz' })
   fecha: Date;
 
+  @Column({ name: 'correlation_id', type: 'varchar', length: 100, nullable: true })
+  correlationId: string | null;
+
   @OneToMany(() => AuditoriaCambio, (cambio) => cambio.auditoria)
   cambios: AuditoriaCambio[];
 }

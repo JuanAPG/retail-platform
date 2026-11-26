@@ -1,8 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { Connection } from 'mongoose';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import { getRedis } from '../common/auth/redis.client';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 
 /**
  * Salud del servicio — NO CAMBIAR su forma ni su ruta.
@@ -18,7 +21,11 @@ import { getRedis } from '../common/auth/redis.client';
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    // D-30: Mongo solo lo usan las visitas de campo; si cae, el resto del catálogo sigue.
+    @InjectConnection() private readonly mongo: Connection,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Salud del servicio y de sus dependencias.' })
@@ -29,14 +36,14 @@ export class HealthController {
         status: 'ok',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         version: '1.0.0',
-        checks: { postgres: 'ok', redis: 'ok' },
+        checks: { postgres: 'ok', redis: 'ok', mongodb: 'ok' },
         timestamp: '2026-10-03T12:00:00.000Z',
       },
     },
   })
   async check() {
     const [postgres, redis] = await Promise.all([this.verificarPostgres(), verificarRedis()]);
-    const checks = { postgres, redis };
+    const checks = { postgres, redis, mongodb: (await asegurarMongo(this.mongo)) ? 'ok' : 'error: sin conexión a MongoDB' };
     return {
       status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',
       service: process.env.SERVICE_NAME ?? 'unknown-service',

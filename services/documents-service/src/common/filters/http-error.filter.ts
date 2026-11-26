@@ -7,6 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { CABECERA_CORRELACION } from '../correlation/correlacion';
+import { sinSecretos } from '../interceptors/logging.interceptor';
 import {
   CONTENT_TYPE_XML,
   quiereXml,
@@ -99,8 +101,9 @@ export class HttpErrorFilter implements ExceptionFilter {
           timestamp: new Date().toISOString(),
           service: process.env.SERVICE_NAME ?? 'unknown-service',
           requestId: request.headers['x-request-id'] ?? null,
+          correlationId: request.headers[CABECERA_CORRELACION] ?? null,
           method: request.method,
-          path: request.url,
+          path: sinSecretos(request.url),
           statusCode: status,
           error: exception instanceof Error ? exception.message : String(exception),
         }),
@@ -113,7 +116,7 @@ export class HttpErrorFilter implements ExceptionFilter {
       message,
       code,
       details,
-      path: request.url,
+      path: sinSecretos(request.url),
       timestamp: new Date().toISOString(),
     };
 

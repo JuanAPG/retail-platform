@@ -128,7 +128,7 @@ export class RegistrarEventoDto {
 
   /** Nombre del microservicio emisor, p. ej. `pricing-service`. */
   @IsIn(SERVICIOS, {
-    message: `servicio debe ser uno de los 10 microservicios: ${SERVICIOS.join(', ')}.`,
+    message: `servicio debe ser uno de los microservicios permitidos: ${SERVICIOS.join(', ')}.`,
   })
   servicio: string;
 
