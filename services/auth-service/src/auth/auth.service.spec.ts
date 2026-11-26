@@ -40,6 +40,10 @@ describe('AuthService — a quién se le reenvía el Authorization al auditar', 
         return 1;
       }),
       exists: jest.fn(async () => 0),
+      eval: jest.fn(async (_script, _keys, _busy, _epoch, session, _issued, _version, _previous, value) => {
+        store.set(session, value);
+        return 1;
+      }),
     };
     (getRedis as jest.Mock).mockReturnValue(redis);
 

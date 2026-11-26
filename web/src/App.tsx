@@ -1,3 +1,4 @@
+import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -34,6 +35,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PantallaCargando />}>
     <Routes>
+      <Route path="/recuperar-contrasena" element={<PasswordRecoveryPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro-proveedor" element={<RegisterProveedorPage />} />
       <Route path="/no-autorizado" element={<NotAuthorizedPage />} />
