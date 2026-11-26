@@ -153,6 +153,21 @@ Request JSON:
 { "presentationId": "uuid-presentacion", "zoneId": "uuid-zona", "newPrice": 25.5 }
 ```
 
+Request XML (`Content-Type: application/xml` o `text/xml`), raíz
+`simulacionPrecioRequest` del XSD, en el namespace `decision/v1`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionPrecioRequest xmlns="decision/v1">
+  <presentationId>8f14e45f-ceea-467a-9f3b-1c2d3e4f5a6b</presentationId>
+  <zoneId>3c59dc04-8a1f-4d2e-b7c6-5e4f3a2b1c0d</zoneId>
+  <newPrice>25.50</newPrice>
+</simulacionPrecioRequest>
+```
+
+El XML se convierte al mismo objeto que el JSON y pasa por los mismos guards
+y la misma validación (ver "Cuerpo XML de entrada" al final de esta sección).
+
 Sin elasticidad previa para esa presentación/zona → 404 `NOT_FOUND` (no se
 inventa demanda). Sin precio vigente → 404. Response `201`:
 
@@ -183,6 +198,22 @@ Request JSON:
   "presentationIds": ["uuid-a", "uuid-b", "uuid-c"] }
 ```
 
+Request XML, raíz `simulacionPresentacionRequest` (la lista va como
+`<presentationIds><item>…</item></presentationIds>`):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionPresentacionRequest xmlns="decision/v1">
+  <productId>a87ff679-a2f3-471d-8c3e-9b8a7c6d5e4f</productId>
+  <zoneId>3c59dc04-8a1f-4d2e-b7c6-5e4f3a2b1c0d</zoneId>
+  <presentationIds>
+    <item>e4da3b7f-bbce-4345-9777-2b0674a318d5</item>
+    <item>1679091c-5a88-4faf-afb5-e6087eb1b2dc</item>
+    <item>8f14e45f-ceea-467a-9f3b-1c2d3e4f5a6c</item>
+  </presentationIds>
+</simulacionPresentacionRequest>
+```
+
 `zoneId` opcional: sin ella usa datos nacionales. `presentationIds` opcional:
 sin ella se comparan todas las presentaciones activas del producto.
 
@@ -194,6 +225,20 @@ sin ella se comparan todas las presentaciones activas del producto.
 | 404 | El producto o la zona no existen; menos de 3 de las presentaciones tienen precio vigente (las que no tienen se excluyen con aviso, nunca entran como 0) |
 
 Response `201`: `PresentationComparisonResult` con `type: "presentacion"`.
+
+### Cuerpo XML de entrada (`/price` y `/presentation`)
+
+Los dos POST de simulación aceptan `application/json` (igual que siempre) o
+`application/xml` / `text/xml`. La respuesta sigue el `Accept`, también en
+los errores. Orden de revisión: sesión (401) → rol (403) → cuerpo XML → DTO.
+La excepción es el 413: el tope se aplica mientras se lee el cuerpo, antes
+de revisar la sesión (igual que el tope del parser JSON).
+
+| Código | Cuándo (cuerpo XML) |
+|---|---|
+| 400 `VALIDATION_ERROR` | XML vacío o mal formado; trae `DOCTYPE` o `ENTITY`; la raíz no es la del XSD; la raíz no está en el namespace `decision/v1`; el contenido no cumple el DTO (mismo `details` que en JSON) |
+| 413 `VALIDATION_ERROR` | El cuerpo XML pasa de 1 MB |
+| 415 `VALIDATION_ERROR` | `Content-Type` que no es `application/json`, `application/xml` ni `text/xml`, o un `charset` distinto de UTF-8 |
 
 ## GET /v1/simulation/scenarios
 
