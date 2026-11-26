@@ -409,7 +409,7 @@ export class SyncService {
         message: `El servidor ya tiene un dato de esta tienda y presentación capturado el ${ultimo}, más reciente que esta captura. No se sobrescribió; la captura quedó guardada.`,
       };
     } else {
-      // Paso 3: el destino (hoy SIMULADO; el mapeo real está PENDIENTE).
+      // Paso 3: el destino (DestinoHttp o DestinoSimulado, según SYNC_DESTINO).
       respuesta = await this.destino.enviar(c, { token, correlationId, userId: usuario.id, client: lote.client });
     }
 

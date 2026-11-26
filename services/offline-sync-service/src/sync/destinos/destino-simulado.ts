@@ -5,18 +5,19 @@ import { CapturaEntrada, CodigoMotivo, Destino } from '../tipos';
 import { ContextoEnvio, DestinoCapturas, RespuestaDestino } from './destino';
 
 /**
- * Destino SIMULADO (en memoria). ⚠️ No envía nada a availability-service ni
- * a pricing-service: el mapeo real está PENDIENTE de acuerdo con Pamela
- * (contrato §6). Sirve para las pruebas y para la demo del flujo de
- * sincronización; lo que "acepta" se pierde al reiniciar el proceso.
+ * Destino SIMULADO (en memoria), con `SYNC_DESTINO=simulado`. ⚠️ No envía
+ * nada a availability-service ni a pricing-service: eso lo hace
+ * `DestinoHttp` (`SYNC_DESTINO=http`, el modo por defecto). Sirve para las
+ * pruebas unitarias y una demo sin destinos; lo que "acepta" se pierde al
+ * reiniciar el proceso.
  *
  * Imita lo que ya dicen los contratos de destino, sin inventar reglas:
  *  - `disponibilidad` (como availability-service): gana el dato capturado
  *    después; si ya tiene uno capturado igual o después → `conflicto`.
  *    El id de destino es el mismo `captureId`.
- *  - `precio_observado` (como pricing-service hoy): toda observación queda
+ *  - `precio_observado` (como pricing-service): toda observación queda
  *    registrada (pasa a aprobación, D-16) y recibe un id nuevo. NO decide
- *    conflictos: si D-42 aplica a precios es PENDIENTE.
+ *    conflictos: pricing no compara fechas.
  *  - Idempotente por `captureId` (lo que §6 exige a todo destino).
  *
  * Los métodos `sembrarDato`, `rechazarTienda`, `caer` y `latencia` son
