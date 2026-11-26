@@ -1,8 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Connection } from 'mongoose';
 import { getRedis } from '../common/auth/redis.client';
+import { ALMACEN_OBJETOS, AlmacenObjetos } from '../reports/archivos/almacen/almacen';
+
+/** El bucket no se consulta en cada health: una vez cada 30 s basta y no castiga al monitoreo (T-09). */
+const VIGENCIA_ALMACEN_MS = 30_000;
 
 /**
  * Salud del servicio — NO CAMBIAR su forma ni su ruta.
@@ -17,7 +21,19 @@ import { getRedis } from '../common/auth/redis.client';
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectConnection() private readonly mongo: Connection) {}
+  private almacenCache: { valor: string; en: number } | null = null;
+
+  constructor(
+    @InjectConnection() private readonly mongo: Connection,
+    @Inject(ALMACEN_OBJETOS) private readonly almacen: AlmacenObjetos,
+  ) {}
+
+  private async verificarAlmacen(): Promise<string> {
+    if (this.almacenCache && Date.now() - this.almacenCache.en < VIGENCIA_ALMACEN_MS) return this.almacenCache.valor;
+    const valor = await this.almacen.verificar();
+    this.almacenCache = { valor, en: Date.now() };
+    return valor;
+  }
 
   @Get()
   @ApiOperation({ summary: 'Salud del servicio y de sus dependencias.' })
@@ -28,18 +44,25 @@ export class HealthController {
         status: 'ok',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         version: '1.0.0',
-        checks: { redis: 'ok' },
+        checks: { redis: 'ok', mongodb: 'ok', almacen: 'ok' },
+        almacen: { tipo: 'gcs', bucket: 'retail-staging-reportes' },
         timestamp: '2026-10-03T12:00:00.000Z',
       },
     },
   })
   async check() {
-    const checks = { redis: await verificarRedis(), mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB' };
+    const checks = {
+      redis: await verificarRedis(),
+      mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB',
+      almacen: await this.verificarAlmacen(),
+    };
     return {
       status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',
       service: process.env.SERVICE_NAME ?? 'unknown-service',
       version: process.env.SERVICE_VERSION ?? '1.0.0',
       checks,
+      // Qué almacén y bucket usa (no es secreto; sin credenciales ni rutas físicas).
+      almacen: { tipo: this.almacen.tipo, bucket: this.almacen.bucket },
       timestamp: new Date().toISOString(),
     };
   }
