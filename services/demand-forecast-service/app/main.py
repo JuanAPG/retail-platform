@@ -76,11 +76,25 @@ def xml_root(ruta: str, elemento: str, siempre_presentes: tuple[str, ...] = ()) 
 def _raiz_de(ruta: str) -> tuple[str | None, tuple[str, ...]]:
     if ruta in XML_ROOTS:
         return XML_ROOTS[ruta]
-    # Coincidencia por prefijo para las rutas con parametros.
-    for patron, valor in XML_ROOTS.items():
-        if patron.endswith("*") and ruta.startswith(patron[:-1]):
-            return valor
+    # Rutas con parámetros: `*` es un segmento cualquiera. Gana el patrón más largo, para que
+    # `/v1/forecast/runs/*/replay` no quede tapado por `/v1/forecast/runs/*`.
+    from fnmatch import fnmatchcase
+    for patron in sorted((p for p in XML_ROOTS if "*" in p), key=len, reverse=True):
+        if fnmatchcase(ruta, patron) and ruta.count("/") == patron.count("/"):
+            return XML_ROOTS[patron]
     return None, ()
+
+
+def _rutas() -> None:
+    # Importado aquí: el router usa `xml_root`, que se define arriba.
+    from .forecast_api import RAICES_XML, router
+
+    app.include_router(router)
+    for ruta, raiz in RAICES_XML.items():
+        xml_root(ruta, raiz)
+
+
+_rutas()
 
 
 @app.get("/v1/health", summary="Salud del servicio y de sus dependencias, con lo que tardó cada una.")
