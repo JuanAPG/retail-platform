@@ -781,7 +781,7 @@ los análisis son por zona agregada, nunca por persona.
 |---|---|---|
 | `visitId` nuevo | `201` `fieldVisitResponse` | `aceptada` |
 | Mismo `visitId`, mismo usuario (aunque cambie el cuerpo) | `200` con la visita **original** | `duplicada` |
-| Mismo `visitId`, otro usuario | `409` (no revela la ajena) | `conflicto` |
+| Mismo `visitId`, otro usuario | `409` (no revela la ajena) | `rechazada` (generar otro id; D-42, ver contrato de pricing) |
 | Cuerpo inválido | `400` | `rechazada` |
 | MongoDB caído | `503` (D-25); el dispositivo la conserva y reintenta | reintentar |
 
