@@ -3,6 +3,7 @@ import { SetMetadata } from '@nestjs/common';
 export const XML_ROOT_KEY = 'xmlRoot';
 
 export interface XmlRootOpciones {
+  namespace?: string;
   /**
    * Elementos que deben salir SIEMPRE, incluso cuando su valor es nulo.
    *

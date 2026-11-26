@@ -12,6 +12,7 @@ function repoFalso() {
   let secuencia = 0;
 
   const manager = {
+    query: jest.fn(),
     create: jest.fn((_entidad: unknown, fila: object) => fila),
     save: jest.fn(async (fila: object | object[]) => {
       if (Array.isArray(fila)) {

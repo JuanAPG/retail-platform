@@ -1,4 +1,6 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { middlewareCorrelacion } from './common/correlation/correlacion';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -7,9 +9,12 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  const proxy = process.env.AUTH_TRUSTED_PROXY;
+  if (proxy) app.set('trust proxy', proxy);
+  app.use(middlewareCorrelacion);
+  app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'x-request-id', 'Retry-After'] });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });

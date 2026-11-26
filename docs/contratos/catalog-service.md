@@ -719,6 +719,67 @@ Presentation.
 
 ---
 
+## /v1/field-visits — Visitas de campo (D-30, RF-37, RF-38) **(nueva)**
+
+Ubicación GPS de la visita y respuestas de encuesta capturadas en la app móvil. Se guardan en
+**MongoDB**, colección `visitas_campo` (uso de Mongo registrado en D-30). Solo se anexan.
+
+| Método | Ruta | Roles |
+|---|---|---|
+| POST | `/v1/field-visits` | **Investigador de mercado** (D-28: alta de ubicación de la visita y respuestas de encuesta) |
+
+No hay lectura todavía: ningún documento dice quién lee las visitas (hallazgo de especificación).
+
+### POST /v1/field-visits
+
+```json
+{
+  "visitId": "7c1e2a90-3b4d-4f5e-8a6b-9c0d1e2f3a4b",
+  "storeId": "27f05c81-5d3b-4c8e-9a1f-2b3c4d5e6f70",
+  "visitedAt": "2026-11-20T16:05:00Z",
+  "lat": 25.6866, "lng": -100.3161, "accuracyM": 12,
+  "answers": [
+    { "preguntaId": "p-frescura", "pregunta": "¿Los perecederos se ven frescos?", "respuesta": "si" },
+    { "preguntaId": "p-cajas", "pregunta": "¿Cuántas cajas estaban abiertas?", "respuesta": 3 }
+  ],
+  "notes": "Anaquel de lácteos reorganizado."
+}
+```
+
+| Campo | Regla |
+|---|---|
+| `visitId` | **Obligatorio**, UUID v4 generado en el dispositivo (D-42). Es el `_id` del documento. |
+| `storeId` | Tienda existente y activa (`400` si no existe, `409` si está dada de baja). |
+| `visitedAt` | ISO 8601; no futura (5 min de margen por el reloj del teléfono). |
+| `lat` / `lng` | **Obligatorias** (RF-37): `-90..90`, `-180..180`. `accuracyM` opcional, 0 a 10000. |
+| `answers` | Opcional, hasta 50. `preguntaId` (`[A-Za-z0-9._-]{1,64}`), `pregunta` (≤ 300) y `respuesta`: texto (≤ 1000), número o booleano. **El catálogo de preguntas no está definido**: se guarda lo que manda el dispositivo. |
+| `notes` | Opcional, ≤ 1000. |
+
+El autor sale del token (no se acepta `capturedBy`). La zona se toma de la tienda al registrar:
+los análisis son por zona agregada, nunca por persona.
+
+| Caso | Respuesta | Acuse en offline-sync (T-17) |
+|---|---|---|
+| `visitId` nuevo | `201` `fieldVisitResponse` | `aceptada` |
+| Mismo `visitId`, mismo usuario (aunque cambie el cuerpo) | `200` con la visita **original** | `duplicada` |
+| Mismo `visitId`, otro usuario | `409` (no revela la ajena) | `conflicto` |
+| Cuerpo inválido | `400` | `rechazada` |
+| MongoDB caído | `503` (D-25); el dispositivo la conserva y reintenta | reintentar |
+
+Respuesta (`201`/`200`, XML raíz `fieldVisitResponse`):
+
+```json
+{ "visitId": "7c1e…", "storeId": "27f0…", "zoneId": "f3a1…", "visitedAt": "2026-11-20T16:05:00.000Z",
+  "lat": 25.6866, "lng": -100.3161, "accuracyM": 12, "answers": [ … ], "notes": "…",
+  "capturedBy": "b9a0…", "receivedAt": "2026-11-20T16:05:03.000Z" }
+```
+
+Mongo: `{ _id: visitId, tiendaId, zonaId, visitadaEn, ubicacion: GeoJSON Point [lng, lat], precisionM,
+respuestas, notas, capturadoPor, correlationId, recibidaEn }`; índices `{tiendaId, visitadaEn}`,
+`{capturadoPor, visitadaEn}` y `2dsphere` en `ubicacion`. Auditoría: `insert` sobre `visitas_campo`
+(un reenvío no se audita otra vez). `GET /v1/health` agrega `checks.mongodb`; con Mongo caído el resto del
+catálogo sigue funcionando. Variable nueva: `MONGO_URL` (falta en `infra/docker-compose.yml`, la agrega Juan Ángel).
+
 ## Caché (Redis)
 
 Los **cuatro catálogos planos** se cachean en Redis (prefijo `catalog:`, TTL **1 hora**), porque cada

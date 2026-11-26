@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor, StreamableFile } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { XMLBuilder } from 'fast-xml-parser';
 import { Observable } from 'rxjs';
@@ -55,6 +55,9 @@ export class XmlInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
+        // Un archivo (PDF, Excel, CSV) sale tal cual: el navegador manda `application/xml;q=0.9` en
+        // cualquier navegación, y serializar los bytes a XML rompía la descarga con un 500.
+        if (data instanceof StreamableFile || Buffer.isBuffer(data)) return data;
         const response = context.switchToHttp().getResponse<{ setHeader: (k: string, v: string) => void }>();
         response.setHeader('Content-Type', CONTENT_TYPE_XML);
         return serializarXml(data, {

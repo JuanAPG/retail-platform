@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -119,6 +120,46 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     const r = await get('/v1/health');
     expect(r.estado).toBe(200);
     expect(r.cuerpo).toMatchObject({ status: 'ok', checks: { postgres: 'ok', redis: 'ok' } });
+  });
+
+  it('D-34: confirma una sola venta y reconcilia intentos concurrentes', async () => {
+    const seed = (await get('/v1/transactions?limit=1')).cuerpo.data[0];
+    const body = {
+      batchId: randomUUID(),
+      storeId: seed.store.id,
+      folio: `${CORRIDA}-D34`,
+      fecha: '2026-11-01',
+      details: [{ presentationId: seed.details[0].presentationId, quantity: 2, unitPrice: 22 }],
+    };
+    const correlation = `d34-${randomUUID()}`;
+    const confirmImported = (payload: object, xml = false) =>
+      fetch(`${BASE}/v1/transactions/internal/imported-sales`, {
+        method: 'POST',
+        headers: {
+          ...auth,
+          'Content-Type': 'application/json',
+          'X-Correlation-Id': correlation,
+          ...(xml ? { Accept: 'application/xml' } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+    const outcomes = await Promise.all([confirmImported(body), confirmImported(body)]);
+    const receipts = await Promise.all(outcomes.map((response) => response.json()));
+    expect(outcomes.map((response) => response.status)).toEqual([200, 200]);
+    expect(outcomes[0].headers.get('X-Correlation-Id')).toBe(correlation);
+    expect(receipts.map((receipt) => receipt.status).sort()).toEqual(['insertada', 'repetida']);
+    expect(receipts[1].transactionId).toBe(receipts[0].transactionId);
+
+    const conflict = await confirmImported({ ...body, details: [{ ...body.details[0], quantity: 3 }] });
+    expect(conflict.status).toBe(409);
+    const rec = await confirmImported({ ...body, batchId: randomUUID() }, true);
+    expect(rec.status).toBe(200);
+    expect(await rec.text()).toContain('<status>repetida</status>');
+    const rows = await get(`/v1/transactions?storeId=${body.storeId}&dateFrom=${body.fecha}&dateTo=${body.fecha}`);
+    const stored = rows.cuerpo.data.filter((row: { folio: string }) => row.folio === body.folio);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ id: receipts[0].transactionId, total: '44.00', canal: 'importacion_archivo' });
   });
 
   it('CSV 100: preview 154/0, confirm 100/100 y canastas visibles', async () => {

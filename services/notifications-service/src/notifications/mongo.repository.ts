@@ -1,6 +1,8 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, FilterQuery, Model } from 'mongoose';
+import { APROBACION_PENDIENTE } from './notification.types';
+import { NotificationPreference } from './schemas/preference.schema';
 import {
   CrearNotificacion,
   Destinatario,
@@ -18,6 +20,7 @@ import { NotificacionDocument, NotificacionMongo } from './schemas/notification.
 export class MongoNotificationsRepository implements NotificationsRepository {
   constructor(
     @InjectModel(NotificacionMongo.name) private readonly modelo: Model<NotificacionDocument>,
+    @InjectModel(NotificationPreference.name) private readonly preferencias: Model<NotificationPreference>,
     @InjectConnection() private readonly conexion: Connection,
   ) {}
 
@@ -52,13 +55,14 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     userId: string;
     rol?: string;
     incluirArchivadas: boolean;
+    soloObligatorias?: boolean;
     dateFrom?: string;
     dateTo?: string;
     skip: number;
     limit: number;
   }): Promise<{ filas: NotificacionGuardada[]; total: number }> {
     this.exigirMongo();
-    const filtro: FilterQuery<NotificacionDocument> = { $or: this.destinatarioDe(filtros.userId, filtros.rol) };
+    const filtro: FilterQuery<NotificacionDocument> = this.visibles(filtros.userId, filtros.rol, filtros.soloObligatorias);
     if (!filtros.incluirArchivadas) filtro.archived = false;
     if (filtros.dateFrom || filtros.dateTo) {
       filtro.createdAt = {};
@@ -89,10 +93,10 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     return this.buscarPorId(id);
   }
 
-  async contarNoLeidas(userId: string, rol?: string): Promise<number> {
+  async contarNoLeidas(userId: string, rol?: string, soloObligatorias?: boolean): Promise<number> {
     this.exigirMongo();
     return this.modelo.countDocuments({
-      $or: this.destinatarioDe(userId, rol),
+      ...this.visibles(userId, rol, soloObligatorias),
       archived: false,
       'readBy.userId': { $ne: userId },
     });
@@ -102,6 +106,25 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     this.exigirMongo();
     const r = await this.modelo.updateMany({ archived: false, createdAt: { $lt: corte } }, { $set: { archived: true } });
     return r.modifiedCount;
+  }
+
+  async aceptaInformativas(userId: string): Promise<boolean> {
+    this.exigirMongo();
+    const document = await this.preferencias.findById(userId).lean();
+    return document?.informational ?? true;
+  }
+
+  async guardarPreferencia(userId: string, informational: boolean): Promise<void> {
+    this.exigirMongo();
+    await this.preferencias.updateOne({ _id: userId }, { $set: { informational } }, { upsert: true });
+  }
+
+  private visibles(userId: string, role?: string, requiredOnly?: boolean): FilterQuery<NotificacionDocument> {
+    const recipient = { $or: this.destinatarioDe(userId, role) };
+    if (!requiredOnly) return recipient;
+    return { $and: [recipient, {
+      $or: [{ priority: { $ne: 'info' } }, { eventType: { $in: APROBACION_PENDIENTE } }],
+    }] };
   }
 
   private destinatarioDe(userId: string, rol?: string): FilterQuery<NotificacionDocument>[] {
@@ -128,6 +151,7 @@ export class MongoNotificationsRepository implements NotificationsRepository {
       relatedEntityType: doc.relatedEntityType ?? null,
       relatedEntityId: doc.relatedEntityId ?? null,
       priority: doc.priority,
+      correlationId: doc.correlationId ?? null,
       readBy: (doc.readBy ?? []).map((m) => ({ userId: m.userId, readAt: new Date(m.readAt) })),
       archived: doc.archived,
       createdAt: new Date(doc.createdAt),

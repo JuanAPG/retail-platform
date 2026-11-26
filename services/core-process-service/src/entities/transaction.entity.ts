@@ -40,6 +40,9 @@ export class Transaction {
   @Column({ name: 'importacion_id', type: 'uuid', nullable: true })
   importacionId: string | null;
 
+  @Column({ name: 'lote_ingesta_id', type: 'uuid', nullable: true })
+  loteIngestaId: string | null;
+
   @Column({ name: 'capturada_por', type: 'uuid', nullable: true })
   capturadaPor: string | null;
 

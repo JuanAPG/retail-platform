@@ -48,7 +48,7 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   private log(
-    request: { method: string; url: string; user?: { id?: string } },
+    request: { method: string; url: string; headers: Record<string, string | undefined>; user?: { id?: string } },
     requestId: string,
     started: number,
     statusCode: number,
@@ -59,6 +59,7 @@ export class LoggingInterceptor implements NestInterceptor {
         level: 'log',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         requestId,
+        correlationId: request.headers['x-correlation-id'] ?? null,
         method: request.method,
         path: request.url,
         statusCode,

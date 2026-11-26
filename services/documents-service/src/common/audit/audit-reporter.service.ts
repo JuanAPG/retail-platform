@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { conCorrelacion } from '../correlation/correlacion';
 
 /** Nombre de este microservicio para el campo `servicio` del evento. */
 const SERVICIO = 'documents-service';
@@ -33,6 +34,7 @@ export class AuditReporter {
         | 'simular'
         | 'generar_recomendacion'
         | 'exportar';
+      // ^ audit-service solo acepta estas acciones: la emisión de una URL firmada viaja como 'exportar'.
       descripcion?: string | null;
       cambios?: Array<{ campo: string; previo?: string | null; posterior?: string | null }>;
       ip?: string | null;
@@ -47,10 +49,11 @@ export class AuditReporter {
       try {
         await fetch(`${base}/v1/auditoria`, {
           method: 'POST',
-          headers: {
+          // T-02: la bitácora guarda el mismo X-Correlation-Id de la operación.
+          headers: conCorrelacion({
             'Content-Type': 'application/json',
             ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-          },
+          }),
           body: JSON.stringify({ ...evento, servicio: SERVICIO }),
           signal: controller.signal,
         });

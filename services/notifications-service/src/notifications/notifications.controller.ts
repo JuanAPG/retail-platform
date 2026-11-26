@@ -1,4 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { serializarXml } from '../common/interceptors/xml.interceptor';
+import { PreferenceDto } from './dto/preference.dto';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -76,6 +78,28 @@ export class NotificationsController {
   @ApiOperation({ summary: 'No leídas del solicitante (agregación).' })
   contar(@CurrentUser() usuario: SesionUsuario) {
     return this.notificationsService.countUnread(usuario.id, usuario.rol);
+  }
+
+  @Get('preferences')
+  @XmlRoot('notificationPreferences')
+  @ApiOperation({ summary: 'Consulta la preferencia del usuario de la sesión.' })
+  @ApiOkResponse({ content: {
+    'application/json': { example: { informational: true } },
+    'application/xml': { example: serializarXml({ informational: true }, { raiz: 'notificationPreferences' }) },
+  } })
+  preferencias(@CurrentUser() usuario: SesionUsuario) {
+    return this.notificationsService.preferencias(usuario.id);
+  }
+
+  @Put('preferences')
+  @XmlRoot('notificationPreferences')
+  @ApiOperation({ summary: 'Modifica la preferencia del usuario de la sesión.' })
+  @ApiOkResponse({ content: {
+    'application/json': { example: { informational: false } },
+    'application/xml': { example: serializarXml({ informational: false }, { raiz: 'notificationPreferences' }) },
+  } })
+  cambiarPreferencias(@CurrentUser() usuario: SesionUsuario, @Body() dto: PreferenceDto) {
+    return this.notificationsService.cambiarPreferencias(usuario.id, dto.informational);
   }
 
   @Get(':id')

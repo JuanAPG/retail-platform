@@ -120,3 +120,19 @@ o `{ "active": false, "user": null }` (nunca 401: la inactividad no es error).
 `[{ modulo: "M06", nivel: "lectura" }]`), `PUT /v1/roles/:id/permisos`
 (reemplaza la matriz: `[{ moduloId | clave, nivel }]` con niveles
 `total | lectura_actualiza | lectura | propone | aprueba | lectura_propios | sin_acceso`).
+
+## Límite temporal de login (T-18)
+
+`POST /v1/auth/login` cuenta intentos por IP en Redis. La ventana por
+defecto admite 15 peticiones durante 60 segundos, incluyendo intentos
+fallidos. El siguiente intento devuelve 429, código `TOO_MANY_REQUESTS`
+y `Retry-After` en segundos. Sin Redis, devuelve 503. La IP se toma de la
+conexión directa. En staging, configura `AUTH_TRUSTED_PROXY` únicamente
+con la IP o CIDR del proxy controlado para que Express determine la IP
+del cliente a partir del reenvío. El proxy debe ser la única entrada.
+
+Configura `AUTH_LOGIN_MAX_ATTEMPTS` y `AUTH_LOGIN_WINDOW_SECONDS` como
+enteros positivos para ajustar el límite. El log estructurado
+`auth.login.failed` registra IP y correlación, sin correo, contraseña ni
+tokens. La recuperación D-45 y los límites de otras rutas forman parte
+del trabajo posterior.

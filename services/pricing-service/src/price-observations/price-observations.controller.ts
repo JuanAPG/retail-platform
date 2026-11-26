@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -38,14 +39,19 @@ export class PriceObservationsController {
       'Registra un precio levantado en tienda (app móvil). Lo capturan el Investigador de mercado (D-28), el Analista comercial y el Responsable de precios. Nace pendiente y NO cambia el precio actual hasta que el Responsable de precios lo apruebe.',
   })
   @ApiRespuesta(201, 'Observación registrada, pendiente.', muestras.observacion, 'priceObservationResponse')
+  @ApiRespuesta(200, 'Reenvío con el mismo observationId (D-42): la observación original, sin crear otra.', muestras.observacion, 'priceObservationResponse')
   @ApiErrores(400, 401, 403, 409)
-  create(
+  async create(
     @Body() dto: CreatePriceObservationDto,
     @CurrentUser() usuario: SesionUsuario,
     @Ip() ip: string,
     @Headers('authorization') token: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.observaciones.create(dto, usuario, ip, token);
+    const { observacion, duplicada } = await this.observaciones.create(dto, usuario, ip, token);
+    // 201 = nueva; 200 = reenvío ya recibido. offline-sync lo traduce a su acuse (aceptada / duplicada).
+    res.status(duplicada ? 200 : 201);
+    return observacion;
   }
 
   @Get()

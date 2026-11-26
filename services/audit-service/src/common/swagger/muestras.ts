@@ -18,6 +18,7 @@ export const evento = {
   descripcion: 'Usuario actualizado (a@x.mx).',
   direccionIp: '172.18.0.5',
   fecha: FECHA,
+  correlationId: 'captura-01',
   cambios: [{ auditoriaId: '123', campo: 'activo', valorPrevio: 'true', valorPosterior: 'false' }],
 };
 

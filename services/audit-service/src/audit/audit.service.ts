@@ -20,6 +20,7 @@ export interface AuditEventoInput {
   accion: AccionAuditoria;
   descripcion?: string | null;
   ip?: string | null;
+  correlationId?: string;
   cambios?: AuditCambioInput[];
 }
 
@@ -68,6 +69,9 @@ export class AuditService {
    */
   async registrar(input: AuditEventoInput): Promise<string> {
     return this.auditoriaRepo.manager.transaction(async (manager) => {
+      // Se adquiere antes de reservar el ID, así dos escritores conservan el
+      // mismo orden de asignación, encadenamiento y confirmación.
+      await manager.query('SELECT pg_advisory_xact_lock(3110, 1)');
       const evento = await manager.save(
         manager.create(Auditoria, {
           usuarioId: input.usuarioId ?? null,
@@ -78,6 +82,7 @@ export class AuditService {
           accion: input.accion,
           descripcion: input.descripcion ?? null,
           direccionIp: input.ip ?? null,
+          correlationId: input.correlationId ?? null,
         }),
       );
 
@@ -94,6 +99,7 @@ export class AuditService {
         );
       }
 
+      await manager.query('SELECT auditoria_sellar($1)', [evento.id]);
       return evento.id;
     });
   }
@@ -140,6 +146,9 @@ export class AuditService {
     if (filters.usuarioId) {
       qb.andWhere('evento.usuarioId = :usuarioId', { usuarioId: filters.usuarioId });
     }
+    if (filters.correlationId) {
+      qb.andWhere('evento.correlationId = :correlationId', { correlationId: filters.correlationId });
+    }
     if (filters.accion) {
       qb.andWhere('evento.accion = :accion', { accion: filters.accion });
     }
@@ -158,6 +167,23 @@ export class AuditService {
 
     const [data, total] = await qb.getManyAndCount();
     return { data, total, page, limit };
+  }
+
+  /** Una consulta comprueba la cadena en una instantánea consistente. */
+  async verificarIntegridad(): Promise<{ integra: boolean; primerIdAlterado: string | null }> {
+    const [resultado] = await this.auditoriaRepo.query(`
+      WITH enlaces AS (
+        SELECT id, hash, hash_anterior, lag(hash) OVER (ORDER BY id) AS esperado
+        FROM auditoria
+      )
+      SELECT id::text AS id
+      FROM enlaces
+      WHERE hash IS NULL OR hash_anterior IS DISTINCT FROM esperado
+         OR hash IS DISTINCT FROM auditoria_hash(id, hash_anterior)
+      ORDER BY id
+      LIMIT 1
+    `);
+    return { integra: !resultado, primerIdAlterado: resultado?.id ?? null };
   }
 
   /**

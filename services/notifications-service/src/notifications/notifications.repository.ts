@@ -1,4 +1,4 @@
-import { Notification, Priority, ReadMark } from './notification.types';
+import { Priority, ReadMark } from './notification.types';
 
 /** Lo que el servicio necesita persistir (sin mongo acoplado). */
 export interface NotificacionGuardada {
@@ -12,6 +12,7 @@ export interface NotificacionGuardada {
   relatedEntityType: string | null;
   relatedEntityId: string | null;
   priority: Priority;
+  correlationId?: string | null;
   readBy: ReadMark[];
   archived: boolean;
   createdAt: Date;
@@ -31,6 +32,7 @@ export interface CrearNotificacion extends Destinatario {
   relatedEntityType: string | null;
   relatedEntityId: string | null;
   priority: Priority;
+  correlationId?: string | null;
 }
 
 /**
@@ -49,6 +51,7 @@ export interface NotificationsRepository {
     userId: string;
     rol?: string;
     incluirArchivadas: boolean;
+    soloObligatorias?: boolean;
     dateFrom?: string;
     dateTo?: string;
     skip: number;
@@ -63,7 +66,9 @@ export interface NotificationsRepository {
    */
   buscarPorId(id: string): Promise<NotificacionGuardada | null>;
   marcarLeida(id: string, userId: string): Promise<NotificacionGuardada | null>;
-  contarNoLeidas(userId: string, rol?: string): Promise<number>;
+  contarNoLeidas(userId: string, rol?: string, soloObligatorias?: boolean): Promise<number>;
+  aceptaInformativas(userId: string): Promise<boolean>;
+  guardarPreferencia(userId: string, informational: boolean): Promise<void>;
   archivarAnteriores(corte: Date): Promise<number>;
 }
 

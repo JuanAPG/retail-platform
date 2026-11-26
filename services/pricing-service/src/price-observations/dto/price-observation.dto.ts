@@ -13,6 +13,16 @@ import { IsFechaIso } from '../../common/validators/fecha-calendario';
  * `pendiente`). El `ValidationPipe` global rechaza lo que sobre.
  */
 export class CreatePriceObservationDto {
+  @ApiPropertyOptional({
+    example: 'b3e1c7a2-5d4f-4e8a-9c1b-2f3a4b5c6d7e',
+    description:
+      'UUID generado EN EL DISPOSITIVO (D-42). Reenviar la misma observación (offline-sync) con el mismo id no crea otra: ' +
+      'responde 200 con la original. Un id ya usado por otro usuario es 409. Sin él, cada POST crea una observación.',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'observationId debe ser un UUID v4.' })
+  observationId?: string;
+
   @ApiProperty({ description: 'Id de la presentación observada.' })
   @IsUUID()
   @IsNotEmpty({ message: 'presentationId es obligatorio.' })

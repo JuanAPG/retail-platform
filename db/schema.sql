@@ -945,6 +945,8 @@ CREATE TABLE precios_observados (
     revisado_por        UUID REFERENCES usuarios(id),
     revisado_en         TIMESTAMPTZ,
     precio_id           UUID REFERENCES precios(id),
+    -- D-42: id generado en el dispositivo; un reenvío por offline-sync no crea otra fila.
+    observacion_id      UUID UNIQUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_precio_obs_rechazo CHECK (
         (estatus = 'rechazado' AND motivo_rechazo IS NOT NULL) OR estatus <> 'rechazado'
@@ -1101,7 +1103,7 @@ CREATE INDEX idx_imperrores_importacion ON importacion_errores(importacion_id, s
 --     La vista v_transaccion_detalle de abajo entrega ambos.
 -- =====================================================================
 
-CREATE TYPE canal_transaccion AS ENUM ('punto_venta','app_movil','web','importacion_csv','otro');
+CREATE TYPE canal_transaccion AS ENUM ('punto_venta','app_movil','web','importacion_csv','otro','importacion_archivo');
 
 CREATE TABLE transacciones (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1113,11 +1115,14 @@ CREATE TABLE transacciones (
     total               NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
     -- Trazabilidad de origen: de qué carga CSV salió, si vino de una.
     importacion_id      UUID REFERENCES importaciones(id),
+    lote_ingesta_id     UUID,
     capturada_por       UUID REFERENCES usuarios(id),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tienda_id, folio)
 );
 COMMENT ON TABLE transacciones IS 'Encabezado de venta. Una transacción = una canasta (RN-03).';
+COMMENT ON COLUMN transacciones.lote_ingesta_id IS
+    'Identificador del lote en transactions-ingestion-service. La referencia se obtiene por HTTP.';
 
 CREATE INDEX idx_transacciones_tienda_fecha ON transacciones(tienda_id, fecha);
 CREATE INDEX idx_transacciones_fecha ON transacciones(fecha);
@@ -1459,7 +1464,20 @@ CREATE TABLE auditoria (
     accion              accion_auditoria NOT NULL,
     descripcion         TEXT,
     direccion_ip        INET,
-    fecha               TIMESTAMPTZ NOT NULL DEFAULT now()
+    fecha               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    correlation_id      VARCHAR(100),
+    hash_anterior       TEXT,
+    hash                TEXT,
+    CONSTRAINT chk_auditoria_correlation CHECK (correlation_id ~ '^[A-Za-z0-9._:-]{1,100}$'),
+    CONSTRAINT chk_auditoria_servicio CHECK (servicio IN (
+       'auth-service', 'catalog-service', 'pricing-service',
+       'core-process-service', 'algorithms-core', 'analytics-stats',
+       'decision-service', 'documents-service', 'notifications-service',
+       'audit-service', 'transactions-ingestion-service', 'income-segmentation-service',
+       'basket-analysis-service', 'availability-service', 'promotion-service',
+       'demand-forecast-service', 'recommendations-workflow-service', 'offline-sync-service',
+       'data-governance-service', 'monitoring-service'
+    ))
 );
 COMMENT ON TABLE auditoria IS 'Evento auditable: quién, qué acción, sobre qué entidad y cuándo. Append-only: no se actualiza ni se borra.';
 COMMENT ON COLUMN auditoria.rol_id IS 'Rol con el que actuaba el usuario EN EL INSTANTE del evento. No es copia redundante de usuarios.rol_id (eso sería una dependencia transitiva): el rol del usuario puede cambiar después y la bitácora no debe cambiar con él.';
@@ -1479,6 +1497,33 @@ CREATE TABLE auditoria_cambios (
 COMMENT ON TABLE auditoria_cambios IS 'Campos modificados por el evento. Permite consultar el historial de un campo concreto sin recorrer JSON.';
 
 CREATE INDEX idx_auditoria_cambios_campo ON auditoria_cambios(campo);
+CREATE INDEX idx_auditoria_correlation ON auditoria(correlation_id);
+
+-- El hash usa fechas como epoch (sin huso) y cambios en orden binario por campo.
+CREATE OR REPLACE FUNCTION auditoria_hash(evento_id bigint, anterior text)
+RETURNS text LANGUAGE sql STABLE AS $$
+    SELECT encode(sha256(convert_to(jsonb_build_array(
+        'v1', anterior, a.id, a.usuario_id, a.rol_id, a.tabla_afectada, a.registro_id,
+        a.servicio, a.accion, a.descripcion, a.direccion_ip, extract(epoch FROM a.fecha),
+        a.correlation_id, COALESCE((
+            SELECT jsonb_agg(jsonb_build_array(c.campo, c.valor_previo, c.valor_posterior)
+                             ORDER BY c.campo COLLATE "C")
+            FROM auditoria_cambios c WHERE c.auditoria_id = a.id
+        ), '[]'::jsonb)
+    )::text, 'UTF8')), 'hex')
+    FROM auditoria a WHERE a.id = evento_id;
+$$;
+
+-- Se ejecuta bajo el bloqueo adquirido antes de asignar el ID del evento.
+CREATE OR REPLACE FUNCTION auditoria_sellar(evento_id bigint)
+RETURNS void LANGUAGE sql AS $$
+    UPDATE auditoria a
+       SET hash_anterior = previo.hash, hash = auditoria_hash(evento_id, previo.hash)
+      FROM (SELECT (SELECT b.hash FROM auditoria b
+                    WHERE b.id < evento_id ORDER BY b.id DESC LIMIT 1) AS hash) previo
+     WHERE a.id = evento_id AND a.hash IS NULL;
+$$;
+
 
 -- =====================================================================
 -- 16. VISTAS PARA EL DASHBOARD DE NEGOCIO

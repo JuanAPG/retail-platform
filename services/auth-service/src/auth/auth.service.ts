@@ -1,7 +1,9 @@
+import { correlacionActual } from '../common/correlation/correlacion';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -40,6 +42,8 @@ export function aSegundos(expresion: string): number {
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -120,14 +124,12 @@ export class AuthService {
   async login(dto: LoginDto, ip?: string) {
     const usuario = await this.usersService.findByEmail(dto.email);
 
-    // Mensaje genérico + sin auditar fallos: no enumerar cuentas.
-    if (!usuario) {
-      throw new UnauthorizedException('Correo o contraseña incorrectos.');
-    }
-    if (!(await bcrypt.compare(dto.password, usuario.passwordHash))) {
+    if (!usuario || !(await bcrypt.compare(dto.password, usuario.passwordHash))) {
+      this.logFailedLogin(ip);
       throw new UnauthorizedException('Correo o contraseña incorrectos.');
     }
     if (!usuario.activo) {
+      this.logFailedLogin(ip);
       throw new UnauthorizedException(
         'Tu cuenta está inactiva o pendiente de aprobación por el Administrador.',
       );
@@ -284,6 +286,14 @@ export class AuthService {
   // ---------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------
+  private logFailedLogin(ip?: string): void {
+    this.logger.warn(JSON.stringify({
+      event: 'auth.login.failed',
+      correlationId: correlacionActual(),
+      ip,
+    }));
+  }
+
   private refreshTtl(): number {
     return aSegundos(this.configService.getOrThrow<string>('jwt.refreshExpiresIn'));
   }
