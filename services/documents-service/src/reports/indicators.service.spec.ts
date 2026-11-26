@@ -230,3 +230,120 @@ describe('IndicatorsService.reunir', () => {
     expect(porClave(r, 'variacion_precios')).toMatchObject({ disponible: true, motivo: null });
   });
 });
+
+describe('escenarios_creados e impacto_estimado (forma actual de decision-service)', () => {
+  const esc = (id: string, type: string, createdAt: string, name = `Escenario ${id}`) => ({ id, name, type, zoneId: 'z-1', createdAt });
+  /** GET /simulation/scenarios paginado: `lista` repartida en páginas de `limit`. */
+  function paginado(lista: ReturnType<typeof esc>[], porPagina = 100) {
+    return (url: string) => {
+      const q = new URL(url).searchParams;
+      const page = Number(q.get('page') ?? 1);
+      const limit = Math.min(Number(q.get('limit') ?? 20), porPagina);
+      return ok({ data: lista.slice((page - 1) * limit, page * limit), total: lista.length, page, limit });
+    };
+  }
+  /** GET /simulation/compare: `scenarios[].results[]` con ingreso_estimado por escenario. */
+  function compare(ingresos: Record<string, number>, pedidos: string[][]) {
+    return (url: string) => {
+      const ids = (new URL(url).searchParams.get('ids') ?? '').split(',');
+      pedidos.push(ids);
+      return ok({
+        scenarioIds: ids,
+        scenarios: ids.map((id) => ({
+          scenarioId: id, name: id, type: 'precio', zoneId: 'z-1', elasticity: -2, elasticityRunId: null,
+          results: id in ingresos
+            ? [
+                { indicatorKey: 'demanda_estimada', zoneId: 'z-1', baseValue: 1000, simulatedValue: 826, difference: -174, variationPct: -17.4 },
+                { indicatorKey: 'ingreso_estimado', zoneId: 'z-1', baseValue: 25000, simulatedValue: ingresos[id], difference: ingresos[id] - 25000, variationPct: -9.14 },
+              ]
+            : [],
+        })),
+        warnings: [],
+      });
+    };
+  }
+  function simularUrl(rutas: Record<string, (url: string) => Response>) {
+    global.fetch = jest.fn(async (url: string | URL | Request) => {
+      const u = String(url);
+      const clave = Object.keys(rutas).find((r) => u.includes(r));
+      return clave ? rutas[clave](u) : http(404);
+    }) as unknown as typeof fetch;
+  }
+  const EN = '2026-08-10T12:00:00.000Z';
+  const FUERA = '2026-09-02T12:00:00.000Z';
+
+  it('cero escenarios: conteo 0 e impacto [] (disponibles, sin llamar a compare)', async () => {
+    const pedidos: string[][] = [];
+    simularUrl({ '/v1/simulation/scenarios': paginado([]), '/v1/simulation/compare': compare({}, pedidos) });
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'escenarios_creados')).toMatchObject({ disponible: true, valor: 0 });
+    expect(porClave(r, 'impacto_estimado')).toMatchObject({ disponible: true, valor: [] });
+    expect(pedidos).toHaveLength(0);
+  });
+
+  it('un escenario de precio: se compara con un acompañante y solo se reporta el de precio', async () => {
+    const pedidos: string[][] = [];
+    simularUrl({
+      '/v1/simulation/scenarios': paginado([esc('a', 'precio', EN, 'Leche +10 %'), esc('b', 'presentacion', EN)]),
+      '/v1/simulation/compare': compare({ a: 22715 }, pedidos),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'escenarios_creados').valor).toBe(2);
+    expect(porClave(r, 'impacto_estimado').valor).toEqual([
+      { escenario: 'Leche +10 %', zonaId: 'z-1', ingresoBase: 25000, ingresoEstimado: 22715, variacionPct: -9.14 },
+    ]);
+    expect(pedidos).toEqual([['a', 'b']]);
+  });
+
+  it('un único escenario en todo decision-service: el impacto queda null (nunca 0) y no se llama a compare', async () => {
+    const pedidos: string[][] = [];
+    simularUrl({ '/v1/simulation/scenarios': paginado([esc('a', 'precio', EN, 'Solo')]), '/v1/simulation/compare': compare({ a: 1 }, pedidos) });
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'impacto_estimado').valor).toEqual([{ escenario: 'Solo', zonaId: 'z-1', ingresoBase: null, ingresoEstimado: null, variacionPct: null }]);
+    expect(pedidos).toHaveLength(0);
+  });
+
+  it('dos escenarios de precio: simulatedValue de ingreso_estimado de cada uno', async () => {
+    const pedidos: string[][] = [];
+    simularUrl({
+      '/v1/simulation/scenarios': paginado([esc('a', 'precio', EN, 'A'), esc('b', 'precio', EN, 'B')]),
+      '/v1/simulation/compare': compare({ a: 22715, b: 26000 }, pedidos),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+    const v = porClave(r, 'impacto_estimado').valor as Array<{ escenario: string; ingresoEstimado: number }>;
+    expect(v.map((x) => [x.escenario, x.ingresoEstimado])).toEqual([['A', 22715], ['B', 26000]]);
+  });
+
+  it('escenarios fuera del periodo no cuentan ni entran al impacto (pero pueden servir de acompañante)', async () => {
+    const pedidos: string[][] = [];
+    simularUrl({
+      '/v1/simulation/scenarios': paginado([esc('a', 'precio', EN, 'Dentro'), esc('x', 'precio', FUERA, 'Fuera'), esc('y', 'precio', '2026-07-31T23:00:00.000Z')]),
+      '/v1/simulation/compare': compare({ a: 22715, x: 99999 }, pedidos),
+    });
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'escenarios_creados').valor).toBe(1);
+    const v = porClave(r, 'impacto_estimado').valor as Array<{ escenario: string }>;
+    expect(v.map((x) => x.escenario)).toEqual(['Dentro']);
+  });
+
+  it('más de una página: cuenta todo (250 escenarios en 3 páginas) y compara en lotes de 20', async () => {
+    const pedidos: string[][] = [];
+    const lista = Array.from({ length: 250 }, (_, i) => esc(`e${i}`, i < 45 ? 'precio' : 'presentacion', EN));
+    const ingresos = Object.fromEntries(lista.slice(0, 45).map((e) => [e.id, 1000]));
+    simularUrl({ '/v1/simulation/scenarios': paginado(lista), '/v1/simulation/compare': compare(ingresos, pedidos) });
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'escenarios_creados').valor).toBe(250);
+    const v = porClave(r, 'impacto_estimado').valor as Array<{ ingresoEstimado: number | null }>;
+    expect(v).toHaveLength(45);
+    expect(v.every((x) => x.ingresoEstimado === 1000)).toBe(true);
+    expect(pedidos.every((ids) => ids.length >= 2 && ids.length <= 20)).toBe(true);
+  });
+
+  it('las tarjetas dicen si el valor es vigente o de la última corrida', async () => {
+    simularUrl({});
+    const r = await new IndicatorsService().reunir(params, 't');
+    expect(porClave(r, 'elasticidad_promedio').nombre).toMatch(/vigentes hoy/);
+    expect(porClave(r, 'productos_mas_sensibles').nombre).toMatch(/vigente/);
+    expect(porClave(r, 'accesibilidad_por_zona').nombre).toMatch(/última corrida/);
+  });
+});
