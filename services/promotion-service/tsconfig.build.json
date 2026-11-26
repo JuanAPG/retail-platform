@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  // El build de producción excluye pruebas: sin esto, tsc infiere la raíz
+  // común de src/** + test/** y emite dist/src/main.js en vez de
+  // dist/main.js, con lo que el CMD del Dockerfile no arranca.
+  "exclude": ["node_modules", "test", "dist", "**/*.spec.ts"]
+}
