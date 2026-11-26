@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { conCorrelacion } from '../correlation/correlacion';
 
 /** Nombre de este microservicio para el campo `servicio` del evento. */
 const SERVICIO = 'catalog-service';
@@ -47,10 +48,10 @@ export class AuditReporter {
       try {
         await fetch(`${base}/v1/auditoria`, {
           method: 'POST',
-          headers: {
+          headers: conCorrelacion({
             'Content-Type': 'application/json',
             ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-          },
+          }),
           body: JSON.stringify({ ...evento, servicio: SERVICIO }),
           signal: controller.signal,
         });

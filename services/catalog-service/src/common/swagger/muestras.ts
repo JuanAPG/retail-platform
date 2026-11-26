@@ -147,6 +147,24 @@ const productoPendiente = {
   proveedor,
 };
 
+/** Visita de campo (D-30). */
+const visitaCampo = {
+  visitId: '7c1e2a90-3b4d-4f5e-8a6b-9c0d1e2f3a4b',
+  storeId: '27f05c81-5d3b-4c8e-9a1f-2b3c4d5e6f70',
+  zoneId: 'f3a1b2c4-d5e6-4789-8abc-def012345678',
+  visitedAt: '2026-11-20T16:05:00.000Z',
+  lat: 25.6866,
+  lng: -100.3161,
+  accuracyM: 12,
+  answers: [
+    { preguntaId: 'p-frescura', pregunta: '¿Los perecederos se ven frescos?', respuesta: 'si' },
+    { preguntaId: 'p-cajas', pregunta: '¿Cuántas cajas estaban abiertas?', respuesta: 3 },
+  ],
+  notes: 'Anaquel de lácteos reorganizado.',
+  capturedBy: 'b9a0c1d2-e3f4-4a5b-8c6d-7e8f90a1b2c3',
+  receivedAt: '2026-11-20T16:05:03.000Z',
+};
+
 export const muestras = {
   municipio,
   segmento,
@@ -162,4 +180,5 @@ export const muestras = {
   presentacion,
   producto,
   productoPendiente,
+  visitaCampo,
 };
