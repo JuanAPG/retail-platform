@@ -2,10 +2,9 @@ import { pedir } from './httpClient';
 import { NAMESPACE, XmlInvalidoError, asList, construirXml, leerXml, text, textOrNull } from './xml';
 
 /*
- * transactions-ingestion-service (3111, D-33/D-34). SEGÚN CONTRATO EN REVISIÓN (PR #96, rama
- * docs/contratos-ingestion-monitoring): transactions-ingestion-service.md / .xsd, namespace
- * ingestion/v1. El servicio todavía no existe en ninguna rama: esto se probó contra el contrato
- * y sus ejemplos, no contra el servicio.
+ * transactions-ingestion-service (3111, D-33/D-34). Contrato: docs/contratos/
+ * transactions-ingestion-service.md / .xsd, namespace ingestion/v1. El servicio todavía no está en
+ * services/: esto se probó contra el contrato y sus ejemplos, no contra el servicio.
  *
  * Dos cosas distintas que el contrato separa:
  *  1. El ARCHIVO de ventas: los datos (CSV, JSON o XML `salesFile`). Viaja como adjunto, en la

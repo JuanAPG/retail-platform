@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<objectImport xmlns="ingestion/v1">
-  <objectKey>ingestion/incoming/01/demo.csv</objectKey>
-  <generation>1764000000000000</generation>
-</objectImport>

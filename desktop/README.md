@@ -39,11 +39,12 @@ CSV y XML (`BotonesExportar`); los reportes se descargan tal cual los arma docum
   libxml2 (`xmllint-wasm`): las respuestas que la app sabe leer, los ejemplos del contrato de ingesta
   y el XML que la app arma. No se carga el validador en la ventana (pesa ~2 MB de WebAssembly).
 
-## Importar ventas — según contrato en revisión
+## Importar ventas
 
-`transactions-ingestion-service` (3111) se implementó **según el contrato en revisión** (PR #96, rama
-`docs/contratos-ingestion-monitoring`). El servicio todavía no existe en ninguna rama, así que se probó
-contra el contrato y sus ejemplos, no contra el servicio. La pantalla separa:
+`transactions-ingestion-service` (3111) sigue su contrato oficial,
+`docs/contratos/transactions-ingestion-service.md` y `.xsd`. El servicio todavía no está en
+`services/`, así que se probó contra el contrato y sus ejemplos (`docs/contratos/ejemplos/`), no
+contra el servicio. La pantalla separa:
 
 1. **Archivo de ventas** (los datos): se adjunta en la parte `file` de un multipart → vista previa.
 2. **Mensaje de control**: `objectImport` en XML (importar un objeto del bucket), **confirmar**

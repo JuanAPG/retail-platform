@@ -21,8 +21,8 @@ import { useAuth } from '../context/AuthContext';
 import { Columna, descargar } from '../utils/exportar';
 
 /*
- * Importar ventas (transactions-ingestion-service, 3111, D-33/D-34), SEGÚN CONTRATO EN REVISIÓN
- * (PR #96). Solo el Analista comercial. Se separan:
+ * Importar ventas (transactions-ingestion-service, 3111, D-33/D-34; contrato en
+ * docs/contratos/transactions-ingestion-service.md). Solo el Analista comercial. Se separan:
  *  - el ARCHIVO de ventas (los datos: CSV, JSON o XML `salesFile`), que viaja adjunto;
  *  - el MENSAJE de control (`objectImport` en XML para importar desde el bucket privado;
  *    confirmar y descartar), que le dice al servicio qué hacer con un lote.
@@ -179,7 +179,7 @@ export default function Ventas() {
     <div>
       <h1>Importar ventas</h1>
       <p className="muted">
-        Servicio: transactions-ingestion-service (según contrato en revisión, PR #96). Una venta se identifica por tienda
+        Servicio: transactions-ingestion-service. Una venta se identifica por tienda
         y folio (D-34): reimportar no duplica, y el mismo folio con otro contenido queda en conflicto.
       </p>
       {error && <p className="alert-error">{error}</p>}

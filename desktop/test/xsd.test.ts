@@ -2,10 +2,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { archivoVentasXml } from '../src/api/ingestionApi';
 import { NAMESPACE, construirXml } from '../src/api/xml';
-import { EN_REVISION, XSD, erroresXsd, fixture, leer } from './apoyo';
+import { EJEMPLOS_CONTRATO, XSD, erroresXsd, fixture, leer } from './apoyo';
 
 /**
- * Validación COMPLETA contra los XSD de docs/contratos (y el de ingesta en revisión), con libxml2.
+ * Validación COMPLETA contra los XSD oficiales de docs/contratos, con libxml2.
  * Cubre: las respuestas que la app sabe leer (fixtures), los ejemplos del contrato de ingesta y
  * el XML que la app ARMA y envía.
  */
@@ -41,13 +41,13 @@ describe('respuestas que lee la app: válidas contra el XSD de su servicio', () 
   });
 });
 
-describe('ejemplos del contrato de ingesta (en revisión, PR #96)', () => {
+describe('ejemplos del contrato de ingesta (docs/contratos/ejemplos)', () => {
   it('ingestion-ventas.xml (el ARCHIVO de ventas) valida', async () => {
-    expect(await erroresXsd(leer(join(EN_REVISION, 'ejemplos', 'ingestion-ventas.xml')), XSD.ingestion)).toEqual([]);
+    expect(await erroresXsd(leer(join(EJEMPLOS_CONTRATO, 'ingestion-ventas.xml')), XSD.ingestion)).toEqual([]);
   });
 
   it('ingestion-objeto.xml (el MENSAJE de control) valida', async () => {
-    expect(await erroresXsd(leer(join(EN_REVISION, 'ejemplos', 'ingestion-objeto.xml')), XSD.ingestion)).toEqual([]);
+    expect(await erroresXsd(leer(join(EJEMPLOS_CONTRATO, 'ingestion-objeto.xml')), XSD.ingestion)).toEqual([]);
   });
 });
 
@@ -65,9 +65,9 @@ describe('XML que la app arma y envía', () => {
       { folio: 'DEMO-001', fecha: '2026-11-20', tienda: 'MTY-CENTRO', sku: 'SKU-100', presentacion: '500 g', cantidad: 2, precio: 42.5 },
       { folio: 'DEMO-002', fecha: '2026-11-21', tienda: 'MTY & Co <sur>', sku: 'SKU-101', presentacion: '1 L', cantidad: 1.25, precio: 18 },
     ]);
+    expect(await erroresXsd(xml, XSD.ingestion)).toEqual([]); // primero el XSD oficial
     expect(xml).toContain('<precio>42.50</precio>');
     expect(xml).toContain('MTY &amp; Co &lt;sur&gt;');
-    expect(await erroresXsd(xml, XSD.ingestion)).toEqual([]);
   });
 });
 
@@ -78,7 +78,7 @@ describe('el validador sí detecta XML fuera de contrato', () => {
   });
 
   it('precio negativo en el archivo de ventas', async () => {
-    const xml = leer(join(EN_REVISION, 'ejemplos', 'ingestion-ventas.xml')).replace('<precio>42.50</precio>', '<precio>-3</precio>');
+    const xml = leer(join(EJEMPLOS_CONTRATO, 'ingestion-ventas.xml')).replace('<precio>42.50</precio>', '<precio>-3</precio>');
     expect((await erroresXsd(xml, XSD.ingestion)).length).toBeGreaterThan(0);
   });
 

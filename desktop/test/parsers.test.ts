@@ -16,7 +16,7 @@ import { NAMESPACE, XmlInvalidoError, asList, construirXml, errorDesdeXml, exigi
 import { fixture } from './apoyo';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { EN_REVISION } from './apoyo';
+import { EJEMPLOS_CONTRATO } from './apoyo';
 
 /** Lee el fixture como lo hace `pedir`: XML → raíz y namespace del contrato → contenido. */
 const raiz = (archivo: string, nombre: string, ns: string) => exigirRaiz(leerXml(fixture(archivo)), nombre, ns);
@@ -150,7 +150,7 @@ describe('parsers por servicio', () => {
   });
 
   it('ingestion: revisión local del archivo de ventas XML', () => {
-    const bueno = readFileSync(join(EN_REVISION, 'ejemplos', 'ingestion-ventas.xml'), 'utf8');
+    const bueno = readFileSync(join(EJEMPLOS_CONTRATO, 'ingestion-ventas.xml'), 'utf8');
     expect(revisarXmlVentas(bueno)).toBeNull();
     expect(revisarXmlVentas(bueno.replace('ingestion/v1', 'ventas/v1'))).toMatch(/namespace/);
     expect(revisarXmlVentas(fixture('ingestion-import.xml'))).toMatch(/salesFile/);

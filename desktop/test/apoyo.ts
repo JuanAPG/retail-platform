@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateXML } from 'xmllint-wasm';
 
-/** Contratos de main (docs/contratos) y el de ingesta en revisión (copia en test/). */
+/** Contratos oficiales (docs/contratos en la raíz del repositorio) y sus ejemplos XML. */
 export const CONTRATOS = join(__dirname, '..', '..', 'docs', 'contratos');
-export const EN_REVISION = join(__dirname, 'contratos-en-revision');
+export const EJEMPLOS_CONTRATO = join(CONTRATOS, 'ejemplos');
 export const FIXTURES = join(__dirname, 'fixtures');
 
 export const leer = (ruta: string) => readFileSync(ruta, 'utf8');
@@ -18,7 +18,7 @@ export const XSD = {
   decision: join(CONTRATOS, 'decision-service.xsd'),
   documents: join(CONTRATOS, 'documents-service.xsd'),
   segmentation: join(CONTRATOS, 'income-segmentation-service.xsd'),
-  ingestion: join(EN_REVISION, 'transactions-ingestion-service.xsd'),
+  ingestion: join(CONTRATOS, 'transactions-ingestion-service.xsd'),
 } as const;
 
 /**
@@ -27,7 +27,7 @@ export const XSD = {
  */
 export async function erroresXsd(xml: string, xsd: string): Promise<string[]> {
   const preload = xsd === XSD.ingestion
-    ? [{ fileName: 'xsd/error-transversal.xsd', contents: leer(join(EN_REVISION, 'xsd', 'error-transversal.xsd')) }]
+    ? [{ fileName: 'xsd/error-transversal.xsd', contents: leer(join(CONTRATOS, 'xsd', 'error-transversal.xsd')) }]
     : [];
   const r = await validateXML({
     xml: [{ fileName: 'documento.xml', contents: xml }],
