@@ -1,7 +1,7 @@
 // QA-WEB64-02 (resuelto): el web no ofrece escrituras que el backend rechaza con 403.
 // Tiendas (M02) y zonas (M03) las escribe SOLO el Administrador (Matriz §3); el Gerente
 // de categoría y el Analista comercial pasaron a solo lectura en esos dos módulos.
-import { abrirNavegador, ok, resumen, sesion, rail, texto } from './lib.mjs';
+import { abrirNavegador, ok, resumen, sesion, rail, texto, BASE } from './lib.mjs';
 
 const navegador = await abrirNavegador();
 const boton = (page, nombre) => page.getByRole('button', { name: nombre });
@@ -26,10 +26,11 @@ const editarOEliminar = (page) =>
   await ctx.close();
 }
 {
-  // M06/M07: el Administrador es Lectura. Entra al portal del Analista con
-  // «Ver como» (SelectorDePortal), así que ahí tampoco se le ofrece escribir.
+  // M06/M07: el Administrador es Lectura. Entra al portal del Analista (antes con el
+  // selector «Ver como»; desde el rediseño, con los perfiles del menú del Rail), así
+  // que ahí tampoco se le ofrece escribir.
   const { ctx, page } = await sesion(navegador, 'admin');
-  await page.getByLabel('Cambiar de portal').selectOption('/analista');
+  await page.goto(`${BASE}/analista`);
   await page.waitForTimeout(800);
   await rail(page, 'Transacciones').click();
   await page.waitForTimeout(800);
