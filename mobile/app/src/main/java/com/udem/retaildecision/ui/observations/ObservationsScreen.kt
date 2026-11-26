@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.udem.retaildecision.data.model.TipoCaptura
 import com.udem.retaildecision.data.remote.dto.StoreDto
 import com.udem.retaildecision.data.repository.EstadoCaptura
 import com.udem.retaildecision.data.repository.ObservacionGuardada
@@ -52,6 +53,7 @@ import com.udem.retaildecision.ui.components.RetailCard
 import com.udem.retaildecision.ui.components.SectionTitle
 import com.udem.retaildecision.ui.components.SelectorDesplegable
 import com.udem.retaildecision.ui.components.StatusPill
+import com.udem.retaildecision.ui.home.ConnectivityBanner
 import com.udem.retaildecision.ui.theme.Warning
 import com.udem.retaildecision.ui.theme.WarningSoft
 import java.text.SimpleDateFormat
@@ -61,6 +63,15 @@ import java.util.Locale
 private fun coordenada(valor: Double) = String.format(Locale.US, "%.6f", valor)
 
 private fun dinero(valor: Double) = "$" + String.format(Locale.US, "%.2f", valor)
+
+private fun cantidad(valor: Double): String =
+    if (valor % 1.0 == 0.0) valor.toLong().toString() else String.format(Locale.US, "%.2f", valor)
+
+private fun nombreTipo(tipo: String): String = when (tipo) {
+    TipoCaptura.PRECIO_OBSERVADO -> "Precio"
+    TipoCaptura.DISPONIBILIDAD -> "Existencia"
+    else -> tipo
+}
 
 private fun fecha(millis: Long): String =
     SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "MX")).format(Date(millis))
@@ -95,16 +106,20 @@ fun ObservationsScreen(
         }
     }
 
-    val pendientes = state.capturas.count { it.estado == EstadoCaptura.PENDIENTE }
+    val pendientes = state.capturas.count { it.estado == EstadoCaptura.PENDIENTE || it.estado == EstadoCaptura.REINTENTO }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            AppTopBar(
-                title = "Levantar precio en tienda",
-                subtitle = if (pendientes == 0) "Todo enviado" else "$pendientes pendientes de enviar",
-                onBack = onBack,
-            )
+            Column {
+                AppTopBar(
+                    title = "Capturas en tienda",
+                    subtitle = if (pendientes == 0) "Todo enviado" else "$pendientes pendientes de enviar",
+                    onBack = onBack,
+                )
+                // Siempre visible: dice si lo que se guarde se envía ya o se queda en el teléfono.
+                ConnectivityBanner(online = state.enLinea)
+            }
         },
     ) { padding ->
         when {
@@ -131,8 +146,8 @@ fun ObservationsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 InfoBanner(
-                    "El precio se guarda en el teléfono y se envía solo cuando hay internet. " +
-                            "Al llegar al servidor queda pendiente de aprobación del Responsable de precios.",
+                    "Cada captura se guarda en el teléfono con su folio y se envía sola cuando hay internet. " +
+                            "Un precio aceptado queda pendiente de aprobación del Responsable de precios.",
                 )
                 if (state.usandoCopiaLocal) {
                     InfoBanner("Sin conexión: se usan las tiendas y productos guardados la última vez.")
@@ -157,6 +172,29 @@ fun ObservationsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             tienda.zona?.let { LabeledValue(label = "Zona", value = it.nombre) }
+                        }
+                    }
+                }
+
+                // ---------- Tipo de captura (solo los que el rol puede enviar) ----------
+                if (state.tipos.size > 1) {
+                    SectionTitle("Qué vas a capturar")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        state.tipos.forEach { tipo ->
+                            val texto = if (tipo == TipoCaptura.PRECIO_OBSERVADO) "Precio en anaquel" else "Existencia"
+                            if (tipo == state.tipo) {
+                                Button(
+                                    onClick = {},
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium,
+                                ) { Text(texto) }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { viewModel.elegirTipo(tipo) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium,
+                                ) { Text(texto) }
+                            }
                         }
                     }
                 }
@@ -212,18 +250,31 @@ fun ObservationsScreen(
                     }
                 }
 
-                // ---------- 3. Precio ----------
-                SectionTitle("3. Precio que ves en el anaquel")
-                OutlinedTextField(
-                    value = state.precioTexto,
-                    onValueChange = viewModel::cambiarPrecio,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Precio en pesos") },
-                    prefix = { Text("$") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = MaterialTheme.shapes.medium,
-                )
+                // ---------- 3. Precio o existencia ----------
+                if (state.esPrecio) {
+                    SectionTitle("3. Precio que ves en el anaquel")
+                    OutlinedTextField(
+                        value = state.valorTexto,
+                        onValueChange = viewModel::cambiarValor,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Precio en pesos") },
+                        prefix = { Text("$") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                } else {
+                    SectionTitle("3. Existencia en anaquel")
+                    OutlinedTextField(
+                        value = state.valorTexto,
+                        onValueChange = viewModel::cambiarValor,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Unidades de esta presentación (0 = agotado)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                }
 
                 // ---------- 4. Ubicación ----------
                 SectionTitle("4. Tu ubicación")
@@ -280,11 +331,15 @@ fun ObservationsScreen(
                     shape = MaterialTheme.shapes.medium,
                 ) {
                     Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text(if (state.guardando) "Guardando…" else "Guardar precio")
+                    Text(if (state.guardando) "Guardando…" else "Guardar captura")
                 }
                 if (!state.puedeGuardar && !state.guardando) {
                     Text(
-                        "Para guardar hace falta: tienda, producto con presentación, un precio mayor que cero y tu ubicación.",
+                        if (state.esPrecio) {
+                            "Para guardar hace falta: tienda, producto con presentación, un precio mayor que cero y tu ubicación."
+                        } else {
+                            "Para guardar hace falta: tienda, producto con presentación, la existencia (0 o más) y tu ubicación."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -302,7 +357,7 @@ fun ObservationsScreen(
                         Text("Enviar ahora ($pendientes)")
                     }
                 }
-                if (state.capturas.any { it.estado == EstadoCaptura.ENVIADA }) {
+                if (state.puedeConsultarDecisiones && state.capturas.any { it.estado == EstadoCaptura.ENVIADA && it.tipo == TipoCaptura.PRECIO_OBSERVADO }) {
                     OutlinedButton(
                         onClick = { viewModel.refrescarEstados() },
                         enabled = !state.actualizandoEstados,
@@ -314,7 +369,7 @@ fun ObservationsScreen(
                     }
                 }
                 if (state.capturas.isEmpty()) {
-                    EmptyState(title = "Todavía no hay capturas", message = "Los precios que guardes aparecerán aquí.")
+                    EmptyState(title = "Todavía no hay capturas", message = "Lo que guardes aparecerá aquí con su estado.")
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         state.capturas.forEach { CapturaCard(it) }
@@ -327,6 +382,7 @@ fun ObservationsScreen(
 
 @Composable
 private fun CapturaCard(c: ObservacionGuardada) {
+    val esPrecio = c.tipo == TipoCaptura.PRECIO_OBSERVADO
     RetailCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
@@ -340,19 +396,30 @@ private fun CapturaCard(c: ObservacionGuardada) {
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        "${c.tiendaNombre} · ${fecha(c.creadaEn)}",
+                        "${nombreTipo(c.tipo)} · ${c.tiendaNombre} · ${fecha(c.creadaEn)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(dinero(c.precio), style = MaterialTheme.typography.titleLarge)
+                    val valor = if (esPrecio) {
+                        c.precio?.let(::dinero) ?: "—"
+                    } else {
+                        c.existencia?.let { if (it == 0.0) "Agotado" else "${cantidad(it)} u." } ?: "—"
+                    }
+                    Text(valor, style = MaterialTheme.typography.titleLarge)
                     when (c.estado) {
                         EstadoCaptura.PENDIENTE -> Pill(text = "Pendiente de enviar", background = WarningSoft, contentColor = Warning)
-                        EstadoCaptura.ENVIADA -> Pill(text = "En revisión", background = WarningSoft, contentColor = Warning)
+                        EstadoCaptura.REINTENTO -> Pill(text = "Se reintentará", background = WarningSoft, contentColor = Warning)
+                        EstadoCaptura.ENVIADA -> if (esPrecio) {
+                            Pill(text = "Enviada · en revisión", background = WarningSoft, contentColor = Warning)
+                        } else {
+                            StatusPill(text = "Enviada", positive = true)
+                        }
+                        EstadoCaptura.CONFLICTO -> StatusPill(text = "Conflicto", positive = false)
+                        EstadoCaptura.NO_ACEPTADA -> StatusPill(text = "Rechazada", positive = false)
                         EstadoCaptura.APROBADA -> StatusPill(text = "Aprobada", positive = true)
-                        EstadoCaptura.RECHAZADA -> StatusPill(text = "Rechazada", positive = false)
-                        EstadoCaptura.NO_ACEPTADA -> StatusPill(text = "No aceptada", positive = false)
+                        EstadoCaptura.RECHAZADA -> StatusPill(text = "Precio no aprobado", positive = false)
                     }
                 }
             }
@@ -363,21 +430,29 @@ private fun CapturaCard(c: ObservacionGuardada) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (c.estado == EstadoCaptura.APROBADA) {
-                Text(
-                    "Aprobada por el Responsable de precios. Ya forma parte del historial de precios.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            val explicacion = when (c.estado) {
+                EstadoCaptura.PENDIENTE -> "Guardada en el teléfono. Se envía sola cuando haya internet."
+                EstadoCaptura.REINTENTO -> "El servidor no pudo entregarla todavía; se vuelve a enviar sola con el mismo folio."
+                EstadoCaptura.ENVIADA -> if (esPrecio) {
+                    "Recibida por el servidor. Espera la decisión del Responsable de precios."
+                } else {
+                    "Recibida por el servidor."
+                }
+                EstadoCaptura.CONFLICTO -> "El servidor ya tenía un dato más reciente de esta tienda y presentación. No se sobrescribió y no se reintenta; la captura quedó guardada."
+                EstadoCaptura.NO_ACEPTADA -> "El servidor no la aceptó y reintentar no cambia nada."
+                EstadoCaptura.APROBADA -> "Aprobada por el Responsable de precios. Ya forma parte del historial de precios."
+                EstadoCaptura.RECHAZADA -> "El Responsable de precios no la aprobó."
             }
-            if (c.estado == EstadoCaptura.ENVIADA) {
-                Text(
-                    "Recibida por el servidor. Espera la decisión del Responsable de precios.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Text(explicacion, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            c.motivo?.let {
+                val color = if (c.estado == EstadoCaptura.REINTENTO) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                Text("Motivo: $it", style = MaterialTheme.typography.bodySmall, color = color)
             }
-            c.motivoRechazo?.let { Text(if (c.estado == EstadoCaptura.RECHAZADA) "Motivo: $it" else it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            Text(
+                "Folio ${c.captureId}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

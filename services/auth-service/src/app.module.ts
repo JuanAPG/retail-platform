@@ -1,3 +1,4 @@
+import { PasswordRecoveryService } from './auth/password-recovery.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -42,7 +43,7 @@ import { UsuarioEntity } from './entities/usuario.entity';
     JwtModule.register({}),
   ],
   controllers: [HealthController, AuthController, UsersController, RolesController],
-  providers: [AuthService, LoginRateLimitGuard, UsersService, RolesService, AuditReporter, SessionGuard],
+  providers: [AuthService, PasswordRecoveryService, LoginRateLimitGuard, UsersService, RolesService, AuditReporter, SessionGuard],
   exports: [SessionGuard],
 })
 export class AppModule {}

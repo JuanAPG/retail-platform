@@ -113,7 +113,7 @@ Resultado (`captureResponse`):
 |---|---|---|
 | `aceptada` | `201` | La captura es el dato más reciente de esa tienda y presentación: actualiza la existencia. |
 | `conflicto` | `201` | El servidor ya tenía un dato **capturado después** (`currentCapturedAt` > `capturedAt`). La captura se guarda en la bitácora pero **no sobrescribe** (D-42). `reason` lo explica. |
-| `duplicada` | `200` | Ese `captureId` ya se había recibido: no se crea nada y se devuelve el resultado original (reenviar un lote no duplica). |
+| `duplicada` | `200` | Ese `captureId` ya se había recibido: no se crea nada y se devuelve el resultado original (reenviar un lote no duplica). Trae **`originalStatus`** (`aceptada` o `conflicto`): el estado con que se registró la primera vez. Úsalo en vez de leer el texto de `reason`. |
 
 - Lo que cuenta es **cuándo se capturó**, no cuándo se subió: una captura del lunes
   sincronizada el viernes pierde contra una del jueves.
@@ -324,9 +324,9 @@ No emite notificaciones: ninguna decisión define un aviso para estos eventos.
 
 No son parte de este contrato; las coordina cada dueño:
 
-- **decision-service** hoy lee `inventario` por SQL en accesibilidad. Debe pasar a
-  `GET /v1/availability/zones/:zoneId/coverage`. La columna que lee no cambia, así que
-  sigue funcionando mientras migra.
+- **decision-service** ya usa `GET /v1/availability/zones/:zoneId/coverage` para la
+  cobertura de básicos de la accesibilidad. Solo si availability no responde vuelve a su
+  cálculo SQL anterior sobre `inventario` (respaldo, sin vigencia).
 - **offline-sync-service** (T-17) envía cada captura de disponibilidad a
   `POST /v1/availability/captures` con su `captureId` y traduce `status` a su acuse
   (`aceptada`, `duplicada`, `conflicto`; un `400` es `rechazada`).

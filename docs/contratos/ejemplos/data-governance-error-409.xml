@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="governance/v1"><statusCode>409</statusCode><code>CONFLICT</code><message>Ya hay un linaje para demand-forecast-service/corrida/674a1f3c9e2b4d0012ab34cd con otro contenido; el linaje no se sobrescribe.</message><path>/v1/lineage</path><timestamp>2026-11-25T18:05:00.114000+00:00</timestamp></error>

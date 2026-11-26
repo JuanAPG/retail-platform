@@ -8,6 +8,8 @@ import { ApiErrores, ApiRespuesta } from '../common/swagger/ejemplos';
 import { muestras } from '../common/swagger/muestras';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsFilterDto } from './dto/analytics-filter.dto';
+import { WeeklySalesFilterDto } from './dto/weekly-sales-filter.dto';
+import { BasketProductsFilterDto } from './dto/basket-products-filter.dto';
 
 /**
  * M09 — Indicadores descriptivos dentro de core-process-service.
@@ -64,5 +66,37 @@ export class AnalyticsController {
   @ApiErrores(401, 403)
   getSpendByCategory(@Query() filters: AnalyticsFilterDto) {
     return this.analyticsService.getSpendByCategory(filters);
+  }
+
+  /** Ruta nueva del Sprint 4 (T-13): la consume demand-forecast-service. */
+  @Get('weekly-sales')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({
+    summary: 'Ventas de un producto por semana (lunes, hora de Monterrey) y presentación.',
+    description:
+      'Serie para el pronóstico de demanda. Cantidades en la unidad de cada presentación; ' +
+      '`transactions` y `stores` del encabezado son distintos en toda la ventana. ' +
+      '`asOf` fija la instantánea. Ver `docs/contratos/core-process-analytics.md`.',
+  })
+  @ApiRespuesta(200, 'Serie semanal del producto.', muestras.ventasSemanales)
+  @ApiErrores(400, 401, 403)
+  getWeeklySales(@Query() filters: WeeklySalesFilterDto) {
+    return this.analyticsService.getWeeklySales(filters);
+  }
+
+  /** Ruta nueva del Sprint 4 (T-12): la consume basket-analysis-service. */
+  @Get('basket-products')
+  @Roles(...PERFILES_INTERNOS)
+  @ApiOperation({
+    summary: 'Canastas del grupo zona + segmento y en cuántas canastas distintas aparece cada producto.',
+    description:
+      'Base de la canasta típica (D-37). Una canasta con varias presentaciones del mismo ' +
+      'producto cuenta una vez. Sin `groupBy`, un solo periodo (aunque tenga 0 canastas). ' +
+      '`asOf` fija la instantánea. Ver `docs/contratos/core-process-analytics.md`.',
+  })
+  @ApiRespuesta(200, 'Productos del grupo por periodo.', muestras.productosPorCanastaDelGrupo)
+  @ApiErrores(400, 401, 403)
+  getBasketProducts(@Query() filters: BasketProductsFilterDto) {
+    return this.analyticsService.getBasketProducts(filters);
   }
 }

@@ -50,7 +50,8 @@ el Postgres compartido. **Nunca escribe tablas ajenas.**
 
 | Dueño | Lo que lee |
 |---|---|
-| catalog-service | `productos`, `producto_presentaciones`, `zonas`, `tiendas`, `segmentos_ingreso`, `unidades_medida`, `zona_clasificaciones`, `indicadores`, `indicador_valores`, `inventario`; vista `v_zona_indicadores` |
+| catalog-service | `productos`, `producto_presentaciones`, `zonas`, `tiendas`, `segmentos_ingreso`, `unidades_medida`, `zona_clasificaciones`, `indicadores`, `indicador_valores`; vista `v_zona_indicadores` |
+| availability-service | `inventario` solo como **respaldo** si availability no responde; lo normal es su API de cobertura (D-38) |
 | pricing-service | `precios` |
 | core-process-service | `transacciones_detalle`, `canastas` |
 | algorithms-core | `elasticidades`, `corrida_clusters`, y las corridas de elasticidad en `analisis_corridas` |
@@ -112,6 +113,15 @@ Response `200`:
 ponderado de precio, ingreso del segmento, disponibilidad y cobertura de
 básicos. Zona o segmento inexistente → 404 `NOT_FOUND`.
 
+**Cobertura de básicos (D-38).** Sale de availability-service por HTTP
+(`GET {AVAILABILITY_SERVICE_URL}/v1/availability/zones/:zoneId/coverage`,
+reenviando el `Authorization`, timeout 3 s): `coverage / 100`. Esa cobertura ya
+aplica la vigencia de 7 días. Si availability responde `disponible: false`
+(zona sin tiendas, sin básicos o sin datos vigentes) el componente vale **0**,
+igual que los otros componentes sin datos. Si availability no responde, se usa
+el cálculo anterior (SQL sobre `inventario`, sin vigencia) y queda en el log,
+para que el índice no se caiga en la demo.
+
 ## GET /v1/accessibility/by-zone/:zoneId
 
 Historial de corridas de la zona (de la más reciente a la más antigua),
@@ -153,6 +163,21 @@ Request JSON:
 { "presentationId": "uuid-presentacion", "zoneId": "uuid-zona", "newPrice": 25.5 }
 ```
 
+Request XML (`Content-Type: application/xml` o `text/xml`), raíz
+`simulacionPrecioRequest` del XSD, en el namespace `decision/v1`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionPrecioRequest xmlns="decision/v1">
+  <presentationId>8f14e45f-ceea-467a-9f3b-1c2d3e4f5a6b</presentationId>
+  <zoneId>3c59dc04-8a1f-4d2e-b7c6-5e4f3a2b1c0d</zoneId>
+  <newPrice>25.50</newPrice>
+</simulacionPrecioRequest>
+```
+
+El XML se convierte al mismo objeto que el JSON y pasa por los mismos guards
+y la misma validación (ver "Cuerpo XML de entrada" al final de esta sección).
+
 Sin elasticidad previa para esa presentación/zona → 404 `NOT_FOUND` (no se
 inventa demanda). Sin precio vigente → 404. Response `201`:
 
@@ -160,12 +185,13 @@ inventa demanda). Sin precio vigente → 404. Response `201`:
 {
   "type": "price", "productId": "uuid", "presentationId": "uuid",
   "zoneId": "uuid-zona", "segmentId": 2,
-  "inputs": { "currentPrice": 28.5, "newPrice": 25.5, "elasticity": -1.2 },
+  "inputs": { "currentPrice": 28.5, "newPrice": 25.5, "baseDemand": 100,
+              "elasticity": -1.2, "elasticityRunId": "uuid-corrida" },
   "results": [
     { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
-      "baseValue": 100, "simulatedValue": 112.4, "variacionPct": 12.4 },
+      "baseValue": 100, "simulatedValue": 112.4, "variationPct": 12.4 },
     { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
-      "baseValue": 2850.0, "simulatedValue": 2856.2, "variacionPct": 0.22 }
+      "baseValue": 2850.0, "simulatedValue": 2856.2, "variationPct": 0.22 }
   ],
   "scenarioId": "uuid-escenario"
 }
@@ -183,6 +209,22 @@ Request JSON:
   "presentationIds": ["uuid-a", "uuid-b", "uuid-c"] }
 ```
 
+Request XML, raíz `simulacionPresentacionRequest` (la lista va como
+`<presentationIds><item>…</item></presentationIds>`):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionPresentacionRequest xmlns="decision/v1">
+  <productId>a87ff679-a2f3-471d-8c3e-9b8a7c6d5e4f</productId>
+  <zoneId>3c59dc04-8a1f-4d2e-b7c6-5e4f3a2b1c0d</zoneId>
+  <presentationIds>
+    <item>e4da3b7f-bbce-4345-9777-2b0674a318d5</item>
+    <item>1679091c-5a88-4faf-afb5-e6087eb1b2dc</item>
+    <item>8f14e45f-ceea-467a-9f3b-1c2d3e4f5a6c</item>
+  </presentationIds>
+</simulacionPresentacionRequest>
+```
+
 `zoneId` opcional: sin ella usa datos nacionales. `presentationIds` opcional:
 sin ella se comparan todas las presentaciones activas del producto.
 
@@ -193,24 +235,104 @@ sin ella se comparan todas las presentaciones activas del producto.
 | 400 | `presentationIds` trae menos de 3; el producto tiene menos de 3 presentaciones activas; alguna presentación es de otro producto (D-14) o está inactiva |
 | 404 | El producto o la zona no existen; menos de 3 de las presentaciones tienen precio vigente (las que no tienen se excluyen con aviso, nunca entran como 0) |
 
-Response `201`: `PresentationComparisonResult` con `type: "presentacion"`.
+Response `201`: `PresentationComparisonResult` con `type: "presentacion"`:
+`{ scenarioId, productId, productName, zoneId, segmentId, presentations: [{ presentationId,
+presentationName, priceStatus, outlay, unitPrice, baseUnit, estimatedDemand,
+accessibilityEffect: { incomeSharePct, unitPricePremiumPct } }], referencePresentationId,
+comparedPresentationId, results, assumptions, warnings }`. Sin precio, `outlay`, `unitPrice`
+y `estimatedDemand` son `null` (nunca 0) y `priceStatus` dice por qué.
+
+### Cuerpo XML de entrada (`/price` y `/presentation`)
+
+Los dos POST de simulación aceptan `application/json` (igual que siempre) o
+`application/xml` / `text/xml`. La respuesta sigue el `Accept`, también en
+los errores. Orden de revisión: sesión (401) → rol (403) → cuerpo XML → DTO.
+La excepción es el 413: el tope se aplica mientras se lee el cuerpo, antes
+de revisar la sesión (igual que el tope del parser JSON).
+
+| Código | Cuándo (cuerpo XML) |
+|---|---|
+| 400 `VALIDATION_ERROR` | XML vacío o mal formado; trae `DOCTYPE` o `ENTITY`; la raíz no es la del XSD; la raíz no está en el namespace `decision/v1`; el contenido no cumple el DTO (mismo `details` que en JSON) |
+| 413 `VALIDATION_ERROR` | El cuerpo XML pasa de 1 MB |
+| 415 `VALIDATION_ERROR` | `Content-Type` que no es `application/json`, `application/xml` ni `text/xml`, o un `charset` distinto de UTF-8 |
 
 ## GET /v1/simulation/scenarios
 
-Escenarios guardados. Response `200`: `[{ id, nombre, zonaId, creadoPor, createdAt }]`.
+Escenarios guardados, del más reciente al más antiguo. Lista paginada
+(paginación estándar: `page` y `limit`, enteros ≥ 1; `limit` por defecto 20,
+mayor a 100 se recorta a 100). XML: raíz
+`simulacionEscenariosResponse`, cada escenario como `<item>` dentro de
+`<data>`. Response `200`:
+
+```json
+{
+  "data": [{
+    "id": "uuid-escenario", "name": "Cambio de precio - …", "type": "precio",
+    "zoneId": "uuid-zona", "productId": "uuid", "presentationId": "uuid",
+    "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+    "currentPrice": 28.5, "newPrice": 25.5, "baseDemand": 100,
+    "presentations": [], "assumptions": ["…"],
+    "createdBy": "uuid-usuario", "createdAt": "2026-10-12T18:00:00.000Z"
+  }],
+  "total": 1, "page": 1, "limit": 20
+}
+```
+
+`type` es `precio`, `presentacion` o `desconocido` (escenario viejo sin
+insumos guardados). Ojo: aquí es `precio`, mientras que la respuesta de
+`POST /v1/simulation/price` trae `"type": "price"`. Los campos que no aplican al tipo salen `null` en JSON
+y se omiten en XML (`productId`, `presentationId`, `elasticity`,
+`currentPrice`, `newPrice`, `baseDemand`); `presentations` solo trae datos
+en un escenario de presentación.
 
 ## GET /v1/simulation/compare?ids=id1,id2
 
-Compara escenarios entre sí. Response `200`:
+Compara escenarios guardados entre sí (`ids=a,b` o `ids=a&ids=b`): de 2 a
+20 UUID, sin repetir. Si alguno no existe → 404 `NOT_FOUND`. XML: raíz
+`simulacionCompareResponse`; las listas salen como `<item>`.
+
+Es una lista **por escenario** (no un mapa indexado por id, porque un UUID no
+es un nombre de elemento XML válido), en el mismo orden que `ids`. Cada
+escenario trae sus `results`, con `difference` (`simulatedValue - baseValue`)
+y `variationPct` (`null` en JSON y omitido en XML si `baseValue` es 0).
+`warnings` avisa, por ejemplo, si se mezclan escenarios de tipos distintos
+(sus indicadores no miden lo mismo); sin avisos es `[]`. Response `200`:
 
 ```json
 {
   "scenarioIds": ["uuid-1", "uuid-2"],
-  "scenarioNames": { "uuid-1": "Cambio de precio - …" },
-  "rows": [{ "indicatorKey": "ingreso_estimado", "zonaId": "uuid-zona",
-              "valuesByScenario": { "uuid-1": 2856.2, "uuid-2": 2790.0 } }]
+  "scenarios": [
+    { "scenarioId": "uuid-1",
+      "name": "Cambio de precio - Arroz 1 kg (12/10/26, 6:00:00 p.m.) #a1b2c3",
+      "type": "precio", "zoneId": "uuid-zona",
+      "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+      "results": [
+        { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
+          "baseValue": 100, "simulatedValue": 112.4,
+          "difference": 12.4, "variationPct": 12.4 },
+        { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
+          "baseValue": 2850.0, "simulatedValue": 2856.2,
+          "difference": 6.2, "variationPct": 0.2175 }
+      ] },
+    { "scenarioId": "uuid-2",
+      "name": "Cambio de precio - Arroz 1 kg (12/10/26, 6:05:00 p.m.) #d4e5f6",
+      "type": "precio", "zoneId": "uuid-zona",
+      "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+      "results": [
+        { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
+          "baseValue": 100, "simulatedValue": 97.9,
+          "difference": -2.1, "variationPct": -2.1 },
+        { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
+          "baseValue": 2850.0, "simulatedValue": 2790.0,
+          "difference": -60.0, "variationPct": -2.1053 }
+      ] }
+  ],
+  "warnings": []
 }
 ```
+
+Un indicador que un escenario no calculó simplemente no aparece en su `results`; el cliente
+lo muestra vacío, nunca como 0.
 
 ## POST /v1/recommendations/generate (Planeador)
 

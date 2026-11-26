@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de demand-forecast-service (T-06, T-13, D-40, D-36, D-47).
+     Espacio de nombres fijo `forecast/v1`. Los endpoints responden estas raíces
+     cuando `Accept: application/xml`. `GET /v1/health` usa health.xsd.
+
+     Convenciones de este esquema (las de `app/xml_out.py` de la plantilla FastAPI):
+     - Objetos con xs:all: los campos pueden llegar en cualquier orden.
+     - Todo arreglo se envuelve en <item> por elemento; arreglo vacío = elemento vacío.
+     - Un null se OMITE: los campos que pueden ser nulos llevan minOccurs="0".
+     - Cantidades y estadísticos sin redondear: xs:double. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="forecast/v1"
+           xmlns:fc="forecast/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== Tipos simples ===== -->
+
+  <xs:simpleType name="fecha">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="sha256">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-f]{64}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Unidad base del producto (DF-2): factor 1 de su tipo en `unidades_medida`. -->
+  <xs:simpleType name="unidadBase">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="kg"/>
+      <xs:enumeration value="l"/>
+      <xs:enumeration value="pza"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="tipoUnidad">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="masa"/>
+      <xs:enumeration value="volumen"/>
+      <xs:enumeration value="pieza"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="reglaPublicacion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ambos"/>
+      <xs:enumeration value="cualquiera"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="tipoCorrida">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="forecast"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="textos">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== Partes de la corrida ===== -->
+
+  <xs:complexType name="parametros">
+    <xs:all>
+      <xs:element name="productId" type="xs:string"/>
+      <!-- Sin zona = todas las zonas. -->
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="dateFrom" type="fc:fecha" minOccurs="0"/>
+      <xs:element name="dateTo" type="fc:fecha" minOccurs="0"/>
+      <xs:element name="horizonWeeks" type="xs:positiveInteger"/>
+      <xs:element name="holdoutWeeks" type="xs:positiveInteger"/>
+      <xs:element name="seasonalPeriod" type="xs:positiveInteger"/>
+      <xs:element name="intervalLevels">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="xs:positiveInteger" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="model" type="xs:string"/>
+      <xs:element name="publicationRule" type="fc:reglaPublicacion"/>
+      <xs:element name="minTransactions" type="xs:positiveInteger"/>
+      <xs:element name="minStores" type="xs:positiveInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="producto">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="unit" type="fc:unidadBase"/>
+      <xs:element name="unitType" type="fc:tipoUnidad"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="zona">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- D-36: conteos de la combinación; se publican aunque el pronóstico no. -->
+  <xs:complexType name="cobertura">
+    <xs:all>
+      <xs:element name="transactions" type="xs:nonNegativeInteger"/>
+      <xs:element name="stores" type="xs:nonNegativeInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- Foto de los datos (D-15): con la misma historia, el mismo resultado. -->
+  <xs:complexType name="versionDatos">
+    <xs:all>
+      <xs:element name="sha256" type="fc:sha256"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="asOf" type="xs:dateTime"/>
+      <xs:element name="weeks" type="xs:positiveInteger"/>
+      <xs:element name="effectiveFrom" type="fc:fecha"/>
+      <xs:element name="effectiveTo" type="fc:fecha"/>
+      <xs:element name="zeroWeeks" type="xs:nonNegativeInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="semanaHistoria">
+    <xs:all>
+      <xs:element name="weekStart" type="fc:fecha"/>
+      <xs:element name="quantity" type="xs:double"/>
+      <!-- true = semana sin ventas rellenada con 0 (DF-3). -->
+      <xs:element name="filled" type="xs:boolean"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="semanaReservada">
+    <xs:all>
+      <xs:element name="weekStart" type="fc:fecha"/>
+      <xs:element name="actual" type="xs:double"/>
+      <xs:element name="forecast" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="validacion">
+    <xs:all>
+      <xs:element name="trainWeeks" type="xs:positiveInteger"/>
+      <xs:element name="holdoutWeeks" type="xs:positiveInteger"/>
+      <!-- En porcentaje (7.5 = 7.5 %). Se omite si las semanas reservadas son todas 0. -->
+      <xs:element name="mape" type="xs:double" minOccurs="0"/>
+      <xs:element name="mapeWeeks" type="xs:nonNegativeInteger"/>
+      <xs:element name="zeroWeeksExcluded" type="xs:nonNegativeInteger"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <xs:element name="holdout">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="fc:semanaReservada" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="semanaPronostico">
+    <xs:all>
+      <xs:element name="weekStart" type="fc:fecha"/>
+      <xs:element name="quantity" type="xs:double"/>
+      <xs:element name="lower80" type="xs:double"/>
+      <xs:element name="upper80" type="xs:double"/>
+      <xs:element name="lower95" type="xs:double"/>
+      <xs:element name="upper95" type="xs:double"/>
+      <!-- true = algún límite inferior salió negativo y se recortó a 0 (DF-7). -->
+      <xs:element name="clipped" type="xs:boolean"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="modelo">
+    <xs:all>
+      <xs:element name="library" type="xs:string"/>
+      <xs:element name="smoothingLevel" type="xs:double"/>
+      <xs:element name="smoothingTrend" type="xs:double"/>
+      <xs:element name="smoothingSeasonal" type="xs:double"/>
+      <!-- Se omite si el ajuste no da un AIC finito: nunca sale Infinity ni NaN. -->
+      <xs:element name="aic" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="presentacionExcluida">
+    <xs:all>
+      <xs:element name="presentationId" type="xs:string"/>
+      <xs:element name="reason" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- Corrida completa: POST /v1/forecast/run (201) y GET /v1/forecast/runs/:id.
+       Con disponible=false (D-36) no llevan dataVersion, history, validation,
+       forecast ni model: nunca sale un número del agregado. -->
+  <xs:complexType name="corrida">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="type" type="fc:tipoCorrida"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="durationMs" type="xs:double"/>
+      <xs:element name="parameters" type="fc:parametros"/>
+      <xs:element name="product" type="fc:producto"/>
+      <xs:element name="zone" type="fc:zona" minOccurs="0"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <xs:element name="coverage" type="fc:cobertura"/>
+      <xs:element name="dataVersion" type="fc:versionDatos" minOccurs="0"/>
+      <xs:element name="history" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="fc:semanaHistoria" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="validation" type="fc:validacion" minOccurs="0"/>
+      <xs:element name="forecast" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="fc:semanaPronostico" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="model" type="fc:modelo" minOccurs="0"/>
+      <xs:element name="excludedPresentations">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="fc:presentacionExcluida" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="limitations" type="fc:textos"/>
+      <xs:element name="assumptions" type="fc:textos"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- Resumen de una corrida en el listado (sin history ni forecast). -->
+  <xs:complexType name="resumenCorrida">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="date" type="xs:dateTime"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="productId" type="xs:string"/>
+      <xs:element name="zoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="unit" type="fc:unidadBase"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="weeks" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="mape" type="xs:double" minOccurs="0"/>
+      <xs:element name="durationMs" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="diferencia">
+    <xs:all>
+      <xs:element name="field" type="xs:string"/>
+      <xs:element name="stored" type="xs:string"/>
+      <xs:element name="recomputed" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- ===== Raíces ===== -->
+
+  <xs:element name="forecastRunResponse" type="fc:corrida"/>
+
+  <xs:element name="forecastRunListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="fc:resumenCorrida" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:nonNegativeInteger"/>
+        <xs:element name="page" type="xs:positiveInteger"/>
+        <xs:element name="limit" type="xs:positiveInteger"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="forecastReplayResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="runId" type="xs:string"/>
+        <xs:element name="identical" type="xs:boolean"/>
+        <xs:element name="sha256" type="fc:sha256"/>
+        <xs:element name="differences">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="fc:diferencia" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="durationMs" type="xs:double"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Error estándar ===== -->
+
+  <xs:simpleType name="errorCode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- El middleware quita `details` al responder XML. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="fc:errorCode"/>
+        <xs:element name="details" type="xs:anyType" minOccurs="0"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

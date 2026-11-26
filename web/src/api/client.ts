@@ -21,7 +21,10 @@ export const SERVICIOS = {
   notifications: { etiqueta: 'notifications-service', puerto: 3109, env: 'VITE_NOTIFICATIONS_URL' },
   audit: { etiqueta: 'audit-service', puerto: 3110, env: 'VITE_AUDIT_URL' },
   // Sprint 4 (D-35): los segmentos de ingreso salieron de catalog-service.
+  ingestion: { etiqueta: 'transactions-ingestion-service', puerto: 3111, env: 'VITE_INGESTION_URL' },
   segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
+  // T-09: estado de los 20 servicios (solo Administrador).
+  monitoring: { etiqueta: 'monitoring-service', puerto: 3120, env: 'VITE_MONITORING_URL' },
 } as const;
 
 type NombreServicio = keyof typeof SERVICIOS;
@@ -81,7 +84,7 @@ export function limpiarSesion(): void {
 
 // Rutas donde un 401 significa "credenciales incorrectas", no "tu sesión
 // expiró": ahí el error lo muestra el formulario y NO se toca la sesión.
-const RUTAS_SIN_SESION = ['/auth/login', '/auth/register/proveedor', '/auth/refresh'];
+const RUTAS_SIN_SESION = ['/auth/login', '/auth/register/proveedor', '/auth/refresh', '/auth/password-reset/'];
 
 interface ReintentableConfig extends InternalAxiosRequestConfig {
   _reintentado?: boolean;
@@ -207,3 +210,6 @@ export const documentsApi = crearCliente('documents');
 export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
 export const segmentationApi = crearCliente('segmentation');
+export const monitoringApi = crearCliente('monitoring');
+
+export const ingestionApi = crearCliente('ingestion');

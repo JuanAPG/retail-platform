@@ -1,6 +1,9 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { TransactionsService } from './transactions.service';
+import { getMetadataArgsStorage } from 'typeorm';
+import { FILAS_POR_INSERT, TransactionsService } from './transactions.service';
+import { ImportacionFila } from '../entities/importacion-fila.entity';
+import { ImportacionError } from '../entities/importacion-error.entity';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { BasketsService } from '../baskets/baskets.service';
 
@@ -212,6 +215,7 @@ function servicio(opciones: Opciones = {}) {
     insertadas,
     commits,
     guardados,
+    manager,
     r: { transactionsRepo, importacionesRepo, filasRepo, erroresRepo },
   };
 }
@@ -443,6 +447,63 @@ describe('TransactionsService — preview CSV', () => {
     // La cabecera tampoco: si quedara, su hash bloquearía el archivo con
     // 409 para siempre, incluso después de que el catálogo vuelva.
     expect(r.importacionesRepo.save).not.toHaveBeenCalled();
+  });
+
+  // --- Staging en bloques: Postgres acepta 65,535 parámetros por consulta.
+  // De un solo INSERT, más de 4,095 líneas (16 valores cada una) daban 500.
+
+  const lineasValidas = (n: number) =>
+    Array.from({ length: n }, (_, i) => `T${i + 1},2026-09-01,Super Valle Centro,P-001-001,1 kg,2,42.5`);
+  const guardadoDe = (manager: { save: jest.Mock }, entidad: unknown) =>
+    manager.save.mock.calls.filter(([e]) => e === entidad);
+
+  it('un bloque de FILAS_POR_INSERT cabe en el tope de parámetros de Postgres', () => {
+    const columnas = (entidad: unknown) =>
+      getMetadataArgsStorage().columns.filter((c) => c.target === entidad).length;
+    // Cota alta: cuenta también el id que pone la base.
+    expect(FILAS_POR_INSERT * columnas(ImportacionFila)).toBeLessThanOrEqual(65535);
+    expect(FILAS_POR_INSERT * columnas(ImportacionError)).toBeLessThanOrEqual(65535);
+  });
+
+  it('5,000 líneas válidas (arriba del límite viejo de 4,095) se guardan en bloques', async () => {
+    const { svc, r, manager } = servicio();
+    const resultado = await svc.previewCsvImport(archivo(lineasValidas(5000)), USUARIO as never);
+
+    expect(resultado.filasTotales).toBe(5000);
+    expect(resultado.filasValidas).toBe(5000);
+    expect(resultado.transaccionesDetectadas).toBe(5000);
+    const [llamada] = guardadoDe(manager, ImportacionFila);
+    expect(llamada[1]).toHaveLength(5000);
+    expect(llamada[2]).toEqual({ chunk: FILAS_POR_INSERT });
+    expect(r.importacionesRepo.save).not.toHaveBeenCalled(); // la cabecera va por el manager
+  });
+
+  it('los errores de un archivo grande también se guardan en bloques', async () => {
+    const { svc, manager } = servicio();
+    const conCantidadCero = lineasValidas(4500).map((l) => l.replace(',1 kg,2,', ',1 kg,0,'));
+    const resultado = await svc.previewCsvImport(archivo(conCantidadCero), USUARIO as never);
+
+    expect(resultado.filasConError).toBe(4500);
+    const [llamada] = guardadoDe(manager, ImportacionError);
+    expect(llamada[1]).toHaveLength(4500);
+    expect(llamada[2]).toEqual({ chunk: FILAS_POR_INSERT });
+    // La respuesta sigue recortada aunque el staging guarde todos.
+    expect(resultado.errores.length).toBeLessThanOrEqual(200);
+  });
+
+  it('si un bloque falla, la vista previa no deja nada a medias', async () => {
+    const { svc, commits, manager } = servicio();
+    const original = manager.save.getMockImplementation()!;
+    manager.save.mockImplementation(async (entidad: unknown, fila: object | object[]) => {
+      if (entidad === ImportacionFila) throw new Error('bind message has 33776 parameter formats');
+      return original(entidad, fila);
+    });
+
+    await expect(svc.previewCsvImport(archivo(lineasValidas(5000)), USUARIO as never)).rejects.toThrow(
+      /parameter formats/,
+    );
+    // Cabecera, filas y errores van en la misma transacción: se revierte toda.
+    expect(commits).toEqual(['rollback']);
   });
 });
 

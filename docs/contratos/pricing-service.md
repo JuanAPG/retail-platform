@@ -518,8 +518,10 @@ Response `201` (`priceObservationResponse`): la observación `pendiente`.
 |---|---|---|
 | Id nuevo (o sin id) | `201` con la observación nueva | `aceptada` |
 | Mismo id, mismo usuario (reenvío, aunque cambie el cuerpo) | `200` con la observación **original**; no se crea otra, ni se audita ni se avisa de nuevo | `duplicada` |
-| Mismo id, otro usuario | `409 CONFLICT` (no revela la ajena) | `conflicto` |
+| Mismo id, otro usuario | `409 CONFLICT` (no revela la ajena) | `rechazada` (generar otro id) |
 | Id que no es UUID v4 | `400 VALIDATION_ERROR` | `rechazada` |
+
+> **Acuses (D-42).** Un reenvío del mismo id (`200`) se acusa **`duplicada`**, nunca `aceptada`: es el caso de control de D-42 ("enviar el mismo lote dos veces → todas `duplicada`"). El `409` por un id que ya usó **otro usuario** se acusa **`rechazada`**: no es un conflicto de datos (en D-42 *conflicto* es que el servidor ya tiene un dato más reciente); el dispositivo debe generar otro id. Acordado con offline-sync (Fernando) el 26-nov-2026.
 
 ```json
 POST /v1/price-observations

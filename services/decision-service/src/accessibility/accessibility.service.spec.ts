@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
+import { AvailabilityClient, CoberturaZona } from '../common/availability/availability-client.service';
 import { AccessibilityComponentEntity } from '../entities/accessibility-component.entity';
 import { AccessibilityWeightEntity } from '../entities/accessibility-weight.entity';
 import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
@@ -32,7 +33,10 @@ const CON_DATOS: Datos = {
 
 const SEGMENTO = { id: 2, incomeRangeMin: '10000', incomeRangeMax: '20000' };
 
-function crearServicio(datos: Datos = CON_DATOS) {
+/** Por defecto availability "no responde": las pruebas de abajo ejercen el respaldo SQL (cálculo anterior). */
+const NO_RESPONDE: CoberturaZona = { estado: 'no_responde', motivo: 'prueba' };
+
+function crearServicio(datos: Datos = CON_DATOS, cobertura: CoberturaZona = NO_RESPONDE) {
   const zonaRepo = {
     create: jest.fn((x) => ({ ...x })),
     save: jest.fn(async (x) => ({ id: 'acc-1', ...x })),
@@ -61,6 +65,7 @@ function crearServicio(datos: Datos = CON_DATOS) {
     transaction: jest.fn(async (fn: (m: typeof manager) => unknown) => fn(manager)),
   };
   const audit = { reportar: jest.fn(async () => undefined) };
+  const availability = { coberturaZona: jest.fn(async () => cobertura) };
   const servicio = new AccessibilityService(
     zonaRepo as unknown as Repository<AccessibilityZoneEntity>,
     pesosRepo as unknown as Repository<AccessibilityWeightEntity>,
@@ -68,8 +73,9 @@ function crearServicio(datos: Datos = CON_DATOS) {
     segmentosRepo as unknown as Repository<IncomeSegment>,
     dataSource as unknown as DataSource,
     audit as unknown as AuditReporter,
+    availability as unknown as AvailabilityClient,
   );
-  return { zonaRepo, pesosRepo, componentesRepo, segmentosRepo, manager, dataSource, audit, servicio };
+  return { zonaRepo, pesosRepo, componentesRepo, segmentosRepo, manager, dataSource, audit, availability, servicio };
 }
 
 /** Valor guardado de cada componente, tal como llega a `accesibilidad_componentes`. */
@@ -78,6 +84,31 @@ function componentesGuardados(componentesRepo: { create: jest.Mock }): Record<st
     componentesRepo.create.mock.calls.map(([c]: [{ componente: string; valor: string }]) => [c.componente, c.valor]),
   );
 }
+
+describe('AccessibilityService: cobertura de básicos desde availability-service (D-38)', () => {
+  it('usa la cobertura de la zona que da availability (coverage/100) y reenvía el token', async () => {
+    const { componentesRepo, availability, dataSource, servicio } = crearServicio(CON_DATOS, { estado: 'ok', valor: 0.75 });
+    const resultado = await servicio.calculateIndex('zona-1', 2, { token: 'Bearer t' });
+    expect(availability.coberturaZona).toHaveBeenCalledWith('zona-1', 'Bearer t');
+    expect(componentesGuardados(componentesRepo).cobertura_basicos).toBe('0.7500');
+    // Ya no se lee `inventario` por SQL.
+    expect(dataSource.query.mock.calls.some(([sql]: [string]) => sql.includes('AS disponibles'))).toBe(false);
+    // 0.25 × (0.4 + 0.5 + 0.8 + 0.75) = 0.6125.
+    expect(resultado.indexValue).toBeCloseTo(0.6125, 10);
+  });
+
+  it('availability sin datos vigentes (vencidos > 7 días, sin tiendas o sin básicos): el componente vale 0', async () => {
+    const { componentesRepo, servicio } = crearServicio(CON_DATOS, { estado: 'sin_datos', motivo: 'ninguna tienda con dato vigente' });
+    await servicio.calculateIndex('zona-1', 2);
+    expect(componentesGuardados(componentesRepo).cobertura_basicos).toBe('0.0000');
+  });
+
+  it('availability no responde: respaldo con el cálculo SQL anterior (6 de 10 básicos)', async () => {
+    const { componentesRepo, servicio } = crearServicio(CON_DATOS, NO_RESPONDE);
+    await servicio.calculateIndex('zona-1', 2);
+    expect(componentesGuardados(componentesRepo).cobertura_basicos).toBe('0.6000');
+  });
+});
 
 describe('AccessibilityService.calculateIndex', () => {
   it('zona sin ningún precio vigente de canasta básica: el componente de precio vale 0, no 1', async () => {
@@ -210,6 +241,7 @@ describe('AccessibilityService.findByZone', () => {
       {} as unknown as Repository<IncomeSegment>,
       dataSource as unknown as DataSource,
       { reportar: jest.fn() } as unknown as AuditReporter,
+      { coberturaZona: jest.fn() } as unknown as AvailabilityClient,
     );
     return { dataSource, servicio };
   }

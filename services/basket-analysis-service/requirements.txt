@@ -1,0 +1,6 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pyjwt==2.10.1
+redis==5.2.1
+# Lecturas de core-process, catalog e income-segmentation (sin base de datos propia)
+httpx==0.28.1

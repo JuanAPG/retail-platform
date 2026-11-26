@@ -12,10 +12,12 @@ import { Connection, Model } from 'mongoose';
 import { AuditReporter } from '../../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../../common/auth/session.guard';
 import { correlacionActual } from '../../common/correlation/correlacion';
+import { ROL } from '../../common/roles';
 import { NotificationsReporter } from '../../common/notifications/notifications-reporter.service';
 import { FormatoExportacion } from '../dto/reports.dto';
 import { nombreDescarga, ReporteDto, ReportsService, TIPO_CONTENIDO } from '../reports.service';
 import { ALMACEN_OBJETOS, AlmacenNoDisponibleError, AlmacenObjetos, motivoSeguro, ttlConfigurado } from './almacen/almacen';
+import { asegurarMongo } from '../../common/mongo/asegurar-mongo';
 import { Archivo, ArchivoDocument, ESTADO_ARCHIVO } from './archivo.schema';
 
 export const DOMINIO = 'reportes';
@@ -81,8 +83,8 @@ export class ArchivosService {
     private readonly avisos: NotificationsReporter,
   ) {}
 
-  private exigirMongo() {
-    if (this.conexion.readyState !== 1) {
+  private async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.conexion))) {
       throw new ServiceUnavailableException('El registro de archivos (MongoDB) no está disponible. Intenta más tarde.');
     }
   }
@@ -102,7 +104,7 @@ export class ArchivosService {
   ): Promise<ResultadoPreparar> {
     // Autorización por recurso ANTES de tocar el registro: un Proveedor con un reporte ajeno recibe 404.
     const reporte = await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
 
     let doc = await this.obtenerOCrear(reporte, formato, usuario);
 
@@ -114,7 +116,7 @@ export class ArchivosService {
         throw new ServiceUnavailableException(`El almacén de archivos no responde: ${motivoSeguro(error)}`);
       }
       if (presente) {
-        await this.avisarUnaVez(doc, authorization);
+        await this.avisarUnaVez(doc, usuario, authorization);
         return { archivo: this.aDto(doc), status: 200 };
       }
       // El objeto desapareció del almacén: el registro deja de anunciarlo y se regenera.
@@ -185,7 +187,7 @@ export class ArchivosService {
         },
         authorization,
       );
-      await this.avisarUnaVez(listo!, authorization);
+      await this.avisarUnaVez(listo!, usuario, authorization);
       return { archivo: this.aDto(listo!), status: 201 };
     } catch (error) {
       const motivo = motivoSeguro(error);
@@ -199,7 +201,7 @@ export class ArchivosService {
 
   async listar(reporteId: string, usuario: SesionUsuario): Promise<ArchivoDto[]> {
     await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
     const docs = await this.modelo.find({ dominio: DOMINIO, recursoTipo: RECURSO, recursoId: reporteId }).sort({ formato: 1 });
     return docs.map((d) => this.aDto(d));
   }
@@ -270,7 +272,7 @@ export class ArchivosService {
 
   /** Registro por id sin regla de usuario: lo usa SOLO la descarga local, que ya validó la firma. */
   async porIdParaDescargaLocal(archivoId: string): Promise<ArchivoDocument | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     return this.modelo.findById(archivoId);
   }
 
@@ -330,7 +332,7 @@ export class ArchivosService {
 
   private async buscar(reporteId: string, archivoId: string, usuario: SesionUsuario): Promise<ArchivoDocument> {
     await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await this.modelo.findOne({ _id: archivoId, dominio: DOMINIO, recursoTipo: RECURSO, recursoId: reporteId });
     if (!doc) throw new NotFoundException('El archivo no existe.');
     return doc;
@@ -351,21 +353,29 @@ export class ArchivosService {
   }
 
   /**
-   * Aviso de "archivo disponible" UNA sola vez: se reclama atómicamente
+   * Aviso de "ya se puede descargar" UNA sola vez: se reclama atómicamente
    * (`avisoEmitidoEn: null → ahora`) y si notifications lo rechaza se libera
    * para que una petición posterior lo intente de nuevo.
+   *
+   * Usa el evento `reporte.generado` de T-20: lo origina solo el Gerente de
+   * categoría y le llega al mismo usuario que hizo la acción (destino `actor`).
+   * Con otro perfil no se emite (notifications lo rechazaría con 403) y el
+   * aviso queda pendiente para cuando lo pida un Gerente; la web ya muestra
+   * "ya se puede descargar" a quien lo preparó.
    */
-  private async avisarUnaVez(doc: ArchivoDocument, authorization: string | undefined): Promise<void> {
+  private async avisarUnaVez(doc: ArchivoDocument, usuario: SesionUsuario, authorization: string | undefined): Promise<void> {
+    if (usuario.rol !== ROL.GERENTE_CATEGORIA) return;
     const reclamado = await this.modelo.updateOne({ _id: doc._id, avisoEmitidoEn: null }, { $set: { avisoEmitidoEn: new Date() } });
     if (reclamado.modifiedCount !== 1) return;
     const aceptado = await this.avisos.emitir(
       {
-        eventType: 'reporte.disponible',
+        eventType: 'reporte.generado',
         relatedEntityType: 'reporte',
         relatedEntityId: doc.recursoId,
         title: 'Tu reporte ya se puede descargar',
         message: `El reporte ejecutivo en ${doc.formato.toUpperCase()} está listo para descargar.`,
-        recipientUserId: doc.solicitadoPor,
+        // Destino `actor`: notifications exige que sea quien hizo la acción.
+        recipientUserId: usuario.id,
       },
       authorization,
     );

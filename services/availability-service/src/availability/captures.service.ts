@@ -22,6 +22,11 @@ export interface Capture {
   currentStock?: number;
   currentCapturedAt?: Date;
   reason: string | null;
+  /**
+   * Solo en un `duplicada` (200): el estado con que se registró la captura la primera vez
+   * (`aceptada` o `conflicto`). Para que offline-sync no tenga que leerlo del texto de `reason`.
+   */
+  originalStatus?: 'aceptada' | 'conflicto';
 }
 
 export interface StockRow {
@@ -167,10 +172,14 @@ export class CapturesService {
       [fila.tienda_id, fila.presentacion_id],
     );
     const original = aCaptura(fila);
-    return conExistenciaActual(
-      { ...original, status: 'duplicada', reason: `Captura ya recibida (${original.status}); no se registró de nuevo (D-42).` },
-      actual,
-    );
+    return {
+      ...conExistenciaActual(
+        { ...original, status: 'duplicada', reason: `Captura ya recibida (${original.status}); no se registró de nuevo (D-42).` },
+        actual,
+      ),
+      // Campo estable para offline-sync; el texto de `reason` puede cambiar.
+      originalStatus: original.status as 'aceptada' | 'conflicto',
+    };
   }
 
   /** Bitácora de capturas, la más reciente (por llegada) primero. */
