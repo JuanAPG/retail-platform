@@ -7,12 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.udem.retaildecision.data.local.CatalogCache
 import com.udem.retaildecision.data.location.LocationProvider
 import com.udem.retaildecision.data.location.Ubicacion
+import com.udem.retaildecision.data.model.TipoCaptura
 import com.udem.retaildecision.data.remote.dto.PresentacionDto
 import com.udem.retaildecision.data.remote.dto.ProductDto
 import com.udem.retaildecision.data.remote.dto.StoreDto
 import com.udem.retaildecision.data.repository.CatalogRepository
 import com.udem.retaildecision.data.repository.ObservacionGuardada
 import com.udem.retaildecision.data.repository.ObservationRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,12 @@ fun precioDesdeTexto(texto: String): Double? {
     return if (numero > 0.0 && numero <= PRECIO_MAXIMO) numero else null
 }
 
+/** Existencia en unidades de la presentación: 0 o más (0 = agotado), hasta 2 decimales (contrato §3). */
+fun existenciaDesdeTexto(texto: String): Double? {
+    val numero = texto.trim().replace(',', '.').toDoubleOrNull() ?: return null
+    return if (numero >= 0.0 && numero <= PRECIO_MAXIMO) numero else null
+}
+
 /** Distancia en metros entre la ubicación y la dirección de la tienda, o null si la tienda no tiene coordenadas. */
 fun distanciaATienda(tienda: StoreDto?, ubicacion: Ubicacion?): Int? {
     val direccion = tienda?.direccion ?: return null
@@ -39,6 +47,13 @@ fun distanciaATienda(tienda: StoreDto?, ubicacion: Ubicacion?): Int? {
 }
 
 data class ObservationsUiState(
+    /** Tipos de captura que el rol puede mandar (contrato de offline-sync §2). */
+    val tipos: List<String> = listOf(TipoCaptura.PRECIO_OBSERVADO),
+    val tipo: String = TipoCaptura.PRECIO_OBSERVADO,
+    /** true = hay internet (ConnectivityObserver). */
+    val enLinea: Boolean = true,
+    /** Si el rol puede preguntar a pricing si ya aprobaron sus precios. */
+    val puedeConsultarDecisiones: Boolean = false,
     val cargandoCatalogo: Boolean = true,
     val errorCatalogo: String? = null,
     /** true si las listas salen de la copia guardada en el teléfono (no hubo conexión). */
@@ -49,7 +64,8 @@ data class ObservationsUiState(
     val busqueda: String = "",
     val producto: ProductDto? = null,
     val presentacion: PresentacionDto? = null,
-    val precioTexto: String = "",
+    /** Precio (precio_observado) o existencia (disponibilidad), según `tipo`. */
+    val valorTexto: String = "",
     val obteniendoUbicacion: Boolean = false,
     val ubicacion: Ubicacion? = null,
     val errorUbicacion: String? = null,
@@ -59,7 +75,10 @@ data class ObservationsUiState(
     val capturas: List<ObservacionGuardada> = emptyList(),
     val actualizandoEstados: Boolean = false,
 ) {
-    val precio: Double? get() = precioDesdeTexto(precioTexto)
+    val esPrecio: Boolean get() = tipo == TipoCaptura.PRECIO_OBSERVADO
+
+    /** El número ya validado para el tipo elegido, o null si no es válido. */
+    val valor: Double? get() = if (esPrecio) precioDesdeTexto(valorTexto) else existenciaDesdeTexto(valorTexto)
 
     /** Productos que coinciden con lo escrito (nombre o SKU), máximo 6, mientras no haya uno elegido. */
     val sugerencias: List<ProductDto>
@@ -70,7 +89,7 @@ data class ObservationsUiState(
         }
 
     val puedeGuardar: Boolean
-        get() = tienda != null && presentacion != null && precio != null && ubicacion != null && !guardando
+        get() = tienda != null && presentacion != null && valor != null && ubicacion != null && !guardando
 }
 
 class ObservationsViewModel(
@@ -80,14 +99,30 @@ class ObservationsViewModel(
     private val cache: CatalogCache,
     /** Pide al sistema que envíe lo pendiente en cuanto haya internet (SyncScheduler). */
     private val programarEnvio: () -> Unit,
+    tiposPermitidos: List<String>,
+    puedeConsultarDecisiones: Boolean,
+    conectividad: Flow<Boolean>,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ObservationsUiState())
+    private val _state = MutableStateFlow(
+        ObservationsUiState(
+            tipos = tiposPermitidos,
+            tipo = tiposPermitidos.firstOrNull() ?: TipoCaptura.PRECIO_OBSERVADO,
+            puedeConsultarDecisiones = puedeConsultarDecisiones,
+        ),
+    )
     val state: StateFlow<ObservationsUiState> = _state.asStateFlow()
 
     init {
         cargarCatalogo()
         refrescarEstados(avisar = false)
+        viewModelScope.launch {
+            conectividad.collect { enLinea ->
+                _state.update { it.copy(enLinea = enLinea) }
+                // Al volver la conexión se pide el envío (WorkManager igual espera a que haya red).
+                if (enLinea) programarEnvio()
+            }
+        }
         // La lista de capturas se actualiza sola cada vez que se guarda una o el envío cambia su estado.
         viewModelScope.launch {
             observationRepository.capturas().collect { lista -> _state.update { it.copy(capturas = lista) } }
@@ -164,8 +199,14 @@ class ObservationsViewModel(
         _state.update { it.copy(presentacion = presentacion) }
     }
 
+    /** Cambia entre precio observado y disponibilidad. El número escrito se borra: no significa lo mismo. */
+    fun elegirTipo(tipo: String) {
+        if (tipo !in _state.value.tipos) return
+        _state.update { it.copy(tipo = tipo, valorTexto = "", mensaje = null, errorGuardar = null) }
+    }
+
     /** Solo deja dígitos y un separador decimal, con máximo 2 decimales. */
-    fun cambiarPrecio(texto: String) {
+    fun cambiarValor(texto: String) {
         var hayPunto = false
         var decimales = 0
         val limpio = buildString {
@@ -181,7 +222,7 @@ class ObservationsViewModel(
                 }
             }
         }.take(13)
-        _state.update { it.copy(precioTexto = limpio, mensaje = null) }
+        _state.update { it.copy(valorTexto = limpio, mensaje = null) }
     }
 
     fun obtenerUbicacion() {
@@ -195,7 +236,7 @@ class ObservationsViewModel(
 
     fun permisoDenegado() {
         _state.update {
-            it.copy(errorUbicacion = "Sin el permiso de ubicación no se puede guardar el precio. Puedes darlo desde los ajustes del teléfono.")
+            it.copy(errorUbicacion = "Sin el permiso de ubicación no se puede guardar la captura. Puedes darlo desde los ajustes del teléfono.")
         }
     }
 
@@ -204,24 +245,26 @@ class ObservationsViewModel(
         val tienda = actual.tienda ?: return
         val producto = actual.producto ?: return
         val presentacion = actual.presentacion ?: return
-        val precio = actual.precio ?: return
+        val valor = actual.valor ?: return
         val ubicacion = actual.ubicacion ?: return
         if (actual.guardando) return
         _state.update { it.copy(guardando = true, errorGuardar = null, mensaje = null) }
         viewModelScope.launch {
-            observationRepository.guardar(tienda, producto, presentacion, precio, ubicacion, distanciaATienda(tienda, ubicacion))
+            observationRepository.guardar(
+                actual.tipo, tienda, producto, presentacion, valor, ubicacion, distanciaATienda(tienda, ubicacion),
+            )
                 .onSuccess {
                     programarEnvio()
-                    // Se limpia el producto, el precio y la ubicación; la tienda se queda para capturar el siguiente producto.
+                    // Se limpia el producto, el valor y la ubicación; la tienda y el tipo se quedan para el siguiente.
                     _state.update {
                         it.copy(
                             guardando = false,
                             busqueda = "",
                             producto = null,
                             presentacion = null,
-                            precioTexto = "",
+                            valorTexto = "",
                             ubicacion = null,
-                            mensaje = "Precio guardado en el teléfono. Se enviará solo cuando haya internet.",
+                            mensaje = "Captura guardada en el teléfono. Se enviará sola cuando haya internet.",
                         )
                     }
                 }
@@ -234,7 +277,8 @@ class ObservationsViewModel(
      * Se llama al abrir la pantalla (sin avisar si no hay internet) y con el botón "Actualizar estados".
      */
     fun refrescarEstados(avisar: Boolean = true) {
-        if (_state.value.actualizandoEstados) return
+        // El Investigador de mercado no puede leer GET /v1/price-observations (pricing le responde 403).
+        if (!_state.value.puedeConsultarDecisiones || _state.value.actualizandoEstados) return
         _state.update { it.copy(actualizandoEstados = true) }
         viewModelScope.launch {
             observationRepository.actualizarDecisiones()
@@ -267,9 +311,15 @@ class ObservationsViewModelFactory(
     private val locationProvider: LocationProvider,
     private val cache: CatalogCache,
     private val programarEnvio: () -> Unit,
+    private val tiposPermitidos: List<String>,
+    private val puedeConsultarDecisiones: Boolean,
+    private val conectividad: Flow<Boolean>,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return ObservationsViewModel(catalogRepository, observationRepository, locationProvider, cache, programarEnvio) as T
+        return ObservationsViewModel(
+            catalogRepository, observationRepository, locationProvider, cache, programarEnvio,
+            tiposPermitidos, puedeConsultarDecisiones, conectividad,
+        ) as T
     }
 }

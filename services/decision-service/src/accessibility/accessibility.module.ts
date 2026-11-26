@@ -9,6 +9,7 @@ import { AccessibilityComponentEntity } from '../entities/accessibility-componen
 import { IncomeSegment } from '../entities/income-segment.entity';
 import { AccessibilityService } from './accessibility.service';
 import { AccessibilityController } from './accessibility.controller';
+import { AvailabilityClient } from '../common/availability/availability-client.service';
 
 /**
  * M12 — Accesibilidad. Combina precio + ingreso del segmento +
@@ -34,6 +35,6 @@ import { AccessibilityController } from './accessibility.controller';
     AuditModule,
   ],
   controllers: [AccessibilityController],
-  providers: [AccessibilityService, SessionGuard],
+  providers: [AccessibilityService, SessionGuard, AvailabilityClient],
 })
 export class AccessibilityModule {}

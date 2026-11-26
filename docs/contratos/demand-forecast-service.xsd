@@ -181,7 +181,8 @@
       <xs:element name="smoothingLevel" type="xs:double"/>
       <xs:element name="smoothingTrend" type="xs:double"/>
       <xs:element name="smoothingSeasonal" type="xs:double"/>
-      <xs:element name="aic" type="xs:double"/>
+      <!-- Se omite si el ajuste no da un AIC finito: nunca sale Infinity ni NaN. -->
+      <xs:element name="aic" type="xs:double" minOccurs="0"/>
     </xs:all>
   </xs:complexType>
 

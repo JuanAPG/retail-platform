@@ -29,16 +29,16 @@ Las rutas de la tabla se habilitan a medida que se despliega su servicio.
 | documents-service | 3108 | `/api/documents-service` | Pamela | Sí |
 | notifications-service | 3109 | `/api/notifications-service` | Juan Ángel | Sí |
 | audit-service | 3110 | `/api/audit-service` | Juan Ángel | Sí |
-| transactions-ingestion-service | 3111 | `/api/transactions-ingestion-service` | Juan Ángel | Pendiente |
+| transactions-ingestion-service | 3111 | `/api/transactions-ingestion-service` | Juan Ángel | Sí |
 | income-segmentation-service | 3112 | `/api/income-segmentation-service` | Pamela | Sí |
-| basket-analysis-service | 3113 | `/api/basket-analysis-service` | Leonardo | Pendiente |
+| basket-analysis-service | 3113 | `/api/basket-analysis-service` | Leonardo | Sí |
 | availability-service | 3114 | `/api/availability-service` | Pamela | Sí |
 | promotion-service | 3115 | `/api/promotion-service` | Fernando | Pendiente |
-| demand-forecast-service | 3116 | `/api/demand-forecast-service` | Leonardo | Pendiente |
+| demand-forecast-service | 3116 | `/api/demand-forecast-service` | Leonardo | Sí |
 | recommendations-workflow-service | 3117 | `/api/recommendations-workflow-service` | Fernando | Pendiente |
-| offline-sync-service | 3118 | `/api/offline-sync-service` | Fernando | Pendiente |
-| data-governance-service | 3119 | `/api/data-governance-service` | Leonardo | Pendiente |
-| monitoring-service | 3120 | `/api/monitoring-service` | Juan Ángel | Pendiente |
+| offline-sync-service | 3118 | `/api/offline-sync-service` | Fernando | Sí |
+| data-governance-service | 3119 | `/api/data-governance-service` | Leonardo | Sí |
+| monitoring-service | 3120 | `/api/monitoring-service` | Juan Ángel | Sí |
 
 ```mermaid
 flowchart LR
@@ -125,3 +125,8 @@ pronóstico, promoción y seguimiento.
 Pendientes de ejecución en GCP. URL HTTPS, inventario, costo autorizado,
 digest desplegado, prueba externa, reinicio, restauración, firma V4 y
 matriz de fallos.
+
+
+Consulta la [actualización y observabilidad](actualizacion.md) y la
+[evidencia de recuperación](evidencia-recuperacion.md) para la revisión de
+esta versión.

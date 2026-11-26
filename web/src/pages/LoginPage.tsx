@@ -172,9 +172,9 @@ export function LoginPage() {
                 <Switch checked={recordarme} onChange={alternarRecordarme}>
                   Recordarme
                 </Switch>
-                <a href="#" className="rounded-full px-3.5 py-2 text-sm font-semibold text-teal transition hover:bg-vino hover:text-arena">
+                <Link to="/recuperar-contrasena" className="rounded-full px-3.5 py-2 text-sm font-semibold text-teal transition hover:bg-vino hover:text-arena">
                   ¿Olvidaste tu contraseña?
-                </a>
+                </Link>
               </div>
 
               {error && (

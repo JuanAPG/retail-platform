@@ -72,6 +72,8 @@
       <xs:element name="currentStock" type="av:existencia" minOccurs="0"/>
       <xs:element name="currentCapturedAt" type="xs:dateTime" minOccurs="0"/>
       <xs:element name="reason" type="xs:string" minOccurs="0"/>
+      <!-- Solo en status=duplicada: el estado original (aceptada | conflicto). -->
+      <xs:element name="originalStatus" type="av:estadoCaptura" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 

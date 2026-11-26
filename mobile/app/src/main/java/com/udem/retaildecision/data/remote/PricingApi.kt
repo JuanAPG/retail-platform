@@ -42,7 +42,11 @@ interface PricingApi {
     @POST("v1/price-proposals")
     suspend fun createProposal(@Body body: CreatePriceProposalRequest): Response<PriceProposalDto>
 
-    /** Precio visto en tienda. Roles: Analista comercial y Responsable de precios. Responde 201 con la observación (trae su id). */
+    /**
+     * Precio visto en tienda. Roles: Investigador de mercado, Analista comercial y Responsable de precios.
+     * La app ya NO la llama directo: los precios de campo viajan en lotes por offline-sync-service (D-42),
+     * que es quien los entrega a pricing. Se deja la firma como referencia del contrato de pricing.
+     */
     @POST("v1/price-observations")
     suspend fun createObservation(@Body body: CreatePriceObservationRequest): Response<PriceObservationDto>
 

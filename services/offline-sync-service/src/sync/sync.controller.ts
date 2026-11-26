@@ -40,7 +40,8 @@ export class SyncController {
     description:
       'JSON (app móvil) o XML con raíz loteSync (escritorio). 200 con cualquier mezcla de resultados: aceptada, duplicada, conflicto o rechazada (D-42). ' +
       'Reenviar el mismo lote devuelve el resultado guardado (resend: true). Roles: Investigador de mercado, Analista comercial, Responsable de precios. ' +
-      '⚠️ Los destinos (availability, pricing) están SIMULADOS: el mapeo real está PENDIENTE de acuerdo con Pamela.',
+      'Con SYNC_DESTINO=http (por defecto) cada captura va a su destino real: disponibilidad → availability-service, ' +
+      'precio_observado → pricing-service (contrato §6). Con SYNC_DESTINO=simulado no sale nada del servicio.',
   })
   @ApiConsumes('application/json', 'application/xml')
   @ApiProduces('application/json', 'application/xml')

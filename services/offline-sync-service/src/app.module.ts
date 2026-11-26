@@ -13,7 +13,8 @@ import {
 } from './sync/almacen/mongo.repositorio';
 import { ALMACEN_RAPIDO, REPOSITORIO_SYNC } from './sync/almacen/puertos';
 import { RedisAlmacen } from './sync/almacen/redis.almacen';
-import { DESTINO_CAPTURAS } from './sync/destinos/destino';
+import { CONFIG_DESTINO, DESTINO_CAPTURAS, DestinoCapturas } from './sync/destinos/destino';
+import { ConfigDestino, configDestino, DestinoHttp } from './sync/destinos/destino-http';
 import { DestinoSimulado } from './sync/destinos/destino-simulado';
 import { SyncController } from './sync/sync.controller';
 import { SyncService } from './sync/sync.service';
@@ -23,9 +24,17 @@ import { ValidadorXsd } from './sync/xml/validador-xsd';
 /**
  * offline-sync-service (T-17). Lotes y acuses en MongoDB, idempotencia y
  * último estado en Redis (D-47). Los destinos entran por el puerto
- * `DESTINO_CAPTURAS`; hoy solo existe `DestinoSimulado` porque el mapeo real
- * está PENDIENTE de acuerdo con Pamela (contrato §6).
+ * `DESTINO_CAPTURAS` y se eligen con `SYNC_DESTINO` (contrato §6):
+ *  - `http` (por defecto): `DestinoHttp`, a availability-service y
+ *    pricing-service. Sin `AVAILABILITY_SERVICE_URL` o `PRICING_SERVICE_URL`
+ *    el servicio NO arranca y dice cuál falta.
+ *  - `simulado`: `DestinoSimulado` en memoria (pruebas y demo sin destinos).
  */
+function crearDestino(config: ConfigDestino): DestinoCapturas {
+  if (config.modo === 'simulado') return new DestinoSimulado();
+  return new DestinoHttp({ availabilityUrl: config.availabilityUrl as string, pricingUrl: config.pricingUrl as string });
+}
+
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({})],
   controllers: [HealthController, SyncController],
@@ -40,7 +49,9 @@ import { ValidadorXsd } from './sync/xml/validador-xsd';
     CierreDeConexiones,
     { provide: REPOSITORIO_SYNC, useClass: MongoRepositorioSync },
     { provide: ALMACEN_RAPIDO, useClass: RedisAlmacen },
-    { provide: DESTINO_CAPTURAS, useClass: DestinoSimulado },
+    // Se valida al arrancar: un SYNC_DESTINO inválido o una URL faltante detienen el servicio.
+    { provide: CONFIG_DESTINO, useFactory: () => configDestino() },
+    { provide: DESTINO_CAPTURAS, useFactory: crearDestino, inject: [CONFIG_DESTINO] },
   ],
   exports: [SessionGuard],
 })
