@@ -21,6 +21,61 @@ export const muestras = {
       share: 23.75,
     },
   ],
+  /** `GET /v1/analytics/weekly-sales` (T-13). */
+  ventasSemanales: {
+    productId: '3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60',
+    zoneId: '97925ca4-3845-4e68-9660-46f781957b8c',
+    dateFrom: null,
+    dateTo: null,
+    timezone: 'America/Monterrey',
+    weekStartsOn: 'monday',
+    asOf: '2026-11-25T18:04:11.902Z',
+    transactions: 1184,
+    stores: 4,
+    data: [
+      {
+        weekStart: '2026-07-06',
+        presentationId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+        quantity: 214,
+        transactions: 61,
+      },
+      {
+        weekStart: '2026-07-06',
+        presentationId: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+        quantity: 79,
+        transactions: 48,
+      },
+    ],
+  },
+  /** `GET /v1/analytics/basket-products` (T-12), sin `groupBy`. */
+  productosPorCanastaDelGrupo: {
+    zoneId: '97925ca4-3845-4e68-9660-46f781957b8c',
+    segmentId: 2,
+    dateFrom: '2026-10-01',
+    dateTo: '2026-10-31',
+    groupBy: null,
+    timezone: 'America/Monterrey',
+    asOf: '2026-11-25T18:20:00.000Z',
+    periods: [{ periodStart: null, baskets: 100, stores: 4, totalSpend: 10983.5 }],
+    data: [
+      {
+        periodStart: null,
+        productId: 'a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01',
+        productName: 'Leche entera',
+        categoryId: 2,
+        basketsWithProduct: 62,
+        spend: 3534,
+      },
+      {
+        periodStart: null,
+        productId: 'a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c05',
+        productName: 'Queso panela',
+        categoryId: 2,
+        basketsWithProduct: 20,
+        spend: 1110,
+      },
+    ],
+  },
   transaccion: {
     id: '11111111-1111-4111-8111-111111111111',
     folio: 'T-V-001',
