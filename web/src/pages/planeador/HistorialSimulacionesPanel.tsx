@@ -7,6 +7,8 @@ import { EstadoError } from '../../components/EstadoError';
 
 const formatoFecha = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
 
+const TIPO: Record<string, string> = { precio: 'Cambio de precio', presentacion: 'Presentaciones', desconocido: 'Escenario' };
+
 interface Props {
   zonas: Zona[];
   seleccionados: string[];
@@ -74,9 +76,9 @@ export function HistorialSimulacionesPanel({ zonas, seleccionados, onCambiarSele
                     {elegido && <IconCheck className="h-4 w-4" />}
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-bold">{esc.nombre}</span>
+                    <span className="truncate text-sm font-bold">{esc.name}</span>
                     <span className={`font-data text-xs ${elegido ? 'text-salvia' : 'text-teal/70'}`}>
-                      {esc.zonaId ? zonas.find((z) => z.id === esc.zonaId)?.nombre ?? 'Zona' : 'Nacional'} · {formatoFecha.format(new Date(esc.createdAt))}
+                      {TIPO[esc.type] ?? 'Escenario'} · {esc.zoneId ? zonas.find((z) => z.id === esc.zoneId)?.nombre ?? 'Zona' : 'Nacional'} · {formatoFecha.format(new Date(esc.createdAt))}
                     </span>
                   </div>
                 </button>

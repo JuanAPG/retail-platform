@@ -193,24 +193,54 @@ sin ella se comparan todas las presentaciones activas del producto.
 | 400 | `presentationIds` trae menos de 3; el producto tiene menos de 3 presentaciones activas; alguna presentación es de otro producto (D-14) o está inactiva |
 | 404 | El producto o la zona no existen; menos de 3 de las presentaciones tienen precio vigente (las que no tienen se excluyen con aviso, nunca entran como 0) |
 
-Response `201`: `PresentationComparisonResult` con `type: "presentacion"`.
+Response `201`: `PresentationComparisonResult` con `type: "presentacion"`:
+`{ scenarioId, productId, productName, zoneId, segmentId, presentations: [{ presentationId,
+presentationName, priceStatus, outlay, unitPrice, baseUnit, estimatedDemand,
+accessibilityEffect: { incomeSharePct, unitPricePremiumPct } }], referencePresentationId,
+comparedPresentationId, results, assumptions, warnings }`. Sin precio, `outlay`, `unitPrice`
+y `estimatedDemand` son `null` (nunca 0) y `priceStatus` dice por qué.
 
 ## GET /v1/simulation/scenarios
 
-Escenarios guardados. Response `200`: `[{ id, nombre, zonaId, creadoPor, createdAt }]`.
+Escenarios guardados, **paginado** (`paginacion.md`). Response `200` (`ScenarioPage`):
+
+```json
+{
+  "data": [
+    { "id": "uuid", "name": "Cambio de precio - Leche 1 L", "type": "precio",
+      "zoneId": "uuid-zona", "productId": "uuid", "presentationId": "uuid",
+      "elasticity": -2, "elasticityRunId": "uuid", "currentPrice": 25, "newPrice": 27.5,
+      "baseDemand": 1000, "presentations": [], "assumptions": [],
+      "createdBy": "uuid-usuario", "createdAt": "2026-11-20T16:00:00.000Z" }
+  ],
+  "total": 1, "page": 1, "limit": 20
+}
+```
+
+`type`: `precio` | `presentacion` (`desconocido` para escenarios viejos sin snapshot).
 
 ## GET /v1/simulation/compare?ids=id1,id2
 
-Compara escenarios entre sí. Response `200`:
+Compara 2 o más escenarios guardados (`ids=a,b` o `ids=a&ids=b`). Response `200`
+(`ScenarioComparison`):
 
 ```json
 {
   "scenarioIds": ["uuid-1", "uuid-2"],
-  "scenarioNames": { "uuid-1": "Cambio de precio - …" },
-  "rows": [{ "indicatorKey": "ingreso_estimado", "zonaId": "uuid-zona",
-              "valuesByScenario": { "uuid-1": 2856.2, "uuid-2": 2790.0 } }]
+  "scenarios": [
+    { "scenarioId": "uuid-1", "name": "Cambio de precio - …", "type": "precio",
+      "zoneId": "uuid-zona", "elasticity": -2, "elasticityRunId": "uuid",
+      "results": [
+        { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona", "baseValue": 1000,
+          "simulatedValue": 826, "difference": -174, "variationPct": -17.4 }
+      ] }
+  ],
+  "warnings": []
 }
 ```
+
+Un indicador que un escenario no calculó simplemente no aparece en su `results`; el cliente
+lo muestra vacío, nunca como 0.
 
 ## POST /v1/recommendations/generate (Planeador)
 
