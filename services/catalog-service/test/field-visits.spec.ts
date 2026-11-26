@@ -165,6 +165,28 @@ describe('Visitas de campo (D-30, integración, requiere stack + MongoDB)', () =
     }
   });
 
+  it('D-52: leen Analista, Administrador y Auditor; Investigador y otros perfiles 403; inexistente 404', async () => {
+    const v = visita();
+    creadas.push(v.visitId);
+    expect((await http('POST', '/v1/field-visits', investigador.token, v)).estado).toBe(201);
+    const admin = (await sesionDelSeed('admin@retail.mx')).token;
+    const auditor = (await sesionDelSeed('auditor@retail.mx')).token;
+    const gerente = (await sesionDelSeed('gercategoria@retail.mx')).token;
+    for (const token of [analista, admin, auditor]) {
+      const lista = await http('GET', `/v1/field-visits?storeId=${tiendaId}&dateFrom=2026-11-20&dateTo=2026-11-20&limit=100`, token);
+      expect(lista.estado).toBe(200);
+      expect(lista.cuerpo.data.map((x: { visitId: string }) => x.visitId)).toContain(v.visitId);
+      expect((await http('GET', `/v1/field-visits/${v.visitId}`, token)).cuerpo.visitId).toBe(v.visitId);
+    }
+    for (const token of [investigador.token, gerente]) {
+      expect((await http('GET', '/v1/field-visits', token)).estado).toBe(403);
+    }
+    expect((await http('GET', `/v1/field-visits/${randomUUID()}`, analista)).estado).toBe(404);
+    expect((await http('GET', '/v1/field-visits?dateFrom=2026-11-21&dateTo=2026-11-20', analista)).estado).toBe(400);
+    const fuera = await http('GET', `/v1/field-visits?storeId=${tiendaId}&dateFrom=2026-12-01`, analista);
+    expect(fuera.cuerpo.data.map((x: { visitId: string }) => x.visitId)).not.toContain(v.visitId);
+  });
+
   it('XML: la respuesta valida contra catalog-service.xsd', async () => {
     const v = visita();
     creadas.push(v.visitId);
