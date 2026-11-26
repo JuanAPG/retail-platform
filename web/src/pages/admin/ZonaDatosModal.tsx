@@ -8,26 +8,31 @@ import { ErrorText } from '../../components/ui/ErrorText';
 import { useFetch } from '../../hooks/useFetch';
 import { mensajeDeError } from '../../api/errores';
 import { listaSegura } from '../../api/seguro';
-import { cargarIndicadoresZona, clasificarZona } from '../../api/catalogo';
-import { getSegmentos } from '../../api/segmentos';
+import { cargarIndicadoresZona } from '../../api/catalogo';
+import { clasificarZona, getSegmentos } from '../../api/segmentos';
 import { IncomeSegment, Zona } from '../../types';
 
 interface ZonaDatosModalProps {
   zona: Zona;
   onCerrar: () => void;
   onGuardado: (mensaje: string) => void;
+  /** Indicadores de la zona (catalog-service, Administrador). */
+  indicadores?: boolean;
+  /** Clasificación en un segmento (income-segmentation-service, Analista comercial; D-35, Matriz §3.2). */
+  clasificacion?: boolean;
 }
 
 const botonPrimario =
   'flex h-11 items-center rounded-full bg-vino px-5 text-sm font-bold text-arena transition hover:bg-teal disabled:opacity-50';
 
 /**
- * CAT-12 / CAT-13 — Datos analíticos de una zona, solo para el Analista comercial:
- * indicadores cargados a mano (con fuente y periodo, para que sean trazables) y
- * clasificación en un segmento de ingreso. La clasificación es de la ZONA agregada,
- * nunca de una persona (reglas de negocio).
+ * CAT-12 / CAT-13 — Datos analíticos de una zona: indicadores cargados a mano (con
+ * fuente y periodo, para que sean trazables; los guarda catalog, Administrador) y
+ * clasificación en un segmento de ingreso (la guarda income-segmentation con la
+ * versión vigente del segmento; Analista comercial). Cada rol ve solo su parte. La
+ * clasificación es de la ZONA agregada, nunca de una persona.
  */
-export function ZonaDatosModal({ zona, onCerrar, onGuardado }: ZonaDatosModalProps) {
+export function ZonaDatosModal({ zona, onCerrar, onGuardado, indicadores = true, clasificacion = true }: ZonaDatosModalProps) {
   const segmentos = useFetch(getSegmentos, []);
 
   const [ingreso, setIngreso] = useState('');
@@ -97,6 +102,7 @@ export function ZonaDatosModal({ zona, onCerrar, onGuardado }: ZonaDatosModalPro
       onCerrar={onCerrar}
     >
       <div className="flex flex-col gap-8">
+        {indicadores && (
         <form noValidate onSubmit={guardarIndicadores} className="flex flex-col gap-4">
           <h3 className="font-slab text-xl text-vino">Indicadores</h3>
           <Field id="zd-ingreso" label="Ingreso mensual estimado del hogar (MXN)" type="number" min="0" value={ingreso} onChange={(e) => setIngreso(e.target.value)} />
@@ -123,7 +129,9 @@ export function ZonaDatosModal({ zona, onCerrar, onGuardado }: ZonaDatosModalPro
             </button>
           </div>
         </form>
+        )}
 
+        {clasificacion && (
         <form noValidate onSubmit={guardarSegmento} className="flex flex-col gap-4">
           <h3 className="font-slab text-xl text-vino">Segmento de ingreso</h3>
           {segmentos.loading && !segmentos.data && <Cargando etiqueta="Cargando segmentos…" />}
@@ -145,6 +153,7 @@ export function ZonaDatosModal({ zona, onCerrar, onGuardado }: ZonaDatosModalPro
             </button>
           </div>
         </form>
+        )}
       </div>
     </Modal>
   );
