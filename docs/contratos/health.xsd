@@ -36,6 +36,7 @@
               <xs:element name="postgres" type="estadoCheck"/>
               <xs:element name="mongodb" type="estadoCheck"/>
               <xs:element name="redis" type="estadoCheck"/>
+              <xs:element name="bucket" type="estadoCheck" minOccurs="0"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
@@ -45,6 +46,7 @@
               <xs:element name="postgres" type="xs:nonNegativeInteger"/>
               <xs:element name="mongodb" type="xs:nonNegativeInteger"/>
               <xs:element name="redis" type="xs:nonNegativeInteger"/>
+              <xs:element name="bucket" type="xs:nonNegativeInteger" minOccurs="0"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>

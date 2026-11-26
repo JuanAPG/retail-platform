@@ -8,7 +8,7 @@ docker compose -f infra/docker-compose.yml logs -f api
 ```
 
 Front en `http://localhost:5173`, API/Swagger en `http://localhost:3001/docs`,
-12 microservicios en `3101–3110`, `3112` y `3114` (`/v1/health` en cada uno).
+18 microservicios en `3101–3114`, `3116` y `3118–3120` (`/v1/health` en cada uno).
 
 Con volumen nuevo, Compose inicializa `schema.sql` y `data_retail.sql`.
 Para conservar una base de desarrollo previa, guarda un respaldo y

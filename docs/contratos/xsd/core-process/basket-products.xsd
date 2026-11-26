@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M09: GET /v1/analytics/basket-products (ruta nueva, T-12).
+     Para un grupo zona + segmento CONGELADO en la canasta: por periodo,
+     canastas, tiendas distintas y gasto total; por periodo y producto, en
+     cuántas canastas DISTINTAS aparece el producto (aunque la canasta lleve
+     varias presentaciones) y cuánto se gastó en él. Lo consume
+     basket-analysis-service (canasta típica, D-37). Sin `groupBy`, un solo
+     periodo y `periodStart` se omite. Los nulos se omiten. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:include schemaLocation="_comun.xsd"/>
+
+  <xs:simpleType name="dia">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="response">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="zoneId" type="xs:string"/>
+        <xs:element name="segmentId" type="xs:positiveInteger"/>
+        <xs:element name="dateFrom" type="dia" minOccurs="0"/>
+        <xs:element name="dateTo" type="dia" minOccurs="0"/>
+        <xs:element name="groupBy" minOccurs="0">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="week"/>
+              <xs:enumeration value="month"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="timezone" type="xs:string"/>
+        <!-- Instantánea: solo cuentan las canastas construidas hasta aquí. -->
+        <xs:element name="asOf" type="xs:dateTime"/>
+        <xs:element name="periods">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="periodStart" type="dia" minOccurs="0"/>
+                    <xs:element name="baskets" type="xs:nonNegativeInteger"/>
+                    <xs:element name="stores" type="xs:nonNegativeInteger"/>
+                    <xs:element name="totalSpend" type="xs:decimal"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="periodStart" type="dia" minOccurs="0"/>
+                    <xs:element name="productId" type="xs:string"/>
+                    <xs:element name="productName" type="xs:string"/>
+                    <!-- Vacío si el producto no tiene categoría, como en
+                         spend-by-category. -->
+                    <xs:element name="categoryId" type="xs:integer" minOccurs="0"/>
+                    <xs:element name="basketsWithProduct" type="xs:positiveInteger"/>
+                    <xs:element name="spend" type="xs:decimal"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

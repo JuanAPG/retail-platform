@@ -1,0 +1,8 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pyjwt==2.10.1
+redis==5.2.1
+# Tablas propias en el Postgres compartido (D-47): fuentes, versiones, linaje y políticas
+psycopg2-binary==2.9.10
+# Calidad y retención: lee a ingestion, core-process, availability e income-segmentation; bitácora
+httpx==0.28.1

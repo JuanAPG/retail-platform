@@ -76,8 +76,7 @@ ingesta/2026/11/<loteId>/<archivoId>-1.csv
 
 - Se emite **después** de autorizar: rol según la Matriz y propiedad del recurso. Recurso ajeno
   para quien solo ve lo propio → `404`, no `403`.
-- **TTL: 300 s por defecto, tope 900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`). *Propuesta de política para
-  cerrar con el equipo.* Es tiempo para que el navegador empiece la descarga, no un enlace para compartir.
+- **TTL: 300 s por defecto, tope 900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`), **D-50**. Es tiempo para que el navegador empiece la descarga, no un enlace para compartir.
 - La URL **no se guarda, no se escribe en logs ni en la bitácora**. Los logs enmascaran
   `sig`, `token` y `X-Goog-*` del query.
 - Bitácora: **"URL emitida"** (audit-service, `accion: exportar`, con quién, cuándo, formato y
@@ -197,30 +196,33 @@ Rechazos:
 { "statusCode": 409, "code": "CONFLICT", "message": "El archivo todavía no está disponible (estado: fallido).", "details": null, "path": "…", "timestamp": "…" }
 ```
 
-## 7. Aviso de "archivo disponible" (para T-20, Juan Ángel)
+## 7. Aviso de "ya se puede descargar" (evento `reporte.generado` de T-20)
 
-Propuesta de evento nuevo en el catálogo cerrado de notifications-service:
+documents-service usa el evento que ya existe en notifications-service (no hace falta uno nuevo):
 
-| Evento | Puede originarlo | Le llega a | Copia a |
-|---|---|---|---|
-| `reporte.disponible` | los roles de `LEEN_REPORTES` (6 internos + Proveedor) | el usuario que pidió el archivo (`recipientUserId`) | — |
+| Evento | Puede originarlo | Le llega a |
+|---|---|---|
+| `reporte.generado` | Gerente de categoría | el mismo usuario que hizo la acción (destino `actor`) |
 
 ```json
-{ "eventType": "reporte.disponible", "sourceService": "documents-service",
+{ "eventType": "reporte.generado", "sourceService": "documents-service",
   "relatedEntityType": "reporte", "relatedEntityId": "6705f1c2a3b4c5d6e7f80912",
   "title": "Tu reporte ya se puede descargar",
   "message": "El reporte ejecutivo en PDF está listo para descargar.",
-  "recipientUserId": "a8e46052-34a0-4dda-baf2-40bca267454f", "priority": "info" }
+  "recipientUserId": "<id del Gerente que preparó el archivo>", "priority": "info" }
 ```
 
-El dedup de 5 min de notifications no hace falta para este evento (documents ya avisa una sola vez
-por archivo), pero no estorba. Mientras el evento no exista, notifications responde 400/403, documents
-lo deja en el log y vuelve a intentar el aviso en la siguiente petición del archivo.
+- Se emite **una vez por archivo**, cuando queda `disponible`. Si notifications lo rechaza, el aviso se
+  libera y se reintenta en la siguiente petición del archivo.
+- Solo cuando quien prepara el archivo es el **Gerente de categoría**. Con otro perfil no se emite
+  (notifications lo rechazaría con 403); la web ya le muestra "ya se puede descargar" a quien lo preparó.
+- Verificado contra notifications-service real: el aviso aparece en la bandeja del Gerente con el
+  mismo `correlationId` de la petición.
 
-## 8. Pendiente de cerrar
+## 8. Decisiones
 
-- **TTL**: propuesta 300 s / tope 900 s (§4). Registrar como decisión.
-- **P-06**: qué es un reporte "propio" del Proveedor. Hoy: el que tiene su `usuarioId`
-  (`propietarioId` del archivo). Como solo el Gerente genera reportes, en la práctica un Proveedor
-  no tiene reportes propios todavía; el caso de prueba usa uno sembrado.
-- `reporte.disponible` en el catálogo de notifications (T-20).
+- **TTL**: 300 s por defecto, tope 900 s → **D-50**.
+- **Reporte propio del Proveedor**: el que tiene su `usuarioId` (`propietarioId` del archivo) →
+  **D-49** (resuelve P-06). Como solo el Gerente genera reportes, en la práctica un Proveedor no
+  tiene reportes propios todavía; el caso de prueba usa uno sembrado.
+- `reporte.disponible` en el catálogo de notifications (T-20): se agrega en su propio PR.

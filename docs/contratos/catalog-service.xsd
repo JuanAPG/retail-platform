@@ -512,9 +512,27 @@
     </xs:complexType>
   </xs:element>
 
-  <!-- ===== Visitas de campo (D-30): POST /v1/field-visits ===== -->
-  <xs:element name="fieldVisitResponse">
+  <!-- ===== Visitas de campo (D-30, lectura D-52) ===== -->
+  <xs:element name="fieldVisitResponse" type="cat:fieldVisit"/>
+
+  <xs:element name="fieldVisitListResponse">
     <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="cat:fieldVisit" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="fieldVisit">
       <xs:sequence>
         <xs:element name="visitId" type="xs:string"/>
         <xs:element name="storeId" type="xs:string"/>
@@ -543,7 +561,6 @@
         <xs:element name="capturedBy" type="xs:string"/>
         <xs:element name="receivedAt" type="xs:dateTime"/>
       </xs:sequence>
-    </xs:complexType>
-  </xs:element>
+  </xs:complexType>
 
 </xs:schema>

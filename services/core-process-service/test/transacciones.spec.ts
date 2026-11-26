@@ -218,6 +218,41 @@ describe('M06/M07 de punta a punta (integración, requiere stack)', () => {
     expect(confirmar409.estado).toBe(409);
   }, 60000);
 
+  it('un CSV de 4,620 líneas (arriba del límite viejo de 4,095) pasa la vista previa y guarda todo el staging', async () => {
+    // 30 copias del CSV de 100 canastas con folios distintos: 4,620 líneas y
+    // 3,000 ventas, ~250 KB. De un solo INSERT eran 73,920 parámetros (16 por
+    // línea) y Postgres respondía "bind message has … parameter formats": 500.
+    const [encabezado, ...cuerpo] = csvDeLaCorrida().toString('utf-8').trim().split('\n');
+    const copias = Array.from({ length: 30 }, (_, k) =>
+      cuerpo.map((linea) => linea.replace(`${CORRIDA}-`, `${CORRIDA}-C${k}-`)),
+    ).flat();
+    const grande = Buffer.from([encabezado, ...copias].join('\n') + '\n', 'utf-8');
+
+    const preview = await subirCsv(grande, `${CORRIDA}-grande.csv`);
+    expect(preview.estado).toBe(201);
+    expect(preview.cuerpo).toMatchObject({
+      filasTotales: 4620,
+      filasValidas: 4620,
+      filasConError: 0,
+      transaccionesDetectadas: 3000,
+    });
+
+    // El staging quedó completo en la base, no solo contado en memoria:
+    // `filasPendientes` se cuenta sobre importacion_filas.
+    const pendientes = await get('/v1/transactions/import/pending');
+    const esta = pendientes.cuerpo.find(
+      (p: { importacionId: string }) => p.importacionId === preview.cuerpo.importacionId,
+    );
+    expect(esta).toMatchObject({ estado: 'validado', filasValidas: 4620, filasPendientes: 4620 });
+
+    // Se descarta para no llenar la base de QA con 3,000 ventas por corrida.
+    const descarte = await fetch(`${BASE}/v1/transactions/import/${preview.cuerpo.importacionId}`, {
+      method: 'DELETE',
+      headers: auth,
+    });
+    expect(descarte.status).toBe(200);
+  }, 120000);
+
   it('una importación confirmada no se puede descartar', async () => {
     const pendientes = await get('/v1/transactions/import/pending');
     expect(pendientes.estado).toBe(200);

@@ -25,7 +25,7 @@ export class PublicationController {
     summary: 'Por zona clasificada: si su combinación zona-segmento se puede publicar (D-36).',
     description:
       'Con menos de 10 transacciones y menos de 3 tiendas sale `disponible: false` con motivo y sin `averageTicket` (nunca un número). ' +
-      'Cuando solo se cumple un umbral decide `PUBLICATION_RULE` (P-11 pendiente; por defecto no publica). Sin paginar.',
+      'Cuando solo se cumple un umbral decide `PUBLICATION_RULE` (D-48: por defecto `ambos`, no publica). Sin paginar.',
   })
   @ApiRespuesta(200, 'Umbrales usados y una fila por zona clasificada.', muestras.publicacion, 'publicationResponse')
   @ApiErrores(400, 401, 403)

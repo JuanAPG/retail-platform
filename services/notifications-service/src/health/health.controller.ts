@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { serializarXml } from '../common/interceptors/xml.interceptor';
 import { armarSalud, sinConfigurar, verificarMongo, verificarRedis } from './checks';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 
 const ejemplo = {
   status: 'ok',
@@ -31,7 +32,7 @@ export class HealthController {
   check() {
     return armarSalud({
       postgres: sinConfigurar,
-      mongodb: () => verificarMongo(this.conexion),
+      mongodb: async () => (await asegurarMongo(this.conexion), verificarMongo(this.conexion)),
       redis: verificarRedis,
     });
   }

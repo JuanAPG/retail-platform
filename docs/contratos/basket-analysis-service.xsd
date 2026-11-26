@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de basket-analysis-service (T-06, T-12, D-37, D-36).
+     Espacio de nombres fijo `basket-analysis/v1`. Los endpoints responden estas
+     raíces cuando `Accept: application/xml`. `GET /v1/health` usa health.xsd.
+
+     Convenciones de este esquema (las de `app/xml_out.py` de la plantilla FastAPI):
+     - Objetos con xs:all: los campos pueden llegar en cualquier orden.
+     - Todo arreglo se envuelve en <item> por elemento; arreglo vacío = elemento vacío.
+     - Un null se OMITE: los campos que pueden ser nulos llevan minOccurs="0".
+       Con disponible=false (D-36) se omiten todos los números del agregado.
+     - Importes en MXN a 2 decimales; proporciones sin redondear: xs:double. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="basket-analysis/v1"
+           xmlns:ba="basket-analysis/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== Tipos simples ===== -->
+
+  <xs:simpleType name="fecha">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="sha256">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-f]{64}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="reglaPublicacion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ambos"/>
+      <xs:enumeration value="cualquiera"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="granularidad">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="week"/>
+      <xs:enumeration value="month"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Proporción en [0, 1]. -->
+  <xs:simpleType name="proporcion">
+    <xs:restriction base="xs:double">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="indicador">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="averageTicket"/>
+      <xs:enumeration value="productsPerBasket"/>
+      <xs:enumeration value="typicalSize"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="textos">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== Partes comunes ===== -->
+
+  <xs:complexType name="zona">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="segmento">
+    <xs:all>
+      <xs:element name="id" type="xs:positiveInteger"/>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="name" type="xs:string"/>
+      <!-- Versiones del segmento con que la zona estuvo clasificada en el periodo (D-35). -->
+      <xs:element name="versions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="xs:positiveInteger" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- Grupo de D-37: zona + segmento congelado en la canasta. -->
+  <xs:complexType name="grupo">
+    <xs:all>
+      <xs:element name="zone" type="ba:zona"/>
+      <xs:element name="segment" type="ba:segmento"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="periodo">
+    <xs:all>
+      <xs:element name="dateFrom" type="ba:fecha" minOccurs="0"/>
+      <xs:element name="dateTo" type="ba:fecha" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- D-36: conteos de la combinación; se publican aunque el agregado no. -->
+  <xs:complexType name="cobertura">
+    <xs:all>
+      <xs:element name="baskets" type="xs:nonNegativeInteger"/>
+      <xs:element name="stores" type="xs:nonNegativeInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="versionDatos">
+    <xs:all>
+      <xs:element name="sha256" type="ba:sha256"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="asOf" type="xs:dateTime"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- ===== Canasta típica ===== -->
+
+  <xs:complexType name="resumenGrupo">
+    <xs:all>
+      <xs:element name="baskets" type="xs:positiveInteger"/>
+      <xs:element name="totalSpend" type="xs:double"/>
+      <xs:element name="averageTicket" type="xs:double"/>
+      <xs:element name="productsPerBasket" type="xs:double"/>
+      <xs:element name="basketsPerWeek" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="productoCanasta">
+    <xs:all>
+      <xs:element name="productId" type="xs:string"/>
+      <xs:element name="productName" type="xs:string"/>
+      <!-- Sin categoría: se omite y categoryName dice "Sin categoría". -->
+      <xs:element name="categoryId" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="categoryName" type="xs:string"/>
+      <xs:element name="basketsWithProduct" type="xs:positiveInteger"/>
+      <xs:element name="frequency" type="ba:proporcion"/>
+      <xs:element name="averageSpend" type="xs:double"/>
+      <xs:element name="typical" type="xs:boolean"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="typicalBasketResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="group" type="ba:grupo"/>
+        <xs:element name="period" type="ba:periodo"/>
+        <xs:element name="asOf" type="xs:dateTime"/>
+        <xs:element name="threshold" type="ba:proporcion"/>
+        <xs:element name="publicationRule" type="ba:reglaPublicacion"/>
+        <xs:element name="minTransactions" type="xs:positiveInteger"/>
+        <xs:element name="minStores" type="xs:positiveInteger"/>
+        <xs:element name="coverage" type="ba:cobertura"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="summary" type="ba:resumenGrupo" minOccurs="0"/>
+        <xs:element name="products" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="ba:productoCanasta" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="typicalSize" type="xs:nonNegativeInteger" minOccurs="0"/>
+        <xs:element name="dataVersion" type="ba:versionDatos" minOccurs="0"/>
+        <xs:element name="assumptions" type="ba:textos"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Comparación entre periodos ===== -->
+
+  <xs:complexType name="periodoComparado">
+    <xs:all>
+      <xs:element name="dateFrom" type="ba:fecha"/>
+      <xs:element name="dateTo" type="ba:fecha"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <xs:element name="coverage" type="ba:cobertura"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="cambioProducto">
+    <xs:all>
+      <xs:element name="productId" type="xs:string"/>
+      <xs:element name="productName" type="xs:string"/>
+      <xs:element name="frequencyA" type="ba:proporcion"/>
+      <xs:element name="frequencyB" type="ba:proporcion"/>
+      <xs:element name="frequencyChange" type="xs:double"/>
+      <!-- Se omite si el producto no aparece en ese periodo. -->
+      <xs:element name="averageSpendA" type="xs:double" minOccurs="0"/>
+      <xs:element name="averageSpendB" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="listaCambios">
+    <xs:sequence>
+      <xs:element name="item" type="ba:cambioProducto" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="cambioIndicador">
+    <xs:all>
+      <xs:element name="indicator" type="ba:indicador"/>
+      <xs:element name="a" type="xs:double"/>
+      <xs:element name="b" type="xs:double"/>
+      <xs:element name="change" type="xs:double"/>
+      <!-- Se omite si el valor de A es 0. -->
+      <xs:element name="changePercent" type="xs:double" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="basketComparisonResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="group" type="ba:grupo"/>
+        <xs:element name="asOf" type="xs:dateTime"/>
+        <xs:element name="threshold" type="ba:proporcion"/>
+        <xs:element name="publicationRule" type="ba:reglaPublicacion"/>
+        <xs:element name="periodA" type="ba:periodoComparado"/>
+        <xs:element name="periodB" type="ba:periodoComparado"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="entering" type="ba:listaCambios" minOccurs="0"/>
+        <xs:element name="leaving" type="ba:listaCambios" minOccurs="0"/>
+        <xs:element name="staying" type="ba:listaCambios" minOccurs="0"/>
+        <xs:element name="indicators" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="ba:cambioIndicador" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Evolución ===== -->
+
+  <xs:complexType name="puntoEvolucion">
+    <xs:all>
+      <xs:element name="periodStart" type="ba:fecha"/>
+      <xs:element name="periodEnd" type="ba:fecha"/>
+      <xs:element name="coverage" type="ba:cobertura"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <xs:element name="averageTicket" type="xs:double" minOccurs="0"/>
+      <xs:element name="productsPerBasket" type="xs:double" minOccurs="0"/>
+      <xs:element name="typicalSize" type="xs:nonNegativeInteger" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="basketEvolutionResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="group" type="ba:grupo"/>
+        <xs:element name="granularity" type="ba:granularidad"/>
+        <xs:element name="asOf" type="xs:dateTime"/>
+        <xs:element name="publicationRule" type="ba:reglaPublicacion"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="ba:puntoEvolucion" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Mezcla por categoría ===== -->
+
+  <xs:complexType name="categoria">
+    <xs:all>
+      <xs:element name="categoryId" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="categoryName" type="xs:string"/>
+      <xs:element name="totalSpend" type="xs:double"/>
+      <xs:element name="basketCount" type="xs:positiveInteger"/>
+      <!-- 0 a 100, como spend-by-category de core-process. -->
+      <xs:element name="share" type="xs:double"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="categoryMixResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="group" type="ba:grupo"/>
+        <xs:element name="period" type="ba:periodo"/>
+        <xs:element name="publicationRule" type="ba:reglaPublicacion"/>
+        <xs:element name="coverage" type="ba:cobertura"/>
+        <xs:element name="disponible" type="xs:boolean"/>
+        <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+        <xs:element name="data" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="ba:categoria" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Error estándar ===== -->
+
+  <xs:simpleType name="errorCode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- El middleware quita `details` al responder XML. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="ba:errorCode"/>
+        <xs:element name="details" type="xs:anyType" minOccurs="0"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

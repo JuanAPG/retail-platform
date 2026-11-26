@@ -27,6 +27,7 @@ import com.udem.retaildecision.data.repository.PriceReviewRepository
 import com.udem.retaildecision.data.repository.PricingRepository
 import com.udem.retaildecision.data.repository.ProposalsRepository
 import com.udem.retaildecision.data.model.Rol
+import com.udem.retaildecision.data.model.TipoCaptura
 import com.udem.retaildecision.data.sync.SyncScheduler
 import com.udem.retaildecision.ui.catalog.CatalogScreen
 import com.udem.retaildecision.ui.catalog.CatalogViewModel
@@ -34,6 +35,8 @@ import com.udem.retaildecision.ui.catalog.CatalogViewModelFactory
 import com.udem.retaildecision.ui.home.HomeScreen
 import com.udem.retaildecision.ui.home.HomeViewModel
 import com.udem.retaildecision.ui.home.HomeViewModelFactory
+import com.udem.retaildecision.ui.home.ROLES_CONSULTAN_DECISIONES
+import com.udem.retaildecision.ui.home.ROLES_VEN_PRECIOS
 import com.udem.retaildecision.ui.home.SectionPlaceholderScreen
 import com.udem.retaildecision.ui.login.LoginScreen
 import com.udem.retaildecision.ui.login.LoginViewModel
@@ -84,6 +87,7 @@ class MainActivity : ComponentActivity() {
         val observationRepository = ObservationRepository(
             AppDatabase.getInstance(applicationContext).pendingVisitDao(),
             ApiClient.pricingApi,
+            usuarioActual = app.tokenManager::getUserId,
             onSesionExpirada = ApiClient::expirarSesion,
         )
         val priceReviewRepository = PriceReviewRepository(ApiClient.pricingApi, onSesionExpirada = ApiClient::expirarSesion)
@@ -154,6 +158,8 @@ private fun RetailDecisionNavHost(
                 viewModel = viewModel,
                 aviso = if (expirada) "Tu sesión expiró. Inicia sesión de nuevo." else null,
                 onLoginSuccess = {
+                    // Lo que se capturó sin sesión (o antes de que expirara) sale en cuanto haya red.
+                    programarEnvio()
                     navController.navigate("home") {
                         popUpTo(0) { inclusive = true }
                     }
@@ -198,17 +204,23 @@ private fun RetailDecisionNavHost(
                     )
                 }
                 "escaner" -> {
+                    // El Investigador de mercado identifica productos, pero no lee precios (D-28).
+                    val puedeVerPrecios = authRepository.currentRole() in ROLES_VEN_PRECIOS
                     val viewModel: ScannerViewModel =
-                        viewModel(factory = ScannerViewModelFactory(catalogRepository, pricingRepository))
+                        viewModel(factory = ScannerViewModelFactory(catalogRepository, pricingRepository, puedeVerPrecios))
                     ScannerScreen(
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
                     )
                 }
                 "visitas" -> {
+                    val rol = authRepository.currentRole()
                     val viewModel: ObservationsViewModel = viewModel(
                         factory = ObservationsViewModelFactory(
                             catalogRepository, observationRepository, locationProvider, catalogCache, programarEnvio,
+                            tiposPermitidos = TipoCaptura.permitidosPara(rol),
+                            puedeConsultarDecisiones = rol in ROLES_CONSULTAN_DECISIONES,
+                            conectividad = connectivityObserver.observe(),
                         ),
                     )
                     ObservationsScreen(

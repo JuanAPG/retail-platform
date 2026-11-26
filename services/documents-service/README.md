@@ -68,7 +68,7 @@ el almacén con registro (`archivos`: id, bucket/ruta, tipo, tamaño, dueño, fe
   `503`, archivo `fallido`, y la misma petición lo reintenta. Repetirla no sube otro objeto ni repite el aviso.
 - La URL firmada no se guarda ni se loguea (los logs enmascaran `sig`/`X-Goog-*`). La bitácora distingue
   "URL emitida" (audit-service) de "objeto leído" (Cloud Audit Logs de GCS; `lecturas` en el doble local).
-- `GET /v1/health` agrega `checks.almacen` y `almacen: { tipo, bucket }` (consulta el bucket cada 30 s).
+- `GET /v1/health` agrega `checks.bucket` (el nombre que lee monitoring-service) y `almacen: { tipo, bucket }` (consulta el bucket cada 30 s).
 - `X-Correlation-Id` (T-02) en logs, errores, auditoría, notificaciones y en el registro del archivo.
 - `REDIS_PASSWORD` / `REDIS_TLS=true` opcionales para Memorystore en GCP (local sigue sin auth).
 

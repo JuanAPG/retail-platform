@@ -8,7 +8,7 @@
  */
 const BASE = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
 
-type Operacion = { responses?: Record<string, { content?: Record<string, { example?: unknown }> }>; summary?: string };
+type Operacion = { responses?: Record<string, { content?: Record<string, { example?: unknown }> }>; summary?: string; deprecated?: boolean };
 
 async function documentacion(): Promise<{ paths: Record<string, Record<string, Operacion>> }> {
   const respuesta = await fetch(`${BASE}/docs-json`);
@@ -20,9 +20,9 @@ describe('Swagger (integración, requiere stack)', () => {
   it('cada ruta de negocio documenta su respuesta exitosa en JSON y en XML', async () => {
     const { paths } = await documentacion();
     const rutas = Object.entries(paths).filter(([ruta]) => !ruta.endsWith('/health'));
-    // 5 segmentos + 9 zonas/municipios (con indicadores y clasificación) + 6 tiendas + 16 productos/catálogos + 3 escrituras de categorías (T-21) + 1 visita de campo (D-30).
+    // 5 segmentos + 9 zonas/municipios (con indicadores y clasificación) + 6 tiendas + 16 productos/catálogos + 3 escrituras de categorías (T-21) + 3 de visitas de campo (alta D-30, lista y detalle D-52).
     const operaciones = rutas.reduce((total, [, metodos]) => total + Object.keys(metodos).length, 0);
-    expect(operaciones).toBe(40);
+    expect(operaciones).toBe(42);
 
     const fallas: string[] = [];
     for (const [ruta, metodos] of rutas) {
@@ -30,6 +30,11 @@ describe('Swagger (integración, requiere stack)', () => {
         const etiqueta = `${metodo.toUpperCase()} ${ruta}`;
         if (!operacion.summary) fallas.push(`${etiqueta}: sin resumen`);
 
+        // D-35: las escrituras retiradas (segmentos y clasificación) van marcadas `deprecated` y solo responden 409.
+        if (operacion.deprecated) {
+          if (!('409' in (operacion.responses ?? {}))) fallas.push(`${etiqueta}: retirada sin el 409 documentado`);
+          continue;
+        }
         const exitosas = Object.entries(operacion.responses ?? {}).filter(([estado]) => estado.startsWith('2'));
         if (exitosas.length === 0) fallas.push(`${etiqueta}: sin respuesta 2xx documentada`);
 
