@@ -40,5 +40,12 @@ export const crearSegmento = (payload: CrearSegmentoPayload) =>
 export const actualizarSegmento = (id: number, payload: ActualizarSegmentoPayload) =>
   segmentationApi.patch<IncomeSegment>(`/segments/${id}`, payload).then((r) => r.data);
 
+/**
+ * D-35: la clasificación de zonas pasó de catalog a income-segmentation (3112). Guarda la versión
+ * vigente del segmento. Matriz §3.2: la escribe el Analista comercial (el Administrador lee).
+ */
+export const clasificarZona = (zonaId: string, segmentId: number) =>
+  segmentationApi.put(`/zones/${zonaId}/classification`, { segmentId }).then((r) => r.data);
+
 export const eliminarSegmento = (id: number) =>
   segmentationApi.delete<void>(`/segments/${id}`).then((r) => r.data);

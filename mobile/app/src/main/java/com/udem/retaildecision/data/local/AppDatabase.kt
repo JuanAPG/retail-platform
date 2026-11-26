@@ -10,8 +10,11 @@ import androidx.room.RoomDatabase
  * del requisito RF-38. Instancia única por proceso (patrón singleton con
  * doble candado) para que dos pantallas no abran dos conexiones distintas
  * a la misma base de datos al mismo tiempo.
+ *
+ * Versión 2: folio por captura y acuse de offline-sync-service (D-42). La migración conserva
+ * lo que ya estaba guardado; sin migración, Room se niega a abrir la base (no la borra).
  */
-@Database(entities = [PendingVisitEntity::class], version = 1, exportSchema = false)
+@Database(entities = [PendingVisitEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun pendingVisitDao(): PendingVisitDao
@@ -25,7 +28,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "retail_decision.db",
-                ).build().also { INSTANCE = it }
+                )
+                    .addMigrations(Migraciones.MIGRACION_1_2)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

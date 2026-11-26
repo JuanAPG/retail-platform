@@ -45,7 +45,7 @@ export class HealthController {
         status: 'ok',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         version: '1.0.0',
-        checks: { redis: 'ok', mongodb: 'ok', almacen: 'ok' },
+        checks: { redis: 'ok', mongodb: 'ok', bucket: 'ok' },
         almacen: { tipo: 'gcs', bucket: 'retail-staging-reportes' },
         timestamp: '2026-10-03T12:00:00.000Z',
       },
@@ -55,7 +55,8 @@ export class HealthController {
     const checks = {
       redis: await verificarRedis(),
       mongodb: (await asegurarMongo(this.mongo)) ? 'ok' : 'error: sin conexión a MongoDB',
-      almacen: await this.verificarAlmacen(),
+      // `bucket`: el nombre que lee monitoring-service (D-44) para el almacén de objetos.
+      bucket: await this.verificarAlmacen(),
     };
     return {
       status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',

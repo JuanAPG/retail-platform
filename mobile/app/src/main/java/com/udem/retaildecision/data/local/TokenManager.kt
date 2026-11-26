@@ -54,6 +54,8 @@ class TokenManager(context: Context) {
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
     fun getRefreshToken(): String? = prefs.getString(KEY_REFRESH_TOKEN, null)
+    /** Id del usuario (el `sub` del token). Es el dueño de las capturas que se guardan en el teléfono. */
+    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
     fun getUserRole(): String? = prefs.getString(KEY_ROL, null)
     fun getUserRoleId(): Int = prefs.getInt(KEY_ROL_ID, -1)
     fun getUserEmail(): String? = prefs.getString(KEY_EMAIL, null)

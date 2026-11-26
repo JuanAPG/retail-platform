@@ -135,7 +135,7 @@ Colección `reportes`: `{ _id, tipo, parametros, formato, usuarioId, estado, cre
 Se reportan a audit-service (sin romper la operación si está caído): la generación
 (`insert` sobre `reportes`), la exportación (`exportar`), el archivo guardado (`insert` sobre
 `archivos`) y cada URL firmada emitida (`exportar` sobre `archivos`, sin la URL). Avisos:
-`reporte.disponible` a quien pidió el archivo, una sola vez (propuesta para T-20). Las llamadas
+`reporte.generado` (T-20) al Gerente que preparó el archivo, una sola vez por archivo. Las llamadas
 llevan el `X-Correlation-Id` de la operación (T-02).
 
 ## Códigos de error

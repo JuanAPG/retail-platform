@@ -14,3 +14,6 @@ coverage/
 
 # Configuración local de Android (ruta del SDK de cada máquina)
 local.properties
+
+# Salida del generador de datos del Parcial 3 (se regenera con la semilla; ver db/README-generador.md)
+db/generados/

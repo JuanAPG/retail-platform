@@ -134,6 +134,16 @@ export interface ImportacionPendiente {
 const MAX_ARCHIVO_BYTES = 5 * 1024 * 1024;
 const MAX_ERRORES_PREVIEW = 200;
 
+/**
+ * Filas por INSERT al guardar el staging de una vista previa. Postgres acepta
+ * a lo más 65,535 parámetros por consulta: una fila del staging lleva 16 y un
+ * error 7, así que de un solo golpe la vista previa fallaba con 500 arriba de
+ * 4,095 líneas, aunque el archivo cupiera en los 5 MB. En bloques de 1,000
+ * (16,000 parámetros) un CSV de 5 MB (~60,000 líneas) son ~60 INSERT dentro
+ * de la misma transacción: si uno falla, no queda nada.
+ */
+export const FILAS_POR_INSERT = 1000;
+
 /** Lo que manda un navegador o `curl -F` para un .csv, según el sistema. */
 const MIMES_CSV = new Set([
   'text/csv',
@@ -523,6 +533,7 @@ export class TransactionsService {
               transactionId: null,
             }),
           ),
+          { chunk: FILAS_POR_INSERT },
         );
 
         const errores = validadas.flatMap((v) =>
@@ -539,7 +550,7 @@ export class TransactionsService {
           ),
         );
         if (errores.length > 0) {
-          await manager.save(ImportacionError, errores);
+          await manager.save(ImportacionError, errores, { chunk: FILAS_POR_INSERT });
         }
 
         return { importacion: cabecera, erroresEntidad: errores };

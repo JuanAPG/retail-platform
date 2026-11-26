@@ -27,10 +27,6 @@ export interface IndicadoresZonaPayload {
 export const cargarIndicadoresZona = (zonaId: string, payload: IndicadoresZonaPayload) =>
   catalogApi.put(`/zones/${zonaId}/indicators`, payload).then((r) => r.data);
 
-/** CAT-13 — clasifica la zona en un segmento de ingreso (solo Analista comercial). */
-export const clasificarZona = (zonaId: string, segmentId: number) =>
-  catalogApi.put(`/zones/${zonaId}/classification`, { segmentId }).then((r) => r.data);
-
 export const getTiendas = () => traerTodo<Tienda>(catalogApi, '/stores');
 export const getZonas = () => traerTodo<Zona>(catalogApi, '/zones');
 export const getMunicipios = () => catalogApi.get<Municipio[]>('/municipalities').then((r) => r.data);
