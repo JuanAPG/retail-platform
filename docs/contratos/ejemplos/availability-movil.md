@@ -81,7 +81,7 @@ Respuesta `200`:
 
 ### 3. Captura más vieja que el dato del servidor → `201`, `status: conflicto`
 
-Se guarda en la bitácora pero **no sobrescribe** (gana la capturada después, D-42). `currentStock`/`currentCapturedAt` dicen qué quedó. Acuse: **conflicto**.
+Se guarda en la bitácora pero **no sobrescribe** (gana la capturada después, D-42). `currentStock`/`currentCapturedAt` dicen qué quedó. Acuse: **rechazada** (generar otro id).
 
 ```json
 POST /v1/availability/captures
@@ -116,7 +116,7 @@ Respuesta `201`:
 
 ### 4. Mismo `captureId` desde otro usuario → `409`
 
-No revela la captura ajena. El dispositivo debe generar otro id. Acuse: **conflicto**.
+No revela la captura ajena. El dispositivo debe generar otro id. Acuse: **rechazada** (generar otro id).
 
 ```json
 POST /v1/availability/captures
@@ -291,8 +291,8 @@ El Investigador de mercado → `403`:
 |---|---|---|
 | 201 | `aceptada` | aceptada |
 | 201 | `conflicto` | conflicto (no sobrescribió) |
-| 200 | `duplicada` | duplicada |
-| 409 | — | conflicto (id usado por otro usuario; generar otro) |
+| 200 | `duplicada` | duplicada (nunca aceptada, D-42; el estado de la primera vez viene en `originalStatus`) |
+| 409 | — | rechazada (id usado por otro usuario; generar otro) |
 | 400 | — | rechazada |
 | 503 | — | reintentar más tarde |
 
