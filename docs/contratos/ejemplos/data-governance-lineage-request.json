@@ -1,0 +1,18 @@
+{
+  "service": "demand-forecast-service",
+  "resourceType": "corrida",
+  "resourceId": "674a1f3c9e2b4d0012ab34cd",
+  "description": "Pronóstico semanal de Leche entera en Zona Centro",
+  "source": {
+    "key": "ventas-core-process",
+    "version": "be303c96b5d5e8779e0b1523319e456ef247713341192eedbc6af536c56876ad"
+  },
+  "inputs": [
+    {
+      "service": "transactions-ingestion-service",
+      "resourceType": "importacion",
+      "resourceId": "05dbdf5a-8342-4d61-bfce-e04e2b644f9b"
+    }
+  ],
+  "occurredAt": "2026-11-25T18:04:12.317000+00:00"
+}

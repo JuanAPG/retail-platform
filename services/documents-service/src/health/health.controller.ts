@@ -4,6 +4,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Connection } from 'mongoose';
 import { getRedis } from '../common/auth/redis.client';
 import { ALMACEN_OBJETOS, AlmacenObjetos } from '../reports/archivos/almacen/almacen';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 
 /** El bucket no se consulta en cada health: una vez cada 30 s basta y no castiga al monitoreo (T-09). */
 const VIGENCIA_ALMACEN_MS = 30_000;
@@ -53,7 +54,7 @@ export class HealthController {
   async check() {
     const checks = {
       redis: await verificarRedis(),
-      mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB',
+      mongodb: (await asegurarMongo(this.mongo)) ? 'ok' : 'error: sin conexión a MongoDB',
       // `bucket`: el nombre que lee monitoring-service (D-44) para el almacén de objetos.
       bucket: await this.verificarAlmacen(),
     };

@@ -1,0 +1,67 @@
+{
+  "zoneId": "97925ca4-3845-4e68-9660-46f781957b8c",
+  "segmentId": 2,
+  "dateFrom": "2026-10-01",
+  "dateTo": "2026-10-31",
+  "groupBy": null,
+  "timezone": "America/Monterrey",
+  "asOf": "2026-11-25T18:20:00.000000+00:00",
+  "periods": [
+    {
+      "periodStart": null,
+      "baskets": 100,
+      "stores": 4,
+      "totalSpend": 10983.5
+    }
+  ],
+  "data": [
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01",
+      "productName": "Leche entera",
+      "categoryId": 2,
+      "basketsWithProduct": 62,
+      "spend": 3534
+    },
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c02",
+      "productName": "Tortilla de maíz",
+      "categoryId": 5,
+      "basketsWithProduct": 55,
+      "spend": 1265
+    },
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c03",
+      "productName": "Frijol negro",
+      "categoryId": 1,
+      "basketsWithProduct": 41,
+      "spend": 1742.5
+    },
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c04",
+      "productName": "Huevo blanco",
+      "categoryId": 4,
+      "basketsWithProduct": 33,
+      "spend": 1584
+    },
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c05",
+      "productName": "Queso panela",
+      "categoryId": 2,
+      "basketsWithProduct": 20,
+      "spend": 1110
+    },
+    {
+      "periodStart": null,
+      "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c06",
+      "productName": "Quinoa orgánica",
+      "categoryId": 1,
+      "basketsWithProduct": 19,
+      "spend": 1748
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { DataSource } from 'typeorm';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { correlacionActual } from '../common/correlation/correlacion';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 import { CreateFieldVisitDto } from './dto/create-field-visit.dto';
 import { VisitaCampo, VisitaCampoDocument } from './visita-campo.schema';
 
@@ -47,7 +48,7 @@ export class FieldVisitsService {
     token?: string,
     ip?: string,
   ): Promise<{ visita: FieldVisitDto; duplicada: boolean }> {
-    if (this.mongo.readyState !== 1) {
+    if (!(await asegurarMongo(this.mongo))) {
       throw new ServiceUnavailableException('Las visitas de campo (MongoDB) no están disponibles. El dispositivo debe reintentar.');
     }
     const previa = await this.modelo.findById(dto.visitId);

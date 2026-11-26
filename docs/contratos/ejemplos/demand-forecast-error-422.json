@@ -1,0 +1,8 @@
+{
+  "statusCode": 422,
+  "code": "VALIDATION_ERROR",
+  "message": "Hay 11 semanas de historia; el pronóstico necesita al menos 12 (D-40).",
+  "details": null,
+  "path": "/v1/forecast/run",
+  "timestamp": "2026-11-25T18:07:02.118000+00:00"
+}
