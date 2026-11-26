@@ -7,6 +7,8 @@ import { AnalyticsFilterDto } from './dto/analytics-filter.dto';
 import { CategorySpend } from './dto/category-spend.dto';
 import { WeeklySalesFilterDto } from './dto/weekly-sales-filter.dto';
 import { WeeklySales } from './dto/weekly-sales.dto';
+import { BasketProductsFilterDto } from './dto/basket-products-filter.dto';
+import { BasketProducts } from './dto/basket-products.dto';
 import { filtrarDiasLocales, ZONA_HORARIA } from '../common/zona-horaria';
 
 /**
@@ -213,6 +215,120 @@ export class AnalyticsService {
         presentationId: fila.presentationId,
         quantity: round2(Number(fila.quantity)),
         transactions: Number(fila.transactions),
+      })),
+    };
+  }
+
+  /**
+   * Para un grupo zona + segmento: canastas, tiendas y gasto por periodo, y
+   * por producto en cuántas canastas DISTINTAS aparece y cuánto se gastó en
+   * él (T-12, consumidor: basket-analysis-service). Ruta nueva del Sprint 4.
+   *
+   * - Parte de `filteredBaskets`: zona y segmento son los congelados en la
+   *   canasta (RN-02) y los días son locales, igual que los 5 indicadores.
+   * - `basketsWithProduct` es `COUNT(DISTINCT basket.id)`: una canasta con
+   *   500 ml y 1 l del mismo producto cuenta una vez (BA-2 del consumidor).
+   * - `totalSpend` suma `canastas.valor_total`, la misma columna de
+   *   `average-ticket`, para que gasto = ticket × canastas con los mismos filtros.
+   * - Sin `groupBy`, la consulta de periodos no agrupa, así que Postgres
+   *   devuelve SIEMPRE una fila, también con 0 canastas: el consumidor lee
+   *   `periods[0]` sin casos especiales. Con `groupBy`, solo hay periodos
+   *   con canastas.
+   */
+  async getBasketProducts(filters: BasketProductsFilterDto): Promise<BasketProducts> {
+    validarRangoDeDias(filters);
+    const asOf = filters.asOf ? new Date(filters.asOf) : new Date();
+
+    const canastasDelGrupo = () =>
+      this.filteredBaskets({
+        zoneId: filters.zoneId,
+        segmentId: filters.segmentId,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+      }).andWhere('basket.builtAt <= :asOf', { asOf });
+
+    // `groupBy` ya pasó por @IsIn(['week', 'month']): es seguro como campo de date_trunc.
+    const periodo = filters.groupBy
+      ? `date_trunc('${filters.groupBy}', basket.date AT TIME ZONE :zonaPeriodo)`
+      : null;
+
+    const periodosQb = canastasDelGrupo()
+      // Alias propio: `transaction` lo usa filteredBaskets con storeId.
+      .innerJoin('basket.transaction', 'venta')
+      .select('COUNT(basket.id)', 'baskets')
+      .addSelect('COUNT(DISTINCT venta.storeId)', 'stores')
+      .addSelect('COALESCE(SUM(basket.totalValue), 0)', 'totalSpend');
+    if (periodo) {
+      periodosQb
+        .addSelect(`to_char(${periodo}, 'YYYY-MM-DD')`, 'periodStart')
+        .setParameter('zonaPeriodo', ZONA_HORARIA)
+        .groupBy(periodo)
+        .orderBy(periodo, 'ASC');
+    }
+    const periodos = await periodosQb.getRawMany<{
+      periodStart?: string;
+      baskets: string;
+      stores: string;
+      totalSpend: string;
+    }>();
+
+    const productosQb = canastasDelGrupo()
+      .innerJoin(TransactionDetail, 'detail', 'detail.transactionId = basket.transactionId')
+      .innerJoin('detail.presentation', 'presentation')
+      .innerJoin('presentation.producto', 'product')
+      .select('product.id', 'productId')
+      .addSelect('product.nombre', 'productName')
+      .addSelect('product.categoriaId', 'categoryId')
+      .addSelect('COUNT(DISTINCT basket.id)', 'basketsWithProduct')
+      .addSelect('SUM(detail.subtotal)', 'spend');
+    if (periodo) {
+      productosQb
+        .addSelect(`to_char(${periodo}, 'YYYY-MM-DD')`, 'periodStart')
+        .setParameter('zonaPeriodo', ZONA_HORARIA)
+        .groupBy(periodo)
+        .addGroupBy('product.id')
+        .orderBy(periodo, 'ASC');
+    } else {
+      productosQb.groupBy('product.id');
+    }
+    productosQb
+      .addGroupBy('product.nombre')
+      .addGroupBy('product.categoriaId')
+      // Mismo orden en cualquier corrida: más canastas primero y, a igual
+      // conteo, por id (el resultado no depende del plan de Postgres).
+      .addOrderBy('COUNT(DISTINCT basket.id)', 'DESC')
+      .addOrderBy('product.id', 'ASC');
+    const productos = await productosQb.getRawMany<{
+      periodStart?: string;
+      productId: string;
+      productName: string;
+      categoryId: number | string | null;
+      basketsWithProduct: string;
+      spend: string;
+    }>();
+
+    // Mismo orden de campos que el XSD (xs:sequence); los nulos se omiten en XML.
+    return {
+      zoneId: filters.zoneId,
+      segmentId: Number(filters.segmentId),
+      dateFrom: filters.dateFrom?.slice(0, 10) ?? null,
+      dateTo: filters.dateTo?.slice(0, 10) ?? null,
+      groupBy: filters.groupBy ?? null,
+      timezone: ZONA_HORARIA,
+      asOf: asOf.toISOString(),
+      periods: periodos.map((fila) => ({
+        periodStart: fila.periodStart ?? null,
+        baskets: Number(fila.baskets),
+        stores: Number(fila.stores),
+        totalSpend: round2(Number(fila.totalSpend)),
+      })),
+      data: productos.map((fila) => ({
+        periodStart: fila.periodStart ?? null,
+        productId: fila.productId,
+        productName: fila.productName,
+        categoryId: fila.categoryId == null ? null : Number(fila.categoryId),
+        basketsWithProduct: Number(fila.basketsWithProduct),
+        spend: round2(Number(fila.spend)),
       })),
     };
   }

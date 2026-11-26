@@ -127,15 +127,17 @@ canastas **distintas** aparece y cuánto se gastó en él.
 
 ```json
 { "zoneId": "97925ca4-3845-4e68-9660-46f781957b8c", "segmentId": 2,
-  "dateFrom": "2026-10-01", "dateTo": "2026-10-31",
+  "dateFrom": "2026-10-01", "dateTo": "2026-10-31", "groupBy": null,
   "timezone": "America/Monterrey", "asOf": "2026-11-25T18:20:00.000Z",
-  "periods": [ { "baskets": 100, "stores": 4, "totalSpend": 10983.5 } ],
-  "data": [ { "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01", "productName": "Leche entera",
-              "categoryId": 2, "basketsWithProduct": 62, "spend": 3534 } ] }
+  "periods": [ { "periodStart": null, "baskets": 100, "stores": 4, "totalSpend": 10983.5 } ],
+  "data": [ { "periodStart": null, "productId": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01",
+              "productName": "Leche entera", "categoryId": 2, "basketsWithProduct": 62, "spend": 3534 } ] }
 ```
 
+En JSON los campos nulos salen como `null`; en XML se omiten.
+
 - `periods`: canastas, tiendas **distintas** con venta y gasto total de cada periodo. Sin
-  `groupBy` hay **exactamente un** periodo (sin `periodStart`), aunque tenga 0 canastas.
+  `groupBy` hay **exactamente un** periodo (`periodStart: null`), aunque tenga 0 canastas.
   Con `groupBy`, un periodo por semana o mes **con canastas**, con su `periodStart`
   (lunes o día 1, hora de Monterrey), en orden ascendente.
 - `data`: una fila por periodo y producto. `basketsWithProduct` es

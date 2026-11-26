@@ -273,3 +273,121 @@ describe('weekly-sales de punta a punta (T-13, integración, requiere stack)', (
     expect(String(r.cuerpo)).toContain('<item>');
   }, 60000);
 });
+
+describe('basket-products de punta a punta (T-12, integración, requiere stack)', () => {
+  type Canasta = { transactionId: string; storeId: string; zoneId: string; segmentId: number | null; totalValue: string };
+  type Venta = { id: string; details: { productId: string; subtotal: string }[] };
+
+  async function paginas<T>(ruta: string): Promise<T[]> {
+    const filas: T[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const r = await get(`${ruta}${ruta.includes('?') ? '&' : '?'}limit=100&page=${page}`);
+      expect(r.estado).toBe(200);
+      filas.push(...(r.cuerpo.data as T[]));
+      if (page * 100 >= r.cuerpo.total) break;
+    }
+    return filas;
+  }
+
+  it('cada grupo zona-segmento cuadra con /v1/baskets y /v1/transactions', async () => {
+    const canastas = await paginas<Canasta>('/v1/baskets');
+    const ventas = new Map((await paginas<Venta>('/v1/transactions')).map((v) => [v.id, v]));
+
+    // Lo esperado, por grupo, calculado a mano.
+    const grupos = new Map<string, { canastas: Canasta[] }>();
+    for (const k of canastas.filter((c) => c.segmentId != null)) {
+      const clave = `${k.zoneId}|${k.segmentId}`;
+      if (!grupos.has(clave)) grupos.set(clave, { canastas: [] });
+      grupos.get(clave)!.canastas.push(k);
+    }
+    expect(grupos.size).toBeGreaterThan(0);
+
+    for (const [clave, { canastas: delGrupo }] of grupos) {
+      const [zona, segmento] = clave.split('|');
+      const porProducto = new Map<string, { canastas: Set<string>; gasto: number }>();
+      for (const k of delGrupo) {
+        for (const d of ventas.get(k.transactionId)?.details ?? []) {
+          const p = porProducto.get(d.productId) ?? { canastas: new Set<string>(), gasto: 0 };
+          p.canastas.add(k.transactionId);
+          p.gasto += Number(d.subtotal);
+          porProducto.set(d.productId, p);
+        }
+      }
+
+      const r = await get(`/v1/analytics/basket-products?zoneId=${zona}&segmentId=${segmento}`);
+      expect(r.estado).toBe(200);
+      const [periodo] = r.cuerpo.periods;
+      expect(r.cuerpo.periods).toHaveLength(1);
+      expect(periodo.baskets).toBe(delGrupo.length);
+      expect(periodo.stores).toBe(new Set(delGrupo.map((k) => k.storeId)).size);
+      const gastoEsperado = delGrupo.reduce((s, k) => s + Number(k.totalValue), 0);
+      expect(Math.abs(periodo.totalSpend - gastoEsperado)).toBeLessThanOrEqual(0.01);
+
+      const filas = r.cuerpo.data as { productId: string; basketsWithProduct: number; spend: number }[];
+      expect(filas).toHaveLength(porProducto.size);
+      for (const fila of filas) {
+        const esperado = porProducto.get(fila.productId)!;
+        expect(fila.basketsWithProduct).toBe(esperado.canastas.size);
+        expect(Math.abs(fila.spend - esperado.gasto)).toBeLessThanOrEqual(0.01);
+      }
+      // Más canastas primero.
+      const conteos = filas.map((f) => f.basketsWithProduct);
+      expect(conteos).toEqual([...conteos].sort((a, b) => b - a));
+    }
+  }, 120000);
+
+  it('gasto total = average-ticket × canastas con los mismos filtros', async () => {
+    const [k] = await paginas<Canasta>('/v1/baskets?segmentId=1');
+    if (!k) return;
+    const filtros = `zoneId=${k.zoneId}&segmentId=${k.segmentId}`;
+    const [periodo] = (await get(`/v1/analytics/basket-products?${filtros}`)).cuerpo.periods;
+    const ticket = (await get(`/v1/analytics/average-ticket?${filtros}`)).cuerpo as number;
+    // average-ticket redondea a 2 decimales: tolerancia de medio centavo por canasta.
+    expect(Math.abs(periodo.totalSpend - ticket * periodo.baskets)).toBeLessThanOrEqual(0.005 * periodo.baskets + 0.01);
+  }, 60000);
+
+  it('groupBy=month: los meses suman lo mismo que el periodo único', async () => {
+    const [k] = await paginas<Canasta>('/v1/baskets?segmentId=1');
+    if (!k) return;
+    const filtros = `zoneId=${k.zoneId}&segmentId=${k.segmentId}`;
+    const total = (await get(`/v1/analytics/basket-products?${filtros}`)).cuerpo;
+    const porMes = (await get(`/v1/analytics/basket-products?${filtros}&groupBy=month&asOf=${total.asOf}`)).cuerpo;
+    const suma = (porMes.periods as { periodStart: string; baskets: number }[]).reduce((s, p) => s + p.baskets, 0);
+    expect(suma).toBe(total.periods[0].baskets);
+    for (const p of porMes.periods as { periodStart: string }[]) {
+      expect(p.periodStart).toMatch(/^\d{4}-\d{2}-01$/);
+    }
+  }, 60000);
+
+  it('grupo sin canastas: un periodo en 0 y data vacía; el mismo asOf repite el resultado', async () => {
+    const [k] = await paginas<Canasta>('/v1/baskets?segmentId=1');
+    if (!k) return;
+    // La zona con un segmento que no le corresponde no tiene canastas.
+    const vacio = await get(`/v1/analytics/basket-products?zoneId=${k.zoneId}&segmentId=999`);
+    expect(vacio.estado).toBe(200);
+    expect(vacio.cuerpo.periods).toEqual([{ periodStart: null, baskets: 0, stores: 0, totalSpend: 0 }]);
+    expect(vacio.cuerpo.data).toEqual([]);
+
+    const primera = await get(`/v1/analytics/basket-products?zoneId=${k.zoneId}&segmentId=${k.segmentId}`);
+    const repetida = await get(
+      `/v1/analytics/basket-products?zoneId=${k.zoneId}&segmentId=${k.segmentId}&asOf=${primera.cuerpo.asOf}`,
+    );
+    expect(repetida.cuerpo).toEqual(primera.cuerpo);
+  }, 60000);
+
+  it('sin segmentId, o con groupBy inválido, es 400', async () => {
+    const zona = '97925ca4-3845-4e68-9660-46f781957b8c';
+    expect((await get(`/v1/analytics/basket-products?zoneId=${zona}`)).estado).toBe(400);
+    expect((await get(`/v1/analytics/basket-products?zoneId=${zona}&segmentId=2&groupBy=day`)).estado).toBe(400);
+  });
+
+  it('XML: raíz <response> con periodos y productos en <item>', async () => {
+    const [k] = await paginas<Canasta>('/v1/baskets?segmentId=1');
+    if (!k) return;
+    const r = await get(`/v1/analytics/basket-products?zoneId=${k.zoneId}&segmentId=${k.segmentId}`, true);
+    expect(r.estado).toBe(200);
+    expect(r.tipo).toContain('application/xml');
+    expect(String(r.cuerpo)).toContain('<periods>');
+    expect(String(r.cuerpo)).toContain('<basketsWithProduct>');
+  }, 60000);
+});

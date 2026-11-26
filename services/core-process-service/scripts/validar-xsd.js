@@ -241,6 +241,26 @@ const CASOS = [
     'weekly-sales sin ventas ni zona',
     { ...muestras.ventasSemanales, zoneId: null, transactions: 0, stores: 0, data: [] },
   ],
+  ['basket-products', 'GET /v1/analytics/basket-products', muestras.productosPorCanastaDelGrupo],
+  [
+    'basket-products',
+    'basket-products por mes',
+    {
+      ...muestras.productosPorCanastaDelGrupo,
+      groupBy: 'month',
+      periods: [{ ...muestras.productosPorCanastaDelGrupo.periods[0], periodStart: '2026-10-01' }],
+      data: muestras.productosPorCanastaDelGrupo.data.map((fila) => ({ ...fila, periodStart: '2026-10-01' })),
+    },
+  ],
+  [
+    'basket-products',
+    'basket-products de un grupo sin canastas',
+    {
+      ...muestras.productosPorCanastaDelGrupo,
+      periods: [{ periodStart: null, baskets: 0, stores: 0, totalSpend: 0 }],
+      data: [],
+    },
+  ],
   ['error', 'error 404', error(404, 'NOT_FOUND')],
   ['error', 'error 400 con details', error(400, 'VALIDATION_ERROR', ['storeId debe ser un UUID válido.'])],
   ['error', 'error 503', error(503, 'SERVICE_UNAVAILABLE')],

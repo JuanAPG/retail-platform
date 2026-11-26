@@ -47,6 +47,35 @@ export const muestras = {
       },
     ],
   },
+  /** `GET /v1/analytics/basket-products` (T-12), sin `groupBy`. */
+  productosPorCanastaDelGrupo: {
+    zoneId: '97925ca4-3845-4e68-9660-46f781957b8c',
+    segmentId: 2,
+    dateFrom: '2026-10-01',
+    dateTo: '2026-10-31',
+    groupBy: null,
+    timezone: 'America/Monterrey',
+    asOf: '2026-11-25T18:20:00.000Z',
+    periods: [{ periodStart: null, baskets: 100, stores: 4, totalSpend: 10983.5 }],
+    data: [
+      {
+        periodStart: null,
+        productId: 'a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c01',
+        productName: 'Leche entera',
+        categoryId: 2,
+        basketsWithProduct: 62,
+        spend: 3534,
+      },
+      {
+        periodStart: null,
+        productId: 'a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c05',
+        productName: 'Queso panela',
+        categoryId: 2,
+        basketsWithProduct: 20,
+        spend: 1110,
+      },
+    ],
+  },
   transaccion: {
     id: '11111111-1111-4111-8111-111111111111',
     folio: 'T-V-001',

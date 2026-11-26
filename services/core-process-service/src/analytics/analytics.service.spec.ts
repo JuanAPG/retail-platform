@@ -317,3 +317,93 @@ describe('AnalyticsService — weekly-sales (T-13)', () => {
     expect(r.dateTo).toBe('2026-11-22');
   });
 });
+
+describe('AnalyticsService — basket-products (T-12)', () => {
+  const GRUPO = { zoneId: '97925ca4-3845-4e68-9660-46f781957b8c', segmentId: 2 };
+
+  /** Dos consultas: primero periodos, luego productos. */
+  function conRespuestas(periodos: object[], productos: object[]) {
+    const qb = qbFalso();
+    qb['getRawMany'] = jest.fn().mockResolvedValueOnce(periodos).mockResolvedValueOnce(productos);
+    const svc = new AnalyticsService({ createQueryBuilder: () => qb } as never);
+    const llamadas = qb['__llamadas'] as { metodo: string; args: unknown[] }[];
+    const sql = () => llamadas.flatMap((l) => l.args.filter((a) => typeof a === 'string')).join(' | ');
+    return { svc, llamadas, sql };
+  }
+
+  it('cuenta canastas DISTINTAS por producto y filtra el grupo congelado en la canasta', async () => {
+    const s = conRespuestas(
+      [{ baskets: '40', stores: '1', totalSpend: '5607.50' }],
+      [
+        { productId: 'leche', productName: 'Leche entera', categoryId: '2', basketsWithProduct: '30', spend: '2137.50' },
+        { productId: 'quinoa', productName: 'Quinoa orgánica', categoryId: '1', basketsWithProduct: '10', spend: '920.004' },
+      ],
+    );
+    const r = await s.svc.getBasketProducts(GRUPO);
+    const sql = s.sql();
+
+    expect(sql).toContain('basket.zoneId = :zoneId');
+    expect(sql).toContain('basket.segmentId = :segmentId');
+    expect(sql).toContain('basket.builtAt <= :asOf');
+    // Una canasta con dos presentaciones del mismo producto cuenta una vez.
+    expect(sql).toContain('COUNT(DISTINCT basket.id)');
+    expect(sql).toContain('presentation.producto');
+    // El gasto del periodo es la misma columna que average-ticket.
+    expect(sql).toContain('SUM(basket.totalValue)');
+    expect(sql).toContain('COUNT(DISTINCT venta.storeId)');
+
+    expect(r.periods).toEqual([{ periodStart: null, baskets: 40, stores: 1, totalSpend: 5607.5 }]);
+    expect(r.data).toEqual([
+      { periodStart: null, productId: 'leche', productName: 'Leche entera', categoryId: 2, basketsWithProduct: 30, spend: 2137.5 },
+      { periodStart: null, productId: 'quinoa', productName: 'Quinoa orgánica', categoryId: 1, basketsWithProduct: 10, spend: 920 },
+    ]);
+  });
+
+  it('orden estable: más canastas primero y, a igual conteo, por id', async () => {
+    const s = conRespuestas([{ baskets: '0', stores: '0', totalSpend: '0' }], []);
+    await s.svc.getBasketProducts(GRUPO);
+    const ordenes = s.llamadas.filter((l) => l.metodo === 'addOrderBy').map((l) => l.args);
+    expect(ordenes).toEqual([
+      ['COUNT(DISTINCT basket.id)', 'DESC'],
+      ['product.id', 'ASC'],
+    ]);
+  });
+
+  it('sin groupBy no agrupa los periodos: un solo periodo aunque haya 0 canastas', async () => {
+    const s = conRespuestas([{ baskets: '0', stores: '0', totalSpend: '0' }], []);
+    const r = await s.svc.getBasketProducts(GRUPO);
+    expect(r.periods).toEqual([{ periodStart: null, baskets: 0, stores: 0, totalSpend: 0 }]);
+    expect(r.data).toEqual([]);
+    expect(r.groupBy).toBeNull();
+    expect(s.sql()).not.toContain('date_trunc');
+  });
+
+  it('groupBy=month trunca el mes en hora de Monterrey y lo devuelve en cada fila', async () => {
+    const s = conRespuestas(
+      [
+        { periodStart: '2026-08-01', baskets: '54', stores: '3', totalSpend: '6000' },
+        { periodStart: '2026-09-01', baskets: '46', stores: '3', totalSpend: '5000' },
+      ],
+      [{ periodStart: '2026-08-01', productId: 'leche', productName: 'Leche entera', categoryId: '2', basketsWithProduct: '40', spend: '1000' }],
+    );
+    const r = await s.svc.getBasketProducts({ ...GRUPO, groupBy: 'month' });
+    expect(s.sql()).toContain("date_trunc('month', basket.date AT TIME ZONE :zonaPeriodo)");
+    expect(r.groupBy).toBe('month');
+    expect(r.periods.map((p) => p.periodStart)).toEqual(['2026-08-01', '2026-09-01']);
+    expect(r.data[0].periodStart).toBe('2026-08-01');
+  });
+
+  it('el orden de los campos es el del XSD (xs:sequence)', async () => {
+    const r = await conRespuestas([{ baskets: '0', stores: '0', totalSpend: '0' }], []).svc.getBasketProducts(GRUPO);
+    expect(Object.keys(r)).toEqual([
+      'zoneId', 'segmentId', 'dateFrom', 'dateTo', 'groupBy', 'timezone', 'asOf', 'periods', 'data',
+    ]);
+    expect(Object.keys(r.periods[0])).toEqual(['periodStart', 'baskets', 'stores', 'totalSpend']);
+  });
+
+  it('rango de días invertido → 400', async () => {
+    await expect(
+      conRespuestas([], []).svc.getBasketProducts({ ...GRUPO, dateFrom: '2026-09-30', dateTo: '2026-09-01' }),
+    ).rejects.toThrow('dateFrom no puede ser posterior a dateTo.');
+  });
+});
