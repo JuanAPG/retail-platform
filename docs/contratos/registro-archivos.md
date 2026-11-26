@@ -76,8 +76,7 @@ ingesta/2026/11/<loteId>/<archivoId>-1.csv
 
 - Se emite **después** de autorizar: rol según la Matriz y propiedad del recurso. Recurso ajeno
   para quien solo ve lo propio → `404`, no `403`.
-- **TTL: 300 s por defecto, tope 900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`). *Propuesta de política para
-  cerrar con el equipo.* Es tiempo para que el navegador empiece la descarga, no un enlace para compartir.
+- **TTL: 300 s por defecto, tope 900 s** (`ARCHIVOS_URL_TTL_SEGUNDOS`), **D-50**. Es tiempo para que el navegador empiece la descarga, no un enlace para compartir.
 - La URL **no se guarda, no se escribe en logs ni en la bitácora**. Los logs enmascaran
   `sig`, `token` y `X-Goog-*` del query.
 - Bitácora: **"URL emitida"** (audit-service, `accion: exportar`, con quién, cuándo, formato y
@@ -217,10 +216,10 @@ El dedup de 5 min de notifications no hace falta para este evento (documents ya 
 por archivo), pero no estorba. Mientras el evento no exista, notifications responde 400/403, documents
 lo deja en el log y vuelve a intentar el aviso en la siguiente petición del archivo.
 
-## 8. Pendiente de cerrar
+## 8. Decisiones
 
-- **TTL**: propuesta 300 s / tope 900 s (§4). Registrar como decisión.
-- **P-06**: qué es un reporte "propio" del Proveedor. Hoy: el que tiene su `usuarioId`
-  (`propietarioId` del archivo). Como solo el Gerente genera reportes, en la práctica un Proveedor
-  no tiene reportes propios todavía; el caso de prueba usa uno sembrado.
-- `reporte.disponible` en el catálogo de notifications (T-20).
+- **TTL**: 300 s por defecto, tope 900 s → **D-50**.
+- **Reporte propio del Proveedor**: el que tiene su `usuarioId` (`propietarioId` del archivo) →
+  **D-49** (resuelve P-06). Como solo el Gerente genera reportes, en la práctica un Proveedor no
+  tiene reportes propios todavía; el caso de prueba usa uno sembrado.
+- `reporte.disponible` en el catálogo de notifications (T-20): se agrega en su propio PR.

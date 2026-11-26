@@ -22,7 +22,7 @@ describe('publicación de agregados zona-segmento (D-36)', () => {
     expect(evaluarPublicacion(0, 0).disponible).toBe(false);
   });
 
-  describe('solo se cumple un umbral (P-11 pendiente)', () => {
+  describe('solo se cumple un umbral (D-48: no se publica con la regla por defecto)', () => {
     it('por defecto (`ambos`) NO publica y dice cuál umbral falta', () => {
       expect(evaluarPublicacion(10, 2)).toEqual({
         disponible: false,

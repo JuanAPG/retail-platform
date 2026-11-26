@@ -12,9 +12,8 @@ export interface UmbralesPublicacion {
   minTransacciones: number;
   minTiendas: number;
   /**
-   * P-11 PENDIENTE: D-36 dice "menos de 10 transacciones (o 3 tiendas)" y no
-   * fija qué pasa cuando solo se cumple un umbral.
-   *  - `ambos` (por defecto): hacen falta los dos. En la duda NO publica.
+   * D-48 (resuelve P-11): cuando solo se cumple un umbral NO se publica.
+   *  - `ambos` (por defecto, D-48): hacen falta los dos. En la duda NO publica.
    *  - `cualquiera`: basta uno.
    * Los dos casos sin duda (se cumplen los dos / no se cumple ninguno) dan lo
    * mismo con cualquiera de las dos lecturas.
@@ -60,7 +59,7 @@ export function evaluarPublicacion(
     };
   }
 
-  // Solo se cumple uno: es justo el caso que P-11 no ha decidido.
+  // Solo se cumple uno: D-48 dice que no se publica (salvo PUBLICATION_RULE=cualquiera).
   if (regla === 'cualquiera') return { disponible: true, motivo: null };
   return {
     disponible: false,
