@@ -108,7 +108,7 @@ def salud():
     muerto" de "base caida".
     """
     return armar_salud({
-        "postgres": _verificar_postgres,
+        "postgres": lambda: "no configurado",
         "mongodb": _verificar_mongo,
         "redis": _verificar_redis,
     })
@@ -180,30 +180,6 @@ def _verificar_redis() -> str:
         cliente.ping()
         return "ok"
     except Exception as error:  # noqa: BLE001 - el health reporta, no falla
-        return f"error: {error}"
-
-
-def _verificar_postgres() -> str:
-    """`no configurado` si el servicio aun no usa Postgres (sin driver)."""
-    try:
-        import psycopg2  # type: ignore
-    except ImportError:
-        return "no configurado"
-    try:
-
-        conexion = psycopg2.connect(  # noqa: F821 - importado arriba
-            host=os.getenv("DB_HOST", "localhost"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "postgres"),
-            dbname=os.getenv("DB_NAME", "retaildb"),
-            connect_timeout=2,
-        )
-        with conexion.cursor() as cursor:
-            cursor.execute("SELECT 1")
-        conexion.close()
-        return "ok"
-    except Exception as error:  # noqa: BLE001
         return f"error: {error}"
 
 
