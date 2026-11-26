@@ -181,3 +181,95 @@ describe('M09 de punta a punta (integración, requiere stack)', () => {
     expect(respuesta.status).toBe(401);
   });
 });
+
+describe('weekly-sales de punta a punta (T-13, integración, requiere stack)', () => {
+  type Linea = { productId: string; presentationId: string; quantity: string };
+  type Venta = { id: string; storeId: string; details: Linea[] };
+
+  /** Todas las transacciones (el CSV de 100 canastas cabe en pocas páginas). */
+  async function todasLasVentas(): Promise<Venta[]> {
+    const ventas: Venta[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const r = await get(`/v1/transactions?limit=100&page=${page}`);
+      expect(r.estado).toBe(200);
+      ventas.push(...(r.cuerpo.data as Venta[]));
+      if (page * 100 >= r.cuerpo.total) break;
+    }
+    return ventas;
+  }
+
+  it('cuadra con las líneas de /v1/transactions: cantidades, transacciones y tiendas', async () => {
+    const ventas = await todasLasVentas();
+    const producto = ventas[0]?.details[0]?.productId;
+    expect(producto).toBeDefined();
+
+    // Lo esperado, calculado a mano desde las transacciones.
+    const porPresentacion = new Map<string, number>();
+    const transacciones = new Set<string>();
+    const tiendas = new Set<string>();
+    for (const v of ventas) {
+      for (const d of v.details.filter((l) => l.productId === producto)) {
+        porPresentacion.set(d.presentationId, (porPresentacion.get(d.presentationId) ?? 0) + Number(d.quantity));
+        transacciones.add(v.id);
+        tiendas.add(v.storeId);
+      }
+    }
+
+    const r = await get(`/v1/analytics/weekly-sales?productId=${producto}`);
+    expect(r.estado).toBe(200);
+    expect(r.cuerpo.transactions).toBe(transacciones.size);
+    expect(r.cuerpo.stores).toBe(tiendas.size);
+
+    const obtenido = new Map<string, number>();
+    for (const fila of r.cuerpo.data as { weekStart: string; presentationId: string; quantity: number }[]) {
+      obtenido.set(fila.presentationId, (obtenido.get(fila.presentationId) ?? 0) + fila.quantity);
+      // Toda semana empieza en lunes.
+      expect(new Date(`${fila.weekStart}T00:00:00Z`).getUTCDay()).toBe(1);
+    }
+    for (const [presentacion, cantidad] of porPresentacion) {
+      expect(Math.abs((obtenido.get(presentacion) ?? 0) - cantidad)).toBeLessThanOrEqual(0.01);
+    }
+    expect(obtenido.size).toBe(porPresentacion.size);
+  }, 60000);
+
+  it('asOf anterior a las ventas da conteos en 0; el mismo asOf repite el resultado', async () => {
+    const ventas = await todasLasVentas();
+    const producto = ventas[0].details[0].productId;
+
+    const antes = await get(`/v1/analytics/weekly-sales?productId=${producto}&asOf=2000-01-01T00:00:00Z`);
+    expect(antes.estado).toBe(200);
+    expect(antes.cuerpo.transactions).toBe(0);
+    expect(antes.cuerpo.data).toEqual([]);
+
+    const primera = await get(`/v1/analytics/weekly-sales?productId=${producto}`);
+    const repetida = await get(`/v1/analytics/weekly-sales?productId=${producto}&asOf=${primera.cuerpo.asOf}`);
+    expect(repetida.cuerpo).toEqual(primera.cuerpo);
+  }, 60000);
+
+  it('sin productId, o con el rango invertido, es 400', async () => {
+    const sinProducto = await get('/v1/analytics/weekly-sales');
+    expect(sinProducto.estado).toBe(400);
+    expect(sinProducto.cuerpo.code).toBe('VALIDATION_ERROR');
+
+    const invertido = await get(
+      '/v1/analytics/weekly-sales?productId=3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60&dateFrom=2026-09-30&dateTo=2026-09-01',
+    );
+    expect(invertido.estado).toBe(400);
+  });
+
+  it('producto sin ventas: 200 con data vacía, no 404', async () => {
+    const r = await get('/v1/analytics/weekly-sales?productId=3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60');
+    expect(r.estado).toBe(200);
+    expect(r.cuerpo.data).toEqual([]);
+    expect(r.cuerpo.transactions).toBe(0);
+  });
+
+  it('XML: raíz <response> con las semanas en <item>', async () => {
+    const ventas = await todasLasVentas();
+    const r = await get(`/v1/analytics/weekly-sales?productId=${ventas[0].details[0].productId}`, true);
+    expect(r.estado).toBe(200);
+    expect(r.tipo).toContain('application/xml');
+    expect(String(r.cuerpo)).toContain('<weekStartsOn>monday</weekStartsOn>');
+    expect(String(r.cuerpo)).toContain('<item>');
+  }, 60000);
+});

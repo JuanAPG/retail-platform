@@ -98,7 +98,11 @@ Ventas de **un producto** agregadas por **semana y presentación**.
 
 - `weekStart`: el lunes de la semana, en hora de Monterrey
   (`date_trunc('week', fecha AT TIME ZONE 'America/Monterrey')`). Solo aparecen las
-  semanas con venta; el relleno con 0 lo hace el consumidor.
+  semanas con venta; el relleno con 0 lo hace el consumidor. Si `dateFrom` no cae en
+  lunes (o `dateTo` en domingo), la semana del extremo sale **parcial**: solo trae los
+  días dentro del filtro, y su `weekStart` puede ser anterior a `dateFrom` (p. ej.
+  `dateFrom=2026-08-01`, sábado, da una primera semana `2026-07-27`). El consumidor
+  decide si la descarta; demand-forecast-service ajusta sus fechas a semanas completas.
 - `quantity`: suma de cantidades en la unidad de **la presentación** (no se mezclan
   presentaciones, D-06; la conversión a kg/l/pza la hace el consumidor).
 - `transactions` de cada fila: transacciones de esa semana con esa presentación.

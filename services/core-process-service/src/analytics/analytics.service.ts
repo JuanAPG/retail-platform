@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Basket } from '../entities/basket.entity';
 import { TransactionDetail } from '../entities/transaction-detail.entity';
 import { AnalyticsFilterDto } from './dto/analytics-filter.dto';
 import { CategorySpend } from './dto/category-spend.dto';
+import { WeeklySalesFilterDto } from './dto/weekly-sales-filter.dto';
+import { WeeklySales } from './dto/weekly-sales.dto';
 import { filtrarDiasLocales, ZONA_HORARIA } from '../common/zona-horaria';
 
 /**
@@ -148,6 +150,74 @@ export class AnalyticsService {
   }
 
   /**
+   * Ventas de UN producto por semana y presentación (T-13, consumidor:
+   * demand-forecast-service). Ruta nueva del Sprint 4.
+   *
+   * - Parte de `filteredBaskets`, así que la zona es la congelada en la
+   *   canasta y los días son locales, igual que los 5 indicadores.
+   * - La semana es la de `date_trunc('week', …)` (lunes) sobre la fecha en
+   *   hora de Monterrey, por el mismo motivo que la frecuencia de compra: en
+   *   UTC una venta del domingo a las 21:00 caería en la semana siguiente.
+   * - No se mezclan presentaciones (D-06): una fila por semana y
+   *   presentación; la conversión a kg/l/pza la hace el consumidor.
+   * - `asOf` fija la instantánea (`construida_en ≤ asOf`): repetir con el
+   *   mismo `asOf` da lo mismo aunque después entren ventas.
+   * - `transactions` y `stores` del encabezado son DISTINTOS en toda la
+   *   ventana (cobertura de D-36): no se pueden sumar desde las filas, por
+   *   eso salen de su propia consulta.
+   */
+  async getWeeklySales(filters: WeeklySalesFilterDto): Promise<WeeklySales> {
+    validarRangoDeDias(filters);
+    const asOf = filters.asOf ? new Date(filters.asOf) : new Date();
+
+    const lineasDelProducto = () =>
+      this.filteredBaskets({ zoneId: filters.zoneId, dateFrom: filters.dateFrom, dateTo: filters.dateTo })
+        .innerJoin(TransactionDetail, 'detail', 'detail.transactionId = basket.transactionId')
+        .innerJoin('detail.presentation', 'presentation')
+        .andWhere('presentation.productoId = :productId', { productId: filters.productId })
+        .andWhere('basket.builtAt <= :asOf', { asOf });
+
+    const semana = `date_trunc('week', basket.date AT TIME ZONE :zonaSemana)`;
+    const filas = await lineasDelProducto()
+      .select(`to_char(${semana}, 'YYYY-MM-DD')`, 'weekStart')
+      .addSelect('detail.presentationId', 'presentationId')
+      .addSelect('SUM(detail.quantity)', 'quantity')
+      .addSelect('COUNT(DISTINCT basket.id)', 'transactions')
+      .setParameter('zonaSemana', ZONA_HORARIA)
+      .groupBy(semana)
+      .addGroupBy('detail.presentationId')
+      .orderBy(semana, 'ASC')
+      .addOrderBy('detail.presentationId', 'ASC')
+      .getRawMany<{ weekStart: string; presentationId: string; quantity: string; transactions: string }>();
+
+    const cobertura = await lineasDelProducto()
+      // Alias propio: `transaction` lo usa filteredBaskets con storeId.
+      .innerJoin('basket.transaction', 'venta')
+      .select('COUNT(DISTINCT basket.id)', 'transactions')
+      .addSelect('COUNT(DISTINCT venta.storeId)', 'stores')
+      .getRawOne<{ transactions: string; stores: string }>();
+
+    // Mismo orden de campos que el XSD (xs:sequence); los nulos se omiten en XML.
+    return {
+      productId: filters.productId,
+      zoneId: filters.zoneId ?? null,
+      dateFrom: filters.dateFrom?.slice(0, 10) ?? null,
+      dateTo: filters.dateTo?.slice(0, 10) ?? null,
+      timezone: ZONA_HORARIA,
+      weekStartsOn: 'monday',
+      asOf: asOf.toISOString(),
+      transactions: Number(cobertura?.transactions ?? 0),
+      stores: Number(cobertura?.stores ?? 0),
+      data: filas.map((fila) => ({
+        weekStart: fila.weekStart,
+        presentationId: fila.presentationId,
+        quantity: round2(Number(fila.quantity)),
+        transactions: Number(fila.transactions),
+      })),
+    };
+  }
+
+  /**
    * Consulta base sobre canastas con los filtros aplicados. Todos los
    * indicadores parten de aquí para que filtren exactamente igual.
    */
@@ -183,6 +253,17 @@ export class AnalyticsService {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * Las lecturas nuevas del Sprint 4 rechazan un rango invertido con 400. Los
+ * 5 indicadores anteriores lo dejan pasar (un rango invertido da 0) y no se
+ * cambian aquí para no alterar a sus consumidores.
+ */
+function validarRangoDeDias(filtros: { dateFrom?: string; dateTo?: string }): void {
+  if (filtros.dateFrom && filtros.dateTo && filtros.dateFrom.slice(0, 10) > filtros.dateTo.slice(0, 10)) {
+    throw new BadRequestException('dateFrom no puede ser posterior a dateTo.');
+  }
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

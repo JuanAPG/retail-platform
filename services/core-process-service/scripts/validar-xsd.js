@@ -235,6 +235,12 @@ const CASOS = [
   ['indicador-escalar', 'indicador sin canastas', 0],
   ['spend-by-category', 'GET /v1/analytics/spend-by-category', muestras.gastoPorCategoria],
   ['spend-by-category', 'gasto por categoría vacío', []],
+  ['weekly-sales', 'GET /v1/analytics/weekly-sales', muestras.ventasSemanales],
+  [
+    'weekly-sales',
+    'weekly-sales sin ventas ni zona',
+    { ...muestras.ventasSemanales, zoneId: null, transactions: 0, stores: 0, data: [] },
+  ],
   ['error', 'error 404', error(404, 'NOT_FOUND')],
   ['error', 'error 400 con details', error(400, 'VALIDATION_ERROR', ['storeId debe ser un UUID válido.'])],
   ['error', 'error 503', error(503, 'SERVICE_UNAVAILABLE')],

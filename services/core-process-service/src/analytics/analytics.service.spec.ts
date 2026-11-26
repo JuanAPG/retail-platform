@@ -235,3 +235,85 @@ describe('AnalyticsService — gasto por categoría', () => {
     expect(fila.share).toBe(0);
   });
 });
+
+describe('AnalyticsService — weekly-sales (T-13)', () => {
+  const PRODUCTO = '3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60';
+  const FILAS = [
+    { weekStart: '2026-07-06', presentationId: 'p1', quantity: '214.00', transactions: '61' },
+    { weekStart: '2026-07-06', presentationId: 'p2', quantity: '79.333', transactions: '48' },
+  ];
+
+  it('arma la serie: producto, semana en hora local y presentaciones por separado', async () => {
+    const s = servicio({ varios: FILAS, uno: { transactions: '109', stores: '4' } });
+    const r = await s.svc.getWeeklySales({ productId: PRODUCTO, zoneId: 'z1' });
+    const sql = s.sql();
+
+    // Las líneas de la canasta, filtradas por el producto de la presentación.
+    expect(sql).toContain('detail.transactionId = basket.transactionId');
+    expect(sql).toContain('presentation.productoId = :productId');
+    // La semana se trunca en hora de Monterrey, no en UTC.
+    expect(sql).toContain("date_trunc('week', basket.date AT TIME ZONE :zonaSemana)");
+    // Una fila por semana Y presentación (D-06: no se mezclan).
+    expect(s.llamadas.find((l) => l.metodo === 'addGroupBy')!.args).toEqual(['detail.presentationId']);
+    // Instantánea y filtro de zona de la consulta base.
+    expect(sql).toContain('basket.builtAt <= :asOf');
+    expect(sql).toContain('basket.zoneId = :zoneId');
+    // La cobertura cuenta transacciones y tiendas DISTINTAS.
+    expect(sql).toContain('COUNT(DISTINCT basket.id)');
+    expect(sql).toContain('COUNT(DISTINCT venta.storeId)');
+
+    expect(r.productId).toBe(PRODUCTO);
+    expect(r.weekStartsOn).toBe('monday');
+    expect(r.transactions).toBe(109);
+    expect(r.stores).toBe(4);
+    expect(r.data).toEqual([
+      { weekStart: '2026-07-06', presentationId: 'p1', quantity: 214, transactions: 61 },
+      { weekStart: '2026-07-06', presentationId: 'p2', quantity: 79.33, transactions: 48 },
+    ]);
+  });
+
+  it('el orden de los campos es el del XSD (xs:sequence)', async () => {
+    const r = await servicio({ varios: [], uno: null }).svc.getWeeklySales({ productId: PRODUCTO });
+    expect(Object.keys(r)).toEqual([
+      'productId', 'zoneId', 'dateFrom', 'dateTo', 'timezone', 'weekStartsOn',
+      'asOf', 'transactions', 'stores', 'data',
+    ]);
+  });
+
+  it('sin ventas: 200 con data vacía y conteos en 0, no 404', async () => {
+    const r = await servicio({ varios: [], uno: null }).svc.getWeeklySales({ productId: PRODUCTO });
+    expect(r.data).toEqual([]);
+    expect(r.transactions).toBe(0);
+    expect(r.stores).toBe(0);
+    expect(r.zoneId).toBeNull();
+  });
+
+  it('asOf: el enviado se respeta; sin él se usa el instante de la petición', async () => {
+    const fijo = await servicio({ varios: [], uno: null }).svc.getWeeklySales({
+      productId: PRODUCTO,
+      asOf: '2026-11-25T18:04:11.902Z',
+    });
+    expect(fijo.asOf).toBe('2026-11-25T18:04:11.902Z');
+
+    const antes = Date.now();
+    const ahora = await servicio({ varios: [], uno: null }).svc.getWeeklySales({ productId: PRODUCTO });
+    expect(new Date(ahora.asOf).getTime()).toBeGreaterThanOrEqual(antes);
+    expect(new Date(ahora.asOf).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('rango de días invertido → 400', async () => {
+    await expect(
+      servicio().svc.getWeeklySales({ productId: PRODUCTO, dateFrom: '2026-09-30', dateTo: '2026-09-01' }),
+    ).rejects.toThrow('dateFrom no puede ser posterior a dateTo.');
+  });
+
+  it('devuelve los días del filtro sin hora', async () => {
+    const r = await servicio({ varios: [], uno: null }).svc.getWeeklySales({
+      productId: PRODUCTO,
+      dateFrom: '2026-07-01T10:00:00',
+      dateTo: '2026-11-22',
+    });
+    expect(r.dateFrom).toBe('2026-07-01');
+    expect(r.dateTo).toBe('2026-11-22');
+  });
+});
