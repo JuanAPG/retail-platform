@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de offline-sync-service (T-07, D-42, D-47).
+     Espacio de nombres fijo `sync/v1`. El escritorio ENVÍA el lote en XML
+     (`Content-Type: application/xml`, raíz `loteSync`) y recibe el acuse en XML
+     si pide `Accept: application/xml`. Los nulos se OMITEN (por eso los campos
+     opcionales llevan minOccurs="0"). Las listas van como <item> (paginacion.md).
+     `GET /v1/health` usa health.xsd. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="sync/v1"
+           xmlns:sy="sync/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===================== Tipos simples ===================== -->
+
+  <xs:simpleType name="uuid">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Instante ISO 8601 CON zona horaria obligatoria (Z o ±hh:mm). -->
+  <xs:simpleType name="instanteConZona">
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value=".+(Z|[+\-]\d{2}:\d{2})"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Versión del contrato: "mayor.menor". Hoy solo se admite "1.0". -->
+  <xs:simpleType name="versionContrato">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{1,3}\.\d{1,3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="cliente">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="movil"/>
+      <xs:enumeration value="escritorio"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Tipos de captura de la versión 1.0. Visitas de campo (D-30) y propuestas
+       de producto (D-32) quedan PENDIENTES (ver el .md). -->
+  <xs:simpleType name="tipoCaptura">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="disponibilidad"/>
+      <xs:enumeration value="precio_observado"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Estado de cada captura en el acuse (D-42). -->
+  <xs:simpleType name="estadoCaptura">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="aceptada"/>
+      <xs:enumeration value="duplicada"/>
+      <xs:enumeration value="conflicto"/>
+      <xs:enumeration value="rechazada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Estado original: el que tuvo la captura la primera vez (nunca "duplicada"). -->
+  <xs:simpleType name="estadoOriginal">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="aceptada"/>
+      <xs:enumeration value="conflicto"/>
+      <xs:enumeration value="rechazada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="servicioDestino">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="availability-service"/>
+      <xs:enumeration value="pricing-service"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Códigos del catálogo estándar (services/snippets/error-codes.md). -->
+  <xs:simpleType name="codigoError">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== Petición: el lote ===================== -->
+
+  <!-- Contenido de una captura. Todos opcionales en el XSD para que JSON y XML
+       tengan la misma forma; qué campo exige cada `type` lo valida el servicio
+       POR ELEMENTO (un error ahí deja la captura `rechazada`, no el lote).
+       disponibilidad: stock. precio_observado: price (+ lat y lng juntas). -->
+  <xs:complexType name="contenidoCaptura">
+    <xs:all>
+      <xs:element name="stock" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="price" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="lat" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="lng" type="xs:decimal" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="capturaEntrada">
+    <xs:sequence>
+      <xs:element name="captureId" type="sy:uuid"/>
+      <xs:element name="type" type="sy:tipoCaptura"/>
+      <xs:element name="contractVersion" type="sy:versionContrato"/>
+      <xs:element name="capturedAt" type="sy:instanteConZona"/>
+      <xs:element name="storeId" type="sy:uuid" minOccurs="0"/>
+      <xs:element name="presentationId" type="sy:uuid" minOccurs="0"/>
+      <xs:element name="content" type="sy:contenidoCaptura"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/sync/batches (cuerpo XML del escritorio). El tope de 500
+       capturas se revisa en el servicio (413), no aquí. -->
+  <xs:element name="loteSync">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="batchId" type="sy:uuid"/>
+        <xs:element name="deviceId" type="sy:uuid"/>
+        <xs:element name="contractVersion" type="sy:versionContrato"/>
+        <xs:element name="client" type="sy:cliente"/>
+        <xs:element name="sentAt" type="sy:instanteConZona" minOccurs="0"/>
+        <xs:element name="captures">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="sy:capturaEntrada" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===================== Respuesta: el acuse ===================== -->
+
+  <xs:complexType name="destino">
+    <xs:sequence>
+      <xs:element name="service" type="sy:servicioDestino"/>
+      <xs:element name="id" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="motivo">
+    <xs:sequence>
+      <xs:element name="code" type="sy:codigoError"/>
+      <xs:element name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="resultadoCaptura">
+    <xs:sequence>
+      <xs:element name="captureId" type="sy:uuid"/>
+      <xs:element name="type" type="sy:tipoCaptura"/>
+      <xs:element name="status" type="sy:estadoCaptura"/>
+      <xs:element name="originalStatus" type="sy:estadoOriginal" minOccurs="0"/>
+      <xs:element name="capturedAt" type="sy:instanteConZona"/>
+      <xs:element name="target" type="sy:destino" minOccurs="0"/>
+      <xs:element name="serverCapturedAt" type="sy:instanteConZona" minOccurs="0"/>
+      <xs:element name="reason" type="sy:motivo" minOccurs="0"/>
+      <xs:element name="retryable" type="xs:boolean"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="resumen">
+    <xs:sequence>
+      <xs:element name="total" type="xs:nonNegativeInteger"/>
+      <xs:element name="aceptadas" type="xs:nonNegativeInteger"/>
+      <xs:element name="duplicadas" type="xs:nonNegativeInteger"/>
+      <xs:element name="conflictos" type="xs:nonNegativeInteger"/>
+      <xs:element name="rechazadas" type="xs:nonNegativeInteger"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="acuse">
+    <xs:sequence>
+      <xs:element name="batchId" type="sy:uuid"/>
+      <xs:element name="deviceId" type="sy:uuid"/>
+      <xs:element name="userId" type="sy:uuid"/>
+      <xs:element name="client" type="sy:cliente"/>
+      <xs:element name="contractVersion" type="sy:versionContrato"/>
+      <xs:element name="receivedAt" type="sy:instanteConZona"/>
+      <xs:element name="resend" type="xs:boolean"/>
+      <xs:element name="correlationId" type="xs:string"/>
+      <xs:element name="summary" type="sy:resumen"/>
+      <xs:element name="results">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="sy:resultadoCaptura" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- POST /v1/sync/batches y GET /v1/sync/batches/:batchId -->
+  <xs:element name="acuseLote" type="sy:acuse"/>
+
+  <!-- GET /v1/sync/batches (paginado, sin el detalle por captura) -->
+  <xs:element name="loteListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="batchId" type="sy:uuid"/>
+                    <xs:element name="deviceId" type="sy:uuid"/>
+                    <xs:element name="userId" type="sy:uuid"/>
+                    <xs:element name="client" type="sy:cliente"/>
+                    <xs:element name="receivedAt" type="sy:instanteConZona"/>
+                    <xs:element name="summary" type="sy:resumen"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Error estándar, igual que en los demás XSD. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

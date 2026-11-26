@@ -22,6 +22,8 @@ export const SERVICIOS = {
   audit: { etiqueta: 'audit-service', puerto: 3110, env: 'VITE_AUDIT_URL' },
   // Sprint 4 (D-35): los segmentos de ingreso salieron de catalog-service.
   segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
+  // T-09: estado de los 20 servicios (solo Administrador).
+  monitoring: { etiqueta: 'monitoring-service', puerto: 3120, env: 'VITE_MONITORING_URL' },
 } as const;
 
 type NombreServicio = keyof typeof SERVICIOS;
@@ -207,3 +209,4 @@ export const documentsApi = crearCliente('documents');
 export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
 export const segmentationApi = crearCliente('segmentation');
+export const monitoringApi = crearCliente('monitoring');

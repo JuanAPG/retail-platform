@@ -1,0 +1,8 @@
+{
+  "statusCode": 409,
+  "code": "CONFLICT",
+  "message": "Ya hay un linaje para demand-forecast-service/corrida/674a1f3c9e2b4d0012ab34cd con otro contenido; el linaje no se sobrescribe.",
+  "details": null,
+  "path": "/v1/lineage",
+  "timestamp": "2026-11-25T18:05:00.114000+00:00"
+}

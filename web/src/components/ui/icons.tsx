@@ -65,6 +65,14 @@ export function IconProveedores(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconMonitoreo(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </IconBase>
+  );
+}
+
 export function IconAuditoria(props: SVGProps<SVGSVGElement>) {
   return (
     <IconBase {...props}>

@@ -13,8 +13,9 @@ import { ZonasPanel } from './admin/ZonasPanel';
 import { ComparacionZonasPanel } from './admin/ComparacionZonasPanel';
 import { ProveedoresPanel } from './admin/ProveedoresPanel';
 import { BitacoraPanel } from './AuditorPortal';
+import { MonitoreoPanel } from './admin/MonitoreoPanel';
 
-type TabAdmin = 'usuarios' | 'tiendas' | 'zonas' | 'comparar-zonas' | 'proveedores' | 'auditoria';
+type TabAdmin = 'usuarios' | 'tiendas' | 'zonas' | 'comparar-zonas' | 'proveedores' | 'auditoria' | 'monitoreo';
 
 export function AdminPortal() {
   const { usuario, logout } = useAuth();
@@ -65,6 +66,7 @@ export function AdminPortal() {
       {tab === 'comparar-zonas' && <ComparacionZonasPanel estado={zonas} onVolver={() => setTab('zonas')} />}
       {tab === 'proveedores' && <ProveedoresPanel estado={proveedores} />}
       {tab === 'auditoria' && <BitacoraPanel usuarios={usuarios} />}
+      {tab === 'monitoreo' && <MonitoreoPanel />}
     </AppShell>
   );
 }

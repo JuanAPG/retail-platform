@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "dataset": "transacciones",
+      "ownerService": "core-process-service",
+      "retentionPeriod": "P3Y",
+      "basis": "fecha de la venta",
+      "ownerAction": "El dueño decide cómo aplicarla sobre su almacén (D-43 fija el plazo).",
+      "decision": "D-43"
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "ownerService": "availability-service",
+      "retentionPeriod": "P1Y",
+      "basis": "capturedAt",
+      "ownerAction": "El dueño decide cómo aplicarla sobre su almacén (D-43 fija el plazo).",
+      "decision": "D-43"
+    },
+    {
+      "dataset": "observaciones_precio",
+      "ownerService": "pricing-service",
+      "retentionPeriod": "P1Y",
+      "basis": "fecha de la observación",
+      "ownerAction": "El dueño decide cómo aplicarla sobre su almacén (D-43 fija el plazo).",
+      "decision": "D-43"
+    },
+    {
+      "dataset": "visitas_campo",
+      "ownerService": "catalog-service",
+      "retentionPeriod": "P1Y",
+      "basis": "fecha de la visita",
+      "ownerAction": "El dueño decide cómo aplicarla sobre su almacén (D-43 fija el plazo).",
+      "decision": "D-43"
+    },
+    {
+      "dataset": "notificaciones",
+      "ownerService": "notifications-service",
+      "retentionPeriod": "P90D",
+      "basis": "createdAt",
+      "ownerAction": "Ya implementado: un job diario archiva lo mayor a 90 días y nunca borra.",
+      "decision": "D-43"
+    },
+    {
+      "dataset": "bitacora",
+      "ownerService": "audit-service",
+      "retentionPeriod": null,
+      "basis": "—",
+      "ownerAction": "Sin borrado: la bitácora es inmutable (D-43).",
+      "decision": "D-43"
+    }
+  ]
+}

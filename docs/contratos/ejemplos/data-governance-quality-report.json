@@ -1,0 +1,134 @@
+{
+  "dateFrom": "2026-11-01",
+  "dateTo": "2026-11-25",
+  "measuredAt": "2026-11-26T09:15:00.000000+00:00",
+  "sources": [
+    {
+      "sourceKey": "ventas-archivo",
+      "sourceName": "Importación de ventas por archivo (CSV, JSON, XML)",
+      "ownerService": "transactions-ingestion-service",
+      "sampleSize": 254,
+      "metrics": [
+        {
+          "metric": "completeness",
+          "value": 0.9960629921259843,
+          "unit": "proporcion",
+          "numerator": 253,
+          "denominator": 254,
+          "disponible": true,
+          "motivo": null
+        },
+        {
+          "metric": "duplicates",
+          "value": 0.015748031496062992,
+          "unit": "proporcion",
+          "numerator": 4,
+          "denominator": 254,
+          "disponible": true,
+          "motivo": null
+        },
+        {
+          "metric": "outOfRange",
+          "value": 0.015748031496062992,
+          "unit": "proporcion",
+          "numerator": 4,
+          "denominator": 254,
+          "disponible": true,
+          "motivo": null
+        },
+        {
+          "metric": "freshness",
+          "value": 2.0,
+          "unit": "dias",
+          "numerator": null,
+          "denominator": null,
+          "disponible": true,
+          "motivo": null,
+          "stale": false
+        }
+      ],
+      "rejectedByCode": [
+        {
+          "code": "CANTIDAD_INVALIDA",
+          "count": 1
+        },
+        {
+          "code": "FECHA_VACIA",
+          "count": 1
+        },
+        {
+          "code": "PRECIO_INVALIDO",
+          "count": 2
+        },
+        {
+          "code": "SKU_NO_EXISTE",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceKey": "capturas-campo",
+      "sourceName": "Capturas de campo: disponibilidad, precio observado y visitas",
+      "ownerService": "availability-service",
+      "sampleSize": 48,
+      "metrics": [
+        {
+          "metric": "completeness",
+          "value": null,
+          "unit": "proporcion",
+          "numerator": null,
+          "denominator": null,
+          "disponible": false,
+          "motivo": "availability-service rechaza una captura incompleta antes de guardarla: no hay incompletas que medir."
+        },
+        {
+          "metric": "duplicates",
+          "value": 0.0625,
+          "unit": "proporcion",
+          "numerator": 3,
+          "denominator": 48,
+          "disponible": true,
+          "motivo": "Sobre todo el historial: availability-service no filtra capturas por fecha todavía."
+        },
+        {
+          "metric": "outOfRange",
+          "value": null,
+          "unit": "proporcion",
+          "numerator": null,
+          "denominator": null,
+          "disponible": false,
+          "motivo": "availability-service rechaza existencias negativas o fechas futuras antes de guardarlas."
+        },
+        {
+          "metric": "freshness",
+          "value": 0.725,
+          "unit": "proporcion",
+          "numerator": 29,
+          "denominator": 40,
+          "disponible": true,
+          "motivo": null
+        }
+      ],
+      "rejectedByCode": []
+    },
+    {
+      "sourceKey": "inegi-enigh",
+      "sourceName": "INEGI ENIGH: ingreso corriente trimestral por hogar",
+      "ownerService": "income-segmentation-service",
+      "sampleSize": 3,
+      "metrics": [
+        {
+          "metric": "freshness",
+          "value": 62.0,
+          "unit": "dias",
+          "numerator": null,
+          "denominator": null,
+          "disponible": true,
+          "motivo": null,
+          "stale": false
+        }
+      ],
+      "rejectedByCode": []
+    }
+  ]
+}
