@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": "674a20819e2b4d0012ab34ce",
+      "date": "2026-11-25T18:06:40.051000+00:00",
+      "userId": "5b1e7d3c-2a4f-4e6b-8c9d-0e1f2a3b4c5d",
+      "productId": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+      "zoneId": "f2670df2-5c1a-4b7e-9d3f-2a6b8c0d1e4f",
+      "unit": "l",
+      "disponible": false,
+      "weeks": null,
+      "mape": null,
+      "durationMs": 212.4
+    },
+    {
+      "id": "674a1f3c9e2b4d0012ab34cd",
+      "date": "2026-11-25T18:04:12.317000+00:00",
+      "userId": "5b1e7d3c-2a4f-4e6b-8c9d-0e1f2a3b4c5d",
+      "productId": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+      "zoneId": "97925ca4-3845-4e68-9660-46f781957b8c",
+      "unit": "l",
+      "disponible": true,
+      "weeks": 20,
+      "mape": 9.880783430220134,
+      "durationMs": 127.4
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "limit": 20
+}

@@ -1,0 +1,10 @@
+{
+  "statusCode": 400,
+  "code": "VALIDATION_ERROR",
+  "message": "segmentId es obligatorio: el grupo es zona + segmento (D-37).",
+  "details": [
+    "segmentId: campo requerido"
+  ],
+  "path": "/v1/typical-basket",
+  "timestamp": "2026-11-25T18:21:07.402000+00:00"
+}

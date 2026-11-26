@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de data-governance-service (T-06, T-14, D-43, D-47).
+     Espacio de nombres fijo `governance/v1`. Los endpoints responden estas raíces
+     cuando `Accept: application/xml`. `GET /v1/health` usa health.xsd.
+
+     Convenciones de este esquema (las de `app/xml_out.py` de la plantilla FastAPI):
+     - Objetos con xs:all: los campos pueden llegar en cualquier orden.
+     - Todo arreglo se envuelve en <item> por elemento; arreglo vacío = elemento vacío.
+     - Un null se OMITE: los campos que pueden ser nulos llevan minOccurs="0".
+     - Proporciones sin redondear: xs:double. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="governance/v1"
+           xmlns:gb="governance/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===== Tipos simples ===== -->
+
+  <xs:simpleType name="fecha">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="claveFuente">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z0-9]+(-[a-z0-9]+)*"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="40"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="tipoFuente">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="importacion"/>
+      <xs:enumeration value="operacion"/>
+      <xs:enumeration value="captura"/>
+      <xs:enumeration value="referencia_externa"/>
+      <xs:enumeration value="sintetico"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- D-43: lo que registra su linaje. -->
+  <xs:simpleType name="tipoRecurso">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="importacion"/>
+      <xs:enumeration value="version_segmento"/>
+      <xs:enumeration value="corrida"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="origenVersion">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="manual"/>
+      <xs:enumeration value="linaje"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="metrica">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="completeness"/>
+      <xs:enumeration value="duplicates"/>
+      <xs:enumeration value="outOfRange"/>
+      <xs:enumeration value="freshness"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="unidadMetrica">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="proporcion"/>
+      <xs:enumeration value="dias"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="conjunto">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="transacciones"/>
+      <xs:enumeration value="capturas_disponibilidad"/>
+      <xs:enumeration value="observaciones_precio"/>
+      <xs:enumeration value="visitas_campo"/>
+      <xs:enumeration value="notificaciones"/>
+      <xs:enumeration value="bitacora"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Duración ISO 8601 de la política: P3Y, P1Y, P90D. -->
+  <xs:simpleType name="periodo">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="P\d+[YD]"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===== Fuentes y versiones ===== -->
+
+  <xs:complexType name="fuente">
+    <xs:all>
+      <xs:element name="key" type="gb:claveFuente"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="type" type="gb:tipoFuente"/>
+      <xs:element name="ownerService" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="active" type="xs:boolean"/>
+      <xs:element name="currentVersion" type="xs:string" minOccurs="0"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <!-- Se omite en las fuentes sembradas por la migración. -->
+      <xs:element name="createdBy" type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="versionFuente">
+    <xs:all>
+      <xs:element name="sourceKey" type="gb:claveFuente"/>
+      <xs:element name="version" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="origin" type="gb:origenVersion"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="createdBy" type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="sourceResponse" type="gb:fuente"/>
+
+  <xs:element name="sourceListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:fuente" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:nonNegativeInteger"/>
+        <xs:element name="page" type="xs:positiveInteger"/>
+        <xs:element name="limit" type="xs:positiveInteger"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="sourceVersionResponse" type="gb:versionFuente"/>
+
+  <xs:element name="sourceVersionListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:versionFuente" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:nonNegativeInteger"/>
+        <xs:element name="page" type="xs:positiveInteger"/>
+        <xs:element name="limit" type="xs:positiveInteger"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Linaje ===== -->
+
+  <xs:complexType name="referencia">
+    <xs:all>
+      <xs:element name="service" type="xs:string"/>
+      <xs:element name="resourceType" type="gb:tipoRecurso"/>
+      <xs:element name="resourceId" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="fuenteUsada">
+    <xs:all>
+      <xs:element name="key" type="gb:claveFuente"/>
+      <xs:element name="version" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="registroLinaje">
+    <xs:all>
+      <xs:element name="id" type="xs:string"/>
+      <xs:element name="service" type="xs:string"/>
+      <xs:element name="resourceType" type="gb:tipoRecurso"/>
+      <xs:element name="resourceId" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="source" type="gb:fuenteUsada"/>
+      <xs:element name="inputs">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="gb:referencia" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="occurredAt" type="xs:dateTime"/>
+      <xs:element name="userId" type="xs:string"/>
+      <xs:element name="correlationId" type="xs:string" minOccurs="0"/>
+      <xs:element name="registeredAt" type="xs:dateTime"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="lineageRecordResponse" type="gb:registroLinaje"/>
+
+  <xs:element name="lineageListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:registroLinaje" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:nonNegativeInteger"/>
+        <xs:element name="page" type="xs:positiveInteger"/>
+        <xs:element name="limit" type="xs:positiveInteger"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="fuenteOrigen">
+    <xs:all>
+      <xs:element name="key" type="gb:claveFuente"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="type" type="gb:tipoFuente"/>
+      <xs:element name="ownerService" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="versionOrigen">
+    <xs:all>
+      <xs:element name="version" type="xs:string"/>
+      <xs:element name="createdAt" type="xs:dateTime"/>
+      <xs:element name="origin" type="gb:origenVersion"/>
+    </xs:all>
+  </xs:complexType>
+
+  <!-- Nodo del árbol de origen. `registered=false`: el insumo no tiene linaje.
+       `restricted=true`: es de otro usuario y quien consulta solo ve lo propio
+       (DG-6); va solo `reference`. -->
+  <xs:complexType name="nodoOrigen">
+    <xs:all>
+      <xs:element name="reference" type="gb:referencia"/>
+      <xs:element name="registered" type="xs:boolean"/>
+      <xs:element name="restricted" type="xs:boolean"/>
+      <xs:element name="record" type="gb:registroLinaje" minOccurs="0"/>
+      <xs:element name="source" type="gb:fuenteOrigen" minOccurs="0"/>
+      <xs:element name="sourceVersion" type="gb:versionOrigen" minOccurs="0"/>
+      <xs:element name="inputs">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="gb:nodoOrigen" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="lineageOriginResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="depth" type="xs:nonNegativeInteger"/>
+        <xs:element name="truncated" type="xs:boolean"/>
+        <xs:element name="root" type="gb:nodoOrigen"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Calidad ===== -->
+
+  <xs:complexType name="medicion">
+    <xs:all>
+      <xs:element name="metric" type="gb:metrica"/>
+      <xs:element name="value" type="xs:double" minOccurs="0"/>
+      <xs:element name="unit" type="gb:unidadMetrica"/>
+      <xs:element name="numerator" type="xs:nonNegativeInteger" minOccurs="0"/>
+      <xs:element name="denominator" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+      <!-- Solo en frescura medida en días (DG-8). -->
+      <xs:element name="stale" type="xs:boolean" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="rechazoPorCodigo">
+    <xs:all>
+      <xs:element name="code" type="xs:string"/>
+      <xs:element name="count" type="xs:positiveInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="calidadFuente">
+    <xs:all>
+      <xs:element name="sourceKey" type="gb:claveFuente"/>
+      <xs:element name="sourceName" type="xs:string"/>
+      <xs:element name="ownerService" type="xs:string"/>
+      <xs:element name="sampleSize" type="xs:nonNegativeInteger" minOccurs="0"/>
+      <xs:element name="metrics">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="gb:medicion" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="rejectedByCode">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="gb:rechazoPorCodigo" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="qualityReportResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="dateFrom" type="gb:fecha" minOccurs="0"/>
+        <xs:element name="dateTo" type="gb:fecha" minOccurs="0"/>
+        <xs:element name="measuredAt" type="xs:dateTime"/>
+        <xs:element name="sources">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:calidadFuente" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Retención ===== -->
+
+  <xs:complexType name="politica">
+    <xs:all>
+      <xs:element name="dataset" type="gb:conjunto"/>
+      <xs:element name="ownerService" type="xs:string"/>
+      <!-- Se omite = sin borrado (bitácora). -->
+      <xs:element name="retentionPeriod" type="gb:periodo" minOccurs="0"/>
+      <xs:element name="basis" type="xs:string"/>
+      <xs:element name="ownerAction" type="xs:string"/>
+      <xs:element name="decision" type="xs:string"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="retentionPolicyListResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:politica" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="evaluacion">
+    <xs:all>
+      <xs:element name="dataset" type="gb:conjunto"/>
+      <xs:element name="ownerService" type="xs:string"/>
+      <xs:element name="retentionPeriod" type="gb:periodo" minOccurs="0"/>
+      <xs:element name="cutoffDate" type="gb:fecha" minOccurs="0"/>
+      <xs:element name="expiredCount" type="xs:nonNegativeInteger" minOccurs="0"/>
+      <xs:element name="disponible" type="xs:boolean"/>
+      <xs:element name="motivo" type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="retentionEvaluationResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="asOf" type="gb:fecha"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:evaluacion" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="registroSimulado">
+    <xs:all>
+      <xs:element name="dataset" type="gb:conjunto"/>
+      <xs:element name="recordId" type="xs:string"/>
+      <xs:element name="date" type="gb:fecha"/>
+      <!-- Se omite si el conjunto no vence (bitácora). -->
+      <xs:element name="expiresOn" type="gb:fecha" minOccurs="0"/>
+      <xs:element name="expired" type="xs:boolean"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="resumenSimulacion">
+    <xs:all>
+      <xs:element name="dataset" type="gb:conjunto"/>
+      <xs:element name="total" type="xs:positiveInteger"/>
+      <xs:element name="expired" type="xs:nonNegativeInteger"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:element name="retentionSimulationResponse">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="asOf" type="gb:fecha"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:registroSimulado" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="summary">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="gb:resumenSimulacion" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===== Error estándar ===== -->
+
+  <xs:simpleType name="errorCode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="VALIDATION_ERROR"/>
+      <xs:enumeration value="UNAUTHORIZED"/>
+      <xs:enumeration value="FORBIDDEN"/>
+      <xs:enumeration value="NOT_FOUND"/>
+      <xs:enumeration value="CONFLICT"/>
+      <xs:enumeration value="SERVICE_UNAVAILABLE"/>
+      <xs:enumeration value="INTERNAL"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- El middleware quita `details` al responder XML. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="gb:errorCode"/>
+        <xs:element name="details" type="xs:anyType" minOccurs="0"/>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
