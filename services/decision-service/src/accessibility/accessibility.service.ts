@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AccessibilityZoneEntity } from '../entities/accessibility-zone.entity';
@@ -11,6 +11,7 @@ import { AccessibilityComponentEntity } from '../entities/accessibility-componen
 import { IncomeSegment } from '../entities/income-segment.entity';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { ContextoPeticion } from '../common/audit/audit.module';
+import { AvailabilityClient } from '../common/availability/availability-client.service';
 
 /** Forma pública que exige el contrato (M12). No es una entidad: se arma. */
 export interface AccessibilityIndex {
@@ -32,6 +33,8 @@ function clamp01(valor: number): number {
 
 @Injectable()
 export class AccessibilityService {
+  private readonly logger = new Logger(AccessibilityService.name);
+
   constructor(
     @InjectRepository(AccessibilityZoneEntity)
     private readonly zonaRepo: Repository<AccessibilityZoneEntity>,
@@ -44,6 +47,8 @@ export class AccessibilityService {
     private readonly dataSource: DataSource,
     /** Bitácora de cada corrida del índice (acción `ejecutar_corrida`). */
     private readonly audit: AuditReporter,
+    /** D-38: la cobertura de básicos la da availability-service. */
+    private readonly availability: AvailabilityClient,
   ) {}
 
   /**
@@ -74,7 +79,7 @@ export class AccessibilityService {
         this.ingresoMaximoCatalogo(),
         this.disponibilidad(zoneId),
         this.disponibilidadMaxima(),
-        this.coberturaBasicos(zoneId),
+        this.coberturaBasicos(zoneId, contexto.token),
       ]);
 
     // `basicBasketCost` en 0 no es "canasta gratis": es que la zona no tiene
@@ -320,7 +325,22 @@ export class AccessibilityService {
     return Number(fila.maxDisponibilidad ?? 0);
   }
 
-  private async coberturaBasicos(zoneId: string): Promise<number> {
+  /**
+   * Cobertura de básicos de la zona (0..1). D-38: la da availability-service, que aplica la
+   * vigencia de 7 días. Sin datos vigentes vale 0 (peor caso, igual que los otros componentes).
+   * Si availability no responde se usa el cálculo SQL anterior sobre `inventario` (sin vigencia)
+   * para no romper el índice; queda en el log.
+   */
+  private async coberturaBasicos(zoneId: string, token?: string): Promise<number> {
+    const r = await this.availability.coberturaZona(zoneId, token);
+    if (r.estado === 'ok') return r.valor;
+    if (r.estado === 'sin_datos') return 0;
+    this.logger.warn(`Cobertura de la zona ${zoneId} por SQL (availability-service: ${r.motivo}).`);
+    return this.coberturaBasicosSql(zoneId);
+  }
+
+  /** Cálculo anterior a D-38 (SQL sobre `inventario`, sin vigencia). Solo como respaldo. */
+  private async coberturaBasicosSql(zoneId: string): Promise<number> {
     const [{ total }] = await this.dataSource.query(
       `SELECT COUNT(*) AS total FROM productos WHERE es_canasta_basica = true`,
     );
