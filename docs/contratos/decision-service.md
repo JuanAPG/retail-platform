@@ -175,7 +175,8 @@ inventa demanda). Sin precio vigente → 404. Response `201`:
 {
   "type": "price", "productId": "uuid", "presentationId": "uuid",
   "zoneId": "uuid-zona", "segmentId": 2,
-  "inputs": { "currentPrice": 28.5, "newPrice": 25.5, "elasticity": -1.2 },
+  "inputs": { "currentPrice": 28.5, "newPrice": 25.5, "baseDemand": 100,
+              "elasticity": -1.2, "elasticityRunId": "uuid-corrida" },
   "results": [
     { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
       "baseValue": 100, "simulatedValue": 112.4, "variationPct": 12.4 },
@@ -271,14 +272,47 @@ en un escenario de presentación.
 
 ## GET /v1/simulation/compare?ids=id1,id2
 
-Compara escenarios entre sí. Response `200`:
+Compara escenarios guardados entre sí (`ids=a,b` o `ids=a&ids=b`): de 2 a
+20 UUID, sin repetir. Si alguno no existe → 404 `NOT_FOUND`. XML: raíz
+`simulacionCompareResponse`; las listas salen como `<item>`.
+
+Es una lista **por escenario** (no un mapa indexado por id, porque un UUID no
+es un nombre de elemento XML válido), en el mismo orden que `ids`. Cada
+escenario trae sus `results`, con `difference` (`simulatedValue - baseValue`)
+y `variationPct` (`null` en JSON y omitido en XML si `baseValue` es 0).
+`warnings` avisa, por ejemplo, si se mezclan escenarios de tipos distintos
+(sus indicadores no miden lo mismo); sin avisos es `[]`. Response `200`:
 
 ```json
 {
   "scenarioIds": ["uuid-1", "uuid-2"],
-  "scenarioNames": { "uuid-1": "Cambio de precio - …" },
-  "rows": [{ "indicatorKey": "ingreso_estimado", "zonaId": "uuid-zona",
-              "valuesByScenario": { "uuid-1": 2856.2, "uuid-2": 2790.0 } }]
+  "scenarios": [
+    { "scenarioId": "uuid-1",
+      "name": "Cambio de precio - Arroz 1 kg (12/10/26, 6:00:00 p.m.) #a1b2c3",
+      "type": "precio", "zoneId": "uuid-zona",
+      "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+      "results": [
+        { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
+          "baseValue": 100, "simulatedValue": 112.4,
+          "difference": 12.4, "variationPct": 12.4 },
+        { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
+          "baseValue": 2850.0, "simulatedValue": 2856.2,
+          "difference": 6.2, "variationPct": 0.2175 }
+      ] },
+    { "scenarioId": "uuid-2",
+      "name": "Cambio de precio - Arroz 1 kg (12/10/26, 6:05:00 p.m.) #d4e5f6",
+      "type": "precio", "zoneId": "uuid-zona",
+      "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+      "results": [
+        { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
+          "baseValue": 100, "simulatedValue": 97.9,
+          "difference": -2.1, "variationPct": -2.1 },
+        { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
+          "baseValue": 2850.0, "simulatedValue": 2790.0,
+          "difference": -60.0, "variationPct": -2.1053 }
+      ] }
+  ],
+  "warnings": []
 }
 ```
 
