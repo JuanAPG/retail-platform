@@ -40,15 +40,69 @@ function preparaCreate(ctx: ReturnType<typeof armar>, estatus = 'activo') {
     .mockResolvedValueOnce([fila()]);
 }
 
+describe('PriceObservationsService.create con observationId (D-42, reenvíos de offline-sync)', () => {
+  const conId = { ...dto, observationId: 'b3e1c7a2-5d4f-4e8a-9c1b-2f3a4b5c6d7e' };
+
+  it('primera vez: crea con el id del dispositivo, audita y avisa', async () => {
+    const ctx = armar();
+    ctx.dataSource.query
+      .mockResolvedValueOnce([]) // no existe ese id
+      .mockResolvedValueOnce([{ estatus: 'activo' }])
+      .mockResolvedValueOnce([{ '?column?': 1 }])
+      .mockResolvedValueOnce([{ id: 'obs-1' }])
+      .mockResolvedValueOnce([fila()]);
+    const { duplicada } = await ctx.servicio.create(conId, capturador, undefined, 'Bearer t');
+    expect(duplicada).toBe(false);
+    const insert = ctx.dataSource.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO precios_observados'))!;
+    expect(String(insert[0])).toContain('ON CONFLICT (observacion_id) DO NOTHING');
+    expect(insert[1]?.[7]).toBe(conId.observationId);
+    expect(ctx.audit.reportar).toHaveBeenCalledTimes(1);
+    expect(ctx.notificaciones.emitir).toHaveBeenCalledTimes(1);
+  });
+
+  it('reenvío del mismo usuario: devuelve la original, sin INSERT, sin auditoría ni aviso', async () => {
+    const ctx = armar();
+    ctx.dataSource.query.mockResolvedValueOnce([{ id: 'obs-1', capturado_por: 'u-cap' }]).mockResolvedValueOnce([fila()]);
+    const { observacion, duplicada } = await ctx.servicio.create(conId, capturador, undefined, 'Bearer t');
+    expect(duplicada).toBe(true);
+    expect(observacion.id).toBe('obs-1');
+    expect(ctx.dataSource.query.mock.calls.some(([sql]) => String(sql).includes('INSERT'))).toBe(false);
+    expect(ctx.audit.reportar).not.toHaveBeenCalled();
+    expect(ctx.notificaciones.emitir).not.toHaveBeenCalled();
+  });
+
+  it('el mismo id de OTRO usuario: 409 sin revelar la observación ajena', async () => {
+    const ctx = armar();
+    ctx.dataSource.query.mockResolvedValueOnce([{ id: 'obs-1', capturado_por: 'otro' }]);
+    await expect(ctx.servicio.create(conId, capturador)).rejects.toBeInstanceOf(ConflictException);
+    expect(ctx.dataSource.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('dos reenvíos simultáneos: el que pierde el ON CONFLICT lee la del que ganó y no audita dos veces', async () => {
+    const ctx = armar();
+    ctx.dataSource.query
+      .mockResolvedValueOnce([]) // aún no existe
+      .mockResolvedValueOnce([{ estatus: 'activo' }])
+      .mockResolvedValueOnce([{ '?column?': 1 }])
+      .mockResolvedValueOnce([]) // ON CONFLICT DO NOTHING: otro ganó
+      .mockResolvedValueOnce([{ id: 'obs-1', capturado_por: 'u-cap' }])
+      .mockResolvedValueOnce([fila()]);
+    const { duplicada } = await ctx.servicio.create(conId, capturador);
+    expect(duplicada).toBe(true);
+    expect(ctx.audit.reportar).not.toHaveBeenCalled();
+  });
+});
+
 describe('PriceObservationsService.create (PRI-09, D-16)', () => {
   it('nace pendiente con el usuario del token como autor, marcada observado_en_campo y auditada', async () => {
     const ctx = armar();
     preparaCreate(ctx);
 
-    const r = await ctx.servicio.create(dto, capturador, '10.0.0.1', 'Bearer t');
+    const { observacion: r, duplicada } = await ctx.servicio.create(dto, capturador, '10.0.0.1', 'Bearer t');
 
     const insert = ctx.dataSource.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO precios_observados'))!;
-    expect(insert[1]).toEqual(['pres-1', 't-1', 27.5, expect.any(Date), 25.68, -100.31, 'u-cap']);
+    expect(insert[1]).toEqual(['pres-1', 't-1', 27.5, expect.any(Date), 25.68, -100.31, 'u-cap', null]);
+    expect(duplicada).toBe(false);
     expect(r).toMatchObject({ status: 'pendiente', origin: 'observado_en_campo', priceId: null, capturedBy: 'u-cap' });
     const [evento] = ctx.audit.reportar.mock.calls[0];
     expect(evento).toMatchObject({ tabla: 'precios_observados', accion: 'insert', registroId: 'obs-1' });

@@ -6,12 +6,15 @@ import { AppModule } from './app.module';
 import { HttpErrorFilter } from './common/filters/http-error.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
+import { middlewareCorrelacion } from './common/correlation/correlacion';
 import { ProfundidadPipe } from './common/pipes/profundidad.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  // Antes que todo (guards incluidos): hasta un 401 lleva su X-Correlation-Id (T-02).
+  app.use(middlewareCorrelacion);
+  app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'x-request-id'] });
   // PRI-12: tope de 1 MB para el cuerpo JSON (el error 413 sale con el cuerpo estándar, ver HttpErrorFilter).
   app.useBodyParser('json', { limit: '1mb' });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).

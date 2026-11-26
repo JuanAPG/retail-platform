@@ -512,6 +512,24 @@ relojes de teléfono). `lat` y `lng` opcionales y **van juntas** (`-90..90`, `-1
 inexistente → `400`; producto no `activo` → `409` (D-08). El autor sale del token (no se acepta `capturedBy`, `status` ni `origin`).
 Response `201` (`priceObservationResponse`): la observación `pendiente`.
 
+**Reenvíos idempotentes (D-42, offline-sync).** `observationId` es **opcional**: un UUID v4 generado **en el dispositivo**.
+
+| Caso | Respuesta | Acuse que debe dar offline-sync (T-17) |
+|---|---|---|
+| Id nuevo (o sin id) | `201` con la observación nueva | `aceptada` |
+| Mismo id, mismo usuario (reenvío, aunque cambie el cuerpo) | `200` con la observación **original**; no se crea otra, ni se audita ni se avisa de nuevo | `duplicada` |
+| Mismo id, otro usuario | `409 CONFLICT` (no revela la ajena) | `conflicto` |
+| Id que no es UUID v4 | `400 VALIDATION_ERROR` | `rechazada` |
+
+```json
+POST /v1/price-observations
+{ "observationId": "b3e1c7a2-5d4f-4e8a-9c1b-2f3a4b5c6d7e", "presentationId": "uuid", "storeId": "uuid",
+  "price": 27.5, "observedAt": "2026-10-08T15:30:00Z", "lat": 25.6866, "lng": -100.3161 }
+```
+
+Columna nueva `precios_observados.observacion_id UUID UNIQUE` (migración `db/migraciones/sprint4_pricing_observaciones.sql`).
+Dos reenvíos simultáneos con el mismo id terminan en una sola fila (`ON CONFLICT DO NOTHING`).
+
 **Avisos (PRI-09).** Capturar una observación emite `precio.observado` al rol *Responsable de precios* (el que la resuelve);
 aprobarla o rechazarla emite `observacion.resuelta` a quien la capturó, con el motivo si se rechazó. Como el resto de los
 avisos de pricing, no bloquean la operación y se envían en paralelo con la auditoría. Una presentación dada de baja en
