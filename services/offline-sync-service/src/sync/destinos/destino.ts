@@ -3,9 +3,11 @@ import { CapturaEntrada, Cliente, CodigoMotivo, Destino } from '../tipos';
 /**
  * Puerto hacia los servicios destino (contrato §6).
  *
- * ⚠️ El mapeo real hacia availability-service, pricing-service, visitas de
- * campo y propuestas de producto está **PENDIENTE de acuerdo con Pamela**.
- * Por eso hoy solo existe `DestinoSimulado`; no hay adaptador HTTP.
+ * Dos adaptadores, elegidos con `SYNC_DESTINO` (ver `app.module.ts`):
+ *  - `DestinoHttp` (`http`): `disponibilidad` → availability-service y
+ *    `precio_observado` → pricing-service. Tabla de mapeo en el contrato §6.
+ *  - `DestinoSimulado` (`simulado`): en memoria, para pruebas y demo.
+ * `visita_campo` y `propuesta_producto` no entran en la versión 1.0.
  *
  * Lo que este servicio EXIGE de cualquier adaptador:
  *  - Idempotente por `captureId`: recibir dos veces la misma captura devuelve
@@ -15,6 +17,9 @@ import { CapturaEntrada, Cliente, CodigoMotivo, Destino } from '../tipos';
  *  - Timeout de 3 s: sin respuesta → `no_disponible` (captura reintentable).
  */
 export const DESTINO_CAPTURAS = Symbol('DESTINO_CAPTURAS');
+
+/** Modo y URLs de destino ya validados (`configDestino()` en `destino-http.ts`). */
+export const CONFIG_DESTINO = Symbol('CONFIG_DESTINO');
 
 export interface ContextoEnvio {
   token: string;
@@ -30,7 +35,7 @@ export type RespuestaDestino =
   | { resultado: 'no_disponible'; message: string };
 
 export interface DestinoCapturas {
-  /** `simulado` hoy; `http` cuando se acuerde el mapeo (PENDIENTE). */
+  /** `http` (availability y pricing reales) o `simulado` (en memoria). */
   readonly modo: 'simulado' | 'http';
   enviar(captura: CapturaEntrada, contexto: ContextoEnvio): Promise<RespuestaDestino>;
 }

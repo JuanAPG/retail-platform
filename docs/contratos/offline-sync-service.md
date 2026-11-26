@@ -380,8 +380,8 @@ orden, sin leer tablas de otros servicios:
    sin ir al destino.
 3. **Contra el destino.** El destino puede tener datos que no pasaron por aquí (p. ej. una
    corrección del Analista desde la web). Si el destino responde que tiene un dato más
-   reciente, el resultado es `conflicto` con su `serverCapturedAt`. **Cómo lo responde cada
-   destino es PENDIENTE de acuerdo con Pamela** (§6).
+   reciente, el resultado es `conflicto` con su `serverCapturedAt`. Cómo lo responde cada
+   destino está en §6 (hoy solo availability-service decide conflicto por fecha).
 
 **Se avisa al usuario** con el acuse (D-42: "se acusa al dispositivo con su estado"); la app
 muestra cada `conflicto` con su `reason`. Un aviso adicional en la bandeja
@@ -579,24 +579,77 @@ lista) o `dateFrom > dateTo` → `400`.
   "path": "/v1/sync/batches", "timestamp": "2026-10-30T15:05:00.000Z" }
 ```
 
-## 6. Envío a los servicios destino — PENDIENTE de acuerdo con Pamela
+## 6. Envío a los servicios destino
 
-**Nada de esta sección está acordado.** Pamela es dueña de availability-service y
-pricing-service (y de catalog-service para visitas de campo). Hasta acordarlo, el servicio
-**no** se programa contra estos destinos; el sobre del lote y del acuse (§4) sí es final.
+El destino se elige con `SYNC_DESTINO`:
 
-Lo que este contrato **necesita** de cada destino (no lo que el destino debe hacer):
+| Valor | Qué hace |
+|---|---|
+| `http` (por defecto; así va en el Dockerfile) | Cada captura va a su servicio dueño por HTTP (`DestinoHttp`). Exige `AVAILABILITY_SERVICE_URL` y `PRICING_SERVICE_URL`: si falta alguna, **el servicio no arranca** y el error dice cuál. |
+| `simulado` | En memoria (`DestinoSimulado`), no sale nada del servicio. Solo pruebas y demo sin destinos. |
 
-| `type` | Destino que se propone | Lo que falta acordar |
-|---|---|---|
-| `disponibilidad` | `POST /v1/availability/captures` (ya acepta `captureId` y `capturedAt`) | Confirmar el mapeo de estados. El contrato de availability ya dice, desde su lado, que `aceptada`/`duplicada`/`conflicto` se traducen igual y un `400` es `rechazada`; falta confirmar qué hacer con su `409` (captureId de otro usuario) y que acepte `origin: movil \| escritorio` según `client`. |
-| `precio_observado` | `POST /v1/price-observations` | Pricing **no** recibe `captureId` (no hay idempotencia del lado destino si la respuesta se pierde entre sync y pricing) ni responde "conflicto": toda observación queda `pendiente` de aprobación (D-16). Opciones a decidir con Pamela: (a) pricing acepta `captureId` y lo usa como llave única; (b) sync guarda el id de la observación y nunca reenvía una captura que ya tiene `target`. Y si la regla de "dato más reciente" (D-42) aplica contra precios u observaciones ya registrados. |
-| `visita_campo` (D-30) | catalog-service, colección `visitas_campo` | No hay ruta en el contrato de catalog. **No entra en la versión 1.0.** |
-| `propuesta_producto` (D-32) | `POST /v1/products/proposals` | Hoy la ruta solo acepta al `Proveedor`; D-32 pide que el Investigador proponga con origen "campo". **No entra en la versión 1.0.** |
+Reglas para los dos destinos:
 
-Regla que sí es de este contrato: cada llamada a un destino reenvía el `Authorization` del
-usuario y el `X-Correlation-Id`, con **timeout de 3 s**. Sin respuesta → la captura queda
-`rechazada`, `SERVICE_UNAVAILABLE`, `retryable: true`.
+- Se reenvía el `Authorization` del usuario y el `X-Correlation-Id` del lote; el token nunca
+  se registra en el log.
+- **Timeout de 3 s.** Sin respuesta, error de red, `5xx` (incluido `503`), `404` (URL o ruta
+  equivocada), `408`, `429` o `401` (la sesión venció en el destino) → la captura queda
+  `rechazada`, `SERVICE_UNAVAILABLE`, `retryable: true`, y el siguiente envío la vuelve a
+  procesar. Es seguro: los dos destinos son idempotentes por el id del dispositivo, así que
+  si la captura sí había llegado, el reintento recibe el resultado original (`200`) y no crea
+  otra.
+- Cualquier otra respuesta que no esté en las tablas → `rechazada`, `INTERNAL`, con el código
+  que llegó en el mensaje.
+
+### `disponibilidad` → `POST {AVAILABILITY_SERVICE_URL}/v1/availability/captures`
+
+Cuerpo: `captureId`, `storeId`, `presentationId`, `stock` (= `content.stock`),
+`capturedAt` y `origin` (= `client` del lote: `movil` o `escritorio`).
+
+| Respuesta del destino | Resultado en el acuse |
+|---|---|
+| `201`, `status: "aceptada"` | `aceptada`, `target = { service: "availability-service", id: captureId }` |
+| `201`, `status: "conflicto"` | `conflicto`, mismo `target`, `serverCapturedAt` = `currentCapturedAt` del destino y `reason.message` = el `reason` del destino |
+| `200` (ya la tenía: `duplicada` en el destino) | El resultado **original** de la captura (`aceptada` o `conflicto`, como las dos filas de arriba). Ver la nota de abajo. |
+| `400` | `rechazada`, `VALIDATION_ERROR` (tienda o presentación inexistente, `capturedAt` futuro…), con el mensaje del destino |
+| `403` | `rechazada`, `FORBIDDEN` |
+| `409` (`captureId` usado por otro usuario) | `rechazada`, `CONFLICT`, con el mensaje del destino (no revela la captura ajena). Es lo que §4.4 y §4.6 ya dicen para un `captureId` de otro usuario; no es `conflicto`, porque `conflicto` significa "hay un dato capturado después" y lleva `serverCapturedAt`. |
+
+> **Nota del `200`.** availability-service no devuelve el resultado original como campo:
+> solo lo escribe en el texto de `reason` (`"Captura ya recibida (aceptada); …"`). Este
+> servicio lo lee de ahí (o de un campo `originalStatus`, si availability lo agrega). Si el
+> texto no se reconoce, la captura queda `rechazada`, `INTERNAL`, en vez de adivinar.
+> **PROPUESTA** para Pamela: agregar `originalStatus` al `captureResponse` del `200`.
+
+### `precio_observado` → `POST {PRICING_SERVICE_URL}/v1/price-observations`
+
+Cuerpo: `observationId` (= `captureId`), `presentationId`, `storeId`, `price`
+(= `content.price`), `observedAt` (= `capturedAt`) y `lat`/`lng` **solo si vienen las dos**.
+
+| Respuesta del destino | Resultado en el acuse |
+|---|---|
+| `201` | `aceptada`, `target = { service: "pricing-service", id: <id de la observación creada> }`. La observación queda `pendiente` de aprobación (D-16). |
+| `200` (mismo `observationId`, mismo usuario) | `aceptada`, con el id de la observación **original** (no se crea otra) |
+| `400` | `rechazada`, `VALIDATION_ERROR` (incluye un `captureId` que no es UUID v4: pricing lo exige así) |
+| `403` | `rechazada`, `FORBIDDEN` |
+| `409` | `rechazada`, `CONFLICT`, con el mensaje de pricing. Pricing usa `409` para dos cosas: `observationId` de otro usuario, y producto no activo o presentación dada de baja (D-08). Las dos llegan con el mismo `code: "CONFLICT"` y solo cambia el texto, así que **no se distinguen**: en los dos casos la captura no se puede aplicar y el mensaje dice cuál fue. |
+
+Pricing **no** decide conflicto por fecha: toda observación nueva queda pendiente de
+aprobación. (Los pasos 1 y 2 de §4.7 los aplica este servicio antes de llamar al destino.)
+
+### Fuera de la versión 1.0
+
+| `type` | Por qué |
+|---|---|
+| `visita_campo` (D-30) | No hay ruta en el contrato de catalog. |
+| `propuesta_producto` (D-32) | `POST /v1/products/proposals` solo acepta al `Proveedor`; D-32 pide que el Investigador proponga con origen "campo". |
+
+### Lo que cada destino necesita en la base
+
+| Destino | Migración (base que ya existía; un volumen nuevo ya la trae en `db/schema.sql`) |
+|---|---|
+| availability-service | `db/migraciones/sprint4_availability.sql` (tabla `disponibilidad_capturas`) |
+| pricing-service | `db/migraciones/sprint4_pricing_observaciones.sql` (columna `precios_observados.observacion_id`, única) |
 
 ## 7. Persistencia (D-47)
 
@@ -644,6 +697,13 @@ evento `sync.conflicto` (T-19 / T-20). Mientras no estén, audit y notifications
 Sin autenticación; siempre `200` si el proceso responde (`health.xsd`, raíz `response`,
 sin namespace). Usa MongoDB y Redis; PostgreSQL sale `"no configurado"`.
 
+**Solo en JSON** va además `destinos`: el modo (`http` o `simulado`) y si
+availability-service y pricing-service responden su propio `/v1/health` (`ok`,
+`no configurado` en modo simulado, o `error: …`). No va en el XML porque `health.xsd`
+(compartido, T-02) no admite más elementos; **PENDIENTE** con Juan Ángel agregarlo como
+elemento opcional. Un destino caído **no** cambia `status`: el servicio sigue recibiendo
+lotes y deja esas capturas reintentables.
+
 Válido:
 
 ```json
@@ -654,7 +714,8 @@ Válido:
   "checks": { "postgres": "no configurado", "mongodb": "ok", "redis": "ok" },
   "latencyMs": { "postgres": 0, "mongodb": 4, "redis": 1 },
   "durationMs": 6,
-  "timestamp": "2026-10-30T15:00:00.000Z"
+  "timestamp": "2026-10-30T15:00:00.000Z",
+  "destinos": { "modo": "http", "availability": "ok", "pricing": "ok" }
 }
 ```
 
