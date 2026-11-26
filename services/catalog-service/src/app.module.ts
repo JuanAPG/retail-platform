@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
+import { conexionTolerante, OPCIONES_MONGO, uriMongo } from './common/mongo/asegurar-mongo';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import { HealthController } from './health/health.controller';
@@ -25,12 +26,10 @@ import { ZonesModule } from './zones/zones.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
-    // D-30: visitas de campo en MongoDB (`visitas_campo`). Timeout corto y sin búfer: con Mongo caído el
+    // D-30: visitas de campo en MongoDB (`visitas_campo`). `lazyConnection`: con Mongo caído o sin MONGO_URL el
     // servicio arranca igual, el health sale `degraded` y solo POST /v1/field-visits responde 503 (D-25).
-    MongooseModule.forRoot(process.env.MONGO_URL ?? 'mongodb://localhost:27017/retaildb', {
-      serverSelectionTimeoutMS: 2000,
-      bufferCommands: false,
-    }),
+    // La reconexión la hace asegurarMongo() bajo demanda.
+    MongooseModule.forRoot(uriMongo(), { ...OPCIONES_MONGO, lazyConnection: true, connectionFactory: conexionTolerante }),
     JwtModule.register({}),
     EventosModule,
     FieldVisitsModule,
