@@ -5,7 +5,7 @@
 #   1. Documentar la estructura del sistema: qué piezas lo componen.
 #   2. Levantar un entorno reproducible con un solo comando.
 #
-# Sprint 4: hay 12 servicios de negocio (3101–3110, 3112 y 3114).
+# Sprint 4: hay 15 servicios de negocio (3101–3112, 3114, 3118 y 3120).
 # El mapa de los 20 puertos y su estado está en staging/README.md.
 # Para actualizar un volumen previo: ./infra/migrar-postgres.sh.
 # Un servicio arrastra sus dependencias duras con `depends_on`, así que
@@ -156,6 +156,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       AUTH_SERVICE_URL: http://auth-service:3101
+      AUTH_RESET_SMTP_URL: "${AUTH_RESET_SMTP_URL:-}"
+      AUTH_RESET_FROM: "${AUTH_RESET_FROM:-}"
+      AUTH_RESET_WEB_URL: "${AUTH_RESET_WEB_URL:-}"
       AUDIT_SERVICE_URL: http://audit-service:3110
       DB_HOST: postgres
       DB_PORT: 5432
@@ -704,6 +707,61 @@ services:
       timeout: 5s
       retries: 10
       start_period: 90s
+    networks:
+      - retail_net
+
+  transactions-ingestion-service:
+    build:
+      context: ..
+      dockerfile: services/transactions-ingestion-service/Dockerfile
+    environment:
+      PORT: 3111
+      SERVICE_NAME: transactions-ingestion-service
+      XML_NAMESPACE: ingestion/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      DB_HOST: postgres
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+      INGESTION_MAX_BYTES: "${INGESTION_MAX_BYTES:-8388608}"
+      INGESTION_MAX_ROWS: "${INGESTION_MAX_ROWS:-10000}"
+      GCS_INGESTION_BUCKET: "${GCS_INGESTION_BUCKET:-}"
+      GCS_INGESTION_INCOMING_PREFIX: "${GCS_INGESTION_INCOMING_PREFIX:-ingestion/incoming}"
+    ports:
+      - "3111:3111"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - retail_net
+
+  offline-sync-service:
+    build: ../services/offline-sync-service
+    environment:
+      PORT: 3118
+      SERVICE_NAME: offline-sync-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: sync/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
+      MONGO_DB: retaildb
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+    ports:
+      - "3118:3118"
+    depends_on:
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - retail_net
 

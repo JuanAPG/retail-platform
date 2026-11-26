@@ -1,3 +1,4 @@
+import { saveSession } from './issue-session';
 import { correlacionActual } from '../common/correlation/correlacion';
 import {
   BadRequestException,
@@ -135,15 +136,15 @@ export class AuthService {
       );
     }
 
-    const tokens = await this.emitirPar(usuario);
-
-    // Sesión viva hasta que dure el refresh; el guard la exige.
-    await getRedis().set(
-      `session:${usuario.id}`,
-      JSON.stringify({ refreshJti: tokens.refreshJti, accessJti: tokens.accessJti }),
-      'EX',
-      this.refreshTtl(),
-    );
+    const epoch = await getRedis().get(`auth:recovery:epoch:${usuario.id}`) ?? '';
+    if (epoch) {
+      const actual = await this.usersService.findById(usuario.id);
+      if (!actual?.activo || actual.passwordHash !== usuario.passwordHash) {
+        throw new UnauthorizedException('Correo o contraseña incorrectos.');
+      }
+    }
+    const tokens = await this.emitirPar(usuario, epoch);
+    await saveSession(usuario.id, epoch, tokens, this.accessTtl(), this.refreshTtl());
 
     // El propio accessToken recién emitido ya es válido para SessionGuard:
     // la sesión que exige se acaba de escribir arriba. Es el único caso en
@@ -172,7 +173,7 @@ export class AuthService {
   // REFRESH (con rotación)
   // ---------------------------------------------------------------
   async refresh(dto: RefreshTokenDto, ip?: string) {
-    let decodificado: { sub: string; jti: string; tokenType?: string };
+    let decodificado: { sub: string; jti: string; tokenType?: string; credentialEpoch?: string };
     try {
       decodificado = await this.jwtService.verifyAsync(dto.refreshToken, {
         secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
@@ -185,6 +186,10 @@ export class AuthService {
     }
 
     const redis = getRedis();
+    const epoch = await redis.get(`auth:recovery:epoch:${decodificado.sub}`) ?? '';
+    if ((decodificado.credentialEpoch ?? '') !== epoch) {
+      throw new UnauthorizedException('Refresh token inválido o expirado.');
+    }
     const sesion = await redis.get(`session:${decodificado.sub}`);
     if (!sesion) {
       throw new UnauthorizedException('Sesión inactiva. Vuelve a iniciar sesión.');
@@ -192,7 +197,10 @@ export class AuthService {
     // Vinculación refresh↔sesión: si el jti no es el vigente, es reuso
     // (posible robo) y la sesión entera se invalida.
     if (JSON.parse(sesion).refreshJti !== decodificado.jti) {
-      await redis.del(`session:${decodificado.sub}`);
+      await redis.eval(
+        "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end",
+        1, `session:${decodificado.sub}`, sesion,
+      );
       throw new UnauthorizedException('Sesión inválida. Vuelve a iniciar sesión.');
     }
 
@@ -203,13 +211,8 @@ export class AuthService {
 
     // El refresh anterior muere aquí: rotación real, no re-emisión.
     await redis.set(`revoked:${decodificado.jti}`, '1', 'EX', this.refreshTtl());
-    const tokens = await this.emitirPar(usuario);
-    await redis.set(
-      `session:${usuario.id}`,
-      JSON.stringify({ refreshJti: tokens.refreshJti, accessJti: tokens.accessJti }),
-      'EX',
-      this.refreshTtl(),
-    );
+    const tokens = await this.emitirPar(usuario, epoch);
+    await saveSession(usuario.id, epoch, tokens, this.accessTtl(), this.refreshTtl(), sesion);
 
     // Mismo razonamiento que en login(): el accessToken recién rotado ya
     // vale para SessionGuard porque la sesión nueva se acaba de escribir.
@@ -294,15 +297,15 @@ export class AuthService {
     }));
   }
 
-  private refreshTtl(): number {
+  refreshTtl(): number {
     return aSegundos(this.configService.getOrThrow<string>('jwt.refreshExpiresIn'));
   }
 
-  private accessTtl(): number {
+  accessTtl(): number {
     return aSegundos(this.configService.getOrThrow<string>('jwt.accessExpiresIn'));
   }
 
-  private async emitirPar(usuario: UsuarioEntity) {
+  private async emitirPar(usuario: UsuarioEntity, epoch: string) {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
@@ -314,7 +317,7 @@ export class AuthService {
         },
       ),
       this.jwtService.signAsync(
-        { sub: usuario.id, jti: refreshJti, tokenType: 'refresh' },
+        { sub: usuario.id, jti: refreshJti, tokenType: 'refresh', credentialEpoch: epoch },
         {
           secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
           expiresIn: this.refreshTtl(),
