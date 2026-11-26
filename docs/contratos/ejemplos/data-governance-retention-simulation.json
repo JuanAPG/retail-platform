@@ -1,0 +1,76 @@
+{
+  "asOf": "2026-11-25",
+  "data": [
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-001",
+      "date": "2023-11-25",
+      "expiresOn": "2026-11-25",
+      "expired": true
+    },
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-002",
+      "date": "2023-11-26",
+      "expiresOn": "2026-11-26",
+      "expired": false
+    },
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-003",
+      "date": "2024-02-29",
+      "expiresOn": "2027-03-01",
+      "expired": false
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "recordId": "C-SIM-001",
+      "date": "2025-11-24",
+      "expiresOn": "2026-11-24",
+      "expired": true
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "recordId": "C-SIM-002",
+      "date": "2025-11-26",
+      "expiresOn": "2026-11-26",
+      "expired": false
+    },
+    {
+      "dataset": "notificaciones",
+      "recordId": "N-SIM-001",
+      "date": "2026-08-27",
+      "expiresOn": "2026-11-25",
+      "expired": true
+    },
+    {
+      "dataset": "bitacora",
+      "recordId": "A-SIM-001",
+      "date": "2019-01-01",
+      "expiresOn": null,
+      "expired": false
+    }
+  ],
+  "summary": [
+    {
+      "dataset": "transacciones",
+      "total": 3,
+      "expired": 1
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "total": 2,
+      "expired": 1
+    },
+    {
+      "dataset": "notificaciones",
+      "total": 1,
+      "expired": 1
+    },
+    {
+      "dataset": "bitacora",
+      "total": 1,
+      "expired": 0
+    }
+  ]
+}

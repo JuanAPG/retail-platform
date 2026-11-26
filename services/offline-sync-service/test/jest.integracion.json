@@ -1,0 +1,12 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "test/.*\\.spec\\.ts$",
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test/contenedores.ts",
+  "globalTeardown": "<rootDir>/test/contenedores-fin.ts",
+  "setupFiles": ["<rootDir>/test/entorno.ts"],
+  "testTimeout": 60000,
+  "maxWorkers": 1
+}

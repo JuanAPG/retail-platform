@@ -1,0 +1,59 @@
+{
+  "asOf": "2029-09-01",
+  "data": [
+    {
+      "dataset": "transacciones",
+      "ownerService": "core-process-service",
+      "retentionPeriod": "P3Y",
+      "cutoffDate": "2026-09-01",
+      "expiredCount": 56,
+      "disponible": true,
+      "motivo": null
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "ownerService": "availability-service",
+      "retentionPeriod": "P1Y",
+      "cutoffDate": "2028-09-01",
+      "expiredCount": null,
+      "disponible": false,
+      "motivo": "availability-service no filtra capturas por fecha todavía (pedido en el contrato)."
+    },
+    {
+      "dataset": "observaciones_precio",
+      "ownerService": "pricing-service",
+      "retentionPeriod": "P1Y",
+      "cutoffDate": "2028-09-01",
+      "expiredCount": null,
+      "disponible": false,
+      "motivo": "pricing-service no expone un conteo por fecha de las observaciones."
+    },
+    {
+      "dataset": "visitas_campo",
+      "ownerService": "catalog-service",
+      "retentionPeriod": "P1Y",
+      "cutoffDate": "2028-09-01",
+      "expiredCount": null,
+      "disponible": false,
+      "motivo": "catalog-service no expone un conteo por fecha de las visitas."
+    },
+    {
+      "dataset": "notificaciones",
+      "ownerService": "notifications-service",
+      "retentionPeriod": "P90D",
+      "cutoffDate": "2029-06-03",
+      "expiredCount": null,
+      "disponible": false,
+      "motivo": "notifications-service ya archiva a los 90 días y no expone un conteo global."
+    },
+    {
+      "dataset": "bitacora",
+      "ownerService": "audit-service",
+      "retentionPeriod": null,
+      "cutoffDate": null,
+      "expiredCount": null,
+      "disponible": true,
+      "motivo": "Sin borrado: nunca vence (D-43)."
+    }
+  ]
+}

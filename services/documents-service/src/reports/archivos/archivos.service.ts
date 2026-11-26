@@ -17,6 +17,7 @@ import { NotificationsReporter } from '../../common/notifications/notifications-
 import { FormatoExportacion } from '../dto/reports.dto';
 import { nombreDescarga, ReporteDto, ReportsService, TIPO_CONTENIDO } from '../reports.service';
 import { ALMACEN_OBJETOS, AlmacenNoDisponibleError, AlmacenObjetos, motivoSeguro, ttlConfigurado } from './almacen/almacen';
+import { asegurarMongo } from '../../common/mongo/asegurar-mongo';
 import { Archivo, ArchivoDocument, ESTADO_ARCHIVO } from './archivo.schema';
 
 export const DOMINIO = 'reportes';
@@ -82,8 +83,8 @@ export class ArchivosService {
     private readonly avisos: NotificationsReporter,
   ) {}
 
-  private exigirMongo() {
-    if (this.conexion.readyState !== 1) {
+  private async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.conexion))) {
       throw new ServiceUnavailableException('El registro de archivos (MongoDB) no está disponible. Intenta más tarde.');
     }
   }
@@ -103,7 +104,7 @@ export class ArchivosService {
   ): Promise<ResultadoPreparar> {
     // Autorización por recurso ANTES de tocar el registro: un Proveedor con un reporte ajeno recibe 404.
     const reporte = await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
 
     let doc = await this.obtenerOCrear(reporte, formato, usuario);
 
@@ -200,7 +201,7 @@ export class ArchivosService {
 
   async listar(reporteId: string, usuario: SesionUsuario): Promise<ArchivoDto[]> {
     await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
     const docs = await this.modelo.find({ dominio: DOMINIO, recursoTipo: RECURSO, recursoId: reporteId }).sort({ formato: 1 });
     return docs.map((d) => this.aDto(d));
   }
@@ -271,7 +272,7 @@ export class ArchivosService {
 
   /** Registro por id sin regla de usuario: lo usa SOLO la descarga local, que ya validó la firma. */
   async porIdParaDescargaLocal(archivoId: string): Promise<ArchivoDocument | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     return this.modelo.findById(archivoId);
   }
 
@@ -331,7 +332,7 @@ export class ArchivosService {
 
   private async buscar(reporteId: string, archivoId: string, usuario: SesionUsuario): Promise<ArchivoDocument> {
     await this.reportes.buscarDto(reporteId, usuario);
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await this.modelo.findOne({ _id: archivoId, dominio: DOMINIO, recursoTipo: RECURSO, recursoId: reporteId });
     if (!doc) throw new NotFoundException('El archivo no existe.');
     return doc;

@@ -1,0 +1,57 @@
+{
+  "group": {
+    "zone": {
+      "id": "97925ca4-3845-4e68-9660-46f781957b8c",
+      "name": "Zona Centro"
+    },
+    "segment": {
+      "id": 2,
+      "code": "ING_2",
+      "name": "Ingreso medio",
+      "versions": [
+        1
+      ]
+    }
+  },
+  "period": {
+    "dateFrom": "2026-10-01",
+    "dateTo": "2026-10-31"
+  },
+  "publicationRule": "ambos",
+  "coverage": {
+    "baskets": 100,
+    "stores": 4
+  },
+  "disponible": true,
+  "motivo": null,
+  "data": [
+    {
+      "categoryId": 2,
+      "categoryName": "Lácteos",
+      "totalSpend": 4644.0,
+      "basketCount": 62,
+      "share": 42.28
+    },
+    {
+      "categoryId": 1,
+      "categoryName": "Abarrotes",
+      "totalSpend": 3490.5,
+      "basketCount": 60,
+      "share": 31.78
+    },
+    {
+      "categoryId": 4,
+      "categoryName": "Huevo",
+      "totalSpend": 1584.0,
+      "basketCount": 33,
+      "share": 14.42
+    },
+    {
+      "categoryId": 5,
+      "categoryName": "Tortillería",
+      "totalSpend": 1265.0,
+      "basketCount": 55,
+      "share": 11.52
+    }
+  ]
+}

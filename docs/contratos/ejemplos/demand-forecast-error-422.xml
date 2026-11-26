@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="forecast/v1"><statusCode>422</statusCode><code>VALIDATION_ERROR</code><message>Hay 11 semanas de historia; el pronóstico necesita al menos 12 (D-40).</message><path>/v1/forecast/run</path><timestamp>2026-11-25T18:07:02.118000+00:00</timestamp></error>

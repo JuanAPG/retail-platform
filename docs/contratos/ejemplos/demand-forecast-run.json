@@ -1,0 +1,279 @@
+{
+  "id": "674a1f3c9e2b4d0012ab34cd",
+  "type": "forecast",
+  "userId": "5b1e7d3c-2a4f-4e6b-8c9d-0e1f2a3b4c5d",
+  "date": "2026-11-25T18:04:12.317000+00:00",
+  "durationMs": 127.4,
+  "parameters": {
+    "productId": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+    "zoneId": "97925ca4-3845-4e68-9660-46f781957b8c",
+    "dateFrom": null,
+    "dateTo": null,
+    "horizonWeeks": 8,
+    "holdoutWeeks": 4,
+    "seasonalPeriod": 4,
+    "intervalLevels": [
+      80,
+      95
+    ],
+    "model": "ETS(A,A,A)",
+    "publicationRule": "ambos",
+    "minTransactions": 10,
+    "minStores": 3
+  },
+  "product": {
+    "id": "3f6c2a10-8b4e-4c1d-9a7e-1b2c3d4e5f60",
+    "name": "Leche entera",
+    "unit": "l",
+    "unitType": "volumen"
+  },
+  "zone": {
+    "id": "97925ca4-3845-4e68-9660-46f781957b8c",
+    "name": "Zona Centro"
+  },
+  "disponible": true,
+  "motivo": null,
+  "coverage": {
+    "transactions": 1184,
+    "stores": 4
+  },
+  "dataVersion": {
+    "sha256": "be303c96b5d5e8779e0b1523319e456ef247713341192eedbc6af536c56876ad",
+    "source": "core-process-service",
+    "asOf": "2026-11-25T18:04:11.902000+00:00",
+    "weeks": 20,
+    "effectiveFrom": "2026-07-06",
+    "effectiveTo": "2026-11-22",
+    "zeroWeeks": 1
+  },
+  "history": [
+    {
+      "weekStart": "2026-07-06",
+      "quantity": 192.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-07-13",
+      "quantity": 182.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-07-20",
+      "quantity": 174.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-07-27",
+      "quantity": 178.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-08-03",
+      "quantity": 196.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-08-10",
+      "quantity": 184.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-08-17",
+      "quantity": 181.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-08-24",
+      "quantity": 190.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-08-31",
+      "quantity": 202.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-09-07",
+      "quantity": 0.0,
+      "filled": true
+    },
+    {
+      "weekStart": "2026-09-14",
+      "quantity": 188.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-09-21",
+      "quantity": 193.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-09-28",
+      "quantity": 210.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-10-05",
+      "quantity": 196.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-10-12",
+      "quantity": 193.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-10-19",
+      "quantity": 200.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-10-26",
+      "quantity": 212.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-11-02",
+      "quantity": 204.0,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-11-09",
+      "quantity": 193.5,
+      "filled": false
+    },
+    {
+      "weekStart": "2026-11-16",
+      "quantity": 200.5,
+      "filled": false
+    }
+  ],
+  "validation": {
+    "trainWeeks": 16,
+    "holdoutWeeks": 4,
+    "mape": 9.880783430220134,
+    "mapeWeeks": 4,
+    "zeroWeeksExcluded": 0,
+    "motivo": null,
+    "holdout": [
+      {
+        "weekStart": "2026-10-26",
+        "actual": 212.0,
+        "forecast": 203.7501270852417
+      },
+      {
+        "weekStart": "2026-11-02",
+        "actual": 204.0,
+        "forecast": 144.25226943316227
+      },
+      {
+        "weekStart": "2026-11-09",
+        "actual": 193.5,
+        "forecast": 187.498043923245
+      },
+      {
+        "weekStart": "2026-11-16",
+        "actual": 200.5,
+        "forecast": 194.00020117022095
+      }
+    ]
+  },
+  "forecast": [
+    {
+      "weekStart": "2026-11-23",
+      "quantity": 218.82365533914714,
+      "lower80": 169.57322480441806,
+      "upper80": 268.0740858738762,
+      "lower95": 143.5016217461092,
+      "upper95": 294.14568893218507,
+      "clipped": false
+    },
+    {
+      "weekStart": "2026-11-30",
+      "quantity": 169.6234764371487,
+      "lower80": 120.37304565611822,
+      "upper80": 218.87390721817917,
+      "lower95": 94.30144246742528,
+      "upper95": 244.94551040687213,
+      "clipped": false
+    },
+    {
+      "weekStart": "2026-12-07",
+      "quantity": 202.12733570801566,
+      "lower80": 152.87690468063454,
+      "upper80": 251.3777667353968,
+      "lower95": 126.80530136153145,
+      "upper95": 277.44937005449987,
+      "clipped": false
+    },
+    {
+      "weekStart": "2026-12-14",
+      "quantity": 208.72391661591644,
+      "lower80": 159.47348534213538,
+      "upper80": 257.97434788969747,
+      "lower95": 133.40188189259604,
+      "upper95": 284.0459513392368,
+      "clipped": false
+    },
+    {
+      "weekStart": "2026-12-21",
+      "quantity": 224.19867604613563,
+      "lower80": 174.94824378705047,
+      "upper80": 273.4491083052208,
+      "lower95": 148.87663981592263,
+      "upper95": 299.5207122763486,
+      "clipped": false
+    },
+    {
+      "weekStart": "2026-12-28",
+      "quantity": 174.9984971441372,
+      "lower80": 125.74806463855357,
+      "upper80": 224.24892964972082,
+      "lower95": 99.67646053693734,
+      "upper95": 250.32053375133705,
+      "clipped": false
+    },
+    {
+      "weekStart": "2027-01-04",
+      "quantity": 207.50235641500416,
+      "lower80": 158.2519236628728,
+      "upper80": 256.7527891671355,
+      "lower95": 132.1803194307421,
+      "upper95": 282.8243933992662,
+      "clipped": false
+    },
+    {
+      "weekStart": "2027-01-11",
+      "quantity": 214.09893732290493,
+      "lower80": 164.84850432417656,
+      "upper80": 263.3493703216333,
+      "lower95": 138.77689996150525,
+      "upper95": 289.4209746843046,
+      "clipped": false
+    }
+  ],
+  "model": {
+    "library": "statsmodels 0.14.6",
+    "smoothingLevel": 0.0001,
+    "smoothingTrend": 1e-08,
+    "smoothingSeasonal": 9.999000000000001e-05,
+    "aic": 222.71140552666856
+  },
+  "excludedPresentations": [
+    {
+      "presentationId": "c7d8e9f0-1a2b-4c3d-8e4f-5a6b7c8d9e0f",
+      "reason": "Presentación inactiva sin contenido conocido: sus ventas no se convierten a l."
+    }
+  ],
+  "limitations": [
+    "Estacionalidad de 4 semanas (≈ un mes). La anual necesitaría al menos 108 semanas de historia.",
+    "Una semana sin ventas cuenta como 0 (1 semana rellenada)."
+  ],
+  "assumptions": [
+    "Semanas de lunes a domingo, hora de America/Monterrey; la semana en curso no entra.",
+    "Cantidades en la unidad base del producto (l): cantidad × contenido × factor de la unidad.",
+    "Holt-Winters aditivo (ETS A,A,A) de statsmodels; intervalos 80 % y 95 % analíticos.",
+    "El ajuste que valida no ve las 4 semanas reservadas; el pronóstico final usa toda la historia.",
+    "Es una proyección de demanda agregada de la zona, no una causa ni un dato de personas."
+  ]
+}
