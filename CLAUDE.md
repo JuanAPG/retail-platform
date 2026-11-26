@@ -39,10 +39,7 @@ Reglas para agentes:
 
 - Si el código contradice una fuente de mayor precedencia, **gana la fuente** y la
   diferencia se reporta.
-- Lo marcado **PENDIENTE** (P-xx, PR-xx) no está decidido: **no lo asumas ni lo
-  implementes**. Repórtalo como *hallazgo de especificación* y sigue con lo demás.
-- Si una regla de negocio no aparece en ningún documento, pregunta al Product Owner;
-  no la inventes.
+- El agente responsable resuelve las dudas de negocio abiertas y los conflictos rutinarios de commits según [las instrucciones de integración](CONTRIBUTING.md#para-el-agente-de-cada-integrante-claude-code-u-otro). Documenta la decisión, implementa el cambio compatible mínimo y verifica el flujo afectado en el mismo PR.
 - Toda decisión nueva se registra en `docs/matriz-perfiles-permisos.md` §4 con su ID.
   El `.docx` de la Matriz es una copia para entregar; la fuente es el `.md`.
 
