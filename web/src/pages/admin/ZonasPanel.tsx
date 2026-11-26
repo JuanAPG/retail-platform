@@ -29,6 +29,8 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
   const { usuario } = useAuth();
   // Matriz §3 (M03): solo el Administrador escribe zonas; al resto no se le ofrece lo que daría 403.
   const escribe = puedeEscribir('zonas', usuario?.rol);
+  // D-35 / Matriz §3.2: la clasificación de zonas la escribe el Analista comercial en income-segmentation.
+  const clasifica = usuario?.rol === 'Analista comercial';
   const municipios = useFetch(getMunicipios, []);
 
   const [formAbierto, setFormAbierto] = useState(false);
@@ -164,6 +166,8 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
                       onClick={() => setZonaAEliminar(z)}
                     />
                   </>
+                ) : clasifica ? (
+                  <CircleButton icon={<IconSegmentos className="h-[19px] w-[19px]" />} label={`Segmento de ${z.nombre}`} onClick={() => setZonaDatos(z)} />
                 ) : undefined
               }
             >
@@ -189,6 +193,8 @@ export function ZonasPanel({ estado, onComparar }: ZonasPanelProps) {
       {zonaDatos && (
         <ZonaDatosModal
           zona={zonaDatos}
+          indicadores={escribe}
+          clasificacion={clasifica}
           onCerrar={() => setZonaDatos(null)}
           onGuardado={(mensaje) => {
             setZonaDatos(null);

@@ -1,0 +1,5 @@
+# Pruebas: pip install -r requirements-dev.txt && python -m pytest
+-r requirements.txt
+pytest==8.3.4
+# Valida cada respuesta XML contra su XSD de docs/contratos/
+lxml==5.3.0

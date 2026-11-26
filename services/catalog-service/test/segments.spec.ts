@@ -128,71 +128,27 @@ describe('/v1/segments (integración, requiere stack)', () => {
     expect(r.cuerpo.data).toEqual([]);
   });
 
-  it('ciclo completo: crear → duplicado → editar → borrar → 404', async () => {
-    const creado = await http('POST', '/v1/segments', analista, nuevo);
-    expect(creado.estado).toBe(201);
-    expect(creado.cuerpo).toMatchObject({ code: 'ING_IT', incomeRangeMax: null });
-    const id = creado.cuerpo.id;
+  it('D-35: las escrituras de segmentos se movieron a income-segmentation (409 con la ruta nueva, sin escribir nada)', async () => {
+    const antes = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM segmentos_ingreso')).rows[0].n);
+    const primero = (await http('GET', '/v1/segments?limit=1', auditor)).cuerpo.data[0];
 
-    expect((await http('POST', '/v1/segments', analista, nuevo)).estado).toBe(409);
-    expect((await http('POST', '/v1/segments', auditor, nuevo)).estado).toBe(403);
-    expect((await http('POST', '/v1/segments', admin, nuevo)).estado).toBe(403);
+    for (const [metodo, ruta, cuerpo, destino] of [
+      ['POST', '/v1/segments', nuevo, 'POST /v1/segments'],
+      ['PATCH', `/v1/segments/${primero.id}`, { name: 'x' }, 'PATCH /v1/segments/:id'],
+      ['DELETE', `/v1/segments/${primero.id}`, undefined, 'DELETE /v1/segments/:id'],
+    ] as const) {
+      const r = await http(metodo, ruta, analista, cuerpo);
+      expect(r.estado).toBe(409);
+      expect(r.cuerpo.code).toBe('CONFLICT');
+      expect(r.cuerpo.message).toContain('income-segmentation-service');
+      expect(r.cuerpo.message).toContain(destino);
+      // Los demás perfiles siguen recibiendo 403 (el guard de roles va primero).
+      expect((await http(metodo, ruta, auditor, cuerpo)).estado).toBe(403);
+    }
 
-    const editado = await http('PATCH', `/v1/segments/${id}`, analista, { incomeRangeMax: 950000 });
-    expect(editado.estado).toBe(200);
-    expect(Number(editado.cuerpo.incomeRangeMax)).toBe(950000);
-
-    // CAT-06: el Analista tiene control total; el Administrador solo lee.
-    expect((await http('DELETE', `/v1/segments/${id}`, admin)).estado).toBe(403);
-    expect((await http('PATCH', `/v1/segments/${id}`, admin, { incomeRangeMax: 1 })).estado).toBe(403);
-    const borrado = await http('DELETE', `/v1/segments/${id}`, analista);
-    expect(borrado.estado).toBe(204);
-    expect(borrado.cuerpo).toBeNull();
-
-    expect((await http('GET', `/v1/segments/${id}`, admin)).estado).toBe(404);
-  });
-
-  it('CAT-10 / D-10: ingreso negativo, mínimo >= máximo y rangos encimados se rechazan con 400 / 409 (nunca 500)', async () => {
-    const base = { ...nuevo, code: 'ING_VAL', name: 'Segmento validación' };
-
-    const negativo = await http('POST', '/v1/segments', analista, { ...base, incomeRangeMin: -500, incomeRangeMax: 10 });
-    expect(negativo.estado).toBe(400);
-
-    const invertido = await http('POST', '/v1/segments', analista, { ...base, incomeRangeMin: 300000, incomeRangeMax: 200000 });
-    expect(invertido.estado).toBe(400);
-    const igual = await http('POST', '/v1/segments', analista, { ...base, incomeRangeMin: 300000, incomeRangeMax: 300000 });
-    expect(igual.estado).toBe(400);
-
-    // 1000–20000 se encima con ING_1 (0–15000) e ING_2 (15000.01–45000): 409 que dice con cuál.
-    const encimado = await http('POST', '/v1/segments', analista, { ...base, incomeRangeMin: 1000, incomeRangeMax: 20000 });
-    expect(encimado.estado).toBe(409);
-    expect(encimado.cuerpo.message).toMatch(/ING_[123]/);
-
-    // Sin tope, desde un mínimo dentro del rango de ING_3 (que aquí llega a 100000).
-    const sinTope = await http('POST', '/v1/segments', analista, { ...base, incomeRangeMin: 50000 });
-    expect(sinTope.estado).toBe(409);
-    expect(sinTope.cuerpo.message).toContain('ING_3');
-  });
-
-  it('CAT-10: editar un segmento revisa el rango resultante', async () => {
-    const creado = await http('POST', '/v1/segments', analista, nuevo);
-    expect(creado.estado).toBe(201);
-    const id = creado.cuerpo.id;
-
-    // Subir su mínimo no lo encima consigo mismo...
-    expect((await http('PATCH', `/v1/segments/${id}`, analista, { incomeRangeMin: 950000 })).estado).toBe(200);
-    // ...pero bajarlo hasta dentro del rango de ING_3 sí choca.
-    expect((await http('PATCH', `/v1/segments/${id}`, analista, { incomeRangeMin: 60000 })).estado).toBe(409);
-    // Un tope menor o igual que el mínimo es 400.
-    expect((await http('PATCH', `/v1/segments/${id}`, analista, { incomeRangeMax: 900000 })).estado).toBe(400);
-
-    expect((await http('DELETE', `/v1/segments/${id}`, analista)).estado).toBe(204);
-  });
-
-  it('rechaza campos que no están en el contrato (400)', async () => {
-    const r = await http('POST', '/v1/segments', analista, { ...nuevo, foo: 1 });
-    expect(r.estado).toBe(400);
-    expect(r.cuerpo.code).toBe('VALIDATION_ERROR');
+    const despues = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM segmentos_ingreso')).rows[0].n);
+    expect(despues).toBe(antes);
+    expect((await http('GET', `/v1/segments/${primero.id}`, auditor)).cuerpo.name).toBe(primero.name);
   });
 
   it('un token sin sesión en Redis ya no vale (401)', async () => {

@@ -17,6 +17,13 @@ Rutas y campos en **inglés**, igual que `Contrato_Metodos_Endpoints` (Sprint 1)
 
 ## /v1/segments — Segmentos de ingreso (M05)
 
+> **D-35: escrituras retiradas.** `POST`, `PATCH` y `DELETE /v1/segments` y
+> `PUT /v1/zones/:id/classification` responden **409 `CONFLICT`** con la ruta nueva en
+> income-segmentation-service (3112), que guarda versiones y es dueño de `segmentos_ingreso` y
+> `zona_clasificaciones`. Para Analista y Administrador el mensaje dice a dónde ir; el resto de los perfiles sigue
+> recibiendo 403. Las **lecturas** (`GET /v1/segments`, `GET /v1/segments/:id`) siguen aquí sin cambios.
+> Requiere que la web y el escritorio ya escriban en 3112 (PRs `feature/web-clasificacion-3112` y `fix/desktop-segmentos`).
+
 Un segmento clasifica **zonas agregadas**, nunca personas ni compras individuales
 (RN-02). `source`, `updateFrequency`, `zoneRelation` y `limitations` son obligatorios:
 cada segmento debe justificar de dónde sale su rango, cada cuánto se actualiza, cómo
@@ -727,8 +734,20 @@ Ubicación GPS de la visita y respuestas de encuesta capturadas en la app móvil
 | Método | Ruta | Roles |
 |---|---|---|
 | POST | `/v1/field-visits` | **Investigador de mercado** (D-28: alta de ubicación de la visita y respuestas de encuesta) |
+| GET | `/v1/field-visits` | Analista comercial, Administrador, Auditor (**D-52**) |
+| GET | `/v1/field-visits/:visitId` | Analista comercial, Administrador, Auditor (**D-52**) |
 
-No hay lectura todavía: ningún documento dice quién lee las visitas (hallazgo de especificación).
+### GET /v1/field-visits (D-52)
+
+Paginado (`paginacion.md`), la más reciente primero. Filtros opcionales: `storeId`, `zoneId` (UUID),
+`dateFrom`, `dateTo` (`YYYY-MM-DD`, sobre `visitedAt`, UTC; `dateFrom > dateTo` → `400`).
+Response `200`: `{ data: [FieldVisit], total, page, limit }`, XML `fieldVisitListResponse`.
+No hay filtro por quién capturó: las visitas se consultan por tienda y zona, no por persona.
+
+### GET /v1/field-visits/:visitId (D-52)
+
+Response `200`: `fieldVisitResponse`. Inexistente → `404`. `visitId` no UUID → `400`.
+
 
 ### POST /v1/field-visits
 
@@ -762,7 +781,7 @@ los análisis son por zona agregada, nunca por persona.
 |---|---|---|
 | `visitId` nuevo | `201` `fieldVisitResponse` | `aceptada` |
 | Mismo `visitId`, mismo usuario (aunque cambie el cuerpo) | `200` con la visita **original** | `duplicada` |
-| Mismo `visitId`, otro usuario | `409` (no revela la ajena) | `conflicto` |
+| Mismo `visitId`, otro usuario | `409` (no revela la ajena) | `rechazada` (generar otro id; D-42, ver contrato de pricing) |
 | Cuerpo inválido | `400` | `rechazada` |
 | MongoDB caído | `503` (D-25); el dispositivo la conserva y reintenta | reintentar |
 

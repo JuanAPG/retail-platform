@@ -1,26 +1,41 @@
 package com.udem.retaildecision.ui.home
 
 import com.udem.retaildecision.data.model.Rol
+import com.udem.retaildecision.data.model.TipoCaptura
 
 /*
  * Menú por rol. Fuente: docs/matriz-perfiles-permisos.md (§3) y los contratos de cada servicio.
  * El servidor es quien manda (responde 403 a un rol sin permiso); esto solo decide qué se le ofrece a cada quien.
  *
- * Fuera del menú a propósito (la matriz no lo ha decidido, hay que reportarlo y no asumirlo):
- *  - "Investigador de mercado" (P-01): el rol no existe en el servidor. Capturan precios en campo los dos
- *    roles que hoy acepta POST /v1/price-observations.
- *  - Disponibilidad, encuestas y ubicación (RF-36 a RF-38, P-03): no hay servicio que las guarde.
- *  - Código de barras no encontrado (P-08).
+ * Investigador de mercado (D-28): lee productos, presentaciones, tiendas y zonas, y captura precios
+ * observados y disponibilidad. No ve historial de precios, comparación ni nada más (Matriz §3, nota 6).
+ *
+ * Fuera del menú a propósito (PENDIENTE en el contrato de offline-sync-service §6, no entra en la versión 1.0):
+ *  - Visitas de campo: ubicación de la visita y respuestas de encuesta (D-30).
+ *  - Propuesta de producto desde campo cuando el código de barras no existe (D-32).
  */
 
-/** POST /v1/price-observations (pricing-service): hoy solo estos dos roles capturan precios en campo. */
-private val ROLES_CAPTURA = setOf(Rol.ANALISTA, Rol.RESPONSABLE_PRECIOS)
+/**
+ * POST /v1/sync/batches (offline-sync-service, contrato §2): Investigador de mercado, Analista comercial
+ * y Responsable de precios. Qué TIPO de captura puede mandar cada uno lo decide `TipoCaptura.permitidosPara`.
+ * El Planeador queda fuera: el contrato le responde 403 (no puede dar de alta ningún tipo).
+ */
+private val ROLES_CAPTURA = TipoCaptura.ROLES_QUE_SINCRONIZAN
 
 /** PATCH /v1/price-observations/:id/approve|reject: solo el Responsable de precios (D1); Admin y Auditor leen la cola. */
 private val ROLES_VEN_COLA_PRECIOS = setOf(Rol.RESPONSABLE_PRECIOS, Rol.ADMINISTRADOR, Rol.AUDITOR)
 
 /** PATCH /v1/products/:id/approve|reject: solo el Gerente de categoría (D-08); Admin y Auditor leen la bandeja. */
 private val ROLES_VEN_COLA_PRODUCTOS = setOf(Rol.GERENTE_CATEGORIA, Rol.ADMINISTRADOR, Rol.AUDITOR)
+
+/**
+ * GET /v1/prices/history (pricing-service): los 6 perfiles internos. El Investigador no (Matriz §3 M08: solo
+ * propone precios observados), así que el escáner no le muestra precios.
+ */
+val ROLES_VEN_PRECIOS = Rol.INTERNOS
+
+/** GET /v1/price-observations (pricing): el Analista ve las suyas y el Responsable todas. Al Investigador le da 403. */
+val ROLES_CONSULTAN_DECISIONES = setOf(Rol.ANALISTA, Rol.RESPONSABLE_PRECIOS)
 
 data class SeccionMovil(
     val id: String,
@@ -37,34 +52,35 @@ val SECCIONES = listOf(
         titulo = "Catálogo de productos",
         descripcion = "Consulta productos y presentaciones.",
         servicio = "catalog-service",
-        roles = Rol.INTERNOS + Rol.PROVEEDOR, // GET /v1/products: los 7 perfiles (el Proveedor ve solo los suyos)
+        // GET /v1/products: los 8 perfiles (el Proveedor ve solo los suyos; el Investigador solo los activos)
+        roles = Rol.INTERNOS + Rol.PROVEEDOR + Rol.INVESTIGADOR,
     ),
     SeccionMovil(
         id = "escaner",
         titulo = "Escanear código de barras",
         descripcion = "Identifica un producto con la cámara.",
         servicio = "catalog-service",
-        roles = Rol.INTERNOS,
+        roles = Rol.INTERNOS + Rol.INVESTIGADOR,
     ),
     SeccionMovil(
         id = "zonas",
         titulo = "Zonas",
         descripcion = "Consulta las zonas y su clasificación de ingreso.",
         servicio = "catalog-service",
-        roles = Rol.INTERNOS,
+        roles = Rol.INTERNOS + Rol.INVESTIGADOR, // GET /v1/zones: 6 internos + Investigador (D-28)
     ),
     SeccionMovil(
         id = "precios",
         titulo = "Historial de precios",
         descripcion = "Consulta cómo han cambiado los precios.",
         servicio = "pricing-service",
-        roles = Rol.INTERNOS, // GET /v1/prices/history: los 6 internos
+        roles = ROLES_VEN_PRECIOS,
     ),
     SeccionMovil(
         id = "visitas", // id interno que se conserva para no tocar los iconos; el texto visible es otro
-        titulo = "Levantar precio en tienda",
-        descripcion = "Captura el precio de un producto con tu ubicación, incluso sin conexión.",
-        servicio = "pricing-service",
+        titulo = "Capturas en tienda",
+        descripcion = "Levanta precios y existencias con tu ubicación, incluso sin conexión.",
+        servicio = "offline-sync-service",
         roles = ROLES_CAPTURA,
     ),
     SeccionMovil(
@@ -93,7 +109,7 @@ val SECCIONES = listOf(
         titulo = "Proponer un producto",
         descripcion = "Da de alta un producto nuevo; el Gerente de categoría lo revisa.",
         servicio = "catalog-service",
-        roles = setOf(Rol.PROVEEDOR), // POST /v1/products/proposals: solo Proveedor
+        roles = setOf(Rol.PROVEEDOR), // POST /v1/products/proposals: solo Proveedor (D-32 sigue PENDIENTE para campo)
     ),
     SeccionMovil(
         id = "propuestas",

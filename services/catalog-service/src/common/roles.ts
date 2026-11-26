@@ -36,4 +36,7 @@ export const APRUEBAN_PRODUCTOS = [ROL.GERENTE_CATEGORIA] as const;
  * El Gerente los resuelve; Administrador y Auditor solo los leen (CAT-05).
  * Para el resto del equipo un producto no activo no existe (D-08).
  */
+/** D-52: leen las visitas de campo (GPS y encuesta). El Investigador solo las da de alta (D-28). */
+export const LEEN_VISITAS = [ROL.ANALISTA, ROL.ADMINISTRADOR, ROL.AUDITOR] as const;
+
 export const VEN_NO_ACTIVOS = [ROL.GERENTE_CATEGORIA, ROL.ADMINISTRADOR, ROL.AUDITOR] as const;

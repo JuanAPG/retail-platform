@@ -4,9 +4,13 @@ import { Select } from '../../components/ui/Select';
 import { Field } from '../../components/ui/Field';
 import { IconSimulacion } from '../../components/ui/icons';
 import { mensajeDeError } from '../../api/errores';
-import { ResultadoSimulacion, simularCambioPrecio, simularComparacionPresentaciones } from '../../api/simulacion';
+import { ComparacionPresentaciones, ResultadoSimulacion, simularCambioPrecio, simularComparacionPresentaciones } from '../../api/simulacion';
 import { Producto, Zona } from '../../types';
 import { ResultadoSimulacionCard } from './ResultadoSimulacionCard';
+import { ComparacionPresentacionesCard } from './ComparacionPresentacionesCard';
+
+/** D-14: la comparación necesita al menos 3 presentaciones activas del mismo producto. */
+const MINIMO_PRESENTACIONES = 3;
 
 type Modo = 'precio' | 'presentacion';
 
@@ -20,23 +24,25 @@ interface Props {
 export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) {
   const [modo, setModo] = useState<Modo>('precio');
   const conPresentaciones = productos.filter((p) => p.presentaciones?.length > 0);
+  const comparables = productos.filter((p) => (p.presentaciones ?? []).filter((pr) => pr.activo !== false).length >= MINIMO_PRESENTACIONES);
 
   const [presentacionId, setPresentacionId] = useState('');
   const [zonaId, setZonaId] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
 
-  const [presentacionA, setPresentacionA] = useState('');
-  const [presentacionB, setPresentacionB] = useState('');
+  const [productoComparacion, setProductoComparacion] = useState('');
   const [zonaComparacion, setZonaComparacion] = useState('');
 
   const [simulando, setSimulando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoSimulacion | null>(null);
+  const [comparacion, setComparacion] = useState<ComparacionPresentaciones | null>(null);
 
   function cambiarModo(m: Modo) {
     setModo(m);
     setError(null);
     setResultado(null);
+    setComparacion(null);
   }
 
   async function simular(e: FormEvent<HTMLFormElement>) {
@@ -48,15 +54,12 @@ export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) 
     }
     setSimulando(true);
     try {
-      const r =
-        modo === 'precio'
-          ? await simularCambioPrecio({ presentationId: presentacionId, zoneId: zonaId, newPrice: Number(nuevoPrecio) })
-          : await simularComparacionPresentaciones({
-              presentationIdA: presentacionA,
-              presentationIdB: presentacionB,
-              zoneId: zonaComparacion || undefined,
-            });
-      setResultado(r);
+      if (modo === 'precio') {
+        setResultado(await simularCambioPrecio({ presentationId: presentacionId, zoneId: zonaId, newPrice: Number(nuevoPrecio) }));
+      } else {
+        // Sin presentationIds el servicio compara todas las presentaciones activas del producto (D-14).
+        setComparacion(await simularComparacionPresentaciones({ productId: productoComparacion, zoneId: zonaComparacion || undefined }));
+      }
     } catch (err) {
       setError(mensajeDeError(err, 'No se pudo calcular la simulación.'));
     } finally {
@@ -141,11 +144,12 @@ export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) 
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-                <Select id="sim-pres-a" label="Presentación A" required value={presentacionA} onChange={(e) => setPresentacionA(e.target.value)} placeholder="Selecciona…">
-                  {opcionesPresentacion}
-                </Select>
-                <Select id="sim-pres-b" label="Presentación B" required value={presentacionB} onChange={(e) => setPresentacionB(e.target.value)} placeholder="Selecciona…">
-                  {opcionesPresentacion}
+                <Select id="sim-producto" label="Producto (3 o más presentaciones)" required value={productoComparacion} onChange={(e) => setProductoComparacion(e.target.value)} placeholder="Selecciona…">
+                  {comparables.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} · {p.presentaciones.filter((pr) => pr.activo !== false).length} presentaciones
+                    </option>
+                  ))}
                 </Select>
                 <Select id="sim-zona-comp" label="Zona (opcional)" value={zonaComparacion} onChange={(e) => setZonaComparacion(e.target.value)} placeholder="Nacional">
                   {zonas.map((z) => (
@@ -170,6 +174,7 @@ export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) 
       )}
 
       {resultado && <ResultadoSimulacionCard resultado={resultado} />}
+      {comparacion && <ComparacionPresentacionesCard resultado={comparacion} />}
     </div>
   );
 }

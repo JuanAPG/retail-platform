@@ -244,6 +244,9 @@ private fun Resultado(state: ScannerUiState) {
         }
     }
 
+    // El Investigador de mercado identifica el producto, pero no puede leer precios (D-28).
+    if (!state.muestraPrecios) return
+
     SectionTitle("Precios vigentes de esta presentación")
     when {
         state.cargandoPrecios -> LoadingBox(modifier = Modifier.height(96.dp), label = "Buscando precios…")
