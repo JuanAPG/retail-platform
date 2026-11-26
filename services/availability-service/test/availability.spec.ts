@@ -164,7 +164,7 @@ describe('availability-service (integración, requiere stack)', () => {
     it('reenviar la misma captura no la duplica: 200 `duplicada` (D-42)', async () => {
       const r = await capturar(analista, { captureId: idDispositivo, storeId: tiendaId, presentationId: arroz(), stock: 5, capturedAt: vista });
       expect(r.estado).toBe(200);
-      expect(r.cuerpo).toMatchObject({ captureId: idDispositivo, status: 'duplicada', stock: 5, currentStock: 5 });
+      expect(r.cuerpo).toMatchObject({ captureId: idDispositivo, status: 'duplicada', originalStatus: 'aceptada', stock: 5, currentStock: 5 });
       const bitacora = await http('GET', `${BASE}/v1/availability/captures?storeId=${tiendaId}&presentationId=${arroz()}`, analista);
       expect(bitacora.cuerpo.total).toBe(1);
     });
