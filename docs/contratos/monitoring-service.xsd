@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:api="monitoring/v1" targetNamespace="monitoring/v1"
+           elementFormDefault="qualified">
+  <xs:include schemaLocation="xsd/error-transversal.xsd"/>
+  <xs:simpleType name="serviceStatus">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="operativo"/>
+      <xs:enumeration value="degradado"/>
+      <xs:enumeration value="caido"/>
+      <xs:enumeration value="sin_datos"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="dependencyStatus">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="ok|no configurado|error:?.*"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="servicePort">
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="3101"/>
+      <xs:maxInclusive value="3120"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:complexType name="dependency">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="status" type="api:dependencyStatus"/>
+      <xs:element name="latencyMs" type="xs:nonNegativeInteger" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="serviceCheck">
+    <xs:sequence>
+      <xs:element name="service" type="xs:string"/>
+      <xs:element name="port" type="api:servicePort"/>
+      <xs:element name="version" type="xs:string" minOccurs="0"/>
+      <xs:element name="status" type="api:serviceStatus"/>
+      <xs:element name="checkedAt" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="latencyMs" type="xs:nonNegativeInteger" minOccurs="0"/>
+      <xs:element name="probeErrorsConsecutive" type="xs:nonNegativeInteger"/>
+      <xs:element name="dependencies"><xs:complexType><xs:sequence><xs:element name="item" type="api:dependency" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType></xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="servicesType">
+    <xs:sequence>
+      <xs:element name="data"><xs:complexType><xs:sequence><xs:element name="item" type="api:serviceCheck" minOccurs="0" maxOccurs="20"/></xs:sequence></xs:complexType></xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="historyType">
+    <xs:sequence>
+      <xs:element name="data"><xs:complexType><xs:sequence><xs:element name="item" type="api:serviceCheck" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType></xs:element>
+      <xs:element name="total" type="xs:nonNegativeInteger"/>
+      <xs:element name="page" type="xs:positiveInteger"/>
+      <xs:element name="limit" type="xs:positiveInteger"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="monitorServices" type="api:servicesType"/>
+  <xs:element name="monitorHistory" type="api:historyType"/>
+</xs:schema>
