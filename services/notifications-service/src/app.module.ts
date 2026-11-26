@@ -9,6 +9,7 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { NotificationsService } from './notifications/notifications.service';
 import { crearMiddlewareCuerpoXml } from './common/middleware/xml-body.middleware';
 import { MongooseModule } from '@nestjs/mongoose';
+import { conexionTolerante, OPCIONES_MONGO, uriMongo } from './common/mongo/asegurar-mongo';
 import { NOTIFICATIONS_REPOSITORY } from './notifications/notifications.repository';
 import { MongoNotificationsRepository } from './notifications/mongo.repository';
 import { NotificationPreference, NotificationPreferenceSchema } from './notifications/schemas/preference.schema';
@@ -28,10 +29,9 @@ import { NotificacionMongo, NotificacionSchema } from './notifications/schemas/n
     ConfigModule.forRoot({ isGlobal: true }),
     JwtModule.register({}),
     ScheduleModule.forRoot(),
-    MongooseModule.forRoot(process.env.MONGO_URL ?? 'mongodb://localhost:27017/retaildb', {
-      serverSelectionTimeoutMS: 2000,
-      bufferCommands: false,
-    }),
+    // D-25: `lazyConnection` + listener de error: con Mongo caído al arrancar el servicio no muere;
+    // las rutas responden 503 y asegurarMongo() reconecta cuando Mongo vuelve (mismo arreglo que #116).
+    MongooseModule.forRoot(uriMongo(), { ...OPCIONES_MONGO, lazyConnection: true, connectionFactory: conexionTolerante }),
     MongooseModule.forFeature([
       { name: NotificacionMongo.name, schema: NotificacionSchema },
       { name: NotificationPreference.name, schema: NotificationPreferenceSchema },
