@@ -5,7 +5,7 @@
 #   1. Documentar la estructura del sistema: qué piezas lo componen.
 #   2. Levantar un entorno reproducible con un solo comando.
 #
-# Sprint 4: hay 15 servicios de negocio (3101–3112, 3114, 3118 y 3120).
+# Sprint 4: hay 18 servicios de negocio (3101–3114, 3116, 3118–3120).
 # El mapa de los 20 puertos y su estado está en staging/README.md.
 # Para actualizar un volumen previo: ./infra/migrar-postgres.sh.
 # Un servicio arrastra sus dependencias duras con `depends_on`, así que
@@ -42,6 +42,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - retail_net
+
+  postgres-migrations:
+    image: postgres:16
+    environment:
+      PGHOST: postgres
+      PGUSER: retail_user
+      PGPASSWORD: retail_pass_2026
+      PGDATABASE: retaildb
+    volumes:
+      - ../db/migraciones:/migrations:ro
+      - ./aplicar-migraciones.sh:/aplicar-migraciones.sh:ro
+    entrypoint: ["/bin/sh", "/aplicar-migraciones.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - retail_net
 
@@ -219,6 +236,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -264,6 +283,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -312,6 +333,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -601,6 +624,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -658,6 +683,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -707,6 +734,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -747,8 +776,57 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+    networks:
+      - retail_net
+
+  basket-analysis-service:
+    build: ../services/basket-analysis-service
+    environment:
+      PORT: 3113
+      SERVICE_NAME: basket-analysis-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: basket-analysis/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
+      INCOME_SEGMENTATION_SERVICE_URL: http://income-segmentation-service:3112
+      PUBLICATION_RULE: ambos
+    ports:
+      - "3113:3113"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - retail_net
+
+  demand-forecast-service:
+    build: ../services/demand-forecast-service
+    environment:
+      PORT: 3116
+      SERVICE_NAME: demand-forecast-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: forecast/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
+      DATA_GOVERNANCE_SERVICE_URL: http://data-governance-service:3119
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+      PUBLICATION_RULE: ambos
+    ports:
+      - "3116:3116"
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
     networks:
       - retail_net
 
@@ -763,6 +841,9 @@ services:
       REDIS_HOST: redis
       MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
       MONGO_DB: retaildb
+      SYNC_DESTINO: http
+      AVAILABILITY_SERVICE_URL: http://availability-service:3114
+      PRICING_SERVICE_URL: http://pricing-service:3103
       AUDIT_SERVICE_URL: http://audit-service:3110
       NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
     ports:
@@ -772,6 +853,37 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+    networks:
+      - retail_net
+
+  data-governance-service:
+    build: ../services/data-governance-service
+    environment:
+      PORT: 3119
+      SERVICE_NAME: data-governance-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: governance/v1
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+      INGESTION_SERVICE_URL: http://transactions-ingestion-service:3111
+      CORE_PROCESS_SERVICE_URL: http://core-process-service:3104
+      AVAILABILITY_SERVICE_URL: http://availability-service:3114
+      INCOME_SEGMENTATION_SERVICE_URL: http://income-segmentation-service:3112
+      AUDIT_SERVICE_URL: http://audit-service:3110
+    ports:
+      - "3119:3119"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
     networks:
       - retail_net
 
