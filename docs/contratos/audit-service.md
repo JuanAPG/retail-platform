@@ -44,15 +44,13 @@ Request JSON:
 400 (el actor siempre sale del token, nunca de lo que mande el cliente).
 Todo campo salvo `tabla`, `servicio` y `accion` puede ser `null`.
 
-`servicio` admite **solo los 10 microservicios** de la plataforma
-(`auth-service`, `catalog-service`, `pricing-service`,
-`core-process-service`, `algorithms-core`, `analytics-stats`,
-`decision-service`, `documents-service`, `notifications-service`,
-`audit-service`); cualquier otro valor es 400, igual que una `accion`
-fuera del catálogo. Es el mismo valor que el `AuditReporter` de cada
-servicio manda como constante y que `SERVICE_NAME` fija en
-`infra/docker-compose.yml`. Si se agrega un microservicio, se agrega aquí
-y en `src/common/servicios.ts`.
+El catálogo de 20 emisores de [CONTRIBUTING.md](../../CONTRIBUTING.md)
+se valida en el DTO, el XSD y PostgreSQL. Un valor ajeno al catálogo
+responde 400. Los emisores reenvían la cabecera `X-Correlation-Id` de la
+operación original. Se conserva un valor con 1–100 caracteres ASCII
+(alfanuméricos o `._:-`), o se genera uno nuevo si falta o es inválido.
+El servicio devuelve la cabecera, registra el ID en sus logs y lo
+persiste como `correlationId`. Los eventos anteriores a T-19 pueden omitirlo.
 
 Topes de longitud (400 si se pasan): `tabla` y `cambios[].campo` 80
 caracteres —el ancho real de sus columnas—, `registroId` 200,
@@ -104,7 +102,7 @@ Response `201`: `{ "id": "123" }` (id numérico del evento).
 
 Bitácora paginada `{data, total, page, limit}`, de la más reciente a la
 más antigua. Filtros (todos opcionales): `tabla`, `registroId`,
-`servicio` (uno de los 10), `usuarioId` (UUID), `accion` (del catálogo),
+`servicio`, `correlationId` (uno de los 10), `usuarioId` (UUID), `accion` (del catálogo),
 `dateFrom`, `dateTo`, `page` (default 1), `limit` (default 20, máx 100).
 Un filtro que no existe o un valor fuera de catálogo es 400, no una lista
 vacía.
@@ -154,3 +152,23 @@ contrato resuelve el historial por entidad con los filtros
 compone con los otros filtros (`accion`, rango de fechas, emisor). Si
 alguien compara el requerimiento con el código, no falta una función:
 sobra una línea en el requerimiento, que queda cerrada aquí.
+
+
+## Verificación de integridad (T-19)
+
+`GET /v1/auditoria/integridad` exige sesión activa y rol Administrador o
+Auditor. Responde 200 con `{"integra":true,"primerIdAlterado":null}` o, al
+detectar una discontinuidad, por ejemplo
+`{"integra":false,"primerIdAlterado":"123"}`. En XML la raíz es
+`auditIntegrityResponse`. El filtro `?correlationId=captura-01` permite
+reunir los eventos de 3112, 3114 y otros emisores de la misma operación.
+
+La cadena usa SHA-256, ID numérico ascendente, fecha como epoch y los
+campos modificados ordenados por nombre. El evento, sus cambios y su hash
+se confirman en la misma transacción. La migración
+`db/migraciones/sprint4_audit_chain.sql` sella el historial existente una
+sola vez. Para aplicarla, detén los escritores y ejecuta la migración con
+`psql -v ON_ERROR_STOP=1` antes de iniciar la nueva versión. Los hashes
+viven en la misma base que los eventos. La comprobación cubre los
+registros presentes y sus enlaces, por lo que una eliminación del final
+requiere contrastar con un respaldo o un punto de control externo.

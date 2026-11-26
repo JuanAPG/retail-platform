@@ -1,5 +1,5 @@
 // RF-16 y RF-20 a RF-22 contra analytics-stats real (requiere el servicio arriba en :3106 y las ventas de db/datos_prueba_*.csv).
-import { abrirNavegador, ok, resumen, sesion, rail, texto, espera, json } from './lib.mjs';
+import { abrirNavegador, ok, resumen, sesion, rail, texto, espera, json, BASE } from './lib.mjs';
 
 const navegador = await abrirNavegador();
 const corre = (page) => page.getByRole('button', { name: 'Correr prueba' });
@@ -80,7 +80,7 @@ const tipo = (page, n) => page.getByRole('button', { name: n, exact: true });
 // ---------- Rol sin permiso ----------
 {
   const { ctx, page } = await sesion(navegador, 'admin');
-  await page.goto('http://localhost:5173/analista');
+  await page.goto(`${BASE}/analista`);
   await page.waitForLoadState('networkidle');
   await rail(page, 'Pruebas estadísticas').click();
   await page.waitForTimeout(500);

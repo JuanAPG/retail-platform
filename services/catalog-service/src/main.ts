@@ -5,11 +5,14 @@ import { AppModule } from './app.module';
 import { HttpErrorFilter } from './common/filters/http-error.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
+import { middlewareCorrelacion } from './common/correlation/correlacion';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  // Antes que todo (guards incluidos): hasta un 401 lleva su X-Correlation-Id (T-02).
+  app.use(middlewareCorrelacion);
+  app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'x-request-id'] });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });

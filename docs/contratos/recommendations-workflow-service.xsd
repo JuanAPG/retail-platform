@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Contrato XML de recommendations-workflow-service (T-07, D-41).
+     Espacio de nombres fijo `workflow/v1`. Las peticiones XML usan
+     `Content-Type: application/xml` y la raíz indicada en el .md; las
+     respuestas salen en XML con `Accept: application/xml`. Los nulos se OMITEN
+     (campos opcionales con minOccurs="0"). Listas como <item> (paginacion.md).
+     `GET /v1/health` usa health.xsd. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="workflow/v1"
+           xmlns:wf="workflow/v1"
+           elementFormDefault="qualified">
+
+  <!-- ===================== Tipos simples ===================== -->
+
+  <xs:simpleType name="uuid">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Instante en UTC que devuelve el servidor. -->
+  <xs:simpleType name="instanteUtc">
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value=".+Z"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- D-41: Asignada -> En implementación -> Implementada -> Evaluada. -->
+  <xs:simpleType name="estadoSeguimiento">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="asignada"/>
+      <xs:enumeration value="en_implementacion"/>
+      <xs:enumeration value="implementada"/>
+      <xs:enumeration value="evaluada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="evento">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="asignada"/>
+      <xs:enumeration value="iniciada"/>
+      <xs:enumeration value="implementada"/>
+      <xs:enumeration value="evaluada"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="metrica">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ventas_unidades"/>
+      <xs:enumeration value="ventas_importe"/>
+      <xs:enumeration value="precio_unitario"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="unidadMetrica">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="pza"/>
+      <xs:enumeration value="MXN"/>
+      <xs:enumeration value="MXN/kg"/>
+      <xs:enumeration value="MXN/l"/>
+      <xs:enumeration value="MXN/pza"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="estadoEntrega">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="enviado"/>
+      <xs:enumeration value="fallido"/>
+      <xs:enumeration value="pendiente"/>
+      <xs:enumeration value="no_aplica"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="valorMetrica">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="texto10a1000">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="10"/>
+      <xs:maxLength value="1000"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== Tipos compuestos ===================== -->
+
+  <xs:complexType name="alcance">
+    <xs:sequence>
+      <xs:element name="zoneId" type="wf:uuid" minOccurs="0"/>
+      <xs:element name="storeId" type="wf:uuid" minOccurs="0"/>
+      <xs:element name="presentationId" type="wf:uuid" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Periodo de días completos (America/Monterrey), inclusivo, con su valor. -->
+  <xs:complexType name="periodo">
+    <xs:sequence>
+      <xs:element name="from" type="xs:date"/>
+      <xs:element name="to" type="xs:date"/>
+      <xs:element name="value" type="wf:valorMetrica"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="evaluacion">
+    <xs:sequence>
+      <xs:element name="metric" type="wf:metrica"/>
+      <xs:element name="unit" type="wf:unidadMetrica"/>
+      <xs:element name="scope" type="wf:alcance"/>
+      <xs:element name="before" type="wf:periodo"/>
+      <xs:element name="after" type="wf:periodo"/>
+      <xs:element name="variationPct" type="xs:decimal"/>
+      <xs:element name="source" type="xs:string"/>
+      <xs:element name="comment" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="seguimiento">
+    <xs:sequence>
+      <xs:element name="id" type="wf:uuid"/>
+      <xs:element name="recommendationId" type="wf:uuid"/>
+      <xs:element name="status" type="wf:estadoSeguimiento"/>
+      <xs:element name="assigneeUserId" type="wf:uuid"/>
+      <xs:element name="assignedBy" type="wf:uuid"/>
+      <xs:element name="assignedAt" type="wf:instanteUtc"/>
+      <xs:element name="dueDate" type="xs:date" minOccurs="0"/>
+      <xs:element name="assignmentNote" type="xs:string" minOccurs="0"/>
+      <xs:element name="startedAt" type="wf:instanteUtc" minOccurs="0"/>
+      <xs:element name="implementedOn" type="xs:date" minOccurs="0"/>
+      <xs:element name="implementedAt" type="wf:instanteUtc" minOccurs="0"/>
+      <xs:element name="implementationNote" type="xs:string" minOccurs="0"/>
+      <xs:element name="evaluatedBy" type="wf:uuid" minOccurs="0"/>
+      <xs:element name="evaluatedAt" type="wf:instanteUtc" minOccurs="0"/>
+      <xs:element name="evaluation" type="wf:evaluacion" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===================== Peticiones ===================== -->
+
+  <!-- POST /v1/workflow/assignments -->
+  <xs:element name="asignacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="recommendationId" type="wf:uuid"/>
+        <xs:element name="assigneeUserId" type="wf:uuid"/>
+        <xs:element name="dueDate" type="xs:date" minOccurs="0"/>
+        <xs:element name="note" type="wf:texto10a1000" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/workflow/assignments/:id/implement -->
+  <xs:element name="implementacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="implementedOn" type="xs:date" minOccurs="0"/>
+        <xs:element name="note" type="wf:texto10a1000"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- PATCH /v1/workflow/assignments/:id/evaluate -->
+  <xs:element name="evaluacionRequest">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="metric" type="wf:metrica"/>
+        <xs:element name="unit" type="wf:unidadMetrica"/>
+        <xs:element name="scope" type="wf:alcance"/>
+        <xs:element name="before" type="wf:periodo"/>
+        <xs:element name="after" type="wf:periodo"/>
+        <xs:element name="source">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="3"/>
+              <xs:maxLength value="300"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="comment" type="wf:texto10a1000" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ===================== Respuestas ===================== -->
+
+  <!-- POST, GET /:id, PATCH /:id/start, /implement, /evaluate -->
+  <xs:element name="seguimientoResponse" type="wf:seguimiento"/>
+
+  <!-- GET /v1/workflow/assignments -->
+  <xs:element name="seguimientoListResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="wf:seguimiento" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="total" type="xs:integer"/>
+        <xs:element name="page" type="xs:integer"/>
+        <xs:element name="limit" type="xs:integer"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- GET /v1/workflow/assignments/:id/history (no se pagina: máximo 4 eventos). -->
+  <xs:element name="historialSeguimientoResponse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="assignmentId" type="wf:uuid"/>
+        <xs:element name="data">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="event" type="wf:evento"/>
+                    <xs:element name="fromStatus" type="wf:estadoSeguimiento" minOccurs="0"/>
+                    <xs:element name="toStatus" type="wf:estadoSeguimiento"/>
+                    <xs:element name="actorId" type="wf:uuid"/>
+                    <xs:element name="at" type="wf:instanteUtc"/>
+                    <xs:element name="correlationId" type="xs:string"/>
+                    <xs:element name="audit" type="wf:estadoEntrega"/>
+                    <xs:element name="notification" type="wf:estadoEntrega"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Error estándar, igual que en los demás XSD. -->
+  <xs:element name="error">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="statusCode" type="xs:integer"/>
+        <xs:element name="message" type="xs:string"/>
+        <xs:element name="code" type="xs:string"/>
+        <xs:element name="details" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="path" type="xs:string"/>
+        <xs:element name="timestamp" type="xs:dateTime"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

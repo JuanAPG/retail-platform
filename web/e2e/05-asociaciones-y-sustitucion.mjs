@@ -1,5 +1,5 @@
 // RF-13/14 (Apriori y FP-Growth, solo el Analista) y RF-17 (sustitución desde algorithms-core, sin respaldo del monolito).
-import { abrirNavegador, ok, resumen, sesion, rail, texto, espera } from './lib.mjs';
+import { abrirNavegador, ok, resumen, sesion, rail, texto, espera, BASE } from './lib.mjs';
 
 const navegador = await abrirNavegador();
 
@@ -34,7 +34,7 @@ const navegador = await abrirNavegador();
 }
 {
   const { ctx, page } = await sesion(navegador, 'admin');
-  await page.goto('http://localhost:5173/analista');
+  await page.goto(`${BASE}/analista`);
   await page.waitForLoadState('networkidle');
   await rail(page, 'Reglas de asociación').click();
   await page.waitForTimeout(600);

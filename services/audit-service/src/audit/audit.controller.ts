@@ -8,6 +8,7 @@ import { ROL } from '../common/roles';
 import { XmlRoot } from '../common/decorators/xml-root.decorator';
 import { ApiErrores, ApiRespuesta } from '../common/swagger/ejemplos';
 import * as muestras from '../common/swagger/muestras';
+import { correlacionActual } from '../common/correlation/correlacion';
 import { AuditService } from './audit.service';
 import { AuditFilterDto } from './dto/audit-filter.dto';
 import { RegistrarEventoDto } from './dto/registrar-evento.dto';
@@ -38,6 +39,7 @@ export class AuditController {
   async registrar(@Body() dto: RegistrarEventoDto, @CurrentUser() usuario: SesionUsuario) {
     const id = await this.auditService.registrar({
       ...dto,
+      correlationId: correlacionActual(),
       usuarioId: usuario.id,
       rolId: usuario.rolId,
     });
@@ -54,6 +56,17 @@ export class AuditController {
   @ApiErrores(400, 401, 403)
   findAll(@Query() filters: AuditFilterDto) {
     return this.auditService.find(filters);
+  }
+
+  @Get('integridad')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
+  @XmlRoot('auditIntegrityResponse')
+  @ApiOperation({ summary: 'Verifica los hashes de la bitácora y sus cambios.' })
+  @ApiRespuesta(200, 'Resultado de integridad.', { integra: true, primerIdAlterado: null }, 'auditIntegrityResponse')
+  @ApiErrores(401, 403, 503)
+  verificarIntegridad() {
+    return this.auditService.verificarIntegridad();
   }
 
   @Get(':id')

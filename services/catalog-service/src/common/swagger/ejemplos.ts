@@ -50,6 +50,7 @@ const ERRORES: Record<number, { code: string; message: string; descripcion: stri
   403: { code: 'FORBIDDEN', message: 'Forbidden resource', descripcion: 'El rol no tiene permiso sobre esta ruta.' },
   404: { code: 'NOT_FOUND', message: 'El recurso no existe.', descripcion: 'No existe.' },
   409: { code: 'CONFLICT', message: 'Ya existe un registro con esos datos.', descripcion: 'Conflicto con el estado actual.' },
+  503: { code: 'SERVICE_UNAVAILABLE', message: 'Las visitas de campo (MongoDB) no están disponibles.', descripcion: 'MongoDB no responde (D-25).' },
 };
 
 /**

@@ -7,6 +7,7 @@ import jwtConfig from './config/jwt.config';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
 import { AuthController } from './auth/auth.controller';
+import { LoginRateLimitGuard } from './auth/login-rate-limit.guard';
 import { AuthService } from './auth/auth.service';
 import { AuditReporter } from './common/audit/audit-reporter.service';
 import { UsersController } from './users/users.controller';
@@ -41,7 +42,7 @@ import { UsuarioEntity } from './entities/usuario.entity';
     JwtModule.register({}),
   ],
   controllers: [HealthController, AuthController, UsersController, RolesController],
-  providers: [AuthService, UsersService, RolesService, AuditReporter, SessionGuard],
+  providers: [AuthService, LoginRateLimitGuard, UsersService, RolesService, AuditReporter, SessionGuard],
   exports: [SessionGuard],
 })
 export class AppModule {}

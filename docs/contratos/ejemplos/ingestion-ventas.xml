@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<salesFile xmlns="ingestion/v1">
+  <rows>
+    <item>
+      <folio>DEMO-001</folio>
+      <fecha>2026-11-20</fecha>
+      <tienda>MTY-CENTRO</tienda>
+      <sku>SKU-100</sku>
+      <presentacion>500 g</presentacion>
+      <cantidad>2</cantidad>
+      <precio>42.50</precio>
+    </item>
+  </rows>
+</salesFile>

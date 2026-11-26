@@ -38,13 +38,18 @@ export class AuditFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({ description: 'Solo eventos reportados por este microservicio.', enum: SERVICIOS })
   @IsOptional()
-  @IsIn(SERVICIOS, { message: `servicio debe ser uno de los 10 microservicios: ${SERVICIOS.join(', ')}.` })
+  @IsIn(SERVICIOS, { message: `servicio debe ser uno de los microservicios permitidos: ${SERVICIOS.join(', ')}.` })
   servicio?: string;
 
   @ApiPropertyOptional({ description: 'Solo eventos de este usuario.' })
   @IsOptional()
   @IsUUID('4', { message: 'usuarioId debe ser un UUID válido.' })
   usuarioId?: string;
+
+  @ApiPropertyOptional({ description: 'Identificador de la operación transversal.', example: 'captura-01' })
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9._:-]{1,100}$/, { message: 'correlationId no tiene un formato válido.' })
+  correlationId?: string;
 
   @ApiPropertyOptional({ enum: ACCIONES })
   @IsOptional()

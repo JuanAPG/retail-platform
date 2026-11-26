@@ -3,6 +3,8 @@ import { SetMetadata } from '@nestjs/common';
 export const XML_ROOT_KEY = 'xmlRoot';
 
 export interface XmlRootOpciones {
+  /** Permite seleccionar un XSD transversal sin namespace. */
+  namespace?: string;
   /**
    * Elementos que deben salir SIEMPRE, incluso cuando su valor es nulo.
    *

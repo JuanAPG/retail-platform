@@ -16,13 +16,13 @@ export function ejemploXml(ejemplo: unknown, raiz?: string): string {
  * Documenta una respuesta exitosa con ejemplo en JSON **y** en XML
  * (gate del PR). Uso: `@ApiRespuesta(200, 'Bitácora paginada.', pagina, 'auditListResponse')`.
  */
-export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown, raiz?: string) {
+export function ApiRespuesta(status: number, descripcion: string, ejemplo: unknown, raiz?: string, namespace?: string) {
   return ApiResponse({
     status,
     description: descripcion,
     content: {
       'application/json': { example: ejemplo },
-      'application/xml': { example: ejemploXml(ejemplo, raiz) },
+      'application/xml': { example: serializarXml(ejemplo, { raiz, namespace }) },
     },
   });
 }
@@ -51,6 +51,11 @@ const ERRORES: Record<
     code: 'NOT_FOUND',
     message: 'El evento no existe.',
     descripcion: 'No existe un evento de bitácora con ese id.',
+  },
+  503: {
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'No se pudo verificar la sesión: el servicio de sesiones no responde.',
+    descripcion: 'No se pudo consultar Redis para validar la sesión.',
   },
   500: {
     code: 'INTERNAL',

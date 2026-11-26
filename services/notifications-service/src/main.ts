@@ -4,12 +4,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpErrorFilter } from './common/filters/http-error.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { middlewareCorrelacion } from './common/correlation/correlacion';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  app.use(middlewareCorrelacion);
+  app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'x-request-id'] });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });
