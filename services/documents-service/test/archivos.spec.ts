@@ -210,7 +210,7 @@ describe('Archivos privados de reportes (integración, requiere MongoDB y Redis)
     // Un aviso al que lo pidió, con el mismo id de correlación; y su registro en la bitácora.
     const a = avisos(repGerente);
     expect(a).toHaveLength(1);
-    expect(a[0].cuerpo).toMatchObject({ eventType: 'reporte.disponible', recipientUserId: `${PREFIJO}ger`, sourceService: 'documents-service' });
+    expect(a[0].cuerpo).toMatchObject({ eventType: 'reporte.generado', recipientUserId: `${PREFIJO}ger`, sourceService: 'documents-service' });
     expect(a[0].correlacion).toBe(correlacion);
     const bit = recibidos.find((x) => x.ruta === '/v1/auditoria' && x.cuerpo.registroId === pdfId && x.cuerpo.accion === 'insert');
     expect(bit?.correlacion).toBe(correlacion);
@@ -325,16 +325,21 @@ describe('Archivos privados de reportes (integración, requiere MongoDB y Redis)
     expect(avisos(repGerente).filter((a) => String(a.cuerpo.message).includes('PDF'))).toHaveLength(1);
   });
 
+  it('reporte.generado solo lo origina el Gerente (T-20): el archivo de otro perfil no emite aviso', async () => {
+    expect(avisos(repProvA)).toHaveLength(0);
+  });
+
   it('si notifications rechaza el aviso, no se marca como dado y la siguiente petición lo reintenta una vez', async () => {
+    const rep = await insertarReporte(`${PREFIJO}ger`);
     notificacionesAceptan = false;
-    const r1 = await http('POST', `/v1/reports/${repProvA}/files`, provA, { format: 'pdf' });
+    const r1 = await http('POST', `/v1/reports/${rep}/files`, gerente, { format: 'pdf' });
     expect(r1.estado).toBe(201);
-    const rechazados = avisos(repProvA).filter((a) => String(a.cuerpo.message).includes('PDF')).length;
-    expect(rechazados).toBe(1);
+    expect(avisos(rep)).toHaveLength(1);
     notificacionesAceptan = true;
-    expect((await http('POST', `/v1/reports/${repProvA}/files`, provA, { format: 'pdf' })).estado).toBe(200);
-    expect((await http('POST', `/v1/reports/${repProvA}/files`, provA, { format: 'pdf' })).estado).toBe(200);
-    expect(avisos(repProvA).filter((a) => String(a.cuerpo.message).includes('PDF'))).toHaveLength(2);
+    expect((await http('POST', `/v1/reports/${rep}/files`, gerente, { format: 'pdf' })).estado).toBe(200);
+    expect((await http('POST', `/v1/reports/${rep}/files`, gerente, { format: 'pdf' })).estado).toBe(200);
+    expect(avisos(rep)).toHaveLength(2);
+    await mongoose.connection.collection('archivos').deleteMany({ recursoId: rep });
   });
 
   it('XML: archivo, lista, URL firmada y error validan contra documents-service.xsd', async () => {

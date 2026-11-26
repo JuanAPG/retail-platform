@@ -196,25 +196,28 @@ Rechazos:
 { "statusCode": 409, "code": "CONFLICT", "message": "El archivo todavía no está disponible (estado: fallido).", "details": null, "path": "…", "timestamp": "…" }
 ```
 
-## 7. Aviso de "archivo disponible" (para T-20, Juan Ángel)
+## 7. Aviso de "ya se puede descargar" (evento `reporte.generado` de T-20)
 
-Propuesta de evento nuevo en el catálogo cerrado de notifications-service:
+documents-service usa el evento que ya existe en notifications-service (no hace falta uno nuevo):
 
-| Evento | Puede originarlo | Le llega a | Copia a |
-|---|---|---|---|
-| `reporte.disponible` | los roles de `LEEN_REPORTES` (6 internos + Proveedor) | el usuario que pidió el archivo (`recipientUserId`) | — |
+| Evento | Puede originarlo | Le llega a |
+|---|---|---|
+| `reporte.generado` | Gerente de categoría | el mismo usuario que hizo la acción (destino `actor`) |
 
 ```json
-{ "eventType": "reporte.disponible", "sourceService": "documents-service",
+{ "eventType": "reporte.generado", "sourceService": "documents-service",
   "relatedEntityType": "reporte", "relatedEntityId": "6705f1c2a3b4c5d6e7f80912",
   "title": "Tu reporte ya se puede descargar",
   "message": "El reporte ejecutivo en PDF está listo para descargar.",
-  "recipientUserId": "a8e46052-34a0-4dda-baf2-40bca267454f", "priority": "info" }
+  "recipientUserId": "<id del Gerente que preparó el archivo>", "priority": "info" }
 ```
 
-El dedup de 5 min de notifications no hace falta para este evento (documents ya avisa una sola vez
-por archivo), pero no estorba. Mientras el evento no exista, notifications responde 400/403, documents
-lo deja en el log y vuelve a intentar el aviso en la siguiente petición del archivo.
+- Se emite **una vez por archivo**, cuando queda `disponible`. Si notifications lo rechaza, el aviso se
+  libera y se reintenta en la siguiente petición del archivo.
+- Solo cuando quien prepara el archivo es el **Gerente de categoría**. Con otro perfil no se emite
+  (notifications lo rechazaría con 403); la web ya le muestra "ya se puede descargar" a quien lo preparó.
+- Verificado contra notifications-service real: el aviso aparece en la bandeja del Gerente con el
+  mismo `correlationId` de la petición.
 
 ## 8. Decisiones
 
