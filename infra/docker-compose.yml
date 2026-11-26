@@ -443,6 +443,8 @@ services:
       # Reglas de asociacion para la venta cruzada (D3: viven en Mongo, se
       # piden por HTTP). Llamada en caliente: si no responde, generate da 503.
       ALGORITHMS_SERVICE_URL: http://algorithms-core:3105
+      # D-38: la cobertura de básicos de la accesibilidad la da availability-service.
+      AVAILABILITY_SERVICE_URL: http://availability-service:3114
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: retail_user
@@ -723,6 +725,10 @@ services:
       SERVICE_NAME: monitoring-service
       SERVICE_VERSION: 1.0.0
       XML_NAMESPACE: monitoring/v1
+      # Sondea los 20 servicios a la vez: el DNS de un servicio que no existe o está apagado
+      # tarda ~2.5 s y con el pool por defecto (4 hilos) bloquea a los sanos, que salen
+      # "caido" por timeout de 3 s (mismo motivo que en documents-service, main.ts).
+      UV_THREADPOOL_SIZE: "32"
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
