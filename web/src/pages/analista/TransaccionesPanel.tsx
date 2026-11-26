@@ -9,7 +9,7 @@ import { CtaButton } from '../../components/ui/CtaButton';
 import { ErrorText } from '../../components/ui/ErrorText';
 import { IconTransacciones } from '../../components/ui/icons';
 import { TransaccionFormModal } from './TransaccionFormModal';
-import { ImportarCsvPanel } from './ImportarCsvPanel';
+import { ImportarVentasPanel } from './ImportarVentasPanel';
 import { EstadoError } from '../../components/EstadoError';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEscribir, quienEscribe } from '../../routes/permisosEscritura';
@@ -24,7 +24,7 @@ interface TransaccionesPanelProps {
  * backend (M07), así que aquí no hay que hacer nada más tras guardar.
  *
  * Escribir es del Analista comercial (Matriz §3). El Administrador llega aquí
- * con «Ver como» y solo lee: no se le ofrecen «Importar CSV» ni «Nueva
+ * con «Ver como» y solo lee: no se le ofrecen «Importar ventas» ni «Nueva
  * transacción», que core-process le rechaza con 403.
  */
 export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
@@ -87,7 +87,7 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
                 onClick={() => setImportacionAbierta((v) => !v)}
                 className="flex h-[52px] items-center rounded-full border-2 border-arena/40 px-5 text-sm font-bold text-arena transition hover:bg-salvia hover:text-tinta"
               >
-                Importar CSV
+                Importar ventas
               </button>
               <CtaButton onClick={() => setFormAbierto(true)}>Nueva transacción</CtaButton>
             </div>
@@ -123,14 +123,14 @@ export function TransaccionesPanel({ busqueda }: TransaccionesPanelProps) {
 
       {!escribe && (
         <p className="rounded-panel bg-arena/20 px-5 py-3 text-sm text-arena">
-          Vista de solo lectura: solo {quienEscribe('transacciones')} registra transacciones e importa el CSV.
+          Vista de solo lectura: solo {quienEscribe('transacciones')} registra transacciones e importa ventas.
           Aquí puedes consultarlas.
         </p>
       )}
 
       {escribe && importacionAbierta && (
         <div className="rounded-panel bg-teal p-6">
-          <ImportarCsvPanel
+          <ImportarVentasPanel
             onImportado={(mensaje) => {
               setAviso(mensaje);
               transacciones.refetch();

@@ -1,0 +1,11 @@
+**
+!services/
+!services/transactions-ingestion-service/
+!services/transactions-ingestion-service/*.json
+!services/transactions-ingestion-service/src/
+!services/transactions-ingestion-service/src/**
+!docs/
+!docs/contratos/
+!docs/contratos/transactions-ingestion-service.xsd
+!docs/contratos/xsd/
+!docs/contratos/xsd/error-transversal.xsd

@@ -8,7 +8,7 @@
  */
 const BASE = process.env.CATALOG_BASE_URL ?? 'http://localhost:3102';
 
-type Operacion = { responses?: Record<string, { content?: Record<string, { example?: unknown }> }>; summary?: string };
+type Operacion = { responses?: Record<string, { content?: Record<string, { example?: unknown }> }>; summary?: string; deprecated?: boolean };
 
 async function documentacion(): Promise<{ paths: Record<string, Record<string, Operacion>> }> {
   const respuesta = await fetch(`${BASE}/docs-json`);
@@ -30,6 +30,11 @@ describe('Swagger (integración, requiere stack)', () => {
         const etiqueta = `${metodo.toUpperCase()} ${ruta}`;
         if (!operacion.summary) fallas.push(`${etiqueta}: sin resumen`);
 
+        // D-35: las escrituras retiradas (segmentos y clasificación) van marcadas `deprecated` y solo responden 409.
+        if (operacion.deprecated) {
+          if (!('409' in (operacion.responses ?? {}))) fallas.push(`${etiqueta}: retirada sin el 409 documentado`);
+          continue;
+        }
         const exitosas = Object.entries(operacion.responses ?? {}).filter(([estado]) => estado.startsWith('2'));
         if (exitosas.length === 0) fallas.push(`${etiqueta}: sin respuesta 2xx documentada`);
 

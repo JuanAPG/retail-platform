@@ -100,7 +100,9 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
       expect([quien, (await http('POST', '/v1/zones', token, { nombre, municipioId })).estado]).toEqual([quien, 403]);
       expect([quien, (await http('PATCH', `/v1/zones/${existente}`, token, { descripcion: 'x' })).estado]).toEqual([quien, 403]);
       expect([quien, (await http('PUT', `/v1/zones/${existente}/indicators`, token, carga)).estado]).toEqual([quien, 403]);
-      expect([quien, (await http('PUT', `/v1/zones/${existente}/classification`, token, { segmentId: segmentoId })).estado]).toEqual([quien, 403]);
+      // D-35: la ruta vieja de clasificación responde 409 (movida a 3112) a Administrador y Analista; 403 al resto.
+      const esperado = quien === 'analista' ? 409 : 403;
+      expect([quien, (await http('PUT', `/v1/zones/${existente}/classification`, token, { segmentId: segmentoId })).estado]).toEqual([quien, esperado]);
       expect([quien, (await http('DELETE', `/v1/zones/${existente}`, token)).estado]).toEqual([quien, 403]);
     }
   });
@@ -186,7 +188,7 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
     expect(faltante.cuerpo.message).not.toContain(a);
   });
 
-  it('CAT-13: el Administrador carga indicadores y clasificación, y /zones/compare los muestra', async () => {
+  it('CAT-13: el Administrador carga indicadores y /zones/compare los muestra; la clasificación ya no se escribe aquí (D-35)', async () => {
     // Usuario REAL del seed: `indicador_valores.cargado_por` y
     // `zona_clasificaciones.asignada_por` son FK a `usuarios`.
     const adminReal = await sesion(
@@ -236,23 +238,18 @@ describe('/v1/zones y /v1/municipalities (integración, requiere stack)', () => 
       }
       expect((await http('PUT', '/v1/zones/00000000-0000-4000-8000-000000000000/indicators', adminReal, carga)).estado).toBe(404);
 
-      // Clasificación: cierra la vigente y crea la nueva.
+      // D-35: la clasificación se movió a income-segmentation-service (3112). La ruta vieja
+      // responde 409 diciendo a dónde ir y NO escribe zona_clasificaciones.
       const seg = (await http('GET', '/v1/segments?limit=100', auditor)).cuerpo.data;
-      expect((await http('PUT', `/v1/zones/${id}/classification`, analista, { segmentId: seg[0].id })).estado).toBe(403);
       expect((await http('PUT', `/v1/zones/${id}/classification`, auditor, { segmentId: seg[0].id })).estado).toBe(403);
-      expect((await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: 9999 })).estado).toBe(400);
-      const c1 = await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: seg[0].id });
-      expect(c1.estado).toBe(200);
-      expect(c1.cuerpo).toMatchObject({ zoneId: id, segmentId: seg[0].id, segmentCode: seg[0].code });
-      expect(c1.cuerpo.previousSegmentId).toBeNull(); // sin clasificación previa (en XML se omite)
-      const c2 = await http('PUT', `/v1/zones/${id}/classification`, adminReal, { segmentId: seg[1].id });
-      expect(c2.cuerpo).toMatchObject({ segmentId: seg[1].id, previousSegmentId: seg[0].id });
-      const vigentes = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM zona_clasificaciones WHERE zona_id = $1 AND vigente', [id])).rows[0].n);
+      for (const token of [adminReal, analista]) {
+        const c = await http('PUT', `/v1/zones/${id}/classification`, token, { segmentId: seg[0].id });
+        expect(c.estado).toBe(409);
+        expect(c.cuerpo.code).toBe('CONFLICT');
+        expect(c.cuerpo.message).toContain('income-segmentation-service');
+      }
       const total = await conDb(async (db) => (await db.query('SELECT count(*)::int AS n FROM zona_clasificaciones WHERE zona_id = $1', [id])).rows[0].n);
-      expect(vigentes).toBe(1);
-      expect(total).toBe(2); // el historial se conserva
-      const fila = (await http('GET', `/v1/zones/compare?ids=${id},${otra}`, auditor)).cuerpo.find((f: { zoneId: string }) => f.zoneId === id);
-      expect(fila.classification).toBe(seg[1].name);
+      expect(total).toBe(0);
     } finally {
       await conDb(async (db) => {
         await db.query('DELETE FROM indicador_valores WHERE zona_id = $1', [id]);

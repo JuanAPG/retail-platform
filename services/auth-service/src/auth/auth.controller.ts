@@ -1,3 +1,4 @@
+import { PasswordRecoveryService, RecoveryRequestDto, RecoveryConfirmDto } from './password-recovery.service';
 import { Body, Controller, Headers, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SessionGuard, SesionUsuario } from '../common/auth/session.guard';
@@ -23,7 +24,7 @@ import { ValidateTokenDto } from './dto/validate-token.dto';
 @ApiTags('v1 Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly recovery: PasswordRecoveryService) {}
 
   @Post('register/proveedor')
   @HttpCode(HttpStatus.CREATED)
@@ -44,6 +45,22 @@ export class AuthController {
   @ApiOperation({ summary: 'Inicia sesión y abre sesión en Redis.' })
   login(@Body() dto: LoginDto, @Ip() ip: string) {
     return this.authService.login(dto, ip);
+  }
+
+  @Post('password-reset/request')
+  @UseGuards(LoginRateLimitGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @XmlRoot('passwordRecoveryResponse')
+  solicitarRecuperacion(@Body() dto: RecoveryRequestDto) {
+    return this.recovery.request(dto.email.trim().toLowerCase());
+  }
+
+  @Post('password-reset/confirm')
+  @UseGuards(LoginRateLimitGuard)
+  @HttpCode(HttpStatus.OK)
+  @XmlRoot('passwordRecoveryResponse')
+  confirmarRecuperacion(@Body() dto: RecoveryConfirmDto) {
+    return this.recovery.confirm(dto, this.authService.accessTtl(), this.authService.refreshTtl());
   }
 
   @Post('refresh')

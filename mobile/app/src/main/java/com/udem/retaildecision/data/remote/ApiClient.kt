@@ -171,7 +171,17 @@ object ApiClient {
             .build()
     }
 
+    /** Mismo cliente HTTP, con la URL de offline-sync-service (lotes de capturas, D-42). */
+    private val syncRetrofit: Retrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SYNC_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
     val authApi: AuthApi by lazy { retrofit.create(AuthApi::class.java) }
     val catalogApi: CatalogApi by lazy { catalogRetrofit.create(CatalogApi::class.java) }
     val pricingApi: PricingApi by lazy { pricingRetrofit.create(PricingApi::class.java) }
+    val syncApi: SyncApi by lazy { syncRetrofit.create(SyncApi::class.java) }
 }

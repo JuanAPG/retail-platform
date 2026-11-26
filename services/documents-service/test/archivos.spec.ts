@@ -364,6 +364,6 @@ describe('Archivos privados de reportes (integración, requiere MongoDB y Redis)
   it('el health reporta el almacén (tipo y bucket, sin rutas físicas)', async () => {
     const h = await http('GET', '/v1/health');
     expect(h.cuerpo.almacen).toEqual({ tipo: 'local', bucket: 'local' });
-    expect(Object.keys(h.cuerpo.checks)).toEqual(['redis', 'mongodb', 'almacen']);
+    expect(Object.keys(h.cuerpo.checks)).toEqual(['redis', 'mongodb', 'bucket']);
   });
 });

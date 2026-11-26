@@ -136,3 +136,25 @@ enteros positivos para ajustar el límite. El log estructurado
 `auth.login.failed` registra IP y correlación, sin correo, contraseña ni
 tokens. La recuperación D-45 y los límites de otras rutas forman parte
 del trabajo posterior.
+
+## Recuperación de contraseña (D-45)
+
+- `POST /v1/auth/password-reset/request` recibe `{"email":"..."}`.
+  Responde 202 con el mismo mensaje para cuentas activas, inactivas o
+  desconocidas.
+- `POST /v1/auth/password-reset/confirm` recibe `{"token":"...","password":"..."}`.
+  Responde 200 al cambiar la contraseña o 400 para un enlace vencido,
+  usado o inválido. El token se consume de forma atómica y vive 15
+  minutos. La sesión activa y los JWT vigentes registrados quedan
+  revocados al cambiar la contraseña.
+
+Configura `AUTH_RESET_SMTP_URL`, `AUTH_RESET_FROM` y
+`AUTH_RESET_WEB_URL`. La URL apunta a `/recuperar-contrasena` en el portal
+HTTPS. El token viaja en el fragmento del enlace y el portal lo envía en
+el cuerpo de la confirmación. El SMTP remoto usa TLS. Las dos rutas
+públicas comparten el límite por IP del login.
+
+Para actualizar una instalación, despliega auth con el registro de
+emisión y espera a que expire el mayor TTL de acceso anterior antes de
+habilitar el correo de recuperación. Así se incluyen los JWT que estaban
+vigentes antes del despliegue. Redis debe persistir sus datos de sesión.
