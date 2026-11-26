@@ -8,7 +8,6 @@ import {
   updateSegment,
 } from '../api/segmentsApi';
 import { extractErrorMessage } from '../api/httpClient';
-import { puedeEscribir } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna } from '../utils/exportar';
@@ -78,8 +77,10 @@ function rango(s: Segment): string {
 export default function Segmentos() {
   const { usuario } = useAuth();
   const rol = usuario?.rol ?? null;
-  const puedeEditar = puedeEscribir(rol);
-  const puedeBorrar = rol === 'Administrador';
+  // income-segmentation-service (D-35, Matriz §3.2): solo el Analista comercial escribe y borra segmentos;
+  // el Administrador queda en lectura (L).
+  const puedeEditar = rol === 'Analista comercial';
+  const puedeBorrar = rol === 'Analista comercial';
 
   const [segmentos, setSegmentos] = useState<Segment[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -246,7 +247,12 @@ export default function Segmentos() {
         <form className="panel form-grid" onSubmit={guardar}>
           <label>
             Código (máx. 20)
-            <input value={form.code} onChange={(e) => cambiar('code', e.target.value)} />
+            <input
+              value={form.code}
+              onChange={(e) => cambiar('code', e.target.value)}
+              disabled={formAbierto !== 'nuevo'}
+              title={formAbierto !== 'nuevo' ? 'El código no se cambia: editar crea una versión nueva del segmento (D-35).' : undefined}
+            />
           </label>
           <label>
             Nombre (máx. 60)
