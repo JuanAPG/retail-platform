@@ -178,9 +178,9 @@ inventa demanda). Sin precio vigente → 404. Response `201`:
   "inputs": { "currentPrice": 28.5, "newPrice": 25.5, "elasticity": -1.2 },
   "results": [
     { "indicatorKey": "demanda_estimada", "zoneId": "uuid-zona",
-      "baseValue": 100, "simulatedValue": 112.4, "variacionPct": 12.4 },
+      "baseValue": 100, "simulatedValue": 112.4, "variationPct": 12.4 },
     { "indicatorKey": "ingreso_estimado", "zoneId": "uuid-zona",
-      "baseValue": 2850.0, "simulatedValue": 2856.2, "variacionPct": 0.22 }
+      "baseValue": 2850.0, "simulatedValue": 2856.2, "variationPct": 0.22 }
   ],
   "scenarioId": "uuid-escenario"
 }
@@ -242,7 +242,32 @@ de revisar la sesión (igual que el tope del parser JSON).
 
 ## GET /v1/simulation/scenarios
 
-Escenarios guardados. Response `200`: `[{ id, nombre, zonaId, creadoPor, createdAt }]`.
+Escenarios guardados, del más reciente al más antiguo. Lista paginada
+(paginación estándar: `page` y `limit`, enteros ≥ 1; `limit` por defecto 20,
+mayor a 100 se recorta a 100). XML: raíz
+`simulacionEscenariosResponse`, cada escenario como `<item>` dentro de
+`<data>`. Response `200`:
+
+```json
+{
+  "data": [{
+    "id": "uuid-escenario", "name": "Cambio de precio - …", "type": "precio",
+    "zoneId": "uuid-zona", "productId": "uuid", "presentationId": "uuid",
+    "elasticity": -1.2, "elasticityRunId": "uuid-corrida",
+    "currentPrice": 28.5, "newPrice": 25.5, "baseDemand": 100,
+    "presentations": [], "assumptions": ["…"],
+    "createdBy": "uuid-usuario", "createdAt": "2026-10-12T18:00:00.000Z"
+  }],
+  "total": 1, "page": 1, "limit": 20
+}
+```
+
+`type` es `precio`, `presentacion` o `desconocido` (escenario viejo sin
+insumos guardados). Ojo: aquí es `precio`, mientras que la respuesta de
+`POST /v1/simulation/price` trae `"type": "price"`. Los campos que no aplican al tipo salen `null` en JSON
+y se omiten en XML (`productId`, `presentationId`, `elasticity`,
+`currentPrice`, `newPrice`, `baseDemand`); `presentations` solo trae datos
+en un escenario de presentación.
 
 ## GET /v1/simulation/compare?ids=id1,id2
 
