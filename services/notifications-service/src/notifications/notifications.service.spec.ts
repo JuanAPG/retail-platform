@@ -50,7 +50,8 @@ describe('Matriz de eventos', () => {
     expect(esServicioEmisor('auth-service')).toBe(false);
     expect(esServicioEmisor('notifications-service')).toBe(false);
     expect(esServicioEmisor('web')).toBe(false);
-    expect(SERVICIOS_EMISORES).toHaveLength(8);
+    expect(SERVICIOS_EMISORES).toHaveLength(10);
+    expect(esServicioEmisor('recommendations-workflow-service')).toBe(true);
   });
 });
 
@@ -59,7 +60,7 @@ describe('Tabla de permisos por evento', () => {
     for (const [evento, permiso] of Object.entries(permisos())) {
       expect(permiso.fundamento.length).toBeGreaterThan(20);
       expect(Array.isArray(permiso.origenes)).toBe(true);
-      expect(['rol', 'usuario', 'pendiente']).toContain(permiso.destino.tipo);
+      expect(['rol', 'usuario', 'actor', 'pendiente']).toContain(permiso.destino.tipo);
       // Un destino de rol fijo tiene que nombrar un rol real.
       if (permiso.destino.tipo === 'rol') {
         expect(Object.values(ROL)).toContain(permiso.destino.rol);
@@ -118,7 +119,7 @@ describe('Tabla de permisos por evento', () => {
 
   it('precio.observado y observacion.resuelta (PRI-09/D-16, agregados 2026-10-09)', () => {
     expect(permisoDe('precio.observado')).toMatchObject({
-      origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+      origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS, ROL.INVESTIGADOR],
       destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
     });
     expect(permisoDe('observacion.resuelta')).toMatchObject({
@@ -716,5 +717,44 @@ describe('create: copias automáticas (Auditor)', () => {
       emisorDe('producto.propuesto'),
     );
     expect(await servicio.countUnread('aud-1', ROL.AUDITOR)).toEqual({ unread: 0 });
+  });
+});
+
+describe('Preferencias D-46', () => {
+  it('oculta informativas al destinatario y conserva los avisos de aprobación', async () => {
+    const { servicio } = servicioFresco();
+    const gerente = { id: 'gerente-1', rol: ROL.GERENTE_CATEGORIA };
+    const report = await servicio.create({
+      eventType: 'reporte.generado', sourceService: 'documents-service', title: 'Reporte', message: 'Listo.',
+    }, { usuarioId: gerente.id, rol: gerente.rol });
+    const proposal = await servicio.create({
+      eventType: 'producto.propuesto', sourceService: 'catalog-service', title: 'Producto', message: 'Pendiente.',
+    }, emisorDe('producto.propuesto'));
+
+    await expect(servicio.preferencias(gerente.id)).resolves.toEqual({ informational: true });
+    await expect(servicio.countUnread(gerente.id, gerente.rol)).resolves.toEqual({ unread: 2 });
+    await servicio.cambiarPreferencias(gerente.id, false);
+    const inbox = await servicio.findAllForUser(gerente.id, gerente.rol, {});
+    expect(inbox.data.map((row) => row.id)).toEqual([proposal.data.id]);
+    await expect(servicio.countUnread(gerente.id, gerente.rol)).resolves.toEqual({ unread: 1 });
+    await expect(servicio.markAsRead(report.data.id, gerente)).rejects.toMatchObject({ status: 404 });
+    await expect(servicio.findOneForUser(report.data.id, { ...gerente, id: 'gerente-2' })).rejects.toMatchObject({ status: 404 });
+    await expect(servicio.preferencias('gerente-2')).resolves.toEqual({ informational: true });
+    await servicio.cambiarPreferencias(gerente.id, true);
+    await expect(servicio.findOneForUser(report.data.id, gerente)).resolves.toMatchObject({ id: report.data.id });
+  });
+
+  it('valida emisor y destinatario de los eventos nuevos', async () => {
+    const { servicio } = servicioFresco();
+    const assignment = { eventType: 'tarea.asignada', title: 'Asignación', message: 'Tarea nueva.' };
+    const source = emisorDe('tarea.asignada');
+    await expect(servicio.create({ ...assignment, sourceService: 'catalog-service' }, source))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(servicio.create({
+      ...assignment, sourceService: 'recommendations-workflow-service', recipientUserId: 'responsable-1',
+    }, source)).resolves.toMatchObject({ data: { recipientUserId: 'responsable-1' } });
+    await expect(servicio.create({
+      ...assignment, eventType: 'reporte.generado', sourceService: 'documents-service', recipientUserId: 'otro',
+    }, source)).rejects.toMatchObject({ status: 400 });
   });
 });

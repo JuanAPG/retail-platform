@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { correlacionActual } from '../common/correlation/correlacion';
 import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationFilterDto } from './dto/notification-filter.dto';
@@ -17,6 +18,7 @@ import {
   Notification,
   VENTANA_DEDUP_MINUTOS,
   atributosDe,
+  avisoObligatorio,
   esEventoSoportado,
   permisoDe,
 } from './notification.types';
@@ -68,6 +70,9 @@ export class NotificationsService {
       throw new BadRequestException(`El eventType ${dto.eventType} no está soportado.`);
     }
     const permiso = permisoDe(dto.eventType);
+    if (permiso.servicio && permiso.servicio !== dto.sourceService) {
+      throw new ForbiddenException(`El evento ${dto.eventType} pertenece a ${permiso.servicio}.`);
+    }
 
     // 1. ¿Puede este ROL originar este evento? Los servicios emisores
     //    reenvían el Authorization del usuario que originó la acción, así
@@ -85,7 +90,7 @@ export class NotificationsService {
     }
 
     // 2. El DESTINATARIO lo fija la regla del evento, no el emisor.
-    const destinatario = this.resolverDestinatario(dto, permiso);
+    const destinatario = this.resolverDestinatario(dto, permiso, emisor.usuarioId);
 
     const principal = await this.guardar(dto, destinatario, emisor);
 
@@ -130,9 +135,10 @@ export class NotificationsService {
       relatedEntityType: dto.relatedEntityType ?? base.relatedEntityType,
       relatedEntityId: dto.relatedEntityId ?? null,
       priority: dto.priority ?? base.priority,
+      correlationId: correlacionActual() ?? null,
     });
 
-    await this.auditoria.reportar(
+    void this.auditoria.reportar(
       {
         tabla: 'notificaciones',
         registroId: guardada.id,
@@ -162,6 +168,7 @@ export class NotificationsService {
       userId,
       rol,
       incluirArchivadas: filtros.archived === 'true',
+      soloObligatorias: !(await this.repo.aceptaInformativas(userId)),
       dateFrom: filtros.dateFrom,
       dateTo: filtros.dateTo,
       skip: (page - 1) * limit,
@@ -191,7 +198,17 @@ export class NotificationsService {
   }
 
   async countUnread(userId: string, rol?: string): Promise<{ unread: number }> {
-    return { unread: await this.repo.contarNoLeidas(userId, rol) };
+    const soloObligatorias = !(await this.repo.aceptaInformativas(userId));
+    return { unread: await this.repo.contarNoLeidas(userId, rol, soloObligatorias) };
+  }
+
+  async preferencias(userId: string): Promise<{ informational: boolean }> {
+    return { informational: await this.repo.aceptaInformativas(userId) };
+  }
+
+  async cambiarPreferencias(userId: string, informational: boolean): Promise<{ informational: boolean }> {
+    await this.repo.guardarPreferencia(userId, informational);
+    return { informational };
   }
 
   /**
@@ -216,6 +233,9 @@ export class NotificationsService {
       // Mismo mensaje que cuando no existe: no se filtra su existencia.
       throw new NotFoundException('La notificación no existe.');
     }
+    if (!avisoObligatorio(fila.eventType, fila.priority) && !(await this.repo.aceptaInformativas(usuario.id))) {
+      throw new NotFoundException('La notificación no existe.');
+    }
     return fila;
   }
 
@@ -229,6 +249,7 @@ export class NotificationsService {
   private resolverDestinatario(
     dto: CreateNotificationDto,
     permiso: ReturnType<typeof permisoDe>,
+    actorId?: string,
   ): { recipientUserId: string | null; recipientRole: string | null } {
     const { destino } = permiso;
 
@@ -244,6 +265,13 @@ export class NotificationsService {
         );
       }
       return { recipientUserId: null, recipientRole: destino.rol };
+    }
+
+    if (destino.tipo === 'actor') {
+      if (!actorId || dto.recipientRole || (dto.recipientUserId && dto.recipientUserId !== actorId)) {
+        throw new BadRequestException(`${dto.eventType} va al usuario que realizó la operación.`);
+      }
+      return { recipientUserId: actorId, recipientRole: null };
     }
 
     if (destino.tipo === 'usuario') {

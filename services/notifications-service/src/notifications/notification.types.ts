@@ -18,6 +18,8 @@ export const SERVICIOS_EMISORES = [
   'decision-service',
   'documents-service',
   'audit-service',
+  'recommendations-workflow-service',
+  'transactions-ingestion-service',
 ] as const;
 
 export type SourceService = (typeof SERVICIOS_EMISORES)[number];
@@ -39,7 +41,22 @@ export type EventType =
   | 'corrida.terminada'
   | 'escenario.generado'
   | 'recomendacion.generada'
-  | 'recomendacion.resuelta';
+  | 'recomendacion.resuelta'
+  | 'reporte.generado'
+  | 'tarea.asignada'
+  | 'ingesta.confirmada';
+
+export const APROBACION_PENDIENTE: readonly string[] = [
+  'producto.propuesto',
+  'precio.propuesto',
+  'proveedor.solicitud',
+  'precio.observado',
+  'recomendacion.generada',
+];
+
+export function avisoObligatorio(eventType: string, priority: Priority): boolean {
+  return priority !== 'info' || APROBACION_PENDIENTE.includes(eventType);
+}
 
 /** Entrada de lectura por usuario (nunca flag global). */
 export interface ReadMark {
@@ -65,6 +82,7 @@ export interface Notification {
   relatedEntityType: string | null;
   relatedEntityId: string | null;
   priority: Priority;
+  correlationId?: string | null;
   readBy: ReadMarkPublic[];
   archived: boolean;
   createdAt: string;
@@ -82,6 +100,15 @@ interface AtributosEvento {
  * este genérico. Tabla congelada con el equipo en el contrato.
  */
 const MATRIZ: Record<EventType, AtributosEvento> = {
+  'reporte.generado': {
+    priority: 'info', title: 'Reporte generado', relatedEntityType: 'reporte',
+  },
+  'tarea.asignada': {
+    priority: 'info', title: 'Tarea asignada', relatedEntityType: 'tarea',
+  },
+  'ingesta.confirmada': {
+    priority: 'info', title: 'Importación de ventas confirmada', relatedEntityType: 'importacion',
+  },
   'producto.propuesto': {
     priority: 'info',
     title: 'Nueva propuesta de producto',
@@ -145,7 +172,7 @@ const MATRIZ: Record<EventType, AtributosEvento> = {
 };
 
 export function esEventoSoportado(eventType: string): eventType is EventType {
-  return eventType in MATRIZ;
+  return Object.prototype.hasOwnProperty.call(MATRIZ, eventType);
 }
 
 // =====================================================================
@@ -167,9 +194,11 @@ export function esEventoSoportado(eventType: string): eventType is EventType {
 export type Destino =
   | { tipo: 'rol'; rol: string }
   | { tipo: 'usuario' }
+  | { tipo: 'actor' }
   | { tipo: 'pendiente' };
 
 export interface PermisoEvento {
+  servicio?: SourceService;
   /** Roles que pueden ORIGINAR el evento. Fuera de la lista → 403. */
   origenes: readonly string[];
   destino: Destino;
@@ -200,6 +229,24 @@ export interface PermisoEvento {
  * cualquiera pueda inventar eventos.
  */
 const PERMISOS: Record<EventType, PermisoEvento> = {
+  'reporte.generado': {
+    servicio: 'documents-service',
+    origenes: [ROL.GERENTE_CATEGORIA],
+    destino: { tipo: 'actor' },
+    fundamento: 'El Gerente que genera el reporte recibe el aviso.',
+  },
+  'tarea.asignada': {
+    servicio: 'recommendations-workflow-service',
+    origenes: [ROL.GERENTE_CATEGORIA],
+    destino: { tipo: 'usuario' },
+    fundamento: 'D-41: el Gerente asigna y el responsable recibe el aviso.',
+  },
+  'ingesta.confirmada': {
+    servicio: 'transactions-ingestion-service',
+    origenes: [ROL.ANALISTA],
+    destino: { tipo: 'actor' },
+    fundamento: 'D-33: la confirmación genera un aviso para el Analista del lote.',
+  },
   // catalog: POST /v1/products/proposals -> @Roles(PROVEEDOR);
   // lo resuelve APRUEBAN_PRODUCTOS = [Administrador, Gerente de categoría].
   'producto.propuesto': {
@@ -244,7 +291,7 @@ const PERMISOS: Record<EventType, PermisoEvento> = {
   // porque PriceObservationsService no emitía ninguno de los dos (no
   // inyectaba NotificationsReporter).
   'precio.observado': {
-    origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS],
+    origenes: [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS, ROL.INVESTIGADOR],
     destino: { tipo: 'rol', rol: ROL.RESPONSABLE_PRECIOS },
     fundamento:
       'pricing POST price-observations es de Analista y Responsable de precios (CAPTURAN_OBSERVACIONES). Destino: Responsable de precios, que es quien la resuelve (D1 APRUEBAN_PRECIOS).',
