@@ -1,0 +1,40 @@
+{
+  "asOf": "2026-11-25",
+  "records": [
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-001",
+      "date": "2023-11-25"
+    },
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-002",
+      "date": "2023-11-26"
+    },
+    {
+      "dataset": "transacciones",
+      "recordId": "T-SIM-003",
+      "date": "2024-02-29"
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "recordId": "C-SIM-001",
+      "date": "2025-11-24"
+    },
+    {
+      "dataset": "capturas_disponibilidad",
+      "recordId": "C-SIM-002",
+      "date": "2025-11-26"
+    },
+    {
+      "dataset": "notificaciones",
+      "recordId": "N-SIM-001",
+      "date": "2026-08-27"
+    },
+    {
+      "dataset": "bitacora",
+      "recordId": "A-SIM-001",
+      "date": "2019-01-01"
+    }
+  ]
+}

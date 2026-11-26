@@ -17,6 +17,7 @@ import { ActualizarReporteDto, FormatoExportacion, GenerarReporteEjecutivoDto, L
 import { ExcelService } from './excel.service';
 import { IndicatorsService } from './indicators.service';
 import { PdfService } from './pdf.service';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 import { ESTADO_REPORTE, Indicador, ParametrosReporte, Reporte, ReporteDocument } from './schemas/report.schema';
 
 export const TIPO_EJECUTIVO = 'ejecutivo';
@@ -67,8 +68,8 @@ export class ReportsService {
   ) {}
 
   /** Con Mongo caído se responde 503 al instante en vez de dejar la petición colgada. */
-  private exigirMongo() {
-    if (this.conexion.readyState !== 1) {
+  private async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.conexion))) {
       throw new ServiceUnavailableException('El historial de reportes (MongoDB) no está disponible. Intenta más tarde.');
     }
   }
@@ -79,7 +80,7 @@ export class ReportsService {
     authorization: string | undefined,
     ip?: string,
   ): Promise<ReporteDto> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const parametros: ParametrosReporte = {
       dateFrom: dto.dateFrom,
       dateTo: dto.dateTo,
@@ -113,7 +114,7 @@ export class ReportsService {
   }
 
   async listar(filtros: ListarReportesDto, usuario: SesionUsuario): Promise<Pagina<ReporteDto>> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const page = filtros.page ?? PAGINA_DEFAULT;
     const limit = Math.min(filtros.limit ?? LIMITE_DEFAULT, LIMITE_MAXIMO);
 
@@ -153,7 +154,7 @@ export class ReportsService {
 
   /** Agregación: reportes por usuario y mes (índice `usuarioId + creadoEn`). */
   async estadisticasPorUsuarioMes(usuario: SesionUsuario): Promise<EstadisticaMensual[]> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const filas = await this.modelo.aggregate<{ _id: { usuarioId: string; mes: string }; reportes: number }>([
       ...(usuario.rol === ROL.PROVEEDOR ? [{ $match: { usuarioId: usuario.id } }] : []),
       {
@@ -212,7 +213,7 @@ export class ReportsService {
    * es 404, no 403: no se confirma que exista (DOC-04).
    */
   private async buscar(id: string, usuario: SesionUsuario): Promise<ReporteDocument> {
-    this.exigirMongo();
+    await this.exigirMongo();
     if (!isValidObjectId(id)) throw new BadRequestException('El id del reporte no es válido.');
     const doc = await this.modelo.findById(id);
     if (!doc || (usuario.rol === ROL.PROVEEDOR && doc.usuarioId !== usuario.id)) {

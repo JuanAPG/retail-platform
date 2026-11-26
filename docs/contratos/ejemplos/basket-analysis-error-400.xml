@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="basket-analysis/v1"><statusCode>400</statusCode><code>VALIDATION_ERROR</code><message>segmentId es obligatorio: el grupo es zona + segmento (D-37).</message><path>/v1/typical-basket</path><timestamp>2026-11-25T18:21:07.402000+00:00</timestamp></error>
