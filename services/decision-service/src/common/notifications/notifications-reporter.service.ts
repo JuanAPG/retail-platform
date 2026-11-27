@@ -1,3 +1,4 @@
+import { conCorrelacion } from '../correlation/correlacion';
 import { Injectable, Logger } from '@nestjs/common';
 
 /** Nombre de este microservicio para el campo `sourceService` (lista cerrada del receptor). */
@@ -63,10 +64,10 @@ export class NotificationsReporter {
         const { token } = ctx;
         const respuesta = await fetch(`${base}/v1/notifications`, {
           method: 'POST',
-          headers: {
+          headers: conCorrelacion({
             'Content-Type': 'application/json',
             ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-          },
+          }),
           body: JSON.stringify({
             eventType: aviso.evento,
             sourceService: SERVICIO,

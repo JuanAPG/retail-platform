@@ -1,3 +1,4 @@
+import { conCorrelacion } from '../correlation/correlacion';
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 
 /** Una regla de asociación como la entrega algorithms-core (`GET /v1/association/runs/:id`). */
@@ -70,10 +71,10 @@ export class AlgorithmsClient {
     const limite = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const respuesta = await fetch(`${base}${ruta}`, {
-        headers: {
+        headers: conCorrelacion({
           Accept: 'application/json',
           ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-        },
+        }),
         signal: controller.signal,
       });
       if (!respuesta.ok) {

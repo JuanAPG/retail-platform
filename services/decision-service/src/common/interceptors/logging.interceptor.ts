@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } fr
 import { randomUUID } from 'crypto';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import { CABECERA_CORRELACION } from '../correlation/correlacion';
 
 /**
  * Interceptor global de logging — NO CAMBIAR su formato.
@@ -48,7 +49,7 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   private log(
-    request: { method: string; url: string; user?: { id?: string } },
+    request: { method: string; url: string; headers: Record<string, unknown>; user?: { id?: string } },
     requestId: string,
     started: number,
     statusCode: number,
@@ -59,6 +60,7 @@ export class LoggingInterceptor implements NestInterceptor {
         level: 'log',
         service: process.env.SERVICE_NAME ?? 'unknown-service',
         requestId,
+        correlationId: request.headers[CABECERA_CORRELACION] ?? null,
         method: request.method,
         path: request.url,
         statusCode,
