@@ -1,0 +1,17 @@
+{
+	# Los clientes que se conectan por IP pueden omitir SNI.
+	default_sni {$STAGING_PUBLIC_IP:34.51.89.203}
+}
+
+import routes.caddy
+
+https://{$STAGING_PUBLIC_IP:34.51.89.203} {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	import staging_routes
+}

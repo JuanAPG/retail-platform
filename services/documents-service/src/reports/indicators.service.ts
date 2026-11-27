@@ -24,6 +24,33 @@ class ServicioNoDisponible extends Error {}
  */
 class SinDatos extends Error {}
 
+/** `ScenarioSummary` de decision-service (solo lo que se usa). */
+interface EscenarioResumen {
+  id: string;
+  name: string;
+  type: 'precio' | 'presentacion' | 'desconocido';
+  zoneId: string | null;
+  createdAt: string;
+}
+
+/** Un indicador de un escenario en `ScenarioComparison.scenarios[].results[]`. */
+interface ResultadoCompare {
+  indicatorKey: string;
+  zoneId: string | null;
+  baseValue: number;
+  simulatedValue: number;
+  variationPct: number | null;
+}
+
+/** decision-service compara de 2 a 20 escenarios por llamada. */
+const MAX_COMPARAR = 20;
+
+/** Fecha de creación (UTC) dentro del periodo del reporte, ambos extremos incluidos. */
+function enPeriodo(createdAt: string, p: { dateFrom: string; dateTo: string }): boolean {
+  const dia = String(createdAt).slice(0, 10);
+  return dia >= p.dateFrom && dia <= p.dateTo;
+}
+
 const redondear = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const promedio = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -135,11 +162,11 @@ export class IndicatorsService {
           principales: patrones.slice(0, 5).map((s) => ({ origen: s.originProductName, destino: s.targetProductName, tipo: s.type })),
         };
       }),
-      def('elasticidad_promedio', 'Elasticidad promedio', 'algorithms-core', async () => {
+      def('elasticidad_promedio', 'Elasticidad promedio (valores vigentes hoy, no del periodo)', 'algorithms-core', async () => {
         const filas = await this.todos<{ value: number }>('algorithms-core', u.algorithms, '/v1/elasticity/current', authorization, p.zoneId ? { zoneId: p.zoneId } : {});
         return filas.length ? redondear(promedio(filas.map((f) => Number(f.value))), 3) : null;
       }),
-      def('productos_mas_sensibles', 'Productos más sensibles al precio', 'algorithms-core', async () => {
+      def('productos_mas_sensibles', 'Productos más sensibles al precio (elasticidad vigente)', 'algorithms-core', async () => {
         const filas = await this.todos<Record<string, any>>('algorithms-core', u.algorithms, '/v1/elasticity/current', authorization, p.zoneId ? { zoneId: p.zoneId } : {});
         return filas
           .sort((a, b) => Math.abs(Number(b.value)) - Math.abs(Number(a.value)))
@@ -177,7 +204,7 @@ export class IndicatorsService {
       }),
 
       // --- decision-service ---
-      def('accesibilidad_por_zona', 'Accesibilidad por zona (última corrida)', 'decision-service', async () => {
+      def('accesibilidad_por_zona', 'Accesibilidad por zona (última corrida calculada de cada zona, con su fecha)', 'decision-service', async () => {
         // Se lee el historial: `/accessibility/index` CALCULA y guarda una corrida nueva en cada llamada.
         const zonas = p.zoneId
           ? [{ id: p.zoneId, nombre: null as string | null }]
@@ -198,19 +225,41 @@ export class IndicatorsService {
         }
         return filas;
       }),
-      def('escenarios_creados', 'Escenarios creados', 'decision-service', async () => {
-        const esc = await get<Array<{ createdAt: string }>>('decision-service', u.decision, '/v1/simulation/scenarios');
-        return esc.filter((e) => e.createdAt.slice(0, 10) >= p.dateFrom && e.createdAt.slice(0, 10) <= p.dateTo).length;
+      def('escenarios_creados', 'Escenarios creados en el periodo', 'decision-service', async () => {
+        // GET /simulation/scenarios es paginado ({ data, total, page, limit }): se recorren todas las páginas.
+        const esc = await this.todasLasPaginas<EscenarioResumen>('decision-service', u.decision, '/v1/simulation/scenarios', authorization);
+        return esc.filter((e) => enPeriodo(e.createdAt, p)).length;
       }),
-      def('impacto_estimado', 'Impacto estimado de los escenarios (ingreso estimado)', 'decision-service', async () => {
-        const esc = await get<Array<{ id: string; nombre: string }>>('decision-service', u.decision, '/v1/simulation/scenarios');
-        if (esc.length < 2) return [];
-        const ids = esc.slice(0, 5).map((e) => e.id);
-        const cmp = await get<{ scenarioNames?: Record<string, string>; rows: Array<{ indicatorKey: string; valuesByScenario: Record<string, number> }> }>(
-          'decision-service', u.decision, '/v1/simulation/compare', { ids: ids.join(',') },
-        );
-        const fila = cmp.rows.find((r) => r.indicatorKey === 'ingreso_estimado');
-        return fila ? ids.map((id) => ({ escenario: cmp.scenarioNames?.[id] ?? id, ingresoEstimado: fila.valuesByScenario[id] ?? null })) : [];
+      def('impacto_estimado', 'Impacto estimado de los escenarios de precio del periodo (ingreso estimado)', 'decision-service', async () => {
+        const esc = await this.todasLasPaginas<EscenarioResumen>('decision-service', u.decision, '/v1/simulation/scenarios', authorization);
+        const dePrecio = esc.filter((e) => e.type === 'precio' && enPeriodo(e.createdAt, p));
+        if (dePrecio.length === 0) return [];
+        // /simulation/compare pide 2 a 20 ids. Con un solo escenario de precio se acompaña de otro
+        // escenario cualquiera solo para poder leer sus resultados; ese acompañante no se reporta.
+        const ids = dePrecio.map((e) => e.id);
+        const acompanante = esc.find((e) => !ids.includes(e.id))?.id;
+        const resultados = new Map<string, ResultadoCompare[]>();
+        for (let i = 0; i < ids.length; i += MAX_COMPARAR) {
+          const lote = ids.slice(i, i + MAX_COMPARAR);
+          if (lote.length === 1 && i > 0) lote.unshift(ids[0]);
+          else if (lote.length === 1 && acompanante) lote.push(acompanante);
+          if (lote.length < 2) continue; // un único escenario en todo decision-service: no hay con qué comparar
+          const cmp = await get<{ scenarios: Array<{ scenarioId: string; results: ResultadoCompare[] }> }>(
+            'decision-service', u.decision, '/v1/simulation/compare', { ids: lote.join(',') },
+          );
+          for (const s of cmp.scenarios ?? []) resultados.set(s.scenarioId, s.results ?? []);
+        }
+        return dePrecio.map((e) => {
+          const r = resultados.get(e.id)?.find((x) => x.indicatorKey === 'ingreso_estimado');
+          return {
+            escenario: e.name,
+            zonaId: r?.zoneId ?? e.zoneId ?? null,
+            ingresoBase: r ? r.baseValue : null,
+            // simulatedValue del indicador ingreso_estimado; sin él queda null (nunca 0, D-20).
+            ingresoEstimado: r ? r.simulatedValue : null,
+            variacionPct: r ? r.variationPct : null,
+          };
+        });
       }),
     ]);
   }
@@ -269,6 +318,20 @@ export class IndicatorsService {
   }
 
   /** Recorre las páginas de un listado paginado (límite 100) hasta 5 páginas. */
+  /**
+   * Todas las páginas de una lista paginada, sin el tope de 5 de `todos`: un conteo no puede
+   * quedarse corto. Tope de seguridad de 200 páginas; si se llega, el indicador sale no disponible.
+   */
+  private async todasLasPaginas<T>(servicio: Servicio, base: string, ruta: string, authorization: string | undefined): Promise<T[]> {
+    const filas: T[] = [];
+    for (let page = 1; page <= 200; page++) {
+      const r = await this.pedir<{ data: T[]; total: number }>(servicio, `${base}${ruta}`, { page, limit: 100 }, authorization);
+      filas.push(...(r.data ?? []));
+      if (filas.length >= Number(r.total ?? 0) || (r.data ?? []).length === 0) return filas;
+    }
+    throw new Error(`${ruta} tiene más de 20000 registros: el conteo no sería exacto.`);
+  }
+
   private async todos<T>(servicio: Servicio, base: string, ruta: string, authorization: string | undefined, query: Record<string, unknown> = {}): Promise<T[]> {
     const filas: T[] = [];
     for (let page = 1; page <= 5; page++) {

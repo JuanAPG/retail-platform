@@ -1,97 +1,87 @@
-# Retail Decision — App Desktop (Analistas)
+# Retail Decision — App de escritorio
 
-Electron + React + TypeScript + Vite. Pide **siempre XML** a los microservicios
-(`Accept: application/xml`); no es una copia del sistema web. Multiplataforma
-(Windows/macOS/Linux) vía `electron-builder`.
+Electron + React + TypeScript + Vite. **XML exclusivo**: pide siempre `Accept: application/xml` y
+comprueba cada respuesta contra el contrato. No es una copia del sistema web. Responsable: Fernando.
 
-> Estado al 21-oct-2026 (después del Parcial 2). Responsable: Fernando.
+## Quién entra (D-31)
 
-## Cómo correrlo
+Solo **Analista comercial**, **Responsable de precios** y **Planeador**. Cualquier otro perfil
+(Administrador, Gerente de categoría, Auditor, Proveedor, Investigador de mercado) inicia sesión en
+auth-service, la app cierra esa sesión en el acto y el login muestra **"Acceso no permitido"** sin
+redirigir (no hay bucle). Todo vive en `src/config/menu.ts`; los servicios vuelven a revisar el
+permiso y responden 403.
+
+| Sección | Servicio(s) | Analista | Resp. precios | Planeador |
+|---|---|---|---|---|
+| Comparar zonas | catalog-service | consulta | consulta | consulta |
+| Reglas de asociación (Apriori y FP-Growth) | algorithms-core · catalog | **ejecuta** y consulta | consulta | consulta |
+| Elasticidad (vigente, comparación por zona o segmento, cálculo) | algorithms-core · catalog | consulta | **calcula** y consulta | consulta |
+| Segmentos de ingreso (versiones, D-35) | income-segmentation-service | **crea, versiona, borra** | consulta | consulta |
+| Simulación (precio/descuento y empaque) | decision-service · catalog | escenarios guardados | escenarios guardados | **simula** |
+| Importar ventas | transactions-ingestion-service | **importa** | – | – |
+| Reportes ejecutivos (ver y descargar PDF/Excel/CSV) | documents-service | consulta | consulta | consulta |
+
+Cada sección muestra en el encabezado el servicio que la alimenta. Todas las tablas se exportan a
+CSV y XML (`BotonesExportar`); los reportes se descargan tal cual los arma documents-service.
+
+## XML: qué se envía, qué se recibe y qué se valida
+
+| Servicio | Recibe del escritorio | Responde |
+|---|---|---|
+| transactions-ingestion-service | **XML** (`objectImport`) y el archivo de ventas adjunto (CSV/JSON/XML `salesFile`) | XML (`ingestion/v1`) |
+| auth, catalog, algorithms-core, income-segmentation, decision, documents | **JSON** (no leen XML de entrada) | XML (namespace de cada uno) |
+
+- **En ejecución** (`src/api/xml.ts`, `src/api/httpClient.ts`): cada respuesta debe ser XML bien
+  formado, sin DOCTYPE, con la **raíz** y el **namespace** que declara el XSD para esa ruta; un éxito
+  en JSON se rechaza. Los errores se leen en XML (`<error>`, con sus campos obligatorios) o en JSON.
+  El archivo de ventas XML se revisa antes de subirlo (raíz `salesFile`, namespace, filas).
+- **En pruebas** (`test/xsd.test.ts`): validación **completa** contra los XSD de `docs/contratos/` con
+  libxml2 (`xmllint-wasm`): las respuestas que la app sabe leer, los ejemplos del contrato de ingesta
+  y el XML que la app arma. No se carga el validador en la ventana (pesa ~2 MB de WebAssembly).
+
+## Importar ventas
+
+`transactions-ingestion-service` (3111) sigue su contrato oficial,
+`docs/contratos/transactions-ingestion-service.md` y `.xsd`. El servicio todavía no está en
+`services/`, así que se probó contra el contrato y sus ejemplos (`docs/contratos/ejemplos/`), no
+contra el servicio. La pantalla separa:
+
+1. **Archivo de ventas** (los datos): se adjunta en la parte `file` de un multipart → vista previa.
+2. **Mensaje de control**: `objectImport` en XML (importar un objeto del bucket), **confirmar**
+   (idempotente: repetirlo no duplica, D-34) y **descartar** (antes de confirmar).
+
+La vista previa muestra los conteos y los errores **por fila** (rechazadas y en conflicto).
+
+## Ambientes y URLs
+
+| Modo | Archivo | URLs |
+|---|---|---|
+| `npm run dev` / `electron:dev` | `.env.development` | `http://localhost:31xx/` |
+| `npm run build:staging` | `.env.staging` | HTTPS, marcadores `*.staging.PENDIENTE-GCP.invalid` |
+| `npm run build` | `.env.production` | HTTPS, marcadores `*.PENDIENTE-GCP.invalid` |
+
+Juan Ángel reemplaza los marcadores con las URLs de GCP. El build de staging o producción **se
+detiene** si una URL no es `https://`, apunta a un host local o trae puerto, y si el JS generado
+contiene un host local con puerto. Variables: ver `.env.example`.
+
+## Comandos
 
 ```bash
-cp .env.example .env
 npm install
-npm run electron:dev
+npm run electron:dev     # desarrollo con los servicios del docker-compose
+npm run typecheck        # tsc del código React, las pruebas y Electron
+npm test                 # Vitest: roles, parsers, cliente HTTP, URLs y XSD
+npm run build            # instalador (NSIS en Windows)
+npm run build:unpacked   # carpeta release/win-unpacked sin instalador
 ```
 
-Esto levanta Vite en `localhost:5173` y abre la ventana de Electron apuntando a ese dev
-server, con hot reload. Necesita los microservicios arriba
-(`docker compose -f infra/docker-compose.yml up -d`).
+**Windows:** electron-builder descarga `winCodeSign` y necesita crear enlaces simbólicos. Sin el
+**Modo de desarrollador** de Windows (o una terminal de administrador) falla con "Cannot create
+symbolic link". Vite y `tsc` no se ven afectados.
 
-Variables (`.env`):
+## Pendiente
 
-| Variable | Servicio | Default si no se define |
-|---|---|---|
-| `VITE_API_BASE_URL` | `auth-service` | `http://localhost:3101/` |
-| `VITE_CATALOG_BASE_URL` | `catalog-service` | mismo host, puerto 3102 |
-| `VITE_ALGORITHMS_BASE_URL` | `algorithms-core` | mismo host, puerto 3105 |
-
-## Cómo empaquetar (build final)
-
-```bash
-npm run build
-```
-
-Genera el instalador del sistema operativo donde corras el comando (`.dmg` en macOS,
-`.exe`/NSIS en Windows, `.AppImage` en Linux) dentro de `release/`. Para generar los 3
-desde una sola máquina se necesita CI multiplataforma; para la demo basta compilar en el
-sistema de quien presenta.
-
-## Qué ya funciona
-
-- **Login** contra `auth-service`. Las respuestas llegan en XML y se convierten con
-  `fast-xml-parser`; los **cuerpos que se envían van en JSON**, porque los servicios
-  solo leen JSON de entrada. Si una respuesta llega en JSON (por ejemplo, un error), el
-  cliente la lee igual según su `Content-Type`.
-- **Sesión segura:** el token se cifra en el proceso `main` de Electron con
-  `safeStorage` (Keychain/DPAPI/libsecret) y React solo lo alcanza mediante
-  `window.electronAPI` (`contextBridge`).
-- **Mantener sesión:** al reabrir la app se recupera la sesión guardada, se revisa que el
-  rol del token coincida, se renueva si está por vencer y se confirma con
-  `POST /v1/auth/validate`. Renovación automática un minuto antes de que venza el access
-  token y reintento único ante un `401`.
-- **Logout** que revoca la sesión en `auth-service` y borra el token cifrado.
-- **Menú por rol:** `src/config/menu.ts` es el único lugar que define secciones y roles;
-  el menú, las rutas (`RoleRoute`) y la pantalla de inicio leen de ahí. Entran los 6
-  perfiles internos; el Proveedor no.
-- **Pantallas reales:**
-
-  | Sección | Servicio | Qué hace |
-  |---|---|---|
-  | Comparar zonas | `catalog-service` | Lista zonas con búsqueda y filtros; compara zonas lado a lado (`GET /v1/zones/compare`). Exporta CSV y XML. |
-  | Segmentos de ingreso | `catalog-service` | Tabla con búsqueda; alta, edición y baja de segmentos. Exporta CSV y XML. |
-  | Reglas de asociación | `algorithms-core` | Ejecuta **Apriori**, lista las corridas guardadas y abre el detalle con sus reglas; búsqueda por producto. |
-
-## Qué falta
-
-Cobertura de los RF de escritorio (`docs/requerimientos.md` §1.8):
-
-| RF | Qué pide | Estado |
-|---|---|---|
-| RF-41 | Autenticación de analistas | Hecho. Qué roles usan la app: **PENDIENTE P-04**. |
-| RF-42 | Importar ventas | Pantalla pendiente (sección `/ventas` sin implementar). Por **D-33** la importación por archivo vive en `transactions-ingestion-service` (3111), no en core-process: la pantalla se hace contra ese servicio. |
-| RF-43 | Configurar segmentos | Hecho contra `catalog-service`. Por **D-35** los segmentos pasan a `income-segmentation-service` (3112, con versiones): hay que cambiar `segmentsApi.ts` cuando ese servicio exista. |
-| RF-44 | Ejecutar reglas de asociación | Hecho solo con Apriori; falta FP-Growth (`POST /v1/association/fpgrowth/run`, D2) y exportar las reglas. |
-| RF-45 | Analizar elasticidad | Pantalla pendiente. El Analista solo tiene Lectura en Elasticidad: **PENDIENTE P-04**. |
-| RF-46 | Comparar zonas | Hecho. |
-| RF-47 | Simular empaque y descuentos | Sin sección en el menú. La simulación es Total solo del Planeador: **PENDIENTE P-04**. |
-| RF-48 | Exportar tablas y reportes | Parcial: CSV y XML locales en zonas y segmentos; reportes de `documents-service`, no. |
-
-Requisitos del profesor que todavía no se cumplen (`docs/requerimientos.md` §3):
-
-- **Validación con XSD:** los XSD ya existen en `docs/contratos/*.xsd`, pero la app solo
-  parsea el XML y no lo valida contra ellos.
-- **≥ 4 microservicios:** hoy consume 3 (`auth-service`, `catalog-service`,
-  `algorithms-core`). El cuarto llega con la pantalla de importar ventas o con la de
-  elasticidad o simulación.
-
-Diferencia conocida con la Matriz (§3): `puedeEscribir()` en `src/config/menu.ts` deja
-ejecutar Apriori y editar segmentos al **Administrador** y al Analista, pero la Matriz le da
-al Administrador solo **Lectura** en ambos módulos. Los servicios responden `403`, pero los
-botones no deberían mostrarse.
-
-## Por qué XML y no "la web pero de escritorio"
-
-Esta app no es una copia del sistema web: el enfoque es analista (ejecutar algoritmos,
-comparar resultados, exportar), no captura de datos del día a día. Por eso el menú y las
-pantallas son distintos a los del sistema web, aunque compartan microservicios.
+- Conciliación de un lote en conflicto (ingesta): el contrato no define cómo se resuelve.
+- promotion-service (3115, D-39): no existe; el escritorio no lo llama.
+- Escritura XML hacia auth, catalog, algorithms-core, income-segmentation, decision y documents:
+  depende de que cada dueño acepte cuerpos XML (hoy solo JSON).

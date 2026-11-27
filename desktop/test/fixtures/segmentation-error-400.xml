@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="segmentation/v1">
+  <statusCode>400</statusCode>
+  <message>El rango se encima con el segmento ING_2.</message>
+  <code>VALIDATION_ERROR</code>
+  <details>
+    <item>incomeRangeMin se encima con ING_2</item>
+  </details>
+  <path>/v1/segments/1</path>
+  <timestamp>2026-11-25T18:00:00.000Z</timestamp>
+</error>

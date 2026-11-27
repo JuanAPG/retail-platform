@@ -1,11 +1,24 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { getRun, listRuns, runApriori } from '../api/algorithmsApi';
+import { Algoritmo, getRun, listRuns, runAsociacion } from '../api/algorithmsApi';
 import { Rule, Run, RunDetail } from '../api/algorithmsParsers';
 import { listZones } from '../api/catalogApi';
 import { Zone } from '../api/catalogParsers';
 import { extractErrorMessage } from '../api/httpClient';
-import { puedeEscribir } from '../config/menu';
+import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
+import BotonesExportar from '../components/BotonesExportar';
+import { Columna } from '../utils/exportar';
+
+const NOMBRE_ALGORITMO: Record<string, string> = { apriori: 'Apriori', fpgrowth: 'FP-Growth' };
+
+const COLUMNAS_REGLAS: Columna<Rule>[] = [
+  { clave: 'antecedente', titulo: 'Si compra', valor: (r) => r.antecedente.join(', ') },
+  { clave: 'consecuente', titulo: 'También compra', valor: (r) => r.consecuente.join(', ') },
+  { clave: 'soporte', titulo: 'Soporte', valor: (r) => r.support },
+  { clave: 'confianza', titulo: 'Confianza', valor: (r) => r.confidence },
+  { clave: 'lift', titulo: 'Lift', valor: (r) => r.lift },
+  { clave: 'canastas', titulo: 'Canastas', valor: (r) => r.transactionCount },
+];
 
 const vacio = '—';
 
@@ -20,8 +33,9 @@ const fechaHora = (iso: string) => {
 
 export default function Asociacion() {
   const { usuario } = useAuth();
-  const puedeEjecutar = puedeEscribir(usuario?.rol ?? null);
+  const puedeEjecutar = puede(usuario?.rol, 'ejecutarAsociacion');
 
+  const [algoritmo, setAlgoritmo] = useState<Algoritmo>('apriori');
   const [minSupport, setMinSupport] = useState('0.2');
   const [minConfidence, setMinConfidence] = useState('0.5');
   const [maxItemsetSize, setMaxItemsetSize] = useState('3');
@@ -77,10 +91,11 @@ export default function Asociacion() {
   function validar(): string | null {
     const s = Number(minSupport);
     const c = Number(minConfidence);
-    if (minSupport.trim() === '' || Number.isNaN(s) || s < 0.01 || s > 1)
-      return 'El soporte mínimo debe ser un número entre 0.01 y 1.';
-    if (minConfidence.trim() === '' || Number.isNaN(c) || c < 0 || c > 1)
-      return 'La confianza mínima debe ser un número entre 0 y 1.';
+    // D-17: soporte y confianza en (0, 1].
+    if (minSupport.trim() === '' || Number.isNaN(s) || s <= 0 || s > 1)
+      return 'El soporte mínimo debe ser un número mayor a 0 y hasta 1.';
+    if (minConfidence.trim() === '' || Number.isNaN(c) || c <= 0 || c > 1)
+      return 'La confianza mínima debe ser un número mayor a 0 y hasta 1.';
     if (dateFrom && dateTo && dateFrom > dateTo) return 'La fecha inicial no puede ser posterior a la final.';
     return null;
   }
@@ -96,7 +111,7 @@ export default function Asociacion() {
     setErrorForm(null);
     setEjecutando(true);
     try {
-      const reglas = await runApriori({
+      const reglas = await runAsociacion(algoritmo, {
         minSupport: Number(minSupport),
         minConfidence: Number(minConfidence),
         maxItemsetSize: Number(maxItemsetSize),
@@ -135,17 +150,25 @@ export default function Asociacion() {
     <div>
       <h1>Reglas de asociación</h1>
       <p className="muted">
-        Descubre qué productos se compran juntos (algoritmo Apriori). Cada ejecución queda guardada como una corrida.
+        Descubre qué productos se compran juntos con Apriori o FP-Growth (D2: con los mismos datos y umbrales dan las
+        mismas reglas). Cada ejecución queda guardada como una corrida.
       </p>
 
       {puedeEjecutar ? (
         <form className="panel form-grid" onSubmit={ejecutar}>
           <label>
-            Soporte mínimo (0.01 – 1)
+            Algoritmo
+            <select value={algoritmo} onChange={(e) => setAlgoritmo(e.target.value as Algoritmo)}>
+              <option value="apriori">Apriori</option>
+              <option value="fpgrowth">FP-Growth</option>
+            </select>
+          </label>
+          <label>
+            Soporte mínimo (mayor a 0, hasta 1)
             <input value={minSupport} onChange={(e) => setMinSupport(e.target.value)} inputMode="decimal" />
           </label>
           <label>
-            Confianza mínima (0 – 1)
+            Confianza mínima (mayor a 0, hasta 1)
             <input value={minConfidence} onChange={(e) => setMinConfidence(e.target.value)} inputMode="decimal" />
           </label>
           <label>
@@ -177,14 +200,13 @@ export default function Asociacion() {
           </label>
           <div className="form-actions">
             <button type="submit" disabled={ejecutando}>
-              {ejecutando ? 'Ejecutando...' : 'Ejecutar Apriori'}
+              {ejecutando ? 'Ejecutando...' : `Ejecutar ${NOMBRE_ALGORITMO[algoritmo]}`}
             </button>
           </div>
         </form>
       ) : (
         <p className="alert-info">
-          Tu rol ({usuario?.rol}) puede consultar las corridas, pero solo Administrador y Analista comercial pueden
-          ejecutarlas.
+          Tu rol ({usuario?.rol}) puede consultar las corridas; solo el Analista comercial las ejecuta (D-31).
         </p>
       )}
 
@@ -195,7 +217,9 @@ export default function Asociacion() {
 
       {detalle && (
         <section>
-          <h2>Corrida del {fechaHora(detalle.date)}</h2>
+          <h2>
+            Corrida {NOMBRE_ALGORITMO[detalle.algoritmo] ?? detalle.algoritmo} del {fechaHora(detalle.date)}
+          </h2>
           {detalle.status === 'fallida' && (
             <p className="alert-error">La corrida falló: {detalle.errorMessage ?? 'sin detalle'}</p>
           )}
@@ -229,6 +253,13 @@ export default function Asociacion() {
           )}
 
           <div className="toolbar">
+            <BotonesExportar
+              nombreArchivo={`reglas-${detalle.algoritmo}`}
+              raizXml="reglasAsociacion"
+              filaXml="regla"
+              columnas={COLUMNAS_REGLAS}
+              filas={reglasVisibles}
+            />
             <input
               type="search"
               placeholder="Buscar por producto"
@@ -294,6 +325,7 @@ export default function Asociacion() {
             <thead>
               <tr>
                 <th>Fecha</th>
+                <th>Algoritmo</th>
                 <th>Estado</th>
                 <th>Soporte / Confianza</th>
                 <th>Canastas</th>
@@ -304,7 +336,7 @@ export default function Asociacion() {
             <tbody>
               {corridas.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={7} className="muted">
                     Todavía no hay corridas.
                   </td>
                 </tr>
@@ -312,6 +344,7 @@ export default function Asociacion() {
               {corridas.map((c) => (
                 <tr key={c.id}>
                   <td>{fechaHora(c.date)}</td>
+                  <td>{NOMBRE_ALGORITMO[c.algoritmo] ?? c.algoritmo}</td>
                   <td>{c.status === 'completada' ? 'Completada' : 'Fallida'}</td>
                   <td>
                     {c.parameters.soporte_minimo ?? vacio} / {c.parameters.confianza_minima ?? vacio}

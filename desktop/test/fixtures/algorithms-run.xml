@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<runResponse xmlns="algorithms/v1">
+  <id>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</id>
+  <type>asociacion</type>
+  <status>completada</status>
+  <userId>27f05c81-c6bf-456a-a273-150e4edb9900</userId>
+  <user><id>27f05c81-c6bf-456a-a273-150e4edb9900</id><nombre>Ana Analista</nombre></user>
+  <date>2026-11-20T15:30:00.000Z</date>
+  <periodStart>2026-08-01</periodStart>
+  <periodEnd>2026-08-31</periodEnd>
+  <transactionsConsidered>100</transactionsConsidered>
+  <basketsConsidered>100</basketsConsidered>
+  <errorMessage></errorMessage>
+  <parameters>
+    <item><runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId><key>algoritmo</key><value>fpgrowth</value></item>
+    <item><runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId><key>soporte_minimo</key><value>0.2</value></item>
+  </parameters>
+  <assumptions>
+    <item><runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId><order>2</order><assumption>Cuenta presencia, no cantidad.</assumption></item>
+    <item><runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId><order>1</order><assumption>Una canasta = una transacción.</assumption></item>
+  </assumptions>
+  <filters>
+    <item><runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId><dimension>zona</dimension><referenceId>27f05c81-c6bf-456a-a273-150e4edb9900</referenceId></item>
+  </filters>
+  <results>
+  <item>
+    <id>9a1b2c3d-1111-4222-8333-944455556666</id>
+    <runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId>
+    <support>0.24000</support>
+    <confidence>0.75000</confidence>
+    <lift>1.8000</lift>
+    <transactionCount>24</transactionCount>
+    <items>
+      <item>
+        <ruleId>9a1b2c3d-1111-4222-8333-944455556666</ruleId>
+        <productId>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</productId>
+        <side>antecedente</side>
+        <product><id>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</id><sku>LAC-001</sku><nombre>Leche entera</nombre><categoriaId>2</categoriaId></product>
+      </item>
+      <item>
+        <ruleId>9a1b2c3d-1111-4222-8333-944455556666</ruleId>
+        <productId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</productId>
+        <side>consecuente</side>
+        <product><id>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</id><sku>PAN-003</sku><nombre>Pan de caja</nombre><categoriaId>5</categoriaId></product>
+      </item>
+    </items>
+  </item>
+  </results>
+</runResponse>

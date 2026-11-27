@@ -58,16 +58,23 @@ export async function http(
   metodo: string,
   ruta: string,
   token: string,
-  opciones: { cuerpo?: object; accept?: string } = {},
+  opciones: {
+    cuerpo?: object;
+    accept?: string;
+    /** Cuerpo tal cual (p. ej. XML), con su `Content-Type`; gana sobre `cuerpo`. */
+    crudo?: { texto: string; tipo: string };
+  } = {},
 ): Promise<Respuesta> {
+  const tipo = opciones.crudo?.tipo ?? (opciones.cuerpo ? 'application/json' : undefined);
   const r = await fetch(`${BASE}${ruta}`, {
     method: metodo,
     headers: {
-      Authorization: `Bearer ${token}`,
-      ...(opciones.cuerpo ? { 'Content-Type': 'application/json' } : {}),
+      // Token vacío = petición sin sesión (para probar el 401).
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(tipo ? { 'Content-Type': tipo } : {}),
       ...(opciones.accept ? { Accept: opciones.accept } : {}),
     },
-    body: opciones.cuerpo ? JSON.stringify(opciones.cuerpo) : undefined,
+    body: opciones.crudo ? opciones.crudo.texto : opciones.cuerpo ? JSON.stringify(opciones.cuerpo) : undefined,
   });
   return { estado: r.status, texto: await r.text() };
 }

@@ -147,7 +147,8 @@ describe('Contrato XML contra el XSD (integración)', () => {
     return r;
   }
 
-  it('POST /v1/simulation/price → simulacionPrecioResponse', async () => {
+  /** Presentación y zona con elasticidad calculada y precio vigente (para simular precio). */
+  async function presentacionConElasticidad(): Promise<{ presentationId: string; zoneId: string; precio: number }> {
     const [fila]: { presentationId: string; zoneId: string; precio: number }[] = await db.query(
       `SELECT e.presentacion_id AS "presentationId", t.zona_id AS "zoneId", AVG(p.precio)::float8 AS precio
        FROM elasticidades e
@@ -164,7 +165,11 @@ describe('Contrato XML contra el XSD (integración)', () => {
           'Corre POST /v1/elasticity/calculate en algorithms-core (Responsable de precios) y vuelve a correr la prueba.',
       );
     }
+    return fila;
+  }
 
+  it('POST /v1/simulation/price → simulacionPrecioResponse', async () => {
+    const fila = await presentacionConElasticidad();
     const r = await http('POST', '/v1/simulation/price', planeador, {
       cuerpo: { presentationId: fila.presentationId, zoneId: fila.zoneId, newPrice: Number((fila.precio * 1.1).toFixed(2)) },
       accept: XML,
@@ -181,6 +186,41 @@ describe('Contrato XML contra el XSD (integración)', () => {
 
     expect(r.estado).toBe(201);
     esperarXmlValido(r.texto, 'simulacionPresentacionResponse');
+  });
+
+  it('POST /v1/simulation/price con CUERPO XML (simulacionPrecioRequest) → 201 simulacionPrecioResponse', async () => {
+    const fila = await presentacionConElasticidad();
+    const peticion =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<simulacionPrecioRequest xmlns="decision/v1">' +
+      `<presentationId>${fila.presentationId}</presentationId><zoneId>${fila.zoneId}</zoneId>` +
+      `<newPrice>${(fila.precio * 1.1).toFixed(2)}</newPrice></simulacionPrecioRequest>`;
+    esperarXmlValido(peticion, 'simulacionPrecioRequest');
+
+    const r = await http('POST', '/v1/simulation/price', planeador, { crudo: { texto: peticion, tipo: XML }, accept: XML });
+    const scenarioId = valor(r.texto, 'scenarioId');
+    if (scenarioId) escenarios.push(scenarioId);
+
+    expect(r.estado).toBe(201);
+    esperarXmlValido(r.texto, 'simulacionPrecioResponse');
+    expect(valor(r.texto, 'presentationId')).toBe(fila.presentationId);
+  });
+
+  it('POST /v1/simulation/presentation con CUERPO XML (simulacionPresentacionRequest) → 201', async () => {
+    const { productId, presentationIds } = await productoComparable();
+    const peticion =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<simulacionPresentacionRequest xmlns="decision/v1">' +
+      `<productId>${productId}</productId><presentationIds>` +
+      presentationIds.map((id) => `<item>${id}</item>`).join('') +
+      '</presentationIds></simulacionPresentacionRequest>';
+    esperarXmlValido(peticion, 'simulacionPresentacionRequest');
+
+    const r = await http('POST', '/v1/simulation/presentation', planeador, { crudo: { texto: peticion, tipo: 'text/xml' }, accept: XML });
+    const scenarioId = valor(r.texto, 'scenarioId');
+    if (scenarioId) escenarios.push(scenarioId);
+
+    expect(r.estado).toBe(201);
+    esperarXmlValido(r.texto, 'simulacionPresentacionResponse');
+    expect(valor(r.texto, 'productId')).toBe(productId);
   });
 
   it('GET /v1/simulation/scenarios → simulacionEscenariosResponse', async () => {

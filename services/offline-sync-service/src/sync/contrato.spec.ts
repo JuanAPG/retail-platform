@@ -36,7 +36,8 @@ describe('contrato', () => {
   });
 
   it('los ejemplos XML del contrato (.md) validan con el validador del servicio', async () => {
-    const md = readFileSync(MD_CONTRATO, 'utf8');
+    // Con core.autocrlf=true (Windows) el .md llega con CRLF: se normaliza.
+    const md = readFileSync(MD_CONTRATO, 'utf8').replace(/\r\n/g, '\n');
     const bloques = [...md.matchAll(/```xml\n([\s\S]*?)```/g)].map((m) => m[1]).filter((x) => x.includes('xmlns="sync/v1"'));
     expect(bloques.length).toBeGreaterThanOrEqual(4);
     for (const xml of bloques) expect(await validador.errores(xml)).toEqual([]);

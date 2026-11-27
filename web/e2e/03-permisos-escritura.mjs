@@ -34,7 +34,7 @@ const editarOEliminar = (page) =>
   await page.waitForTimeout(800);
   await rail(page, 'Transacciones').click();
   await page.waitForTimeout(800);
-  ok('admin/transacciones: sin «Importar CSV»', (await boton(page, 'Importar CSV').count()) === 0);
+  ok('admin/transacciones: sin «Importar ventas»', (await boton(page, 'Importar ventas').count()) === 0);
   ok('admin/transacciones: sin «Nueva transacción»', (await boton(page, 'Nueva transacción').count()) === 0);
   ok('admin/transacciones: explica que es de solo lectura', /solo lectura/i.test(await texto(page)));
   ok('admin/transacciones: la lista carga sin 403', !page.http.some((h) => h.startsWith('403')), page.http.join(' | '));
@@ -44,7 +44,7 @@ const editarOEliminar = (page) =>
   const { ctx, page } = await sesion(navegador, 'analista');
   await rail(page, 'Transacciones').click();
   await page.waitForTimeout(800);
-  ok('analista/transacciones: ofrece «Importar CSV» y «Nueva transacción»', (await boton(page, 'Importar CSV').count()) === 1 && (await boton(page, 'Nueva transacción').count()) === 1);
+  ok('analista/transacciones: ofrece «Importar ventas» y «Nueva transacción»', (await boton(page, 'Importar ventas').count()) === 1 && (await boton(page, 'Nueva transacción').count()) === 1);
   await ctx.close();
 }
 {

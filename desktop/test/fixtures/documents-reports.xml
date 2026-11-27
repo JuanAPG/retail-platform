@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<reportListResponse xmlns="documents/v1">
+  <data>
+    <item>
+      <id>6705f1c2a3b4c5d6e7f80912</id>
+      <tipo>ejecutivo</tipo>
+      <parametros><dateFrom>2026-08-01</dateFrom><dateTo>2026-08-31</dateTo></parametros>
+      <formato>json</formato>
+      <usuarioId>27f05c81-c6bf-456a-a273-150e4edb9900</usuarioId>
+      <estado>generado</estado>
+      <creadoEn>2026-10-08T18:00:00.000Z</creadoEn>
+      <secciones>
+        <item><clave>ticket_promedio</clave><nombre>Ticket promedio</nombre><servicio>core-process-service</servicio><disponible>true</disponible><valor>86.4</valor></item>
+        <item><clave>elasticidad_promedio</clave><nombre>Elasticidad promedio</nombre><servicio>algorithms-core</servicio><disponible>false</disponible><motivo>algorithms-core no respondió en 3 s.</motivo></item>
+      </secciones>
+    </item>
+  </data>
+  <total>1</total>
+  <page>1</page>
+  <limit>50</limit>
+</reportListResponse>

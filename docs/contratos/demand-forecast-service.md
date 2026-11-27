@@ -154,7 +154,7 @@ Response `201` (`forecastRunResponse`). Ejemplo completo y real (generado con el
 | `dataVersion.asOf` | Instantánea de core-process: solo cuentan las ventas registradas hasta ese instante |
 | `history` | La foto (D-15): una fila por semana, con las cantidades ya convertidas |
 | `validation.mape` | En porcentaje (`9.88` = 9.88 %). Nulo si las 4 reservadas son 0 |
-| `model` | Parámetros de suavizamiento del ajuste final, para la ficha del algoritmo |
+| `model` | Parámetros de suavizamiento del ajuste final, para la ficha del algoritmo. `aic` es nulo (se omite en XML) si el ajuste no da un valor finito: nunca sale `Infinity` |
 | `excludedPresentations` | Ventas que no se pudieron convertir (presentación sin contenido conocido); nunca se omiten en silencio |
 | `limitations` | En una corrida disponible siempre trae la de la estacionalidad (DF-5); en una no disponible va vacía, porque no se ajustó ningún modelo. Agrega la de semanas rellenadas (DF-3), la de recorte (DF-7) y, con menos de 16 semanas para ajustar, "pocas semanas: el modelo estima 9 parámetros con N datos" |
 

@@ -1,4 +1,11 @@
-import { httpClient } from './httpClient';
+import { pedir } from './httpClient';
+import { bool, text } from './xml';
+
+/*
+ * auth-service (3101). Contrato: docs/contratos/auth-service.md, XSD auth-service.xsd
+ * (namespace auth/v1). auth-service NO lee XML de entrada: el cuerpo va en JSON y la respuesta
+ * llega en XML (loginResponse, refreshResponse, validateResponse, logoutResponse).
+ */
 
 export interface Usuario {
   id: string;
@@ -20,66 +27,59 @@ export interface RefreshResult {
   refreshToken: string;
 }
 
-/**
- * Cuerpo de la petición en JSON (lo único que auth-service lee de entrada).
- * La respuesta llega en XML, envuelta en <response> por el XmlInterceptor
- * del servidor (no en <loginResponse>), por eso se lee `data.response`.
- */
-export async function login(email: string, password: string): Promise<LoginResult> {
-  const res = await httpClient.post('v1/auth/login', { email, password });
-
-  const root = res.data.response ?? res.data;
-  const usuario = root.usuario;
-
-  return {
-    accessToken: String(root.accessToken),
-    refreshToken: String(root.refreshToken),
-    usuario: {
-      id: String(usuario.id),
-      nombre: String(usuario.nombre),
-      email: String(usuario.email),
-      rolId: Number(usuario.rolId),
-      rol: String(usuario.rol),
-      activo: usuario.activo === true || usuario.activo === 'true',
-    },
-  };
-}
-
-/** auth-service ROTA el par: guardar siempre el refreshToken nuevo, nunca reutilizar el viejo. */
-export async function refresh(refreshToken: string): Promise<RefreshResult> {
-  const res = await httpClient.post('v1/auth/refresh', { refreshToken });
-  const root = res.data.response ?? res.data;
-
-  return {
-    accessToken: String(root.accessToken),
-    refreshToken: String(root.refreshToken),
-  };
-}
-
-/** Protegido con SessionGuard: httpClient ya manda el Authorization con el access token vigente. */
-export async function logout(): Promise<void> {
-  await httpClient.post('v1/auth/logout');
-}
-
 export interface ValidationResult {
   active: boolean;
   user: { id: string; email: string; rol: string; rolId: number } | null;
 }
 
-/**
- * Pregunta a auth-service si un token sigue siendo válido (firma + sesión viva en Redis).
- * Nunca responde 401: un token inactivo llega como `active: false`.
- */
-export async function validateToken(token: string): Promise<ValidationResult> {
-  const res = await httpClient.post('v1/auth/validate', { token });
-  const root = res.data.response ?? res.data;
-  const active = root.active === true || root.active === 'true';
-  const u = root.user;
+/** Contenido de <loginResponse> → objeto de la app. */
+export function parseLogin(r: any): LoginResult {
+  const u = r?.usuario ?? {};
+  return {
+    accessToken: text(r?.accessToken),
+    refreshToken: text(r?.refreshToken),
+    usuario: {
+      id: text(u.id),
+      nombre: text(u.nombre),
+      email: text(u.email),
+      rolId: Number(u.rolId),
+      rol: text(u.rol),
+      activo: bool(u.activo),
+    },
+  };
+}
+
+export function parseValidate(r: any): ValidationResult {
+  const active = bool(r?.active);
+  const u = r?.user;
   return {
     active,
     user:
       active && u && typeof u === 'object'
-        ? { id: String(u.id), email: String(u.email), rol: String(u.rol), rolId: Number(u.rolId) }
+        ? { id: text(u.id), email: text(u.email), rol: text(u.rol), rolId: Number(u.rolId) }
         : null,
   };
+}
+
+export async function login(email: string, password: string): Promise<LoginResult> {
+  return parseLogin(
+    await pedir({ servicio: 'auth', metodo: 'POST', ruta: 'v1/auth/login', json: { email, password }, raiz: 'loginResponse' }),
+  );
+}
+
+/** auth-service ROTA el par: guardar siempre el refreshToken nuevo. */
+export async function refresh(refreshToken: string): Promise<RefreshResult> {
+  const r = await pedir({ servicio: 'auth', metodo: 'POST', ruta: 'v1/auth/refresh', json: { refreshToken }, raiz: 'refreshResponse' });
+  return { accessToken: text(r.accessToken), refreshToken: text(r.refreshToken) };
+}
+
+export async function logout(): Promise<void> {
+  await pedir({ servicio: 'auth', metodo: 'POST', ruta: 'v1/auth/logout', raiz: 'logoutResponse' });
+}
+
+/** ¿El token sigue vivo (firma + sesión en Redis)? Nunca responde 401: inactivo = `active: false`. */
+export async function validateToken(token: string): Promise<ValidationResult> {
+  return parseValidate(
+    await pedir({ servicio: 'auth', metodo: 'POST', ruta: 'v1/auth/validate', json: { token }, raiz: 'validateResponse' }),
+  );
 }

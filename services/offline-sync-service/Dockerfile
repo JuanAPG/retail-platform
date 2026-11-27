@@ -16,6 +16,9 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3118
+# Destino real de las capturas (contrato §6). Con `http` exige AVAILABILITY_SERVICE_URL y
+# PRICING_SERVICE_URL (las fija docker-compose); sin ellas el servicio no arranca.
+ENV SYNC_DESTINO=http
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist

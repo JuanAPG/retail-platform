@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zoneListResponse xmlns="catalog/v1">
+  <data>
+    <item>
+      <id>27f05c81-c6bf-456a-a273-150e4edb9900</id>
+      <nombre>Zona Centro</nombre>
+      <municipioId>1</municipioId>
+      <descripcion>Centro de Monterrey</descripcion>
+      <activo>true</activo>
+      <createdAt>2026-09-01T10:00:00.000Z</createdAt>
+      <updatedAt>2026-09-01T10:00:00.000Z</updatedAt>
+      <municipio><id>1</id><nombre>Monterrey</nombre></municipio>
+    </item>
+  </data>
+  <total>1</total>
+  <page>1</page>
+  <limit>100</limit>
+</zoneListResponse>

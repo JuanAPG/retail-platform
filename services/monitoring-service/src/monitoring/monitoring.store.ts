@@ -78,18 +78,26 @@ export class MonitoringStore implements OnApplicationShutdown {
   }
 
   async history(service: ServiceName, page: number, limit: number): Promise<Pagina<ServiceCheck>> {
+    const signal = AbortSignal.timeout(2500);
+    const deadline = new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
     try {
-      const filter = { service, checkedAt: { $gte: this.since() } };
-      const total = await this.collection.countDocuments(filter);
-      const offset = (page - 1) * limit;
-      const data = offset < total
-        ? await this.collection.find(filter, { projection: { _id: 0 } })
-          .sort({ checkedAt: -1, _id: -1 }).skip(offset).limit(limit).toArray()
-        : [];
-      return { data, total, page, limit };
+      return await Promise.race([this.readHistory(service, page, limit, signal), deadline]);
     } catch {
       throw new ServiceUnavailableException('No se pudo consultar el historial de sondeos.');
     }
+  }
+
+  private async readHistory(service: ServiceName, page: number, limit: number, signal: AbortSignal): Promise<Pagina<ServiceCheck>> {
+    const filter = { service, checkedAt: { $gte: this.since() } };
+    const total = await this.collection.countDocuments(filter, { signal });
+    const offset = (page - 1) * limit;
+    const data = offset < total
+      ? await this.collection.find(filter, { projection: { _id: 0 }, signal })
+        .sort({ checkedAt: -1, _id: -1 }).skip(offset).limit(limit).toArray()
+      : [];
+    return { data, total, page, limit };
   }
 
   onApplicationShutdown(): Promise<void> {
