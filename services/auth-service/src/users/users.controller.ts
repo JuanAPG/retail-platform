@@ -44,6 +44,15 @@ export class UsersController {
     return this.usersService.findAll(filtros);
   }
 
+  // Declarada ANTES que ':id' para que 'asignables' no se lea como un id.
+  @Get('asignables')
+  @XmlRoot('usuarioAsignableListResponse')
+  @Roles(ROL.GERENTE_CATEGORIA)
+  async findAsignables() {
+    // D-41: el Gerente elige a quién asignar un seguimiento. Solo id, nombre y rol de usuarios activos.
+    return { data: await this.usersService.findAsignables() };
+  }
+
   @Get(':id')
   @XmlRoot('usuarioResponse')
   @Roles(ROL.ADMINISTRADOR, ROL.AUDITOR)
