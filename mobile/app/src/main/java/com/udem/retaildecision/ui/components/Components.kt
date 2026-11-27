@@ -16,12 +16,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,9 +33,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -274,4 +282,53 @@ fun LabeledValue(label: String, value: String, modifier: Modifier = Modifier) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/**
+ * Etiqueta de un campo con un ícono ⓘ al lado. Al tocar el ícono se abre un diálogo corto con la
+ * explicación del campo y un ejemplo (botón "Entendido").
+ */
+@Composable
+fun EtiquetaConAyuda(
+    etiqueta: String,
+    tituloAyuda: String,
+    ayuda: String,
+    modifier: Modifier = Modifier,
+) {
+    var abierta by rememberSaveable { mutableStateOf(false) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            etiqueta,
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        IconButton(onClick = { abierta = true }) {
+            Icon(
+                Icons.Outlined.Info,
+                contentDescription = "Ayuda: $tituloAyuda",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    if (abierta) {
+        AlertDialog(
+            onDismissRequest = { abierta = false },
+            confirmButton = { TextButton(onClick = { abierta = false }) { Text("Entendido") } },
+            title = { Text(tituloAyuda) },
+            text = { Text(ayuda, style = MaterialTheme.typography.bodyMedium) },
+        )
+    }
+}
+
+/** Texto de apoyo bajo un control que no tiene `supportingText` propio (por ejemplo, un selector). */
+@Composable
+fun TextoDeApoyo(texto: String, modifier: Modifier = Modifier) {
+    Text(
+        texto,
+        modifier = modifier.padding(start = 16.dp, top = 4.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
