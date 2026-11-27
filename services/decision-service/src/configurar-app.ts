@@ -1,5 +1,6 @@
 import { INestApplication, ValidationError, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { middlewareCorrelacion } from './common/correlation/correlacion';
 import { HttpErrorFilter } from './common/filters/http-error.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { XmlInterceptor } from './common/interceptors/xml.interceptor';
@@ -21,7 +22,9 @@ function traducirNoPermitidos(errores: ValidationError[]): void {
  * configuración que el servicio real. Se llama antes de `listen`/`init`.
  */
 export function configurarApp(app: INestApplication): void {
-  app.enableCors();
+  // Antes que todo (guards incluidos): hasta un 401 lleva su X-Correlation-Id (T-02).
+  app.use(middlewareCorrelacion);
+  app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'x-request-id'] });
   // Todas las rutas cuelgan de /v1/ (estándar transversal).
   // `/docs` queda fuera del prefijo para no versionar la documentación.
   app.setGlobalPrefix('v1', { exclude: ['docs', 'docs-json'] });

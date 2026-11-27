@@ -1,3 +1,4 @@
+import { conCorrelacion } from '../correlation/correlacion';
 import { Injectable, Logger } from '@nestjs/common';
 
 /** Resultado de pedir la cobertura de básicos de una zona a availability-service. */
@@ -28,10 +29,10 @@ export class AvailabilityClient {
     const limite = setTimeout(() => control.abort(), TIMEOUT_MS);
     try {
       const r = await fetch(`${base}/v1/availability/zones/${encodeURIComponent(zoneId)}/coverage`, {
-        headers: {
+        headers: conCorrelacion({
           Accept: 'application/json',
           ...(token ? { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` } : {}),
-        },
+        }),
         signal: control.signal,
       });
       if (!r.ok) {
