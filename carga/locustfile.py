@@ -36,6 +36,7 @@ import sesiones as ses  # noqa: E402
 from destinos import Destino, Http  # noqa: E402
 
 AQUI = Path(__file__).resolve().parent
+ARCHIVO_CA = AQUI / '.ca-sistema.pem'
 ESTADO: dict = {'destino': None, 'fixtures': None, 'pool': {}, 'corrida': None, 'solo_lectura': False,
           'caidos': frozenset()}
 CANDADO = threading.Lock()
@@ -75,10 +76,14 @@ def _iniciar(environment, **_):
     for s in datos['sesiones']:
         pool.setdefault(s['perfil'], []).append(s)
     ESTADO['pool'] = pool
+    if ESTADO['destino'].base:
+        ESTADO['verify'] = _raices_del_sistema()
     caidos = _servicios_caidos(Http(timeout=5), pool)
     if caidos is None:
         print('  AVISO: no se pudo revisar el estado de los servicios (sin sesión de administrador).')
         caidos = []
+    if not caidos:
+        print(f'  Los {len(esc.servicios_usados())} servicios responden.')
     if caidos:
         accion = 'se saltan sus tareas' if o.saltar_caidos else 'sus peticiones contarán como falla'
         print(f'  AVISO: no responden {caidos}: {accion}.')
@@ -90,6 +95,20 @@ def _iniciar(environment, **_):
           f"{ {p: len(v) for p, v in pool.items()} }; el pico necesita {necesarias} por perfil.")
     if cortos:
         print(f'  AVISO: perfiles con menos sesiones que el pico {cortos}: esos usuarios extra no arrancan.')
+
+
+def _raices_del_sistema() -> str:
+    """`requests` (Locust) verifica TLS solo contra su paquete `certifi` y no ve el almacén del sistema.
+    Si un antivirus inspecciona el HTTPS (Avast re-firma con su propia raíz, instalada en Windows), todas
+    las peticiones fallan con status 0 (CERTIFICATE_VERIFY_FAILED), mientras urllib de la biblioteca
+    estándar (sesiones.py, preparar.py) sí conecta. Se juntan las raíces del sistema y las de certifi en
+    un archivo y cada usuario verifica contra él: la verificación sigue activa."""
+    import ssl
+    import certifi
+    contexto = ssl.create_default_context()
+    pem = [ssl.DER_cert_to_PEM_cert(c) for c in contexto.get_ca_certs(binary_form=True)]
+    ARCHIVO_CA.write_text(''.join(pem) + Path(certifi.where()).read_text(encoding='utf-8'), encoding='utf-8')
+    return str(ARCHIVO_CA)
 
 
 def _responde(http: Http, url: str) -> bool:
@@ -110,9 +129,13 @@ def _servicios_caidos(http: Http, pool: dict) -> list[str] | None:
     if admin is None:
         return None
     try:
+        if ses.necesita_renovar(admin):   # las sesiones se abrieron minutos antes: el access token pudo vencer
+            nuevo = ses.renovar(http, destino, admin)
+            admin.update(nuevo)
+            RENOVADAS[admin['email']] = admin
         estado, cuerpo, _ = http.pedir('GET', destino.url('monitoring-service', '/v1/monitoring/services'),
                                        token=admin['accessToken'])
-    except OSError:
+    except (OSError, RuntimeError):   # RuntimeError: el refresh falló
         return None
     if estado != 200:
         return None
@@ -138,6 +161,8 @@ class Perfil(HttpUser):
                 SIN_SESION[self.perfil] = SIN_SESION.get(self.perfil, 0) + 1
                 return
             self.sesion = disponibles.pop()
+        if ESTADO.get('verify'):
+            self.client.verify = ESTADO['verify']
         self.rng = random.Random()
         self.dispositivo = str(uuid.uuid5(uuid.NAMESPACE_URL, self.sesion['email']))
 
@@ -179,7 +204,7 @@ class Perfil(HttpUser):
             datos = None
             if clase == 'ok':
                 if xml:
-                    problema = esc.validar_xml(r.text)
+                    problema = esc.validar_xml(r.text, error_esperado=r.status_code >= 400)
                 else:
                     try:
                         datos = r.json() if r.content else None
@@ -196,7 +221,8 @@ class Perfil(HttpUser):
                     request_type='LIMITADO', name=etiqueta, response_time=r.elapsed.total_seconds() * 1000,
                     response_length=len(r.content or b''), exception=None, context={})
             else:
-                r.failure(f'{r.status_code}: {r.text[:200]}')
+                # status 0 = no hubo respuesta HTTP: el motivo está en la excepción (TLS, conexión, timeout).
+                r.failure(f'{r.status_code}: {r.text[:200]}' if r.status_code else f'0: {r.error!r}'[:300])
             return r.status_code, datos
 
     # --- lo que hace cada iteración

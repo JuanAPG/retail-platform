@@ -277,13 +277,17 @@ ESTADOS_SEGUIMIENTO = {'asignada', 'en_implementacion', 'implementada', 'evaluad
 _UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 
 
-def validar_xml(texto: str) -> str | None:
-    """XML bien formado y que no sea un cuerpo de error (la validación XSD se hace aparte, por servicio)."""
+def validar_xml(texto: str, error_esperado: bool = False) -> str | None:
+    """XML bien formado; con código de éxito no debe ser un cuerpo `<error>`, y cuando el error ES la
+    respuesta esperada (p. ej. un 404 de propiedad) debe serlo. La validación XSD va aparte, por servicio."""
     try:
         raiz = ET.fromstring(texto)
     except ET.ParseError as e:
         return f'XML mal formado: {e}'
-    if raiz.tag.rsplit('}', 1)[-1] == 'error':
+    es_error = raiz.tag.rsplit('}', 1)[-1] == 'error'
+    if error_esperado and not es_error:
+        return 'se esperaba el cuerpo de error estándar en XML'
+    if not error_esperado and es_error:
         return 'XML de error con código de éxito'
     return None
 
