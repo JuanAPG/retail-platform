@@ -71,10 +71,10 @@ La vista previa muestra los conteos y los errores **por fila** (rechazadas y en 
 | Modo | Archivo | URLs |
 |---|---|---|
 | `npm run dev` / `electron:dev` | `.env.development` | `http://localhost:31xx/` |
-| `npm run build:staging` | `.env.staging` | HTTPS, marcadores `*.staging.PENDIENTE-GCP.invalid` |
-| `npm run build` | `.env.production` | HTTPS, marcadores `*.PENDIENTE-GCP.invalid` |
+| `npm run build:staging` | `.env.staging` | HTTPS, servidor de staging: `https://34.51.89.203/api/<servicio>/` |
+| `npm run build` | `.env.production` | HTTPS, servidor de staging: `https://34.51.89.203/api/<servicio>/` |
 
-Juan Ángel reemplaza los marcadores con las URLs de GCP. El build de staging o producción **se
+Las dos apuntan al servidor de staging (VM del equipo, HTTPS con Caddy). El build de staging o producción **se
 detiene** si una URL no es `https://`, apunta a un host local o trae puerto, y si el JS generado
 contiene un host local con puerto. Variables: ver `.env.example`.
 

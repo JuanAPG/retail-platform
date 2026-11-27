@@ -88,7 +88,7 @@ mientras se acuerda el mapeo con Pamela, contrato §6). Una captura aceptada no 
 | Variante | URLs | HTTP plano |
 |---|---|---|
 | `debug` | `http://10.0.2.2:31xx/` (el `localhost` de tu máquina visto desde el emulador) | Permitido |
-| `release` (entrega) | HTTPS; hoy son marcadores `https://<servicio>.PENDIENTE-GCP.invalid/` | Prohibido |
+| `release` (entrega) | HTTPS; por omisión apuntan a `https://34.51.89.203/api/<servicio>/` (servidor de staging) | Prohibido |
 
 Las URLs de `release` se llenan sin tocar código, en `mobile/gradle.properties` o al compilar:
 

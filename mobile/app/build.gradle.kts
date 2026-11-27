@@ -10,8 +10,8 @@ plugins {
 // URLs de los microservicios POR VARIANTE (BuildConfig). Nada de esto va escrito en el código.
 //  - debug: servicios locales del docker-compose vistos desde el emulador (10.0.2.2), HTTP.
 //  - release (la variante de entrega): HTTPS, sin 10.0.2.2, sin localhost y sin puertos.
-//    Los valores de abajo son MARCADORES (dominio .invalid, que no existe): los llena Juan Ángel
-//    con las URLs de GCP, en mobile/gradle.properties o al compilar, por ejemplo:
+//    Por omisión apuntan al servidor de staging (https://34.51.89.203/api/<servicio>/); se pueden
+//    sobrescribir en mobile/gradle.properties o al compilar, por ejemplo:
 //      gradle assembleRelease -Pretail.release.syncUrl=https://sync.ejemplo.com/
 // ---------------------------------------------------------------------------------------------
 val urlsLocales = mapOf(
@@ -27,12 +27,12 @@ fun urlDeEntrega(propiedad: String, marcador: String): String =
     (project.findProperty(propiedad) as String?)?.takeIf { it.isNotBlank() } ?: marcador
 
 val urlsEntrega = mapOf(
-    "API_BASE_URL" to urlDeEntrega("retail.release.authUrl", "https://auth-service.PENDIENTE-GCP.invalid/"),
-    "CATALOG_BASE_URL" to urlDeEntrega("retail.release.catalogUrl", "https://catalog-service.PENDIENTE-GCP.invalid/"),
-    "PRICING_BASE_URL" to urlDeEntrega("retail.release.pricingUrl", "https://pricing-service.PENDIENTE-GCP.invalid/"),
-    "SEGMENTATION_BASE_URL" to urlDeEntrega("retail.release.segmentationUrl", "https://income-segmentation-service.PENDIENTE-GCP.invalid/"),
-    "AVAILABILITY_BASE_URL" to urlDeEntrega("retail.release.availabilityUrl", "https://availability-service.PENDIENTE-GCP.invalid/"),
-    "SYNC_BASE_URL" to urlDeEntrega("retail.release.syncUrl", "https://offline-sync-service.PENDIENTE-GCP.invalid/"),
+    "API_BASE_URL" to urlDeEntrega("retail.release.authUrl", "https://34.51.89.203/api/auth-service/"),
+    "CATALOG_BASE_URL" to urlDeEntrega("retail.release.catalogUrl", "https://34.51.89.203/api/catalog-service/"),
+    "PRICING_BASE_URL" to urlDeEntrega("retail.release.pricingUrl", "https://34.51.89.203/api/pricing-service/"),
+    "SEGMENTATION_BASE_URL" to urlDeEntrega("retail.release.segmentationUrl", "https://34.51.89.203/api/income-segmentation-service/"),
+    "AVAILABILITY_BASE_URL" to urlDeEntrega("retail.release.availabilityUrl", "https://34.51.89.203/api/availability-service/"),
+    "SYNC_BASE_URL" to urlDeEntrega("retail.release.syncUrl", "https://34.51.89.203/api/offline-sync-service/"),
 )
 
 /** La variante de entrega no compila con una URL local o sin HTTPS. */
