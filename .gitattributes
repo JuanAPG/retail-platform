@@ -1,0 +1,3 @@
+# Los scripts de shell corren dentro de contenedores Linux: con CRLF (checkout en Windows con
+# core.autocrlf) fallan con 'set: Illegal option -' y las migraciones del compose no se aplican.
+*.sh text eol=lf
