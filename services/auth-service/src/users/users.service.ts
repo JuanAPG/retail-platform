@@ -14,6 +14,7 @@ import { AuditReporter } from '../common/audit/audit-reporter.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginar } from '../common/helpers/pagination.helper';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { ROLES_ASIGNABLES } from '../common/roles';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
 /** Cambio de campo para la bitácora (sin secretos). */
@@ -71,6 +72,21 @@ export class UsersService {
       .orderBy('usuario.nombre', 'ASC');
     const pagina = await paginar(qb, filtros ?? {});
     return { ...pagina, data: pagina.data.map((usuario) => this.toPublic(usuario)) };
+  }
+
+  /**
+   * Responsables que el Gerente puede asignar a un seguimiento (D-41): usuarios ACTIVOS con rol
+   * asignable. Solo id, nombre y rol; nunca correo ni otros datos (mínimo necesario).
+   */
+  async findAsignables(): Promise<Array<{ id: string; nombre: string; rol: string }>> {
+    const usuarios = await this.usuariosRepo
+      .createQueryBuilder('usuario')
+      .innerJoinAndSelect('usuario.rol', 'rol')
+      .where('usuario.activo = true')
+      .andWhere('rol.nombre IN (:...roles)', { roles: [...ROLES_ASIGNABLES] })
+      .orderBy('usuario.nombre', 'ASC')
+      .getMany();
+    return usuarios.map((u) => ({ id: u.id, nombre: u.nombre, rol: u.rol.nombre }));
   }
 
   async findOne(id: string) {

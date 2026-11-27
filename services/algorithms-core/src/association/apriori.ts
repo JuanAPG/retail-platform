@@ -49,12 +49,51 @@ export interface AprioriResult {
 }
 
 /**
+ * Cuánto trabajo hizo una corrida, para la ficha del algoritmo y las mediciones de volumen
+ * (`scripts/medir-asociacion.ts`). Se pide pasando un objeto como tercer argumento de `apriori()`
+ * o `fpGrowth()`, que lo llenan; el resultado no cambia y la API no lo expone.
+ */
+export interface EstadisticasAsociacion {
+  /** Canastas con al menos un producto. */
+  canastas: number;
+  /** Productos distintos en las canastas. */
+  productos: number;
+  /** Conteo mínimo de canastas que exige el soporte. */
+  conteoMinimo: number;
+  /** Itemsets frecuentes por tamaño (1, 2, 3…). Igual en los dos algoritmos. */
+  frecuentesPorTamano: Record<number, number>;
+  /** Apriori: candidatos que se contaron contra las canastas, por tamaño (el 1 son los productos). */
+  candidatosPorTamano: Record<number, number>;
+  /** Apriori: uniones descartadas sin contarlas porque un subconjunto no era frecuente. */
+  podadosPorTamano: Record<number, number>;
+  /** Apriori: pruebas "¿la canasta contiene al candidato?" (candidatos × canastas con tamaño suficiente). */
+  pruebasDeContencion: number;
+  /** FP-Growth: árboles construidos (el inicial más uno por cada base condicional). */
+  arboles: number;
+  /** FP-Growth: nodos creados en todos los árboles. */
+  nodos: number;
+  /** FP-Growth: nodos del árbol inicial (cuánto comprime las canastas). */
+  nodosArbolInicial: number;
+}
+
+export function estadisticasVacias(): EstadisticasAsociacion {
+  return {
+    canastas: 0, productos: 0, conteoMinimo: 0, frecuentesPorTamano: {}, candidatosPorTamano: {},
+    podadosPorTamano: {}, pruebasDeContencion: 0, arboles: 0, nodos: 0, nodosArbolInicial: 0,
+  };
+}
+
+/**
  * Tolerancia para comparar umbrales: 0.1 * 30 da 3.0000000000000004 en
  * punto flotante, y sin ella exigiría 4 canastas en lugar de 3.
  */
 const EPSILON = 1e-9;
 
-export function apriori(baskets: string[][], params: AprioriParams): AprioriResult {
+export function apriori(
+  baskets: string[][],
+  params: AprioriParams,
+  estadisticas?: EstadisticasAsociacion,
+): AprioriResult {
   checkThresholds(params);
   const { minSupport, minConfidence, maxItemsetSize } = params;
 
@@ -64,6 +103,7 @@ export function apriori(baskets: string[][], params: AprioriParams): AprioriResu
   // Un producto repetido en la misma canasta cuenta una sola vez.
   const transactions = baskets.map((basket) => new Set(basket));
   const minCount = minCountOf(minSupport, total);
+  const e = estadisticas;
 
   /** Conteo de cada itemset frecuente, por llave. Lo usan los candidatos. */
   const counts = new Map<string, number>();
@@ -79,18 +119,32 @@ export function apriori(baskets: string[][], params: AprioriParams): AprioriResu
     .map(([item]) => [item])
     .sort(compareItems);
   for (const items of level) record(items, singles.get(items[0])!);
+  if (e) {
+    Object.assign(e, { canastas: total, productos: singles.size, conteoMinimo: minCount });
+    e.candidatosPorTamano[1] = singles.size;
+    e.frecuentesPorTamano[1] = level.length;
+  }
 
   // --- Niveles 2..maxItemsetSize ---------------------------------------
   for (let size = 2; size <= maxItemsetSize && level.length > 1; size++) {
-    const candidates = generateCandidates(level, counts);
+    const poda = { podados: 0 };
+    const candidates = generateCandidates(level, counts, poda);
     const candidateCounts = candidates.map(() => 0);
+    let revisadas = 0;
     for (const transaction of transactions) {
       if (transaction.size < size) continue;
+      revisadas++;
       candidates.forEach((candidate, i) => {
         if (candidate.every((item) => transaction.has(item))) candidateCounts[i]++;
       });
     }
     level = candidates.filter((_, i) => candidateCounts[i] >= minCount);
+    if (e) {
+      e.candidatosPorTamano[size] = candidates.length;
+      e.podadosPorTamano[size] = poda.podados;
+      e.frecuentesPorTamano[size] = level.length;
+      e.pruebasDeContencion += candidates.length * revisadas;
+    }
     candidates.forEach((candidate, i) => {
       if (candidateCounts[i] >= minCount) record(candidate, candidateCounts[i]);
     });
@@ -177,7 +231,11 @@ export function buildResult(itemsets: FrequentItemset[], total: number, minConfi
  * (propiedad Apriori: nada que contenga un conjunto infrecuente puede ser
  * frecuente).
  */
-function generateCandidates(previous: string[][], frequent: Map<string, number>): string[][] {
+function generateCandidates(
+  previous: string[][],
+  frequent: Map<string, number>,
+  poda: { podados: number } = { podados: 0 },
+): string[][] {
   const candidates: string[][] = [];
   for (let i = 0; i < previous.length; i++) {
     for (let j = i + 1; j < previous.length; j++) {
@@ -191,6 +249,7 @@ function generateCandidates(previous: string[][], frequent: Map<string, number>)
         frequent.has(key(candidate.filter((__, n) => n !== skip))),
       );
       if (allSubsetsFrequent) candidates.push(candidate);
+      else poda.podados++;
     }
   }
   return candidates;

@@ -804,6 +804,72 @@ services:
     networks:
       - retail_net
 
+  # D-39: promociones. Propone el Gerente (web); aprueba el Responsable de precios (escritorio).
+  promotion-service:
+    build: ../services/promotion-service
+    environment:
+      PORT: 3115
+      SERVICE_NAME: promotion-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: promotion/v1
+      BUSINESS_TIMEZONE: America/Monterrey
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+      CATALOG_SERVICE_URL: http://catalog-service:3102
+      PRICING_SERVICE_URL: http://pricing-service:3103
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+    ports:
+      - "3115:3115"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - retail_net
+
+  # D-41: seguimiento de recomendaciones aprobadas. Asigna y evalúa el Gerente (web); el asignado
+  # inicia e implementa (escritorio).
+  recommendations-workflow-service:
+    build: ../services/recommendations-workflow-service
+    environment:
+      PORT: 3117
+      SERVICE_NAME: recommendations-workflow-service
+      SERVICE_VERSION: 1.0.0
+      XML_NAMESPACE: workflow/v1
+      BUSINESS_TIMEZONE: America/Monterrey
+      JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: retail_user
+      DB_PASSWORD: retail_pass_2026
+      DB_NAME: retaildb
+      DECISION_SERVICE_URL: http://decision-service:3107
+      AUDIT_SERVICE_URL: http://audit-service:3110
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+    ports:
+      - "3117:3117"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - retail_net
+
   demand-forecast-service:
     build: ../services/demand-forecast-service
     environment:

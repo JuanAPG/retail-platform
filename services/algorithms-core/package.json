@@ -8,7 +8,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "test": "jest --testPathIgnorePatterns=test/",
-    "test:integracion": "jest --config ./test/jest.integracion.json"
+    "test:integracion": "jest --config ./test/jest.integracion.json",
+    "medir:asociacion": "tsc -p scripts/tsconfig.json && node --expose-gc scripts/build/scripts/medir-asociacion.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",

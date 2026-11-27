@@ -394,7 +394,7 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
           </label>
           <label className={labelClass} htmlFor="nombre">
             Nombre del producto
-            <input
+            <input placeholder="Quinoa orgánica"
               id="nombre"
               className={fieldClass}
               value={nombre}
@@ -460,7 +460,7 @@ function FormularioPropuesta({ categorias, unidades, cargandoCategorias, alGuard
 
         <label className={labelClass} htmlFor="descripcion">
           Descripción (opcional)
-          <textarea
+          <textarea placeholder="Quinoa blanca orgánica, bolsa resellable"
             id="descripcion"
             rows={3}
             value={descripcion}

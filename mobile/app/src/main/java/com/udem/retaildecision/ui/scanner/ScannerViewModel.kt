@@ -3,6 +3,7 @@ package com.udem.retaildecision.ui.scanner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.udem.retaildecision.data.local.AlmacenListas
 import com.udem.retaildecision.data.remote.dto.PresentacionDto
 import com.udem.retaildecision.data.remote.dto.PriceHistoryDto
 import com.udem.retaildecision.data.remote.dto.ProductDto
@@ -31,19 +32,29 @@ data class ScannerUiState(
     val errorPrecios: String? = null,
     /** false para el Investigador de mercado: no puede leer precios (Matriz §3 M08, D-28). */
     val muestraPrecios: Boolean = true,
-)
+    /** Tipos de captura que el rol puede enviar (`TipoCaptura.permitidosPara`). Vacío = sin botones de captura. */
+    val tiposCaptura: List<String> = emptyList(),
+    /** true si el catálogo sale de la copia guardada en el teléfono (no hubo conexión). */
+    val usandoCopiaLocal: Boolean = false,
+) {
+    /** "Capturar precio" y/o "Capturar existencia" para el código encontrado. */
+    val botonesCaptura: List<String> get() = botonesCaptura(tiposCaptura, producto, presentacion)
+}
 
 class ScannerViewModel(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
     private val puedeVerPrecios: Boolean = true,
+    private val tiposCaptura: List<String> = emptyList(),
+    /** Copia de productos en el teléfono (la misma que usa Capturas en tienda), para buscar sin internet. */
+    private val cache: AlmacenListas? = null,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ScannerUiState(muestraPrecios = puedeVerPrecios))
+    private val _state = MutableStateFlow(ScannerUiState(muestraPrecios = puedeVerPrecios, tiposCaptura = tiposCaptura))
     val state: StateFlow<ScannerUiState> = _state.asStateFlow()
 
     /** Código de barras (sin ceros a la izquierda) -> producto y presentación a la que pertenece. */
-    private var indice: Map<String, Pair<ProductDto, PresentacionDto>> = emptyMap()
+    private var indice = IndiceCodigos(emptyList())
 
     init {
         cargarCatalogo()
@@ -53,21 +64,16 @@ class ScannerViewModel(
     fun cargarCatalogo() {
         _state.update { it.copy(cargandoCatalogo = true, errorCatalogo = null) }
         viewModelScope.launch {
-            catalogRepository.productos()
-                .onSuccess { lista ->
-                    val mapa = mutableMapOf<String, Pair<ProductDto, PresentacionDto>>()
-                    for (producto in lista) {
-                        for (presentacion in producto.presentaciones) {
-                            val clave = normalizarCodigo(presentacion.codigoBarras ?: continue)
-                            if (clave.isNotEmpty()) mapa[clave] = producto to presentacion
-                        }
-                    }
-                    indice = mapa
-                    _state.update { it.copy(cargandoCatalogo = false) }
-                }
-                .onFailure { e ->
-                    _state.update { it.copy(cargandoCatalogo = false, errorCatalogo = e.message) }
-                }
+            val res = catalogRepository.productos()
+            res.getOrNull()?.let { cache?.guardar(CLAVE_PRODUCTOS, it) }
+            // Sin internet se busca en la última copia guardada.
+            val lista = res.getOrNull() ?: cache?.leer(CLAVE_PRODUCTOS, ProductDto::class.java)
+            if (lista != null) {
+                indice = IndiceCodigos(lista)
+                _state.update { it.copy(cargandoCatalogo = false, usandoCopiaLocal = res.isFailure) }
+            } else {
+                _state.update { it.copy(cargandoCatalogo = false, errorCatalogo = res.exceptionOrNull()?.message) }
+            }
         }
     }
 
@@ -76,7 +82,7 @@ class ScannerViewModel(
         val codigo = crudo.trim()
         if (codigo.isEmpty() || _state.value.cargandoCatalogo) return
 
-        val hallado = indice[normalizarCodigo(codigo)]
+        val hallado = indice.buscar(codigo)
         if (hallado == null) {
             _state.update {
                 ScannerUiState(
@@ -85,6 +91,8 @@ class ScannerViewModel(
                     codigo = codigo,
                     noEncontrado = true,
                     muestraPrecios = puedeVerPrecios,
+                    tiposCaptura = tiposCaptura,
+                    usandoCopiaLocal = it.usandoCopiaLocal,
                 )
             }
             return
@@ -100,6 +108,8 @@ class ScannerViewModel(
                 presentacion = presentacion,
                 cargandoPrecios = puedeVerPrecios,
                 muestraPrecios = puedeVerPrecios,
+                tiposCaptura = tiposCaptura,
+                usandoCopiaLocal = it.usandoCopiaLocal,
             )
         }
         if (!puedeVerPrecios) return
@@ -119,23 +129,32 @@ class ScannerViewModel(
 
     /** Botón "Escanear otro": limpia el resultado y vuelve a abrir la cámara. */
     fun escanearOtro() {
-        _state.update { ScannerUiState(cargandoCatalogo = false, escaneando = true, muestraPrecios = puedeVerPrecios) }
+        _state.update {
+            ScannerUiState(
+                cargandoCatalogo = false,
+                escaneando = true,
+                muestraPrecios = puedeVerPrecios,
+                tiposCaptura = tiposCaptura,
+                usandoCopiaLocal = it.usandoCopiaLocal,
+            )
+        }
     }
 
-    /**
-     * Quita espacios y ceros a la izquierda: una lectora puede entregar un UPC-A de 12 dígitos
-     * y la base guardarlo como EAN-13 de 13 (con un 0 delante), y deben considerarse el mismo.
-     */
-    private fun normalizarCodigo(codigo: String): String = codigo.trim().trimStart('0')
+    private companion object {
+        /** La misma clave que usa Capturas en tienda. */
+        const val CLAVE_PRODUCTOS = "productos"
+    }
 }
 
 class ScannerViewModelFactory(
     private val catalogRepository: CatalogRepository,
     private val pricingRepository: PricingRepository,
     private val puedeVerPrecios: Boolean = true,
+    private val tiposCaptura: List<String> = emptyList(),
+    private val cache: AlmacenListas? = null,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return ScannerViewModel(catalogRepository, pricingRepository, puedeVerPrecios) as T
+        return ScannerViewModel(catalogRepository, pricingRepository, puedeVerPrecios, tiposCaptura, cache) as T
     }
 }

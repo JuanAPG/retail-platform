@@ -52,6 +52,13 @@ internal data class ObservacionPayload(
     /** "aprobado" o "rechazado" cuando el Responsable de precios ya decidió. */
     val decision: String? = null,
     val motivoDecision: String? = null,
+    /**
+     * SKU del producto y código de barras (el escaneado o, si no se escaneó, el de la presentación).
+     * SOLO para mostrarlos en la lista del teléfono: `aCapturaSync` no los lee y no viajan en el lote
+     * (el contrato de offline-sync solo acepta presentationId, storeId, content, captureId, capturedAt y type).
+     */
+    val sku: String? = null,
+    val codigoBarras: String? = null,
 )
 
 internal fun fechaIsoUtc(millis: Long): String =
@@ -105,6 +112,8 @@ data class ObservacionGuardada(
     val tiendaNombre: String,
     val productoNombre: String,
     val presentacionNombre: String?,
+    val sku: String? = null,
+    val codigoBarras: String? = null,
     /** precio_observado. */
     val precio: Double?,
     /** disponibilidad. */
@@ -177,6 +186,8 @@ class ObservationRepository(
         valor: Double,
         ubicacion: Ubicacion,
         distanciaATiendaMetros: Int?,
+        /** Código leído con la cámara; si no hubo, se guarda el de la presentación. */
+        codigoEscaneado: String? = null,
     ): Result<Long> = try {
         val ahora = System.currentTimeMillis()
         val esPrecio = tipo == TipoCaptura.PRECIO_OBSERVADO
@@ -190,6 +201,8 @@ class ObservationRepository(
             observedAt = fechaIsoUtc(ahora),
             precisionMetros = ubicacion.precisionMetros,
             distanciaATiendaMetros = distanciaATiendaMetros,
+            sku = producto.sku,
+            codigoBarras = codigoEscaneado?.trim()?.takeIf { it.isNotEmpty() } ?: presentacion.codigoBarras,
         )
         val fila = nuevaCaptura(
             tipo = tipo,
@@ -268,6 +281,8 @@ class ObservationRepository(
             tiendaNombre = payload?.storeName ?: "Tienda",
             productoNombre = payload?.productName ?: "Registro anterior",
             presentacionNombre = payload?.presentationName,
+            sku = payload?.sku,
+            codigoBarras = payload?.codigoBarras,
             precio = if (esPrecio) payload?.price else null,
             existencia = if (esPrecio) null else payload?.stock,
             latitud = latitude,

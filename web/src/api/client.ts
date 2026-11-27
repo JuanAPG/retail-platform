@@ -25,6 +25,8 @@ export const SERVICIOS = {
   segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
   // D-39: promociones (el Gerente propone; aprueba el Responsable de precios en el escritorio).
   promotion: { etiqueta: 'promotion-service', puerto: 3115, env: 'VITE_PROMOTION_URL' },
+  // D-41: seguimiento de recomendaciones aprobadas (el Gerente asigna y evalúa).
+  workflow: { etiqueta: 'recommendations-workflow-service', puerto: 3117, env: 'VITE_WORKFLOW_URL' },
   // T-09: estado de los 20 servicios (solo Administrador).
   monitoring: { etiqueta: 'monitoring-service', puerto: 3120, env: 'VITE_MONITORING_URL' },
 } as const;
@@ -214,6 +216,7 @@ export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
 export const segmentationApi = crearCliente('segmentation');
 export const monitoringApi = crearCliente('monitoring');
+export const workflowApi = crearCliente('workflow');
 export const promotionApi = crearCliente('promotion');
 
 export const ingestionApi = crearCliente('ingestion');

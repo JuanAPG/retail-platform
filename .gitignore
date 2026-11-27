@@ -17,3 +17,12 @@ local.properties
 
 # Salida del generador de datos del Parcial 3 (se regenera con la semilla; ver db/README-generador.md)
 db/generados/
+
+# Carga (Locust): tokens de las sesiones previas y salidas de las corridas
+carga/.sesiones.json
+carga/.fixtures.json
+carga/.ca-sistema.pem
+carga/resultados/
+
+# Mediciones de algorithms-core (scripts/medir-asociacion.ts): salida de tsc
+services/algorithms-core/scripts/build/

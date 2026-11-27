@@ -158,7 +158,7 @@ export function PreciosPanel() {
 
           <label className={`${labelClass} min-w-0`} htmlFor="precio-monto">
             Precio (MXN)
-            <input
+            <input placeholder="27.50"
               id="precio-monto"
               type="number"
               min={0}

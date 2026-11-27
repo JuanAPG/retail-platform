@@ -7,38 +7,39 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
     primary = Brand,
-    onPrimary = SurfaceWhite,
+    onPrimary = OnBrand,
     primaryContainer = BrandSoft,
     onPrimaryContainer = Brand,
-    secondary = BrandLight,
-    onSecondary = SurfaceWhite,
-    secondaryContainer = BrandSoft,
+    secondary = Sage,
+    onSecondary = OnBrand,
+    secondaryContainer = SurfaceLight,
     onSecondaryContainer = Brand,
-    tertiary = Success,
-    onTertiary = SurfaceWhite,
+    tertiary = Accent,
+    onTertiary = OnBrand,
+    tertiaryContainer = AccentSoft,
+    onTertiaryContainer = Accent,
     background = Background,
     onBackground = TextPrimary,
-    surface = SurfaceWhite,
+    surface = SurfaceArena,
     onSurface = TextPrimary,
-    surfaceVariant = BrandSoft,
+    surfaceVariant = SurfaceLight,
     onSurfaceVariant = TextMuted,
     surfaceTint = Brand,
-    surfaceContainerLowest = SurfaceWhite,
-    surfaceContainerLow = SurfaceWhite,
-    surfaceContainer = SurfaceWhite,
-    surfaceContainerHigh = BrandSoft,
-    surfaceContainerHighest = BrandSoft,
+    surfaceContainerLowest = SurfaceArena,
+    surfaceContainerLow = SurfaceArena,
+    surfaceContainer = SurfaceArena,
+    surfaceContainerHigh = SurfaceLight,
+    surfaceContainerHighest = SurfaceLight,
     outline = TextMuted,
     outlineVariant = Outline,
     error = Danger,
-    onError = SurfaceWhite,
+    onError = OnBrand,
     errorContainer = DangerSoft,
     onErrorContainer = Danger,
 )
@@ -52,7 +53,8 @@ private val DarkColors = darkColorScheme(
     onSecondary = DarkBackground,
     secondaryContainer = DarkBrandSoft,
     onSecondaryContainer = DarkBrand,
-    tertiary = Success,
+    tertiary = DarkError,
+    onTertiary = DarkBackground,
     background = DarkBackground,
     onBackground = DarkText,
     surface = DarkSurface,
@@ -67,10 +69,10 @@ private val DarkColors = darkColorScheme(
     surfaceContainerHighest = DarkBrandSoft,
     outline = DarkMuted,
     outlineVariant = DarkOutline,
-    error = Color(0xFFFF8A80),
+    error = DarkError,
     onError = DarkBackground,
-    errorContainer = Color(0xFF4A1F1B),
-    onErrorContainer = Color(0xFFFFB4AB),
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = DarkOnErrorContainer,
 )
 
 /**

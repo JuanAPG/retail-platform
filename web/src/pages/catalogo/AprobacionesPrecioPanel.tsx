@@ -152,7 +152,7 @@ export function AprobacionesPrecioPanel() {
       {aRechazar && (
         <Modal titulo="Rechazar propuesta" onCerrar={cerrar}>
           <div className="flex flex-col gap-3">
-            <TextArea id="motivo-rechazo-precio" label="Motivo (el proveedor lo verá)" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+            <TextArea placeholder="El precio supera el límite de la zona" id="motivo-rechazo-precio" label="Motivo (el proveedor lo verá)" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             {errorModal && <ErrorText>{errorModal}</ErrorText>}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={cerrar} className="rounded-full px-5 py-2.5 text-sm font-bold text-teal hover:bg-arena">

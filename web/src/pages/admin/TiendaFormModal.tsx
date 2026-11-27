@@ -105,7 +105,7 @@ export function TiendaFormModal({
     >
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field id="tienda-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <Field placeholder="Super Valle Centro" id="tienda-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
           <Select
             id="tienda-formato"
             label="Formato"
@@ -139,12 +139,12 @@ export function TiendaFormModal({
 
         <p className="text-xs font-bold uppercase tracking-wide text-salvia">Dirección</p>
 
-        <Field id="tienda-calle" label="Calle" required value={calle} onChange={(e) => setCalle(e.target.value)} />
+        <Field placeholder="Av. Constitución" id="tienda-calle" label="Calle" required value={calle} onChange={(e) => setCalle(e.target.value)} />
 
         <div className="grid grid-cols-3 gap-3">
-          <Field id="tienda-num-ext" label="No. exterior" value={numeroExterior} onChange={(e) => setNumeroExterior(e.target.value)} />
-          <Field id="tienda-num-int" label="No. interior" value={numeroInterior} onChange={(e) => setNumeroInterior(e.target.value)} />
-          <Field id="tienda-colonia" label="Colonia" value={colonia} onChange={(e) => setColonia(e.target.value)} />
+          <Field placeholder="1200" id="tienda-num-ext" label="No. exterior" value={numeroExterior} onChange={(e) => setNumeroExterior(e.target.value)} />
+          <Field placeholder="Local 3" id="tienda-num-int" label="No. interior" value={numeroInterior} onChange={(e) => setNumeroInterior(e.target.value)} />
+          <Field placeholder="Centro" id="tienda-colonia" label="Colonia" value={colonia} onChange={(e) => setColonia(e.target.value)} />
         </div>
 
         <div>

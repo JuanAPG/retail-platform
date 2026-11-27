@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 ENCABEZADO = 'folio,fecha,tienda,sku,presentacion,cantidad,precio\n'
 # Tope real de la vista previa de core-process hoy: 65,535 parámetros por consulta / 16 por línea.
 # Con 0 se desactiva el tope de líneas (cuando core-process guarde el staging en bloques).
@@ -172,6 +172,13 @@ CICLO_SEMANAL = [1.10, 0.95, 1.05, 0.90]
 TENDENCIA_SEMANAL = 0.004
 DIAS_SEMANA = [0.12, 0.12, 0.13, 0.13, 0.15, 0.19, 0.16]  # lunes a domingo
 
+# Unidades (ver Generador.unidades_por_precio): el total semanal de cada zona × presentación es
+# N̄ · UNIDADES_POR_LINEA · (precio / base)^E · demanda relativa de la semana. Con 1.67 (las unidades
+# por línea de antes) el redondeo tapaba la señal en las presentaciones chicas; con 2.5 las 32
+# presentaciones recuperan su E (nacional ±0.15, por zona ±0.3) desde 10k.
+UNIDADES_POR_LINEA = 2.5
+TOLERANCIA_E_NACIONAL, TOLERANCIA_E_ZONA = 0.15, 0.30
+
 # Casos de control (ver manifiesto.json -> controles).
 CTRL_FRONTERA_20 = 'GEN-CAF-200'    # exactamente 20 % de las canastas del grupo y mes de control
 CTRL_FRONTERA_19 = 'GEN-AVE-400'    # exactamente 19 %
@@ -303,11 +310,59 @@ class Generador:
             nivel = NIVELES_PRECIO[(semana * 2 + i * 3 + z * 5) % len(NIVELES_PRECIO)]
         return round(base * (1 + PERFILES[zona.segmento]['ajuste_precio']) * (1 + nivel), 2)
 
+    def precio_base(self, producto: Producto, presentacion: int, zona: Zona) -> float:
+        return producto.presentaciones[presentacion][3] * (1 + PERFILES[zona.segmento]['ajuste_precio'])
+
     def cantidad(self, producto: Producto, precio: float, presentacion: int, zona: Zona) -> int:
-        base = producto.presentaciones[presentacion][3] * (1 + PERFILES[zona.segmento]['ajuste_precio'])
-        factor = (precio / base) ** producto.elasticidad
+        """Unidades provisionales de una línea; `unidades_por_precio` fija las definitivas.
+
+        Se conserva el sorteo para no mover la secuencia de `self.rng`: así las canastas (qué
+        productos lleva cada venta, a qué precio) salen idénticas a las de la versión 1.2.0.
+        """
+        factor = (precio / self.precio_base(producto, presentacion, zona)) ** producto.elasticidad
         esperada = self.rng.choice([1, 1, 1, 2, 2, 3]) * factor
         return max(1, round(esperada))
+
+    def demanda(self, semana: int) -> float:
+        return (1 + TENDENCIA_SEMANAL * semana) * CICLO_SEMANAL[semana % 4]
+
+    def unidades_por_precio(self, ventas: list[Venta]) -> None:
+        """Las unidades de cada zona × presentación × semana siguen al precio con la E sembrada.
+
+        Antes el precio solo movía las unidades de cada línea (1 a 3) y el redondeo dejaba casi
+        siempre 1; cuántas canastas llevaban el producto no dependía del precio, y ese ruido tapaba
+        la señal (R² ≈ 0, signos al revés). Ahora el total de la semana es
+
+            T = N̄ · UNIDADES_POR_LINEA · (precio / base)^E · demanda(semana) / demanda media
+
+        con N̄ = líneas promedio por semana con venta de esa zona y presentación, y se reparte entre
+        las líneas de la semana (cada una con al menos 1). La demanda relativa conserva el ciclo y
+        la tendencia que ve el pronóstico. El azúcar de Zona Valle (D-40) conserva su serie exacta.
+        Usa su propio generador aleatorio: no mueve `self.rng`.
+        """
+        rng = random.Random(f'{self.semilla}-unidades')
+        celdas: dict[tuple, list[Linea]] = {}
+        for v in ventas:
+            for l in v.lineas:
+                celdas.setdefault((v.zona, l.sku, l.presentacion, v.semana), []).append(l)
+        lineas, semanas = {}, {}
+        for (zona, sku, pres, _), ls in celdas.items():
+            lineas[(zona, sku, pres)] = lineas.get((zona, sku, pres), 0) + len(ls)
+            semanas[(zona, sku, pres)] = semanas.get((zona, sku, pres), 0) + 1
+        media = sum(self.demanda(s) for s in range(self.semanas)) / self.semanas
+        zonas = {z.nombre: z for z in self.zonas}
+        for (zona, sku, pres, semana), ls in celdas.items():
+            if (sku, zona) == CTRL_PATRON:
+                continue
+            producto = POR_SKU[sku]
+            i = [p[0] for p in producto.presentaciones].index(pres)
+            factor = (ls[0].precio / self.precio_base(producto, i, zonas[zona])) ** producto.elasticidad
+            promedio = lineas[(zona, sku, pres)] / semanas[(zona, sku, pres)]
+            total = max(len(ls), round(promedio * UNIDADES_POR_LINEA * factor * self.demanda(semana) / media))
+            extra = repartir(total - len(ls), [1] * len(ls))
+            rng.shuffle(extra)
+            for l, e in zip(ls, extra):
+                l.cantidad = 1 + e
 
     # --- una canasta
 
@@ -391,6 +446,7 @@ class Generador:
             self.canasta(venta, chica)
             ventas.append(venta)
         self.sembrar_controles(ventas)
+        self.unidades_por_precio(ventas)
         ventas.sort(key=lambda v: (v.instante, v.folio))
         return ventas
 
@@ -629,9 +685,13 @@ def controles(gen: Generador) -> list[dict]:
            'esperado': {'semanas': semanas, 'status': 422 if semanas < 12 else 201}}
           for sku, semanas in CTRL_LANZAMIENTO.items()],
         {'id': 'DF-2-unidades-mezcladas', 'sku': CTRL_UNIDADES_MEZCLADAS, 'esperado': {'status': 422}},
-        {'id': 'elasticidad', 'esperado': {p.sku: p.elasticidad for p in PRODUCTOS
-                                           if p.sku in ('P-001-001', 'LDN-QUE-400', 'GEN-REF-600')},
-         'nota': 'inelástica, unitaria y elástica; el precio sigue un ciclo de 6 semanas'},
+        {'id': 'elasticidad', 'granularidad': 'week',
+         'tolerancia': {'nacional': TOLERANCIA_E_NACIONAL, 'zona': TOLERANCIA_E_ZONA},
+         'esperado': {p.sku: p.elasticidad for p in PRODUCTOS},
+         'nota': 'Cada presentación del producto tiene esta E. Log-log por zona × semana (Σ unidades, precio '
+                 'promedio ponderado); el nacional con efectos fijos por zona (ALG-E4). Frijol inelástica, '
+                 'queso unitaria, refresco elástica. El azúcar de Zona Valle tiene precio fijo (D-40) y no '
+                 'aporta. Las 106 ventas del seed (frijol, queso, leche) la mueven un poco en vivo.'},
         {'id': 'asociaciones', 'esperado': [{'antecedente': a, 'consecuente': c, 'probabilidad_agregada': p}
                                             for a, c, p in ASOCIACIONES]},
     ]

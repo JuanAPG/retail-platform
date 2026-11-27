@@ -22,6 +22,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Inventory
+import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SearchOff
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.udem.retaildecision.data.model.TipoCaptura
 import com.udem.retaildecision.data.remote.dto.PriceHistoryDto
 import com.udem.retaildecision.ui.components.AppTopBar
 import com.udem.retaildecision.ui.components.EmptyState
@@ -72,6 +75,8 @@ private fun dinero(texto: String): String =
 @Composable
 fun ScannerScreen(
     viewModel: ScannerViewModel,
+    /** Abre Capturas en tienda con el producto, la presentación y el tipo ya elegidos. */
+    onCapturar: (tipo: String, presentacionId: String, codigo: String) -> Unit,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
@@ -123,6 +128,9 @@ fun ScannerScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (state.usandoCopiaLocal) {
+                    InfoBanner("Sin conexión: se busca en el catálogo guardado en el teléfono.")
+                }
                 if (state.escaneando) {
                     if (permiso) {
                         InfoBanner("Apunta la cámara al código de barras de la presentación.")
@@ -185,7 +193,32 @@ fun ScannerScreen(
                     }
                 } else {
                     Resultado(state = state)
-                    Button(
+
+                    // Solo los tipos que el rol puede enviar; el Planeador, Gerente, Admin y Auditor no ven ninguno.
+                    val presentacion = state.presentacion
+                    if (presentacion != null && state.botonesCaptura.isNotEmpty()) {
+                        SectionTitle("Capturar en tienda")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            state.botonesCaptura.forEach { tipo ->
+                                Button(
+                                    onClick = { onCapturar(tipo, presentacion.id, state.codigo ?: presentacion.codigoBarras.orEmpty()) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium,
+                                ) {
+                                    Icon(
+                                        if (tipo == TipoCaptura.PRECIO_OBSERVADO) Icons.Rounded.Sell else Icons.Rounded.Inventory,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                    Text(textoBotonCaptura(tipo))
+                                }
+                            }
+                        }
+                    } else if (state.producto != null && state.tiposCaptura.isNotEmpty()) {
+                        InfoBanner("Este producto o presentación no está activo, así que no se puede capturar.")
+                    }
+
+                    OutlinedButton(
                         onClick = {
                             manual = ""
                             viewModel.escanearOtro()
