@@ -82,7 +82,8 @@ def correr_clustering(
     })
     # Bitácora y aviso de fondo, ya con la corrida guardada (STA-04). Si Mongo no
     # respondió no hay corrida y no se llega aquí: no se reporta.
-    tareas.add_task(reportes.clustering_terminado, guardada, *reportes.contexto(request))
+    tareas.add_task(reportes.clustering_terminado, guardada, *reportes.contexto(request),
+                    request.headers.get("x-correlation-id"))
     return guardada
 
 

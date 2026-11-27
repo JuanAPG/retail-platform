@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app import reportes
 from app.auth_session import sesion_actual
 from app.corridas import Corridas, obtener_corridas
+from app.fuentes import obtener_fuentes
 from app.main import app
 from app.roles import ROL
 
@@ -166,3 +167,83 @@ def test_el_limite_es_de_1_5_s():
     assert reportes.LIMITE_S == 1.5
     with reportes._cliente() as cliente:
         assert cliente.timeout.read == 1.5 and cliente.timeout.connect == 1.5
+
+
+# --- Linaje (D-43): solo una corrida de clustering con la entrada de los servicios
+
+ZONAS_DE_SERVICIOS = [
+    {"zoneId": "z-1", "zoneName": "Zona Valle", "estimatedIncome": 65000, "population": 120000, "availability": 0.9},
+    {"zoneId": "z-2", "zoneName": "Zona Centro", "estimatedIncome": 28000, "population": 90000, "availability": 0.8},
+    {"zoneId": "z-3", "zoneName": "Zona Oriente", "estimatedIncome": 12000, "population": 150000, "availability": 0.6},
+]
+
+
+class FuentesFalsas:
+    def zonas(self, _ids):
+        return [dict(z) for z in ZONAS_DE_SERVICIOS]
+
+    def ticket_promedio(self, *_):
+        return None
+
+
+@pytest.fixture
+def con_gobierno(monkeypatch):
+    monkeypatch.setenv("DATA_GOVERNANCE_SERVICE_URL", "http://data-governance-service:3119")
+
+
+def test_clustering_con_datos_de_los_servicios_registra_su_linaje(receptores, con_gobierno):
+    receptor = receptores()
+    app.dependency_overrides[obtener_fuentes] = lambda: FuentesFalsas()
+
+    r = analista().post("/v1/clustering/run", json={"k": 2, "features": ["estimatedIncome"]},
+                        headers={"X-Correlation-Id": "corr-clustering-1"})
+
+    assert r.status_code == 201
+    corrida = r.json()
+    assert corrida["parameters"]["source"] == "servicios"
+    [linaje] = receptor.cuerpos("/v1/lineage")
+    assert linaje == {
+        "service": "analytics-stats", "resourceType": "corrida", "resourceId": corrida["id"],
+        "description": "Clustering de 3 zona(s) en 2 grupos con estimatedIncome (semilla 42)",
+        "source": {"key": "ventas-core-process", "version": reportes.foto_de_entrada(corrida["input"])},
+        "occurredAt": corrida["date"],
+    }
+    [peticion] = [p for p in receptor.recibidos if p.url.path == "/v1/lineage"]
+    assert peticion.headers["authorization"] == TOKEN
+    assert peticion.headers["x-correlation-id"] == "corr-clustering-1"
+
+
+def test_clustering_con_zonas_en_el_cuerpo_no_registra_linaje(receptores, con_gobierno):
+    """Los datos los escribió quien hizo la petición: no salen de ninguna fuente registrada."""
+    receptor = receptores()
+
+    r = analista().post("/v1/clustering/run", json=CLUSTERING)
+
+    assert r.status_code == 201 and r.json()["parameters"]["source"] == "cuerpo"
+    assert receptor.cuerpos("/v1/lineage") == []
+    assert len(receptor.cuerpos("/v1/auditoria")) == 1   # la bitácora sigue igual
+
+
+def test_sin_la_variable_no_se_registra_linaje(receptores):
+    receptor = receptores()
+    app.dependency_overrides[obtener_fuentes] = lambda: FuentesFalsas()
+
+    assert analista().post("/v1/clustering/run", json={"k": 2, "features": ["estimatedIncome"]}).status_code == 201
+    assert receptor.cuerpos("/v1/lineage") == []
+
+
+def test_data_governance_caido_no_cambia_la_corrida(receptores, con_gobierno):
+    receptores(falla=httpx.ConnectError("data-governance no responde"))
+    app.dependency_overrides[obtener_fuentes] = lambda: FuentesFalsas()
+
+    assert analista().post("/v1/clustering/run", json={"k": 2, "features": ["estimatedIncome"]}).status_code == 201
+
+
+def test_foto_de_la_entrada():
+    """SHA-256 que no depende del orden de las zonas, y que cambia si cambia un dato."""
+    foto = reportes.foto_de_entrada(ZONAS_DE_SERVICIOS)
+    assert len(foto) == 64
+    assert reportes.foto_de_entrada(list(reversed(ZONAS_DE_SERVICIOS))) == foto
+    otra = [dict(z) for z in ZONAS_DE_SERVICIOS]
+    otra[0]["estimatedIncome"] = 65001
+    assert reportes.foto_de_entrada(otra) != foto
