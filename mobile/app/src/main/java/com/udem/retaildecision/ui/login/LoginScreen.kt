@@ -37,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -49,6 +48,7 @@ import com.udem.retaildecision.ui.components.RetailCard
 import com.udem.retaildecision.ui.theme.Brand
 import com.udem.retaildecision.ui.theme.BrandDark
 import com.udem.retaildecision.ui.theme.BrandLight
+import com.udem.retaildecision.ui.theme.OnBrand
 
 /**
  * Pantalla "tonta": solo lee `uiState` y manda eventos al ViewModel
@@ -86,17 +86,17 @@ fun LoginScreen(
             Box(
                 modifier = Modifier
                     .size(72.dp)
-                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(22.dp)),
+                    .background(OnBrand.copy(alpha = 0.18f), RoundedCornerShape(22.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.Storefront, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                Icon(Icons.Rounded.Storefront, contentDescription = null, tint = OnBrand, modifier = Modifier.size(40.dp))
             }
             Spacer(Modifier.height(16.dp))
-            Text("Retail Decision", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text("Retail Decision", style = MaterialTheme.typography.headlineMedium, color = OnBrand)
             Text(
                 "Ingreso y patrones de consumo minorista",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.8f),
+                color = OnBrand.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(28.dp))

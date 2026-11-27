@@ -8,6 +8,8 @@ import com.udem.retaildecision.ui.theme.Teal
 import com.udem.retaildecision.ui.theme.TealSoft
 import com.udem.retaildecision.ui.theme.Warning
 import com.udem.retaildecision.ui.theme.WarningSoft
+import com.udem.retaildecision.ui.theme.Azul
+import com.udem.retaildecision.ui.theme.AzulSoft
 
 /** Insignia del nivel de ingreso de la zona. Los colores solo distinguen niveles; ninguno es "bueno" o "malo". */
 @Composable
@@ -15,7 +17,7 @@ fun IngresoPill(nivel: NivelIngreso, modifier: Modifier = Modifier) {
     val colores = MaterialTheme.colorScheme
     val (fondo, texto) = when (nivel.tono) {
         TonoIngreso.BAJO -> WarningSoft to Warning
-        TonoIngreso.MEDIO -> colores.primaryContainer to colores.primary
+        TonoIngreso.MEDIO -> AzulSoft to Azul
         TonoIngreso.ALTO -> TealSoft to Teal
         TonoIngreso.NEUTRO -> colores.surfaceVariant to colores.onSurfaceVariant
     }

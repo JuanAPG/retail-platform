@@ -44,6 +44,7 @@ import com.udem.retaildecision.ui.theme.Danger
 import com.udem.retaildecision.ui.theme.DangerSoft
 import com.udem.retaildecision.ui.theme.Success
 import com.udem.retaildecision.ui.theme.SuccessSoft
+import com.udem.retaildecision.ui.theme.OnBrand
 
 /**
  * Componentes reutilizables. Cualquier pantalla nueva (Catálogo, Zonas, Precios, Escáner…)
@@ -149,13 +150,13 @@ fun ConnectivityPill(online: Boolean, modifier: Modifier = Modifier) {
         Icon(
             if (online) Icons.Rounded.Wifi else Icons.Rounded.WifiOff,
             contentDescription = null,
-            tint = Color.White,
+            tint = OnBrand,
             modifier = Modifier.size(14.dp),
         )
         Text(
             if (online) "En línea" else "Sin conexión",
             style = MaterialTheme.typography.labelMedium,
-            color = Color.White,
+            color = OnBrand,
         )
     }
 }
