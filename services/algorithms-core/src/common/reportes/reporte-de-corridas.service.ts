@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuditReporter } from '../audit/audit-reporter.service';
+import { LineageReporter } from '../linaje/lineage-reporter.service';
 import { NotificationsReporter } from '../notifications/notifications-reporter.service';
 
 /** Lo que el controlador sabe de la petición y los servicios no: el token y la IP. */
@@ -7,6 +8,8 @@ export interface ContextoPeticion {
   /** `Authorization` de quien lanzó la corrida: audit y notifications lo exigen. */
   token?: string;
   ip?: string | null;
+  /** `X-Correlation-Id` de la petición, si vino: va al linaje (contrato de data-governance). */
+  correlacion?: string;
 }
 
 /** Una corrida que acaba de terminar, completada o fallida. */
@@ -21,6 +24,13 @@ export interface CorridaTerminada {
   /** Una línea: qué salió (o que falló). Va a la bitácora y al aviso. */
   resumen: string;
   periodo?: { start: string; end: string };
+  /**
+   * SHA-256 de la foto de los datos (D-15). Con ella, una corrida completada se registra en el
+   * linaje (D-43): es la versión de la fuente `ventas-core-process`.
+   */
+  foto?: string;
+  /** Una línea para el linaje: qué se analizó. */
+  descripcion?: string;
 }
 
 /**
@@ -45,6 +55,7 @@ export class ReporteDeCorridas {
   constructor(
     private readonly auditoria: AuditReporter,
     private readonly avisos: NotificationsReporter,
+    private readonly linaje: LineageReporter,
   ) {}
 
   async terminada(corrida: CorridaTerminada, usuarioId: string, contexto: ContextoPeticion = {}): Promise<void> {
@@ -82,6 +93,16 @@ export class ReporteDeCorridas {
             recipientUserId: usuarioId,
           },
           contexto.token,
+        ),
+      );
+    }
+    // D-43: solo una corrida completada y con foto tiene de dónde salió (una fallida no produjo nada).
+    if (completada && corrida.runId && corrida.foto) {
+      envios.push(
+        this.linaje.registrar(
+          { runId: corrida.runId, foto: corrida.foto, descripcion: corrida.descripcion ?? corrida.resumen, fecha: new Date() },
+          contexto.token,
+          contexto.correlacion,
         ),
       );
     }

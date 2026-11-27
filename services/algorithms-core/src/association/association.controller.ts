@@ -43,11 +43,12 @@ export class AssociationController {
     @Body() params: AprioriParamsDto,
     @CurrentUser() user: SesionUsuario,
     @Headers('authorization') token: string | undefined,
+    @Headers('x-correlation-id') correlacion: string | undefined,
     @Ip() ip: string,
   ) {
     // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar. El
     // token y la IP van a la bitácora y al aviso de la corrida (ALG-10).
-    return this.associationService.runApriori(params, user, { token, ip });
+    return this.associationService.runApriori(params, user, { token, ip, correlacion });
   }
 
   @Post('fpgrowth/run')
@@ -70,9 +71,10 @@ export class AssociationController {
     @Body() params: AprioriParamsDto,
     @CurrentUser() user: SesionUsuario,
     @Headers('authorization') token: string | undefined,
+    @Headers('x-correlation-id') correlacion: string | undefined,
     @Ip() ip: string,
   ) {
-    return this.associationService.runFpGrowth(params, user, { token, ip });
+    return this.associationService.runFpGrowth(params, user, { token, ip, correlacion });
   }
 
   @Get('runs')

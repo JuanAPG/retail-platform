@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { DataSource, EntityManager } from 'typeorm';
 import { SesionUsuario } from '../common/auth/session.guard';
 import { ContextoPeticion, ReporteDeCorridas } from '../common/reportes/reporte-de-corridas.service';
@@ -15,7 +16,7 @@ import { AnalysisRun } from '../entities/analysis-run.entity';
 import { AnalysisRunParameter } from '../entities/analysis-run-parameter.entity';
 import { AnalysisRunAssumption } from '../entities/analysis-run-assumption.entity';
 import { Elasticity } from '../entities/elasticity.entity';
-import { FuenteDatos } from '../fuente-datos/fuente-datos.service';
+import { FuenteDatos, VentaAgregada } from '../fuente-datos/fuente-datos.service';
 import { CurrentElasticity, CurrentElasticityFilterDto } from './dto/current-elasticity.dto';
 import { ElasticityChartBar, ElasticityChartData, ElasticityChartValue } from './dto/elasticity-chart-data.dto';
 import { ElasticityFilterDto } from './dto/elasticity-filter.dto';
@@ -46,6 +47,20 @@ const NATIONAL = 'Nacional';
 
 /** Nombre en español de cada periodo, para los textos de assumptions/notas. */
 const ETIQUETA_GRANULARIDAD: Record<Granularity, string> = { day: 'día', week: 'semana', month: 'mes' };
+
+/**
+ * Foto de los datos de una corrida de elasticidad (D-15): SHA-256 de las observaciones que se usaron
+ * (presentación, zona, periodo, cantidad e ingreso), en un orden fijo que no depende del orden en
+ * que llegaron. Va como parámetro `foto_datos` de la corrida y es la versión de la fuente
+ * `ventas-core-process` en el linaje (D-43). Las cifras se escriben con 6 decimales: sin ruido de
+ * punto flotante, y de sobra para cantidades y montos con 2.
+ */
+export function fotoDeVentas(rows: VentaAgregada[]): string {
+  const lineas = rows
+    .map((r) => [r.presentationId, r.zoneId, r.period, r.quantity.toFixed(6), r.revenue.toFixed(6)].join('|'))
+    .sort();
+  return createHash('sha256').update(lineas.join('\n')).digest('hex');
+}
 
 /**
  * Un `granularity` que viene de la base (parámetro guardado en texto) y
@@ -193,6 +208,7 @@ export class ElasticityService {
     const corrida = { tipo: 'elasticidad' as const, nombre: 'Elasticidad', periodo: period };
 
     let resultado: ElasticityResult;
+    let foto = '';
     try {
       const [names, zones] = await Promise.all([
         this.fuente.nombresDePresentaciones([...new Set(rows.map((r) => r.presentationId))]),
@@ -201,6 +217,7 @@ export class ElasticityService {
           .then((lista) => new Map(lista.map((z) => [z.id, z.nombre]))),
       ]);
       const { results, insufficient } = estimateElasticities(rows, names, zones);
+      foto = fotoDeVentas(rows);
 
       const runId = await this.saveElasticityRun({
         user,
@@ -210,6 +227,8 @@ export class ElasticityService {
           ...baseParameters(params, granularity),
           ['resultados_calculados', results.length],
           ['combinaciones_insuficientes', insufficient.length],
+          // D-15: con qué datos se calculó; es la versión de la fuente en el linaje (D-43).
+          ['foto_datos', foto],
         ],
         assumptions,
         results,
@@ -238,6 +257,10 @@ export class ElasticityService {
         resumen:
           `${resultado.results.length} resultado(s) y ${resultado.insufficient.length} combinación(es) sin datos ` +
           `suficientes; observaciones por ${ETIQUETA_GRANULARIDAD[granularity]}.`,
+        foto,
+        descripcion:
+          `Elasticidad por ${ETIQUETA_GRANULARIDAD[granularity]} sobre ${rows.length} observación(es) ` +
+          `zona × periodo, ${period.start} a ${period.end}`,
       },
       user.id,
       contexto,
