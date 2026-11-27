@@ -146,7 +146,7 @@ perfil** (`sesiones.py --por-perfil 12`). Si faltan, los usuarios extra quedan i
 | CPU, RAM y disco | `medir/recursos.py` (en la VM) | Listo; en staging falta correrlo **en la VM** junto a Locust |
 | Planes de consulta e índices en PostgreSQL y Mongo | `medir/planes.py` | Listo (10k local abajo); en staging se corre en la VM |
 | Caída completa de Redis y su 503 controlado | `medir/redis_caido.py` | Listo **en local**; en staging, Juan Ángel en una ventana acordada (`infra/staging/pruebas-de-fallos.md`) |
-| Caché activa contra omitida, con la sesión vigente | — | **Pendiente con Pamela**: catalog-service cachea en Redis categorías, unidades, municipios y códigos postales (`catalog:*`, TTL 1 h) sin forma de apagarlo. Hay que acordar el control. |
+| Caché activa contra omitida, con la sesión vigente | `CATALOG_CACHE` en catalog-service | Listo para medir: catalog-service cachea en Redis categorías, unidades, municipios y códigos postales (`catalog:*`, TTL 1 h). Con `CATALOG_CACHE=off` va directo a Postgres sin leer ni escribir Redis (mismas respuestas). Corrida A con la variable en `on` (valor por defecto), corrida B con `CATALOG_CACHE=off docker compose -f infra/docker-compose.yml up -d catalog-service`; la sesión se sigue validando en Redis en ambas. |
 
 ### Staging, 27 de noviembre de 2026 (10k ventas)
 

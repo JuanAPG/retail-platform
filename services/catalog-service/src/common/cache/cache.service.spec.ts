@@ -24,6 +24,35 @@ function redisFalso(): RedisFalso {
 }
 
 describe('CacheService.obtener', () => {
+  afterEach(() => {
+    delete process.env.CATALOG_CACHE;
+  });
+
+  it('con CATALOG_CACHE=off carga siempre de la fuente y no toca Redis', async () => {
+    const redis = redisFalso();
+    redis.get.mockResolvedValue('{"a":2}');
+    process.env.CATALOG_CACHE = 'off';
+    const cargar = jest.fn().mockResolvedValue({ a: 1 });
+
+    const servicio = new CacheService();
+    expect(await servicio.obtener('catalog:x', 300, cargar)).toEqual({ a: 1 });
+    expect(await servicio.obtener('catalog:x', 300, cargar)).toEqual({ a: 1 });
+
+    expect(cargar).toHaveBeenCalledTimes(2);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it('cualquier otro valor de CATALOG_CACHE deja la caché activa', async () => {
+    const redis = redisFalso();
+    redis.get.mockResolvedValue('{"a":2}');
+    process.env.CATALOG_CACHE = 'on';
+    const cargar = jest.fn();
+
+    expect(await new CacheService().obtener('catalog:x', 300, cargar)).toEqual({ a: 2 });
+    expect(cargar).not.toHaveBeenCalled();
+  });
+
   it('en un MISS carga, guarda como JSON con TTL y devuelve el valor', async () => {
     const redis = redisFalso();
     const cargar = jest.fn().mockResolvedValue({ a: 1 });

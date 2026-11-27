@@ -20,6 +20,11 @@ function conLimite<T>(promesa: Promise<T>): Promise<T> {
   });
 }
 
+/** `CATALOG_CACHE=off` (o `false`/`0`) apaga la caché de catálogos; cualquier otro valor la deja activa. */
+export function cacheApagada(): boolean {
+  return ['off', 'false', '0'].includes((process.env.CATALOG_CACHE ?? '').trim().toLowerCase());
+}
+
 /**
  * Caché sobre el Redis compartido (Sprint 2+3). Convención de llaves:
  * `<prefijo-del-servicio>:<recurso>[:<parámetros>]`, con un prefijo propio por
@@ -42,6 +47,9 @@ export class CacheService {
    * `ttlSegundos` y lo devuelve.
    */
   async obtener<T>(clave: string, ttlSegundos: number, cargar: () => Promise<T>): Promise<T> {
+    // Interruptor para medir (Parcial 3, carga/README.md): con CATALOG_CACHE=off se va directo a
+    // Postgres, sin leer ni escribir Redis. Las respuestas son las mismas; solo cambia el tiempo.
+    if (cacheApagada()) return cargar();
     try {
       const guardado = await conLimite(getRedis().get(clave));
       if (guardado !== null) {

@@ -224,6 +224,8 @@ services:
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Caché de catálogos en Redis: 'off' la apaga para medir contra Postgres (carga/README.md).
+      CATALOG_CACHE: ${CATALOG_CACHE:-on}
       AUTH_SERVICE_URL: http://auth-service:3101
       DB_HOST: postgres
       DB_PORT: 5432
