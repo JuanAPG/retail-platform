@@ -1,7 +1,8 @@
 /**
  * Integración de offline-sync-service contra MongoDB y Redis REALES y
  * aislados (contenedores `offline-sync-it-*`). El destino es el
- * `DestinoSimulado` (el mapeo real está PENDIENTE con Pamela); audit-service y
+ * `DestinoSimulado` (`SYNC_DESTINO=simulado`, por sus ganchos de prueba; los
+ * destinos reales los prueba `destinos-reales.integracion.spec.ts`); audit-service y
  * notifications-service son un servidor falso.
  *
  *   npm run test:integracion
@@ -125,6 +126,8 @@ describe('offline-sync-service · integración (Mongo y Redis reales, aislados)'
     expect(r.correlacion).toBe('it-health-1');
     expect(r.cuerpo.checks).toEqual({ postgres: 'no configurado', mongodb: 'ok', redis: 'ok' });
     expect(r.cuerpo.status).toBe('ok');
+    // Modo del destino: solo en JSON (health.xsd no lo admite).
+    expect(r.cuerpo.destinos).toEqual({ modo: 'simulado', availability: 'no configurado', pricing: 'no configurado' });
     const x = await http('GET', `${base}/v1/health`, { accept: XML });
     expect(x.texto).not.toContain('xmlns');
     expect(errorDeXsd(x.texto, HEALTH_XSD)).toBeNull();

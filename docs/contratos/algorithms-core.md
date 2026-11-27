@@ -323,10 +323,26 @@ puntos.
 La elasticidad se calcula siempre **por cada zona más el agregado nacional**;
 la comparación entre zonas o segmentos la hace `GET /v1/elasticity/chart`. El
 nacional es una sola regresión sobre las observaciones zona × periodo de todas
-las zonas: no suma las zonas de un mismo periodo.
+las zonas: no suma las zonas de un mismo periodo, y **estima la pendiente dentro
+de cada zona** (efectos fijos por zona, ver ALG-E4).
+
+**Reglas de publicación (decididas en este dominio, Sprint 4).** Reportado por el
+equipo al probar desde escritorio: elasticidades con 3 observaciones de hasta
+77.86, E = 0 "inelástica" sin variación y 56 % de valores positivos.
+
+| ID | Regla | Frontera (prueba) |
+|---|---|---|
+| **ALG-E1** | Se publica con al menos **8 observaciones** zona × periodo (antes 3): con 3 puntos una sola semana atípica mueve la pendiente a cualquier valor | 7 → `insufficient`; 8 → se publica |
+| **ALG-E2** | Al menos **3 precios distintos** (antes 2), comparados **al centavo**: el promedio ponderado de un periodo arrastra decimales que no son otro precio | 2 precios → `insufficient`; 3 → se publica. $18.001 y $18.004 son el mismo precio |
+| **ALG-E3** | **Cantidad constante → no calculable** (antes salía E = 0 "inelástica"). Igual que sin variación de precio (D-18): nunca un 0 inventado | 8 semanas con la misma cantidad → `insufficient` |
+| **ALG-E4** | El agregado nacional usa **efectos fijos por zona** (cada zona se centra en su media antes de ajustar). Sin ellos, la zona que vende más y cobra más por su tamaño o ingreso volteaba el signo (paradoja de Simpson). Con una sola zona da exactamente la regresión de siempre | Dos zonas con E = −1.5 y niveles distintos → nacional −1.5 (sin efectos fijos salía positivo) |
+
+Los casos de QA de 3 puntos (referencias de scipy) siguen verificando la
+**fórmula**; las reglas de arriba deciden si el número se publica. Corridas ya
+guardadas no cambian: se recalculan con una corrida nueva.
 
 Claves de `parameters` guardadas: `metodo` (`regresion_log_log`),
-`granularidad`, `observaciones_minimas` (3), `precios_distintos_minimos` (2),
+`granularidad`, `observaciones_minimas` (8), `precios_distintos_minimos` (3), `agregado_nacional` (`efectos_fijos_por_zona`),
 `presentacion_id` (si se filtró), `dateFrom` y `dateTo` (si se filtró por
 fecha — su presencia es lo que distingue una corrida exploratoria de una de
 ventana completa, ver D-22 en `GET /v1/elasticity/current`), `resultados_calculados`,
@@ -383,9 +399,10 @@ Response `201`:
 | `atypical` | `true` si E > 0 (la demanda sube con el precio): no se lee como una elasticidad normal |
 
 `insufficient[]` lista las combinaciones presentación–zona sin datos
-suficientes, con uno de estos `reason`: un solo precio en el periodo; menos de
-3 observaciones; precios o cantidades no positivos; o un valor que excede el
-máximo que se puede guardar (±999 999.9999, datos extremos). Una combinación así
+suficientes, con uno de estos `reason`: un solo precio en el periodo (o sin
+cambio de precio dentro de cada zona); menos de 3 precios distintos; menos de 8
+observaciones; la cantidad no cambió; precios o cantidades no positivos; o un
+valor que excede el máximo que se puede guardar (±999 999.9999, datos extremos). Una combinación así
 no detiene la corrida: las demás se calculan y se guardan.
 
 XML: elementos `elasticityCalculateRequest` y `elasticityCalculateResponse`.

@@ -1,57 +1,50 @@
-import { API_BASE_URL, httpClient } from './httpClient';
-import { unwrap } from './xml';
+import { pedir } from './httpClient';
 import {
   Municipality,
+  Producto,
   Zone,
   ZoneComparison,
   parseComparison,
   parseMunicipalities,
+  parseProductPage,
   parseZonePage,
 } from './catalogParsers';
 
-/**
- * catalog-service vive en su propio puerto (3102), distinto al de
- * auth-service. Por eso este servicio usa su propia URL base
- * (VITE_CATALOG_BASE_URL) y reutiliza el mismo cliente: así conserva el
- * token, el Accept: application/xml y el reintento por 401.
+/*
+ * catalog-service (3102). Contrato: docs/contratos/catalog-service.md, XSD catalog-service.xsd
+ * (namespace catalog/v1). Solo lecturas desde el escritorio.
  */
-const CATALOG_URL = import.meta.env.VITE_CATALOG_BASE_URL ?? deriveUrl(3102);
 
-/** Si no hay variable, se asume el mismo host que auth-service pero con otro puerto. */
-function deriveUrl(port: number): string {
-  try {
-    const url = new URL(API_BASE_URL);
-    url.port = String(port);
-    return url.toString();
-  } catch {
-    return `http://localhost:${port}/`;
-  }
-}
-
-const catalog = (path: string, params?: Record<string, unknown>) =>
-  httpClient.get(path, { baseURL: CATALOG_URL, params });
-
-/** Trae TODAS las zonas (el servicio pagina; el máximo por página es 100). */
+/** Trae TODAS las zonas (el servicio pagina; máximo 100 por página). */
 export async function listZones(): Promise<Zone[]> {
   const all: Zone[] = [];
-  let page = 1;
-  // Se pide página por página hasta completar `total`.
-  for (;;) {
-    const res = await catalog('v1/zones', { page, limit: 100 });
-    const parsed = parseZonePage(unwrap(res.data));
+  for (let page = 1; ; page += 1) {
+    const parsed = parseZonePage(
+      await pedir({ servicio: 'catalog', ruta: 'v1/zones', params: { page, limit: 100 }, raiz: 'zoneListResponse' }),
+    );
     all.push(...parsed.zones);
-    if (all.length >= parsed.total || parsed.zones.length === 0) break;
-    page += 1;
+    if (all.length >= parsed.total || parsed.zones.length === 0) return all;
   }
-  return all;
 }
 
 export async function listMunicipalities(): Promise<Municipality[]> {
-  const res = await catalog('v1/municipalities');
-  return parseMunicipalities(unwrap(res.data));
+  return parseMunicipalities(await pedir({ servicio: 'catalog', ruta: 'v1/municipalities', raiz: 'municipalityListResponse' }));
 }
 
 export async function compareZones(ids: string[]): Promise<ZoneComparison[]> {
-  const res = await catalog('v1/zones/compare', { ids: ids.join(',') });
-  return parseComparison(unwrap(res.data));
+  return parseComparison(
+    await pedir({ servicio: 'catalog', ruta: 'v1/zones/compare', params: { ids: ids.join(',') }, raiz: 'zoneCompareResponse' }),
+  );
+}
+
+/** Productos con sus presentaciones (para elegir qué simular o graficar). */
+export async function listProducts(): Promise<Producto[]> {
+  const all: Producto[] = [];
+  for (let page = 1; ; page += 1) {
+    const parsed = parseProductPage(
+      await pedir({ servicio: 'catalog', ruta: 'v1/products', params: { page, limit: 100 }, raiz: 'productListResponse' }),
+    );
+    all.push(...parsed.productos);
+    if (all.length >= parsed.total || parsed.productos.length === 0) return all;
+  }
 }

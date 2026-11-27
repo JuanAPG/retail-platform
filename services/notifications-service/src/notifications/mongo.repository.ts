@@ -9,6 +9,7 @@ import {
   NotificacionGuardada,
   NotificationsRepository,
 } from './notifications.repository';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 import { NotificacionDocument, NotificacionMongo } from './schemas/notification.schema';
 
 /**
@@ -25,7 +26,7 @@ export class MongoNotificationsRepository implements NotificationsRepository {
   ) {}
 
   async crear(datos: CrearNotificacion): Promise<NotificacionGuardada> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await this.modelo.create({ ...datos, readBy: [], archived: false, createdAt: new Date() });
     return this.aGuardada(doc.toObject());
   }
@@ -36,7 +37,7 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     destinatario: Destinatario,
     desde: Date,
   ): Promise<NotificacionGuardada | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await this.modelo
       .findOne({
         eventType,
@@ -61,7 +62,7 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     skip: number;
     limit: number;
   }): Promise<{ filas: NotificacionGuardada[]; total: number }> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const filtro: FilterQuery<NotificacionDocument> = this.visibles(filtros.userId, filtros.rol, filtros.soloObligatorias);
     if (!filtros.incluirArchivadas) filtro.archived = false;
     if (filtros.dateFrom || filtros.dateTo) {
@@ -78,13 +79,13 @@ export class MongoNotificationsRepository implements NotificationsRepository {
   }
 
   async buscarPorId(id: string): Promise<NotificacionGuardada | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const doc = await this.modelo.findById(id).lean();
     return doc ? this.aGuardada(doc) : null;
   }
 
   async marcarLeida(id: string, userId: string): Promise<NotificacionGuardada | null> {
-    this.exigirMongo();
+    await this.exigirMongo();
     // Solo agrega la marca si ese usuario no la tiene: idempotente.
     await this.modelo.updateOne(
       { _id: id, 'readBy.userId': { $ne: userId } },
@@ -94,7 +95,7 @@ export class MongoNotificationsRepository implements NotificationsRepository {
   }
 
   async contarNoLeidas(userId: string, rol?: string, soloObligatorias?: boolean): Promise<number> {
-    this.exigirMongo();
+    await this.exigirMongo();
     return this.modelo.countDocuments({
       ...this.visibles(userId, rol, soloObligatorias),
       archived: false,
@@ -103,19 +104,19 @@ export class MongoNotificationsRepository implements NotificationsRepository {
   }
 
   async archivarAnteriores(corte: Date): Promise<number> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const r = await this.modelo.updateMany({ archived: false, createdAt: { $lt: corte } }, { $set: { archived: true } });
     return r.modifiedCount;
   }
 
   async aceptaInformativas(userId: string): Promise<boolean> {
-    this.exigirMongo();
+    await this.exigirMongo();
     const document = await this.preferencias.findById(userId).lean();
     return document?.informational ?? true;
   }
 
   async guardarPreferencia(userId: string, informational: boolean): Promise<void> {
-    this.exigirMongo();
+    await this.exigirMongo();
     await this.preferencias.updateOne({ _id: userId }, { $set: { informational } }, { upsert: true });
   }
 
@@ -133,8 +134,8 @@ export class MongoNotificationsRepository implements NotificationsRepository {
     return opciones;
   }
 
-  private exigirMongo(): void {
-    if (this.conexion.readyState !== 1) {
+  private async exigirMongo(): Promise<void> {
+    if (!(await asegurarMongo(this.conexion))) {
       throw new ServiceUnavailableException('Las notificaciones (MongoDB) no están disponibles. Intenta más tarde.');
     }
   }

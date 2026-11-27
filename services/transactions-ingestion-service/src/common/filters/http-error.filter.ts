@@ -69,7 +69,9 @@ export class HttpErrorFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     const esHttp = exception instanceof HttpException;
-    const status = esHttp ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+    const dependenciaCaida = !esHttp && esFalloDeConexion(exception);
+    const status = esHttp ? exception.getStatus()
+      : dependenciaCaida ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.INTERNAL_SERVER_ERROR;
     const body = esHttp ? exception.getResponse() : null;
     const bodyObj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null;
 
@@ -83,6 +85,7 @@ export class HttpErrorFilter implements ExceptionFilter {
       ? 'La petición no pasó la validación.'
       : typeof crudo === 'string' && crudo.length > 0
         ? crudo
+        : dependenciaCaida ? 'La base de datos está temporalmente indisponible.'
         : // Una excepción no-HTTP trae texto interno (driver de BD, ioredis):
           // no se expone al cliente, se registra con su stack más abajo.
           'Error interno del servidor.';
@@ -125,6 +128,14 @@ export class HttpErrorFilter implements ExceptionFilter {
     }
     response.status(status).json(cuerpo);
   }
+}
+
+function esFalloDeConexion(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code ?? '';
+  return /^08[A-Z0-9]{3}$/.test(code) ||
+    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENETUNREACH', '57P01', '57P02', '57P03', '53300'].includes(code) ||
+    ['Connection terminated unexpectedly', 'timeout exceeded when trying to connect'].includes(error.message);
 }
 
 function codeForStatus(status: number): string {

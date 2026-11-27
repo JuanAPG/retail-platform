@@ -8,6 +8,7 @@ import databaseConfig from './config/database.config';
 import { ElasticityModule } from './elasticity/elasticity.module';
 import { HealthController } from './health/health.controller';
 import { SessionGuard } from './common/auth/session.guard';
+import { conexionTolerante, OPCIONES_MONGO, uriMongo } from './common/mongo/asegurar-mongo';
 import { SubstitutionModule } from './substitution/substitution.module';
 
 /**
@@ -19,6 +20,11 @@ import { SubstitutionModule } from './substitution/substitution.module';
  * elasticidades y exclusiones siguen en Postgres. `serverSelectionTimeoutMS`
  * corto y sin buffer (patrón de notifications-service): si Mongo se cae, el
  * health sale `degraded` y las rutas de asociación responden 503 (D-25).
+ *
+ * `lazyConnection` + listener de error (mismo arreglo que #116 y #136): con
+ * Mongo caído AL ARRANCAR el servicio ya no muere tras los reintentos de
+ * Mongoose. `asegurarMongo()` reabre la conexión bajo demanda, así que al
+ * volver Mongo el servicio se recupera sin reiniciar.
  */
 @Module({
   imports: [
@@ -27,10 +33,7 @@ import { SubstitutionModule } from './substitution/substitution.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => config.getOrThrow('database'),
     }),
-    MongooseModule.forRoot(process.env.MONGO_URL ?? 'mongodb://localhost:27017/retaildb', {
-      serverSelectionTimeoutMS: 2000,
-      bufferCommands: false,
-    }),
+    MongooseModule.forRoot(uriMongo(), { ...OPCIONES_MONGO, lazyConnection: true, connectionFactory: conexionTolerante }),
     JwtModule.register({}),
     AssociationModule,
     ElasticityModule,

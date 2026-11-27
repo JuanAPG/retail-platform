@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<loginResponse xmlns="auth/v1">
+  <accessToken>aaa.bbb.ccc</accessToken>
+  <refreshToken>ddd.eee.fff</refreshToken>
+  <usuario>
+    <id>27f05c81-c6bf-456a-a273-150e4edb9900</id>
+    <nombre>Ana Analista</nombre>
+    <email>analista@retail.local</email>
+    <rolId>2</rolId>
+    <activo>true</activo>
+    <createdAt>2026-09-01T10:00:00.000Z</createdAt>
+    <updatedAt>2026-09-01T10:00:00.000Z</updatedAt>
+    <rol>Analista comercial</rol>
+  </usuario>
+</loginResponse>

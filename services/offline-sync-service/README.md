@@ -10,23 +10,49 @@ XSD), aplica la idempotencia por `captureId` y la regla de conflicto de **D-42**
   D-25 (almacén caído → 503), D-43 (retención de 1 año), D-26 (solo ids de usuario).
 - Base: `services/template-nest/` (correlación, error estándar, health, XML, `SessionGuard`).
 
-## ⚠️ Qué está SIMULADO
+## Destinos de las capturas (`SYNC_DESTINO`)
 
-**Los destinos de las capturas están simulados.** El mapeo hacia availability-service
-(3114), pricing-service (3103), visitas de campo y propuestas de producto quedó
-**PENDIENTE de acuerdo con Pamela** (contrato §6). Por eso:
+| `SYNC_DESTINO` | Qué pasa con cada captura |
+|---|---|
+| `http` (por defecto, Dockerfile y `.env.example`) | `DestinoHttp`: `disponibilidad` → availability-service (`POST /v1/availability/captures`), `precio_observado` → pricing-service (`POST /v1/price-observations`). La tabla de cada código HTTP → estado del acuse está en el contrato §6. |
+| `simulado` | `DestinoSimulado` en memoria: **no sale nada**. Lo usan las pruebas unitarias y la integración general; sirve para una demo sin destinos. |
 
-- Las capturas pasan por el puerto `DESTINO_CAPTURAS` (`src/sync/destinos/destino.ts`) y la
-  única implementación es `DestinoSimulado` (en memoria). **No llega nada** a availability ni
-  a pricing; lo que el simulado "acepta" se pierde al reiniciar el proceso. Lo que este
-  servicio guarda (lotes, capturas, acuses) sí queda en Mongo.
-- El simulado imita lo que ya dicen los contratos de destino, sin inventar reglas:
-  `disponibilidad` gana el dato capturado después (conflicto si el destino tiene uno igual o
-  posterior; id de destino = `captureId`, como availability); `precio_observado` siempre se
-  registra con un id nuevo (como pricing hoy, D-16) y **no** decide conflictos.
-- Cuando se acuerde el mapeo, se agrega un adaptador HTTP que cumpla el puerto: idempotente por
-  `captureId`, con `Authorization` + `X-Correlation-Id` y timeout de 3 s.
+- Con `http` hacen falta `AVAILABILITY_SERVICE_URL` y `PRICING_SERVICE_URL`. Si falta alguna,
+  **el servicio no arranca** y el error dice cuál.
+- Cada llamada reenvía el `Authorization` del usuario y el `X-Correlation-Id` del lote, con
+  timeout de 3 s. Destino caído, timeout, error de red o `5xx` → la captura queda `rechazada`
+  con `retryable: true` y el siguiente envío la reprocesa. Es seguro: los dos destinos son
+  idempotentes por el id del dispositivo (`captureId` / `observationId = captureId`).
+- `GET /v1/health` en JSON trae `destinos: { modo, availability, pricing }`. En XML no va,
+  porque `health.xsd` (compartido) no lo admite.
 - Tipos `visita_campo` y `propuesta_producto`: **no implementados** (no están en el XSD 1.0).
+
+### Correr en modo http
+
+1. Levanta los destinos y aplica sus migraciones si tu base es anterior a ellas:
+
+   ```bash
+   docker compose -f infra/docker-compose.yml up -d postgres redis mongodb auth-service availability-service pricing-service
+   docker exec -i retail_postgres psql -U retail_user -d retaildb < db/migraciones/sprint4_availability.sql
+   docker exec -i retail_postgres psql -U retail_user -d retaildb < db/migraciones/sprint4_pricing_observaciones.sql
+   ```
+
+   | Destino | Migración | Sin ella |
+   |---|---|---|
+   | availability-service | `sprint4_availability.sql` (tabla `disponibilidad_capturas`) | availability responde 500 → la captura queda reintentable |
+   | pricing-service | `sprint4_pricing_observaciones.sql` (columna `precios_observados.observacion_id`) | pricing responde 500 → la captura queda reintentable |
+
+   Las dos son idempotentes (se pueden correr varias veces). Un volumen nuevo ya las trae en
+   `db/schema.sql`.
+
+2. Fuera de Docker, apunta a los puertos publicados:
+
+   ```bash
+   SYNC_DESTINO=http AVAILABILITY_SERVICE_URL=http://localhost:3114 PRICING_SERVICE_URL=http://localhost:3103 npm run start:prod
+   curl -s localhost:3118/v1/health   # "destinos": { "modo": "http", "availability": "ok", "pricing": "ok" }
+   ```
+
+   Dentro del compose: `http://availability-service:3114` y `http://pricing-service:3103`.
 
 Tampoco se envía hoy con éxito la auditoría ni el aviso: audit-service y
 notifications-service tienen listas cerradas que todavía no incluyen `offline-sync-service`
@@ -56,7 +82,7 @@ Swagger con ejemplos JSON y XML en `/docs` (`/docs-json`).
    con el mismo, es un reenvío (`resend: true`).
 5. Por captura: idempotencia (`sync:captura:{id}` en Redis, `capturas_sync` en Mongo) →
    reglas y permiso por tipo → conflicto dentro del lote → último estado aceptado
-   (`sync:ultimo:{tipo}:{tienda}:{presentación}`) → destino (simulado).
+   (`sync:ultimo:{tipo}:{tienda}:{presentación}`) → destino (HTTP o simulado, según `SYNC_DESTINO`).
 6. **Escritura adelantada:** cada captura queda `procesando` en Mongo antes de ir al destino.
    Si el proceso se cae a medio lote, el siguiente envío la reprocesa y el destino (idempotente)
    no la repite.
@@ -79,6 +105,17 @@ curl -i localhost:3118/v1/health  # trae X-Correlation-Id
 npm test                  # unitarias (adaptadores en memoria, sin Docker)
 npm run test:integracion  # integración: levanta Mongo y Redis AISLADOS en Docker
 ```
+
+`test:integracion` corre dos archivos:
+
+- `sync.integracion.spec.ts`: el flujo completo con el destino **simulado** (sus ganchos de
+  prueba).
+- `destinos-reales.integracion.spec.ts`: modo `http` contra availability-service (3114) y
+  pricing-service (3103) **reales** del stack local, con sesiones reales de auth-service
+  (3101). Necesita esos servicios arriba y las dos migraciones de arriba; si falta algo, la
+  prueba **falla** diciendo qué falta. Escribe en la base local (capturas de existencia y
+  observaciones pendientes). Entre sync y cada destino pone un proxy de prueba que registra
+  los encabezados y se puede "apagar" para el caso del destino caído.
 
 La integración crea sus propios contenedores (`offline-sync-it-mongo` en 27118,
 `offline-sync-it-redis` en 6418, base `offline_sync_it`), los **pausa** para probar el 503 y los

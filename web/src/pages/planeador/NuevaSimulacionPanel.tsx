@@ -130,7 +130,7 @@ export function NuevaSimulacionPanel({ productos, zonas, puedeSimular }: Props) 
                     <option key={z.id} value={z.id}>{z.nombre}</option>
                   ))}
                 </Select>
-                <Field
+                <Field placeholder="27.50"
                   id="sim-precio"
                   label="Precio nuevo (MXN)"
                   type="number"

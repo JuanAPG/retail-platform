@@ -14,3 +14,6 @@ process.env.MONGO_DB = 'offline_sync_it';
 process.env.REDIS_HOST = usarDocker ? 'localhost' : process.env.REDIS_HOST ?? 'localhost';
 process.env.REDIS_PORT = usarDocker ? '6418' : process.env.REDIS_PORT ?? '6379';
 process.env.BUSINESS_TIMEZONE = 'America/Monterrey';
+// La integración general usa el destino simulado (sus ganchos de prueba). La de destinos
+// reales (destinos-reales.integracion.spec.ts) cambia a `http` antes de levantar la app.
+process.env.SYNC_DESTINO = 'simulado';

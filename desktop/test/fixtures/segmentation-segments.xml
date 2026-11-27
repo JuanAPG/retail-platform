@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<segmentListResponse xmlns="segmentation/v1">
+  <data>
+    <item>
+      <id>1</id>
+      <code>ING_1</code>
+      <name>Ingreso bajo</name>
+      <incomeRangeMin>0.00</incomeRangeMin>
+      <incomeRangeMax>15000.00</incomeRangeMax>
+      <source>INEGI - ENIGH</source>
+      <updateFrequency>Anual</updateFrequency>
+      <zoneRelation>Se asigna a la ZONA agregada (RN-02).</zoneRelation>
+      <limitations>No captura variación dentro de la zona.</limitations>
+      <version>2</version>
+      <versionValidFrom>2026-10-30T16:00:00.000Z</versionValidFrom>
+    </item>
+    <item>
+      <id>3</id>
+      <code>ING_3</code>
+      <name>Ingreso alto</name>
+      <incomeRangeMin>40000.00</incomeRangeMin>
+      <source>INEGI - ENIGH</source>
+      <updateFrequency>Anual</updateFrequency>
+      <zoneRelation>Zona agregada.</zoneRelation>
+      <limitations>Sin tope superior.</limitations>
+      <description>Sin tope</description>
+      <version>1</version>
+      <versionValidFrom>2026-09-25T19:21:10.262Z</versionValidFrom>
+    </item>
+  </data>
+  <total>2</total>
+  <page>1</page>
+  <limit>100</limit>
+</segmentListResponse>

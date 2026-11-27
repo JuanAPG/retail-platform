@@ -113,7 +113,7 @@ Resultado (`captureResponse`):
 |---|---|---|
 | `aceptada` | `201` | La captura es el dato más reciente de esa tienda y presentación: actualiza la existencia. |
 | `conflicto` | `201` | El servidor ya tenía un dato **capturado después** (`currentCapturedAt` > `capturedAt`). La captura se guarda en la bitácora pero **no sobrescribe** (D-42). `reason` lo explica. |
-| `duplicada` | `200` | Ese `captureId` ya se había recibido: no se crea nada y se devuelve el resultado original (reenviar un lote no duplica). |
+| `duplicada` | `200` | Ese `captureId` ya se había recibido: no se crea nada y se devuelve el resultado original (reenviar un lote no duplica). Trae **`originalStatus`** (`aceptada` o `conflicto`): el estado con que se registró la primera vez. Úsalo en vez de leer el texto de `reason`. |
 
 - Lo que cuenta es **cuándo se capturó**, no cuándo se subió: una captura del lunes
   sincronizada el viernes pierde contra una del jueves.

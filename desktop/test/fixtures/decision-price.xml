@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<simulacionPrecioResponse xmlns="decision/v1">
+  <type>price</type>
+  <productId>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</productId>
+  <presentationId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</presentationId>
+  <zoneId>27f05c81-c6bf-456a-a273-150e4edb9900</zoneId>
+  <inputs>
+    <currentPrice>25</currentPrice>
+    <newPrice>27.5</newPrice>
+    <baseDemand>1000</baseDemand>
+    <elasticity>-2</elasticity>
+    <elasticityRunId>3f2e1d0c-aaaa-4bbb-8ccc-1234567890ab</elasticityRunId>
+  </inputs>
+  <results>
+    <item><indicatorKey>demanda_estimada</indicatorKey><zoneId>27f05c81-c6bf-456a-a273-150e4edb9900</zoneId><baseValue>1000</baseValue><simulatedValue>826.45</simulatedValue><variationPct>-17.36</variationPct></item>
+    <item><indicatorKey>ingreso_estimado</indicatorKey><zoneId>27f05c81-c6bf-456a-a273-150e4edb9900</zoneId><baseValue>25000</baseValue><simulatedValue>22727.27</simulatedValue><variationPct>-9.09</variationPct></item>
+  </results>
+  <scenarioId>3f2e1d0c-aaaa-4bbb-8ccc-1234567890ab</scenarioId>
+</simulacionPrecioResponse>

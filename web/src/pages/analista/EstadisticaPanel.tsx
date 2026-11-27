@@ -328,7 +328,7 @@ export function EstadisticaPanel({ zonas, segmentos }: { zonas: Zona[]; segmento
           <div className="flex flex-wrap items-end gap-3.5">
             <label className={labelClass}>
               Nivel de significancia (α)
-              <input type="number" step="0.01" min="0.001" max="0.5" className={`${inputClass} w-40`} value={alfa} onChange={(e) => setAlfa(e.target.value)} />
+              <input placeholder="0.05" type="number" step="0.01" min="0.001" max="0.5" className={`${inputClass} w-40`} value={alfa} onChange={(e) => setAlfa(e.target.value)} />
             </label>
             {prueba === 'hipotesis' && (
               <>

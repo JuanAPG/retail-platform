@@ -61,11 +61,11 @@ export function AlertaPrecioCard({ puedeEditar }: { puedeEditar: boolean }) {
         <form noValidate onSubmit={guardar} className="flex flex-wrap items-end gap-4">
           <label className={labelClass}>
             Umbral (%)
-            <input type="number" step="0.01" className={inputClass} value={umbral} disabled={!puedeEditar} onChange={(e) => setUmbral(e.target.value)} />
+            <input placeholder="5" type="number" step="0.01" className={inputClass} value={umbral} disabled={!puedeEditar} onChange={(e) => setUmbral(e.target.value)} />
           </label>
           <label className={labelClass}>
             Ventana (días)
-            <input type="number" step="1" className={inputClass} value={ventana} disabled={!puedeEditar} onChange={(e) => setVentana(e.target.value)} />
+            <input placeholder="30" type="number" step="1" className={inputClass} value={ventana} disabled={!puedeEditar} onChange={(e) => setVentana(e.target.value)} />
           </label>
           {puedeEditar ? (
             <CtaButton type="submit" disabled={guardando}>

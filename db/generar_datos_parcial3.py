@@ -11,6 +11,8 @@ Salida (carpeta `--salida`, fuera de git):
                      completo y con dos topes por archivo: `--max-mb` (el importador acepta 5 MB) y
                      `--max-lineas` (la vista previa de core-process guarda el staging en un solo
                      INSERT de 16 valores por línea; Postgres acepta 65,535, o sea 4,095 líneas)
+  existencias.json   una captura de existencia por tienda y presentación (stock y antigüedad en
+                     horas) para availability-service (D-38); el cargador fija la fecha al cargar
   manifiesto.json    parámetros, filas, tamaños y SHA-256 de cada archivo, y los casos de control
                      sembrados con su valor esperado
 
@@ -33,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 ENCABEZADO = 'folio,fecha,tienda,sku,presentacion,cantidad,precio\n'
 # Tope real de la vista previa de core-process hoy: 65,535 parámetros por consulta / 16 por línea.
 # Con 0 se desactiva el tope de líneas (cuando core-process guarde el staging en bloques).
@@ -179,6 +181,21 @@ CTRL_PATRON = ('GEN-AZU-1KG', 'Zona Valle')               # serie semanal exacta
 PATRON_BASE, PATRON_TENDENCIA, PATRON_CICLO = 40, 1, [8, 0, -5, -3]
 CTRL_LANZAMIENTO = {'GEN-ENE-473': 11, 'GEN-COC-1L': 12}  # semanas de historia al cierre (D-40)
 CTRL_UNIDADES_MEZCLADAS = 'GEN-HUE-12'                    # DF-2: pieza y masa -> 422
+
+# Existencias (availability-service, D-38). Una captura por tienda y presentación, con su
+# antigüedad en horas; el cargador la convierte en `capturedAt` contando desde la hora de la carga
+# (un dato vale 7 días: con fechas fijas estaría vencido al día siguiente de la demo).
+VIGENCIA_HORAS = 7 * 24
+AGOTADO_POR_SEGMENTO = {'alto': 0.05, 'medio': 0.10, 'bajo': 0.20}   # prob. de stock 0 por presentación
+HORAS_CAPTURA = (1, 60)         # antigüedad normal: vigente al menos 4.5 días después de cargar
+STOCK_DISPONIBLE = (4, 48)
+HORAS_VENCIDO = 8 * 24 + 1      # D-38: "dato de hace 8 días -> vencido"
+# Tienda de control: la segunda de Zona Centro (existe con cualquier --tiendas-por-zona).
+CTRL_TIENDA_COBERTURA = ('Zona Centro', 1)
+CTRL_COB_FALTANTE = 'GEN-ARR-1KG'            # todas sus presentaciones en 0 -> faltante
+CTRL_COB_PARCIAL = ('GEN-ACE-1L', '1 l')      # esta presentación en 0, la otra con stock -> cubierto
+CTRL_COB_VENCIDO = 'GEN-PAS-200'             # capturado hace 8 días -> vencido
+CTRL_ZONA_FALTANTE = ('Zona Oriente', 'GEN-HUE-12')   # en 0 en todas las tiendas de la zona
 
 
 def total_semana_patron(t: int) -> int:
@@ -491,6 +508,87 @@ def escribir(ventas: list[Venta], salida: Path, max_bytes: int, max_lineas: int 
     return archivos
 
 
+def existencias(gen: Generador) -> list[dict]:
+    """Una captura por tienda y presentación: `stock` y `haceHoras` (antigüedad al cargar).
+
+    Usa su propio generador aleatorio (semilla + 'existencias'): no consume `gen.rng`, así que los
+    CSV de ventas salen idénticos con o sin este archivo. Fuera de los controles, cada presentación
+    se agota con la probabilidad de su segmento (más faltantes donde el ingreso es menor).
+    """
+    rng = random.Random(f'{gen.semilla}-existencias')
+    zona_ctrl, indice_ctrl = CTRL_TIENDA_COBERTURA
+    tienda_ctrl = next(z for z in gen.zonas if z.nombre == zona_ctrl).tiendas[indice_ctrl]
+    filas = []
+    for z in gen.zonas:
+        for tienda in z.tiendas:
+            for p in PRODUCTOS:
+                for nombre, *_ in p.presentaciones:
+                    agotado = rng.random() < AGOTADO_POR_SEGMENTO[z.segmento]
+                    stock = 0 if agotado else rng.randint(*STOCK_DISPONIBLE)
+                    horas = rng.randint(*HORAS_CAPTURA)
+                    if (z.nombre, p.sku) == CTRL_ZONA_FALTANTE:
+                        stock = 0
+                    if tienda == tienda_ctrl and p.basico:
+                        # Cobertura exacta: los básicos que no son de control quedan con stock.
+                        stock = stock or rng.randint(*STOCK_DISPONIBLE)
+                        if p.sku == CTRL_COB_FALTANTE or (p.sku, nombre) == CTRL_COB_PARCIAL:
+                            stock = 0
+                        if p.sku == CTRL_COB_VENCIDO:
+                            horas = HORAS_VENCIDO
+                    filas.append({'tienda': tienda, 'sku': p.sku, 'presentacion': nombre,
+                                  'stock': stock, 'haceHoras': horas})
+    return filas
+
+
+def estado_basico(filas: list[dict]) -> str:
+    """Estado de un básico en una tienda según el contrato de availability-service (D-38)."""
+    vigentes = [f for f in filas if f['haceHoras'] <= VIGENCIA_HORAS]
+    if any(f['stock'] > 0 for f in vigentes):
+        return 'cubierto'
+    if vigentes:
+        return 'faltante'
+    return 'vencido' if filas else 'sin_dato'
+
+
+def cobertura_esperada(filas: list[dict], tiendas: list[str], basicos: list[str]) -> dict:
+    """Cobertura de un grupo de tiendas como la calcula availability-service: un básico está
+    cubierto si lo está en alguna tienda, faltante si ninguna lo cubre y alguna tiene dato vigente.
+    Con una sola tienda es la cobertura de la tienda; con varias, la de la zona."""
+    por_tienda = {}
+    for f in filas:
+        if f['tienda'] in tiendas:
+            por_tienda.setdefault((f['tienda'], f['sku']), []).append(f)
+    estados = {}
+    for sku in basicos:
+        en_tiendas = [estado_basico(por_tienda.get((t, sku), [])) for t in tiendas]
+        for estado in ('cubierto', 'faltante', 'vencido', 'sin_dato'):
+            if estado in en_tiendas:
+                estados[sku] = estado
+                break
+    cubiertos = sum(1 for e in estados.values() if e == 'cubierto')
+    return {'basics': len(basicos), 'covered': cubiertos,
+            'missing': sum(1 for e in estados.values() if e == 'faltante'),
+            'expired': sum(1 for e in estados.values() if e == 'vencido'),
+            'noData': sum(1 for e in estados.values() if e == 'sin_dato'),
+            'coverage': round(cubiertos / len(basicos) * 100, 2),
+            'faltantes': sorted(s for s, e in estados.items() if e == 'faltante'),
+            'vencidos': sorted(s for s, e in estados.items() if e == 'vencido')}
+
+
+def controles_existencias(gen: Generador, filas: list[dict]) -> list[dict]:
+    basicos = [p.sku for p in PRODUCTOS if p.basico]
+    zona_ctrl, indice_ctrl = CTRL_TIENDA_COBERTURA
+    tienda_ctrl = next(z for z in gen.zonas if z.nombre == zona_ctrl).tiendas[indice_ctrl]
+    nota = ('Supone que los únicos básicos activos del catálogo son los del generador y que la consulta '
+            'se hace dentro de los 4.5 días siguientes a la carga.')
+    return [
+        {'id': 'D-38-cobertura-tienda', 'tienda': tienda_ctrl, 'nota': nota,
+         'esperado': cobertura_esperada(filas, [tienda_ctrl], basicos)},
+        {'id': 'D-38-cobertura-zonas', 'nota': nota,
+         'esperado': {z.nombre: cobertura_esperada(filas, z.tiendas, basicos) for z in gen.zonas}},
+    ]
+
+
 def catalogo(gen: Generador) -> dict:
     return {
         'zonas': [{'nombre': z.nombre, 'segmento': SEGMENTO_CODIGO[z.segmento], 'municipio': z.municipio,
@@ -560,6 +658,10 @@ def main(argv: list[str] | None = None) -> dict:
     archivos = escribir(ventas, salida, int(args.max_mb * 1024 * 1024), args.max_lineas)
     (salida / 'catalogo.json').write_text(json.dumps(catalogo(gen), ensure_ascii=False, indent=2) + '\n',
                                           encoding='utf-8', newline='\n')
+    filas_existencias = existencias(gen)
+    contenido = (json.dumps({'vigenciaHoras': VIGENCIA_HORAS, 'filas': filas_existencias}, ensure_ascii=False,
+                            indent=1) + '\n').encode('utf-8')
+    (salida / 'existencias.json').write_bytes(contenido)
     manifiesto = {
         'generador': f'db/generar_datos_parcial3.py {VERSION}',
         'parametros': {'transacciones': args.transacciones, 'semanas': args.semanas,
@@ -570,10 +672,13 @@ def main(argv: list[str] | None = None) -> dict:
                     'lineas': sum(a['lineas'] for a in archivos),
                     'bytes': sum(a['bytes'] for a in archivos), 'archivos': len(archivos),
                     'tiendas': len(gen.zona_de_tienda), 'productos': len(PRODUCTOS)},
-        # Huella del conjunto: SHA-256 de los SHA-256 de los archivos, en orden.
+        # Huella de las ventas: SHA-256 de los SHA-256 de los archivos, en orden. No incluye las
+        # existencias, que llevan su propia huella: agregarlas no cambia la de las ventas ya cargadas.
         'sha256': hashlib.sha256(''.join(a['sha256'] for a in archivos).encode()).hexdigest(),
         'archivos': archivos,
-        'controles': controles(gen),
+        'existencias': {'archivo': 'existencias.json', 'filas': len(filas_existencias), 'bytes': len(contenido),
+                        'sha256': hashlib.sha256(contenido).hexdigest()},
+        'controles': controles(gen) + controles_existencias(gen, filas_existencias),
     }
     (salida / 'manifiesto.json').write_text(json.dumps(manifiesto, ensure_ascii=False, indent=2) + '\n',
                                             encoding='utf-8', newline='\n')

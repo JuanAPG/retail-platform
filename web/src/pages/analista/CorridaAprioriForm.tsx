@@ -104,7 +104,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <label className={labelClass} htmlFor="apr-soporte">
           Soporte mínimo (%)
-          <input
+          <input placeholder="0.05"
             id="apr-soporte"
             type="number"
             min={1}
@@ -120,7 +120,7 @@ export function CorridaAprioriForm({ tiendas, zonas, segmentos, onTerminada, onF
         </label>
         <label className={labelClass} htmlFor="apr-confianza">
           Confianza mínima (%)
-          <input
+          <input placeholder="0.6"
             id="apr-confianza"
             type="number"
             min={0}
