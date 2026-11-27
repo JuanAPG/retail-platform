@@ -223,6 +223,14 @@ funciona**; la medición que se presenta es la de staging.
 | Humo ronda A (catálogo, investigador, analista, gerente; 14 servicios) | 1–12 | 235 | 0 | 0 | 140 ms |
 | Humo ronda B (administrador, analista, gerente; 12 servicios) | 1–12 | 216 | 0 | 0 | 88 ms |
 
+**Caché de catálogos encendida contra apagada (local, 27-nov):** 200 consultas secuenciales por ruta
+como Analista, con 10 de calentamiento. `GET /v1/units`: p50 6.7 / p95 9.4 ms con caché y 6.5 / 10.3 ms
+con `CATALOG_CACHE=off`; `GET /v1/product-categories`: 6.7 / 12.9 ms con caché y 6.6 / 9.8 ms sin ella.
+**Sin diferencia medible en local**: los catálogos son tablas chicas y en el mismo equipo leer Postgres
+cuesta lo mismo que leer Redis; el tiempo lo domina la validación de la sesión, que va a Redis en ambos
+casos. La comparación que importa es en staging bajo carga (la etapa alta de Locust), con el mismo
+interruptor.
+
 **Redis caído (local):** 14/14 servicios arriba respondieron `503 SERVICE_UNAVAILABLE` en 0.1–2.1 s,
 el login también dio 503, y todos se recuperaron solos en ≤ 2 s al volver Redis (las sesiones
 sobreviven: Redis guarda RDB en su volumen). La primera corrida encontró que basket-analysis y
