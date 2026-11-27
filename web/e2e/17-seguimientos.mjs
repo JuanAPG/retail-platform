@@ -11,6 +11,30 @@ const diaMty = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mon
 const hoy = diaMty(Date.now());
 const ayer = diaMty(Date.now() - 86400000);
 
+const DECISION = process.env.E2E_DECISION_URL ?? 'http://localhost:3107';
+
+/** Deja al menos una recomendación aceptada SIN seguimiento: si no hay, el Planeador genera y el Gerente aprueba (API). */
+async function asegurarRecomendacionPorAsignar() {
+  const g = { Authorization: `Bearer ${await login('gerente')}` };
+  const aceptadas = (await (await fetch(`${DECISION}/v1/recommendations?status=aceptada&limit=100`, { headers: g })).json()).data ?? [];
+  const seguidas = new Set(((await (await fetch(`${WF}/v1/workflow/assignments?limit=100`, { headers: g })).json()).data ?? []).map((x) => x.recommendationId));
+  if (aceptadas.some((r) => !seguidas.has(r.id))) return true;
+  let propuestas = (await (await fetch(`${DECISION}/v1/recommendations?status=propuesta&limit=100`, { headers: g })).json()).data ?? [];
+  if (propuestas.length === 0) {
+    const p = { Authorization: `Bearer ${await login('planeador')}`, 'Content-Type': 'application/json' };
+    await fetch(`${DECISION}/v1/recommendations/generate`, { method: 'POST', headers: p, body: '{}' });
+    propuestas = (await (await fetch(`${DECISION}/v1/recommendations?status=propuesta&limit=100`, { headers: g })).json()).data ?? [];
+  }
+  if (propuestas.length === 0) return false;
+  const r = await fetch(`${DECISION}/v1/recommendations/${propuestas[0].id}/approve`, { method: 'PATCH', headers: g });
+  return r.ok;
+}
+
+if (!(await asegurarRecomendacionPorAsignar())) {
+  console.log('No se pudo preparar una recomendación aprobada sin seguimiento (decision no generó ninguna).');
+  process.exit(1);
+}
+
 const navegador = await abrirNavegador();
 {
   const { ctx, page } = await sesion(navegador, 'analista');
