@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<validateResponse xmlns="auth/v1">
+  <active>true</active>
+  <user>
+    <id>27f05c81-c6bf-456a-a273-150e4edb9900</id>
+    <email>analista@retail.local</email>
+    <rol>Analista comercial</rol>
+    <rolId>2</rolId>
+  </user>
+</validateResponse>

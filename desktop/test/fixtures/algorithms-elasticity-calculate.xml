@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<elasticityCalculateResponse xmlns="algorithms/v1">
+  <runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId>
+  <periodStart>2026-08-05</periodStart>
+  <periodEnd>2026-08-15</periodEnd>
+  <granularity>week</granularity>
+  <results>
+    <item>
+      <presentationId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</presentationId>
+      <productName>Leche entera</productName>
+      <presentationName>1 L</presentationName>
+      <zoneId></zoneId>
+      <zoneName>Nacional</zoneName>
+      <value>-1.35</value>
+      <classification>elastic</classification>
+      <rSquared>0.62</rSquared>
+      <observations>4</observations>
+      <atypical>false</atypical>
+    </item>
+  </results>
+  <insufficient>
+    <item>
+      <presentationId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</presentationId>
+      <productName>Leche entera</productName>
+      <presentationName>1 L</presentationName>
+      <zoneId>27f05c81-c6bf-456a-a273-150e4edb9900</zoneId>
+      <zoneName>Zona Valle</zoneName>
+      <observations>2</observations>
+      <distinctPrices>1</distinctPrices>
+      <reason>Un solo precio en el periodo: no se puede medir cómo reacciona la demanda al precio.</reason>
+    </item>
+  </insufficient>
+  <assumptions>
+    <item>Modelo de elasticidad constante.</item>
+  </assumptions>
+</elasticityCalculateResponse>

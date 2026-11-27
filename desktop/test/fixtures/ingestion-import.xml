@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transactionImport xmlns="ingestion/v1">
+  <id>05dbdf5a-8342-4d61-bfce-e04e2b644f9b</id>
+  <state>vista_previa</state>
+  <format>csv</format>
+  <sha256>e3f81957d04502d6fcb9eb53e98957e56ba9d17a350ff7fa74c409e0209ef451</sha256>
+  <sizeBytes>124</sizeBytes>
+  <createdAt>2026-11-23T19:00:00Z</createdAt>
+  <counts><valid>1</valid><repeated>0</repeated><rejected>1</rejected><conflicts>0</conflicts><inserted>0</inserted></counts>
+</transactionImport>

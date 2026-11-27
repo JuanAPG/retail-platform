@@ -49,3 +49,14 @@ export function descargar(nombreArchivo: string, contenido: string, mime: string
   enlace.remove();
   URL.revokeObjectURL(url);
 }
+/** Guarda un archivo binario tal cual llegó del servidor (PDF, Excel, CSV de documents-service). */
+export function descargarBinario(nombreArchivo: string, datos: ArrayBuffer, mime: string): void {
+  const url = URL.createObjectURL(new Blob([datos], { type: mime }));
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombreArchivo;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}

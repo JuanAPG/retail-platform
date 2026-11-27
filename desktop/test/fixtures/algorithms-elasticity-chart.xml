@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<elasticityChartResponse xmlns="algorithms/v1">
+  <runId>0e6d0f55-1b2c-4d3e-8f40-5a6b7c8d9e01</runId>
+  <presentationId>5b0d6a0e-1c1e-4f43-9c5b-2a6f1c1e9d77</presentationId>
+  <productName>Leche entera</productName>
+  <presentationName>1 L</presentationName>
+  <groupBy>zone</groupBy>
+  <executedAt>2026-10-01T15:30:00.000Z</executedAt>
+  <granularity>day</granularity>
+  <periodStart>2026-08-05</periodStart>
+  <periodEnd>2026-08-15</periodEnd>
+  <bars>
+    <item>
+      <key>27f05c81-c6bf-456a-a273-150e4edb9900</key>
+      <label>Zona Valle</label>
+      <value>-1.2</value>
+      <classification>elastic</classification>
+      <observations>4</observations>
+      <rSquared>0.7</rSquared>
+      <atypical>false</atypical>
+    </item>
+    <item>
+      <key>8c3e1f20-4d5a-4b6c-9d7e-0f1a2b3c4d5e</key>
+      <label>Zona Centro</label>
+      <value></value>
+      <classification></classification>
+      <observations>0</observations>
+      <rSquared></rSquared>
+      <atypical></atypical>
+    </item>
+  </bars>
+  <national>
+    <value>-1.35</value>
+    <classification>elastic</classification>
+    <observations>4</observations>
+    <rSquared>0.62</rSquared>
+    <atypical>false</atypical>
+  </national>
+  <note>Barras vacías: sin datos suficientes.</note>
+</elasticityChartResponse>
