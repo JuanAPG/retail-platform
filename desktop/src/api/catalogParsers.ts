@@ -73,6 +73,31 @@ export function parseComparison(root: any): ZoneComparison[] {
     availability: nullIfEmpty(c.availability),
   }));
 }
+/** Tienda de catalog-service (lo que el escritorio usa: elegir tienda para precio unitario y comparar). */
+export interface Tienda {
+  id: string;
+  nombre: string;
+  zonaId: string;
+  zonaNombre: string | null;
+  numeroSucursal: string | null;
+  activo: boolean;
+}
+
+/** GET /v1/stores → <storeListResponse> paginado. */
+export function parseStorePage(root: any): { tiendas: Tienda[]; total: number } {
+  return {
+    tiendas: asList(root?.data?.item).map((t: any) => ({
+      id: text(t.id),
+      nombre: text(t.nombre),
+      zonaId: text(t.zonaId),
+      zonaNombre: t.zona && typeof t.zona === 'object' ? text(t.zona.nombre) || null : null,
+      numeroSucursal: t.numeroSucursal ? text(t.numeroSucursal) : null,
+      activo: bool(t.activo),
+    })),
+    total: Number(root?.total ?? 0),
+  };
+}
+
 export interface Presentacion {
   id: string;
   nombre: string;

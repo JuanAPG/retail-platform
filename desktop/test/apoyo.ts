@@ -19,7 +19,25 @@ export const XSD = {
   documents: join(CONTRATOS, 'documents-service.xsd'),
   segmentation: join(CONTRATOS, 'income-segmentation-service.xsd'),
   ingestion: join(CONTRATOS, 'transactions-ingestion-service.xsd'),
+  promotion: join(CONTRATOS, 'promotion-service.xsd'),
+  workflow: join(CONTRATOS, 'recommendations-workflow-service.xsd'),
 } as const;
+
+const BLOQUE_XML = new RegExp('```xml\\r?\\n([\\s\\S]*?)```', 'g');
+
+/**
+ * Bloques ```xml de un contrato (.md), con su raíz. Así las pruebas leen los ejemplos tal cual
+ * están en el contrato, sin copiarlos.
+ */
+export function ejemplosXmlDelContrato(archivoMd: string): Array<{ raiz: string; xml: string }> {
+  const md = leer(join(CONTRATOS, archivoMd));
+  return [...md.matchAll(BLOQUE_XML)].map((m) => {
+    const xml = m[1].trim();
+    const sinPrologo = xml.replace(/<\?[\s\S]*?\?>/, '');
+    const raiz = /<([A-Za-z_][\w.-]*)/.exec(sinPrologo)?.[1] ?? '';
+    return { raiz, xml };
+  });
+}
 
 /**
  * Valida un XML contra un XSD con libxml2 (xmllint compilado a WebAssembly). Devuelve la lista

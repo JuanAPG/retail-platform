@@ -14,6 +14,11 @@ export class AccesoNoPermitidoError extends Error {
 }
 
 export interface SesionUsuario {
+  /**
+   * Id del usuario = `sub` del access token (auth-service). Lo usa Seguimiento para saber si el
+   * usuario es el responsable asignado. Las sesiones guardadas antes de este campo lo recuperan del token.
+   */
+  id: string;
   nombre: string;
   email: string;
   rol: string;
@@ -142,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (msRefresh !== null && msRefresh <= 0) return limpiarSesion();
 
       setAuthToken(stored.accessToken);
-      setUsuario(stored.usuario);
+      setUsuario({ ...stored.usuario, id: payload.sub ?? stored.usuario.id ?? '' });
       setExpiraEn(expiracionMs(stored.accessToken));
       setIsLoggedIn(true);
 
@@ -202,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new AccesoNoPermitidoError(result.usuario.rol);
     }
     const sesionUsuario: SesionUsuario = {
+      id: decodeJwt(result.accessToken)?.sub ?? result.usuario.id,
       nombre: result.usuario.nombre,
       email: result.usuario.email,
       rol: result.usuario.rol,

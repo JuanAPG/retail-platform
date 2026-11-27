@@ -165,3 +165,13 @@ pre { background: #f4f4f6; padding: 8px; overflow: auto; font-size: 12px; }
 .barra { display: block; height: 14px; border-radius: 4px; background: #3b6fd8; }
 .barra.atipica { background: #d8873b; }
 .barra-valor { font-variant-numeric: tabular-nums; }
+
+/* Promociones y seguimiento */
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 0.8rem; }
+.detalle { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
+.detalle dt { color: var(--muted); }
+.detalle dd { margin: 0; }
+.pasos { display: flex; list-style: none; padding: 0; margin: 12px 0; gap: 4px; }
+.paso { flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.paso.hecho { background: var(--brand-soft); color: var(--brand); }
+.paso.actual { background: var(--brand); color: #fff; font-weight: 600; }

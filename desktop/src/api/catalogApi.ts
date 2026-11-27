@@ -2,11 +2,13 @@ import { pedir } from './httpClient';
 import {
   Municipality,
   Producto,
+  Tienda,
   Zone,
   ZoneComparison,
   parseComparison,
   parseMunicipalities,
   parseProductPage,
+  parseStorePage,
   parseZonePage,
 } from './catalogParsers';
 
@@ -46,5 +48,22 @@ export async function listProducts(): Promise<Producto[]> {
     );
     all.push(...parsed.productos);
     if (all.length >= parsed.total || parsed.productos.length === 0) return all;
+  }
+}
+
+/** Tiendas activas (todas las páginas); con zonaId, solo las de esa zona. */
+export async function listStores(zonaId?: string): Promise<Tienda[]> {
+  const all: Tienda[] = [];
+  for (let page = 1; ; page += 1) {
+    const parsed = parseStorePage(
+      await pedir({
+        servicio: 'catalog',
+        ruta: 'v1/stores',
+        params: zonaId ? { page, limit: 100, zonaId } : { page, limit: 100 },
+        raiz: 'storeListResponse',
+      }),
+    );
+    all.push(...parsed.tiendas);
+    if (all.length >= parsed.total || parsed.tiendas.length === 0) return all;
   }
 }

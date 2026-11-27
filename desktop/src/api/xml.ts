@@ -27,6 +27,8 @@ export const NAMESPACE = {
   documents: 'documents/v1',
   ingestion: 'ingestion/v1',
   segmentation: 'segmentation/v1',
+  promotion: 'promotion/v1',
+  workflow: 'workflow/v1',
 } as const;
 
 const parser = new XMLParser({

@@ -7,11 +7,12 @@ import { NAMESPACE, XmlInvalidoError, construirXml, errorDesdeXml, exigirRaiz, l
  *
  * - Pide SIEMPRE XML (`Accept: application/xml`) y comprueba la raíz y el namespace del
  *   contrato en cada respuesta (`pedir`). Una respuesta exitosa que no sea XML se rechaza.
- * - ENVÍA XML (`Content-Type: application/xml`) solo donde el contrato del servicio acepta
- *   cuerpos XML. Hoy eso es únicamente transactions-ingestion-service (`objectImport` y el
- *   archivo `salesFile`). auth, catalog, algorithms-core, income-segmentation, decision y
- *   documents NO leen XML de entrada (el contrato de algorithms-core lo dice: "ningún servicio
- *   acepta cuerpos XML"), así que ahí el cuerpo va en JSON y la respuesta en XML. Ver README.
+ * - ENVÍA XML (`Content-Type: application/xml`) donde el contrato del servicio acepta cuerpos
+ *   XML: transactions-ingestion-service (`objectImport` y el archivo `salesFile`),
+ *   decision-service (`simulacionPrecioRequest`, `simulacionPresentacionRequest`),
+ *   promotion-service (`rechazoPromocionRequest`) y recommendations-workflow-service
+ *   (`implementacionRequest`). auth, catalog, algorithms-core, income-segmentation y documents
+ *   NO leen XML de entrada, así que ahí el cuerpo va en JSON y la respuesta en XML. Ver README.
  * - Los errores pueden llegar en XML (`<error>` del filtro de la plantilla) o en JSON
  *   (versiones anteriores, un proxy, o el servicio sin el filtro nuevo): se leen los dos.
  * - Token y renovación: el token lo pone AuthContext; con un 401 se renueva una vez y se

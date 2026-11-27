@@ -13,7 +13,9 @@ export type Servicio =
   | 'decision'
   | 'documents'
   | 'ingestion'
-  | 'segmentation';
+  | 'segmentation'
+  | 'promotion'
+  | 'workflow';
 
 /** Nombre del microservicio, para mostrarlo en pantalla y en los errores. */
 export const NOMBRE_SERVICIO: Record<Servicio, string> = {
@@ -24,6 +26,8 @@ export const NOMBRE_SERVICIO: Record<Servicio, string> = {
   documents: 'documents-service',
   ingestion: 'transactions-ingestion-service',
   segmentation: 'income-segmentation-service',
+  promotion: 'promotion-service',
+  workflow: 'recommendations-workflow-service',
 };
 
 /** Variable de entorno de cada servicio (ver `.env.example`). */
@@ -35,10 +39,12 @@ export const VARIABLE_SERVICIO: Record<Servicio, string> = {
   documents: 'VITE_DOCUMENTS_URL',
   ingestion: 'VITE_INGESTION_URL',
   segmentation: 'VITE_SEGMENTATION_URL',
+  promotion: 'VITE_PROMOTION_URL',
+  workflow: 'VITE_WORKFLOW_URL',
 };
 
 /**
- * Las 7 variables, nombradas una por una: así Vite solo incrusta estas en el build. Pasar el
+ * Las 9 variables, nombradas una por una: así Vite solo incrusta estas en el build. Pasar el
  * objeto `import.meta.env` completo incrustaría TODAS las VITE_* del ambiente (incluidas las de un
  * `.env` local viejo con localhost) en el instalador de entrega.
  */
@@ -51,6 +57,8 @@ function entornoDeVite(): Record<string, string | undefined> {
     VITE_DOCUMENTS_URL: import.meta.env.VITE_DOCUMENTS_URL,
     VITE_INGESTION_URL: import.meta.env.VITE_INGESTION_URL,
     VITE_SEGMENTATION_URL: import.meta.env.VITE_SEGMENTATION_URL,
+    VITE_PROMOTION_URL: import.meta.env.VITE_PROMOTION_URL,
+    VITE_WORKFLOW_URL: import.meta.env.VITE_WORKFLOW_URL,
   };
 }
 
