@@ -125,11 +125,11 @@ export function ClusteringPanel() {
           <div className="flex flex-wrap items-end gap-3.5">
             <label className={labelClass}>
               Número de grupos (k)
-              <input type="number" min="2" max="10" className={`${inputClass} w-36`} value={k} onChange={(e) => setK(e.target.value)} />
+              <input placeholder="3" type="number" min="2" max="10" className={`${inputClass} w-36`} value={k} onChange={(e) => setK(e.target.value)} />
             </label>
             <label className={labelClass}>
               Semilla
-              <input type="number" min="0" className={`${inputClass} w-36`} value={semilla} onChange={(e) => setSemilla(e.target.value)} />
+              <input placeholder="42" type="number" min="0" className={`${inputClass} w-36`} value={semilla} onChange={(e) => setSemilla(e.target.value)} />
             </label>
             <label className={labelClass}>
               Ticket desde

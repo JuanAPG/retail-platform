@@ -122,6 +122,8 @@ cd web && npm run test:e2e
 CORE_TOKEN=<jwt> scripts/validate-xml.sh
 ```
 
+Consulta la [evidencia de usabilidad web en staging](docs/evidencia-usabilidad-web.md).
+
 ## Estructura del repositorio
 
 ```

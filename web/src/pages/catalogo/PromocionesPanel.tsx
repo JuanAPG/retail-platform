@@ -159,18 +159,18 @@ export function PromocionesPanel({ productos, tiendas }: { productos: Producto[]
           {tipo === 'descuento_porcentual' && (
             <label className={etiqueta}>
               Descuento (%)
-              <input className={input} type="number" min="0.01" max="99.99" step="0.01" value={descuento} onChange={(e) => setDescuento(e.target.value)} />
+              <input placeholder="10" className={input} type="number" min="0.01" max="99.99" step="0.01" value={descuento} onChange={(e) => setDescuento(e.target.value)} />
             </label>
           )}
           {tipo === 'paquete' && (
             <>
               <label className={etiqueta}>
                 Piezas del paquete (2 a 99)
-                <input className={input} type="number" min="2" max="99" value={cantidad} onChange={(e) => setCantidad(e.target.value)} />
+                <input placeholder="3" className={input} type="number" min="2" max="99" value={cantidad} onChange={(e) => setCantidad(e.target.value)} />
               </label>
               <label className={etiqueta}>
                 Precio del paquete (MXN)
-                <input className={input} type="number" min="0.01" step="0.01" value={precioPaquete} onChange={(e) => setPrecioPaquete(e.target.value)} />
+                <input placeholder="80.00" className={input} type="number" min="0.01" step="0.01" value={precioPaquete} onChange={(e) => setPrecioPaquete(e.target.value)} />
               </label>
             </>
           )}
@@ -178,7 +178,7 @@ export function PromocionesPanel({ productos, tiendas }: { productos: Producto[]
             <>
               <label className={etiqueta}>
                 Contenido del empaque
-                <input className={input} type="number" min="0.01" step="0.01" value={contenido} onChange={(e) => setContenido(e.target.value)} />
+                <input placeholder="1.5" className={input} type="number" min="0.01" step="0.01" value={contenido} onChange={(e) => setContenido(e.target.value)} />
               </label>
               <label className={etiqueta}>
                 Unidad (misma familia: masa con masa, volumen con volumen)
@@ -186,7 +186,7 @@ export function PromocionesPanel({ productos, tiendas }: { productos: Producto[]
               </label>
               <label className={etiqueta}>
                 Precio del empaque (MXN)
-                <input className={input} type="number" min="0.01" step="0.01" value={precioEmpaque} onChange={(e) => setPrecioEmpaque(e.target.value)} />
+                <input placeholder="38.90" className={input} type="number" min="0.01" step="0.01" value={precioEmpaque} onChange={(e) => setPrecioEmpaque(e.target.value)} />
               </label>
             </>
           )}

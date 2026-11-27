@@ -16,6 +16,7 @@ import { RecomendacionesPanel } from './planeador/RecomendacionesPanel';
 import { AprobacionesPrecioPanel } from './catalogo/AprobacionesPrecioPanel';
 import { ComparacionPreciosPanel } from './catalogo/ComparacionPreciosPanel';
 import { PromocionesPanel } from './catalogo/PromocionesPanel';
+import { SeguimientosPanel } from './catalogo/SeguimientosPanel';
 import { getProductos, getCategorias, getTiendas, getProveedores } from '../api/catalogo';
 import { MODULOS_POR_ROL, ModuloDefinicion } from '../routes/modulosPorRol';
 import { inicialesDeTexto, perfilesParaAdmin } from '../routes/portalPorRol';
@@ -37,7 +38,8 @@ type Tab =
   | 'reportes-precios'
   | 'tiendas'
   | 'proveedores'
-  | 'promociones';
+  | 'promociones'
+  | 'seguimientos';
 
 /** Los módulos de "Comparar precios" y "Productos" (lectura) llevan al mismo lugar: el catálogo. */
 function tabDeModulo(key: string): Tab {
@@ -158,6 +160,7 @@ export function CatalogoPortal() {
       )}
 
       {tab === 'aprobaciones-precio' && <AprobacionesPrecioPanel />}
+      {tab === 'seguimientos' && usuario?.rol === 'Gerente de categoría' && <SeguimientosPanel productos={productos.data ?? []} />}
       {tab === 'promociones' && usuario?.rol === 'Gerente de categoría' && (
         <PromocionesPanel productos={productos.data ?? []} tiendas={tiendas.data ?? []} />
       )}

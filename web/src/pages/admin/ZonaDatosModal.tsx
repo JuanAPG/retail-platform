@@ -105,9 +105,9 @@ export function ZonaDatosModal({ zona, onCerrar, onGuardado, indicadores = true,
         {indicadores && (
         <form noValidate onSubmit={guardarIndicadores} className="flex flex-col gap-4">
           <h3 className="font-slab text-xl text-vino">Indicadores</h3>
-          <Field id="zd-ingreso" label="Ingreso mensual estimado del hogar (MXN)" type="number" min="0" value={ingreso} onChange={(e) => setIngreso(e.target.value)} />
-          <Field id="zd-poblacion" label="Población estimada" type="number" min="0" value={poblacion} onChange={(e) => setPoblacion(e.target.value)} />
-          <Field
+          <Field placeholder="18500" id="zd-ingreso" label="Ingreso mensual estimado del hogar (MXN)" type="number" min="0" value={ingreso} onChange={(e) => setIngreso(e.target.value)} />
+          <Field placeholder="42000" id="zd-poblacion" label="Población estimada" type="number" min="0" value={poblacion} onChange={(e) => setPoblacion(e.target.value)} />
+          <Field placeholder="0.85"
             id="zd-disp"
             label="Disponibilidad de básicos (0 a 1)"
             type="number"
