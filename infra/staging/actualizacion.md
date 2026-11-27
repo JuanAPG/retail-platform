@@ -16,8 +16,8 @@ a secretos ya configuradas.
 | 3118 | Configurar `SYNC_DESTINO=http`, `AVAILABILITY_SERVICE_URL` y `PRICING_SERVICE_URL` usando los nombres internos de 3114 y 3103. Conservar Redis y MongoDB. |
 | Monitoreo (3120) | Actualizar el límite de las operaciones Mongo. Validar historial durante una interrupción y después de recuperar la conexión. |
 | 3113, 3116 y 3119 | Añadir las imágenes y las variables de sus entradas de Compose al manifiesto privado. Conservar el mismo JWT y Redis. La canasta consume Core, Catálogo y Segmentación. Pronóstico guarda corridas en Mongo y envía linaje a 3119. Gobierno de Datos escribe en PostgreSQL. |
-| Proxy y web | Usar el mismo origen de demo como base de los clientes. En Vite, `VITE_INGESTION_URL=$STAGING_ORIGIN/api/transactions-ingestion-service` y las demás `VITE_*_URL` sin `/v1`. Revisar Caddy antes de recargar. El proxy quita `/api/<servicio>`. |
-| Android y Electron | Fernando verifica los paquetes que se usarán en la demo. Deben admitir el origen HTTP acordado y usar su configuración por ambiente. Validar una operación por cliente y guardar su correlación. |
+| Proxy y web | Activar [HTTPS por IP pública](https-por-ip.md) y compilar Vite en modo staging. El web usa el mismo origen y Caddy quita `/api/<servicio>`. Si se definen variables `VITE_*_URL`, usar bases HTTPS sin `/v1`. |
+| Android y Electron | Fernando verifica los paquetes que se usarán en la demo. Usan el origen HTTPS de staging y su configuración por ambiente. Validar una operación por cliente y guardar su correlación. |
 
 Cada servicio tiene su Dockerfile en `services/<servicio>/Dockerfile`.
 3111 usa la raíz del repositorio como contexto para copiar los XSD.
@@ -37,9 +37,9 @@ docker build --label "org.opencontainers.image.revision=$sha" \
   -t "$RELEASE_REGISTRY/transactions-ingestion-service:$sha" .
 ```
 
-La web usa `npm ci && npm run build` en `web/`, con las variables del
-ambiente definidas antes de compilar. Etiqueta por SHA y registra los digests
-antes de actualizar el manifiesto. Aplica la migración al Postgres de staging
+La web usa `npm ci && npm run build -- --mode staging` en `web/`,
+con las variables del ambiente definidas antes de compilar. Etiqueta por
+SHA y registra los digests antes de actualizar el manifiesto. Aplica la migración al Postgres de staging
 mediante psql con la identidad de migración existente, tras respaldar y
 detener escritores si el cambio lo requiere. Vuelve a ejecutar las consultas
 de verificación en el mismo SHA. Usa la imagen anterior para rollback si
