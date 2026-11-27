@@ -69,7 +69,9 @@ fun CatalogScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-    var pestana by rememberSaveable { mutableStateOf(pestanaInicial) }
+    var pestanaElegida by rememberSaveable { mutableStateOf(pestanaInicial) }
+    // Sin zonas (Proveedor) solo existe Productos.
+    val pestana = if (state.muestraZonas) pestanaElegida else 0
     var busqueda by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
@@ -83,13 +85,16 @@ fun CatalogScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            TabRow(
-                selectedTabIndex = pestana,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Tab(selected = pestana == 0, onClick = { pestana = 0 }, text = { Text("Productos (${state.productos.size})") })
-                Tab(selected = pestana == 1, onClick = { pestana = 1 }, text = { Text("Zonas (${state.zonas.size})") })
+            // El Proveedor no lee zonas (catalog le responde 403): solo Productos, sin barra de pestañas.
+            if (state.muestraZonas) {
+                TabRow(
+                    selectedTabIndex = pestana,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ) {
+                    Tab(selected = pestana == 0, onClick = { pestanaElegida = 0 }, text = { Text("Productos (${state.productos.size})") })
+                    Tab(selected = pestana == 1, onClick = { pestanaElegida = 1 }, text = { Text("Zonas (${state.zonas.size})") })
+                }
             }
 
             SearchField(

@@ -35,6 +35,7 @@ import com.udem.retaildecision.data.sync.SyncScheduler
 import com.udem.retaildecision.ui.catalog.CatalogScreen
 import com.udem.retaildecision.ui.catalog.CatalogViewModel
 import com.udem.retaildecision.ui.catalog.CatalogViewModelFactory
+import com.udem.retaildecision.ui.catalog.catalogoMuestraZonas
 import com.udem.retaildecision.ui.home.HomeScreen
 import com.udem.retaildecision.ui.home.HomeViewModel
 import com.udem.retaildecision.ui.home.HomeViewModelFactory
@@ -229,6 +230,8 @@ private fun RetailDecisionNavHost(
                             clasificaciones = if (permisos.veIngreso) {
                                 { zoneInsightsRepository.clasificacionesVigentes() }
                             } else null,
+                            // GET /v1/zones: 6 internos + Investigador. El Proveedor solo ve Productos.
+                            muestraZonas = catalogoMuestraZonas(rol),
                         ),
                     )
                     CatalogScreen(
