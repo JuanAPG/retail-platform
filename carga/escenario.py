@@ -14,7 +14,9 @@ Reglas para no ensuciar los datos de la demo (los controles del generador, db/RE
 from __future__ import annotations
 
 import random
+import re
 import uuid
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -217,7 +219,7 @@ LECTURAS: dict[str, list[Lectura]] = {
 #: Peso de cada escritura frente a las lecturas de su perfil (0 con `--solo-lectura`).
 ESCRITURAS = {
     'catalogo': {'aprobar_promocion': 2},
-    'investigador': {'lote_sync': 3},
+    'investigador': {'lote_sync': 3, 'propiedad': 1},
     'analista': {'pronostico': 1},
     'gerente': {'proponer_promocion': 2, 'asignar': 1},
     'administrador': {},
@@ -227,7 +229,8 @@ ESCRITURAS = {
 #: Servicio al que va cada escritura (para saltarla si su servicio no responde, `--saltar-caidos`).
 SERVICIO_DE_ESCRITURA = {
     'aprobar_promocion': 'promotion-service', 'proponer_promocion': 'promotion-service',
-    'lote_sync': 'offline-sync-service', 'pronostico': 'demand-forecast-service',
+    'lote_sync': 'offline-sync-service', 'propiedad': 'offline-sync-service',
+    'pronostico': 'demand-forecast-service',
     'asignar': 'recommendations-workflow-service',
 }
 
@@ -262,3 +265,145 @@ def acciones(perfil: str, solo_lectura: bool, caidos: frozenset[str] = frozenset
 
 def quiere_xml(rng: random.Random) -> bool:
     return rng.random() < PROPORCION_XML
+
+
+# ----------------------------------------------------------------------------- validación de negocio
+# "Valida respuestas de negocio, acuses y propiedad, además del código HTTP" (guía del Parcial 3).
+# Cada función devuelve None si la respuesta es correcta, o el problema en una frase. El locustfile
+# marca la petición como falla con el prefijo NEGOCIO para separarla de las fallas HTTP.
+
+PREFIJO_NEGOCIO = 'NEGOCIO'
+ESTADOS_SEGUIMIENTO = {'asignada', 'en_implementacion', 'implementada', 'evaluada'}
+_UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+
+def validar_xml(texto: str) -> str | None:
+    """XML bien formado y que no sea un cuerpo de error (la validación XSD se hace aparte, por servicio)."""
+    try:
+        raiz = ET.fromstring(texto)
+    except ET.ParseError as e:
+        return f'XML mal formado: {e}'
+    if raiz.tag.rsplit('}', 1)[-1] == 'error':
+        return 'XML de error con código de éxito'
+    return None
+
+
+def validar_listado(cuerpo) -> str | None:
+    """Listados paginados (`paginacion.md`): `data` arreglo y `total` entero ≥ len(data)."""
+    if isinstance(cuerpo, dict) and 'data' in cuerpo:
+        if not isinstance(cuerpo['data'], list):
+            return '`data` no es un arreglo'
+        if 'total' in cuerpo and (not isinstance(cuerpo['total'], int) or cuerpo['total'] < len(cuerpo['data'])):
+            return f"`total` inválido ({cuerpo['total']!r}) para {len(cuerpo['data'])} filas"
+    return None
+
+
+def validar_disponible(cuerpo, campo: str | None = None) -> str | None:
+    """D-20 / D-36: lo no publicable sale `disponible:false` con motivo y SIN valor, nunca 0."""
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get('disponible'), bool):
+        return 'falta `disponible`'
+    if cuerpo['disponible']:
+        if campo and cuerpo.get(campo) is None:
+            return f'`disponible:true` sin `{campo}`'
+        return None
+    if not cuerpo.get('motivo'):
+        return '`disponible:false` sin `motivo`'
+    if campo and cuerpo.get(campo) is not None:
+        return f'`disponible:false` con `{campo}` = {cuerpo[campo]!r} (debe omitirse, D-20)'
+    return None
+
+
+def _zona_de_la_ruta(ruta: str) -> str | None:
+    m = _UUID.search(ruta)
+    return m.group(0) if m else None
+
+
+def validar_accesibilidad(cuerpo, ruta: str) -> str | None:
+    zona = _zona_de_la_ruta(ruta)
+    filas = cuerpo if isinstance(cuerpo, list) else [cuerpo]
+    for f in filas:
+        if not isinstance(f, dict) or f.get('zoneId') != zona:
+            return f"accesibilidad de otra zona ({f.get('zoneId') if isinstance(f, dict) else f!r})"
+    return None
+
+
+def validar_no_encontrado(cuerpo) -> str | None:
+    if not isinstance(cuerpo, dict) or cuerpo.get('code') != 'NOT_FOUND':
+        return f"404 sin el cuerpo estándar (code = {cuerpo.get('code') if isinstance(cuerpo, dict) else cuerpo!r})"
+    return None
+
+
+#: Validación específica por lectura (por su nombre en las estadísticas); las demás, `validar_listado`.
+VALIDA_LECTURA = {
+    '/v1/availability/zones/:id/coverage': lambda c, r: validar_disponible(c, 'coverage'),
+    '/v1/typical-basket': lambda c, r: validar_disponible(c) or (None if 'group' in c else 'falta `group`'),
+    '/v1/category-mix': lambda c, r: validar_disponible(c),
+    '/v1/accessibility/by-zone/:id': validar_accesibilidad,
+    '/v1/transaction-imports/:id (404)': lambda c, r: validar_no_encontrado(c),
+}
+
+
+def validar_lectura(lectura: Lectura, cuerpo, ruta: str) -> str | None:
+    especifica = VALIDA_LECTURA.get(lectura.plantilla)
+    return especifica(cuerpo, ruta) if especifica else validar_listado(cuerpo)
+
+
+def validar_acuse(lote: dict, acuse) -> str | None:
+    """Acuse de offline-sync (§4.5): mismo lote, un resultado por captura en el mismo orden, conteo que
+    cuadra y ningún rechazo. Cada captura sale `aceptada` o `conflicto` (D-42: ya había un dato capturado
+    después; no se pierde). La disponibilidad vieja casi siempre es `conflicto`; un precio observado es
+    `conflicto` si otra captura más reciente de esa tienda y presentación ya llegó."""
+    if not isinstance(acuse, dict) or acuse.get('batchId') != lote['batchId']:
+        return 'acuse de otro lote'
+    resultados = acuse.get('results') or []
+    if [r.get('captureId') for r in resultados] != [c['captureId'] for c in lote['captures']]:
+        return 'el acuse no trae un resultado por captura en el orden del lote'
+    resumen = acuse.get('summary') or {}
+    if resumen.get('total') != len(lote['captures']):
+        return f"summary.total = {resumen.get('total')!r}, se enviaron {len(lote['captures'])}"
+    for r in resultados:
+        if r.get('status') not in ('aceptada', 'conflicto'):
+            motivo = (r.get('reason') or {}).get('code')
+            return f"{r.get('type')} {r.get('status')} ({motivo}{', reintentable' if r.get('retryable') else ''})"
+    return None
+
+
+def validar_lote_propio(batch_id: str, acuse) -> str | None:
+    if not isinstance(acuse, dict) or acuse.get('batchId') != batch_id:
+        return 'el autor no recibe su propio lote'
+    return None
+
+
+def validar_promocion(enviada: dict, resp, estado: str) -> str | None:
+    """Al proponer nace `pendiente` con lo enviado; al aprobar queda `aprobada` con quién la resolvió."""
+    if not isinstance(resp, dict) or not resp.get('id'):
+        return 'promoción sin `id`'
+    if resp.get('status') != estado:
+        return f"promoción en `{resp.get('status')}`, se esperaba `{estado}`"
+    if estado == 'pendiente':
+        for campo in ('name', 'presentationId', 'zoneId', 'validFrom', 'validTo'):
+            if resp.get(campo) != enviada[campo]:
+                return f'`{campo}` distinto al enviado'
+    elif not resp.get('resolvedBy') or not resp.get('resolvedAt'):
+        return 'aprobada sin `resolvedBy`/`resolvedAt`'
+    return None
+
+
+def validar_asignacion(enviada: dict, resp) -> str | None:
+    if not isinstance(resp, dict):
+        return 'respuesta vacía'
+    if (resp.get('recommendationId') != enviada['recommendationId']
+            or resp.get('assigneeUserId') != enviada['assigneeUserId']):
+        return 'el seguimiento no corresponde a la recomendación o al responsable enviados'
+    if resp.get('status') not in ESTADOS_SEGUIMIENTO:
+        return f"estado de seguimiento desconocido `{resp.get('status')}`"
+    return None
+
+
+def validar_pronostico(estado: int, resp) -> str | None:
+    """201: corrida con `id` y la regla de publicación (D-36/D-40); 422: error estándar con su `code`."""
+    if estado == 422:
+        return None if isinstance(resp, dict) and resp.get('code') else '422 sin el cuerpo estándar'
+    if not isinstance(resp, dict) or not resp.get('id'):
+        return 'corrida sin `id`'
+    return validar_disponible(resp)

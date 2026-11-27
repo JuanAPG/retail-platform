@@ -14,7 +14,9 @@ Correr (la forma 5 → 10 → 25 → 50 → pico 60 → 10 dura 13 min):
 El destino (local por puertos, o `<base>/api/<servicio>`) sale de `.sesiones.json`: las sesiones se
 abrieron contra ese ambiente. No hay login durante la medición (auth limita a 15 por minuto); cada
 usuario virtual toma una sesión propia y la renueva con `/v1/auth/refresh` antes de que venza.
-Los 429 se cuentan aparte (tipo `LIMITADO`), no como falla.
+Los 429 se cuentan aparte (tipo `LIMITADO`), no como falla. Además del código HTTP se valida la
+respuesta de negocio (acuses, estados, propiedad, `disponible:false` sin valor): un 200 con cuerpo
+incorrecto es falla con el prefijo `NEGOCIO`, que se separa de las fallas HTTP en `*_failures.csv`.
 """
 from __future__ import annotations
 
@@ -38,6 +40,8 @@ ESTADO: dict = {'destino': None, 'fixtures': None, 'pool': {}, 'corrida': None, 
           'caidos': frozenset()}
 CANDADO = threading.Lock()
 PENDIENTES: deque[str] = deque(maxlen=2000)
+RENOVADAS: dict[str, dict] = {}              # correo -> sesión con los tokens que rotó /v1/auth/refresh
+LOTES: dict[str, str] = {}                   # correo del investigador -> su último lote (para la propiedad)
 SIN_SESION: dict[str, int] = {}               # usuarios que quedaron inactivos por falta de sesión   # promociones que propuso el Gerente, para que las apruebe precios
 
 
@@ -65,12 +69,16 @@ def _iniciar(environment, **_):
     ESTADO['fixtures'] = esc.Fixtures.desde(json.loads(Path(o.fixtures).read_text(encoding='utf-8')))
     ESTADO['corrida'] = o.corrida or uuid.uuid4().hex[:8]
     ESTADO['solo_lectura'] = o.solo_lectura
+    ESTADO['archivo_sesiones'] = Path(o.sesiones)
+    ESTADO['datos_sesiones'] = datos
     pool: dict[str, list] = {}
     for s in datos['sesiones']:
         pool.setdefault(s['perfil'], []).append(s)
     ESTADO['pool'] = pool
-    http = Http(timeout=3)
-    caidos = sorted(s for s in esc.servicios_usados() if not _responde(http, ESTADO['destino'].url(s, '/v1/health')))
+    caidos = _servicios_caidos(Http(timeout=5), pool)
+    if caidos is None:
+        print('  AVISO: no se pudo revisar el estado de los servicios (sin sesión de administrador).')
+        caidos = []
     if caidos:
         accion = 'se saltan sus tareas' if o.saltar_caidos else 'sus peticiones contarán como falla'
         print(f'  AVISO: no responden {caidos}: {accion}.')
@@ -90,6 +98,26 @@ def _responde(http: Http, url: str) -> bool:
         return http.pedir('GET', url)[0] == 200
     except OSError:   # URLError, ConnectionRefusedError, TimeoutError
         return False
+
+
+def _servicios_caidos(http: Http, pool: dict) -> list[str] | None:
+    """Local: el `/v1/health` de cada servicio. Detrás del proxy `/v1/health` no se publica
+    (`routes.caddy`, `@interno`): se pregunta a monitoring-service con una sesión de administrador."""
+    destino = ESTADO['destino']
+    if destino.base is None:
+        return sorted(s for s in esc.servicios_usados() if not _responde(http, destino.url(s, '/v1/health')))
+    admin = (pool.get('administrador') or [None])[0]
+    if admin is None:
+        return None
+    try:
+        estado, cuerpo, _ = http.pedir('GET', destino.url('monitoring-service', '/v1/monitoring/services'),
+                                       token=admin['accessToken'])
+    except OSError:
+        return None
+    if estado != 200:
+        return None
+    operativos = {f['service'] for f in cuerpo.get('data', []) if f.get('status') == 'operativo'}
+    return sorted(esc.servicios_usados() - operativos)
 
 
 class Perfil(HttpUser):
@@ -130,12 +158,16 @@ class Perfil(HttpUser):
                 cuerpo = r.json()
                 self.sesion = {**self.sesion, 'accessToken': cuerpo['accessToken'],
                                'refreshToken': cuerpo['refreshToken']}
+                with CANDADO:
+                    RENOVADAS[self.sesion['email']] = self.sesion
                 r.success()
             else:
                 r.failure(f'{r.status_code}: {r.text[:200]}')
 
     def pedir(self, metodo: str, servicio: str, ruta: str, nombre: str, cuerpo=None,
-              esperados: tuple[int, ...] = (200,), xml: bool = False):
+              esperados: tuple[int, ...] = (200,), xml: bool = False, validar=None):
+        """Devuelve (status, cuerpo JSON o None). `validar(status, cuerpo)` revisa el negocio cuando el
+        código fue el esperado; si devuelve un problema, la petición cuenta como falla NEGOCIO."""
         self._renovar_si_hace_falta()
         cabeceras = {'Authorization': f"Bearer {self.sesion['accessToken']}",
                      'X-Correlation-Id': esc.correlacion(ESTADO['corrida']),
@@ -144,8 +176,20 @@ class Perfil(HttpUser):
         with self.client.request(metodo, ESTADO['destino'].url(servicio, ruta), json=cuerpo, headers=cabeceras,
                                  name=etiqueta, catch_response=True) as r:
             clase = esc.clasificar(r.status_code, esperados)
+            datos = None
             if clase == 'ok':
-                r.success()
+                if xml:
+                    problema = esc.validar_xml(r.text)
+                else:
+                    try:
+                        datos = r.json() if r.content else None
+                        problema = validar(r.status_code, datos) if validar else None
+                    except ValueError:
+                        problema = 'cuerpo que no es JSON'
+                if problema:
+                    r.failure(f'{esc.PREFIJO_NEGOCIO}: {problema}')
+                else:
+                    r.success()
             elif clase == 'limitado':
                 r.success()
                 self.environment.events.request.fire(
@@ -153,7 +197,7 @@ class Perfil(HttpUser):
                     response_length=len(r.content or b''), exception=None, context={})
             else:
                 r.failure(f'{r.status_code}: {r.text[:200]}')
-            return r
+            return r.status_code, datos
 
     # --- lo que hace cada iteración
 
@@ -168,39 +212,60 @@ class Perfil(HttpUser):
         lectura = esc.elegir_lectura(self.perfil, self.rng, ESTADO['caidos'])
         if lectura is None:
             return
-        self.pedir('GET', lectura.servicio, lectura.ruta(ESTADO['fixtures'], self.rng), lectura.plantilla,
-                   esperados=lectura.esperados, xml=esc.quiere_xml(self.rng))
+        ruta = lectura.ruta(ESTADO['fixtures'], self.rng)
+        self.pedir('GET', lectura.servicio, ruta, lectura.plantilla, esperados=lectura.esperados,
+                   xml=esc.quiere_xml(self.rng), validar=lambda st, c: esc.validar_lectura(lectura, c, ruta))
 
     def lote_sync(self):
-        self.pedir('POST', 'offline-sync-service', '/v1/sync/batches', '/v1/sync/batches',
-                   esc.lote_sync(ESTADO['fixtures'], self.rng, self.dispositivo))
+        lote = esc.lote_sync(ESTADO['fixtures'], self.rng, self.dispositivo)
+        estado, _ = self.pedir('POST', 'offline-sync-service', '/v1/sync/batches', '/v1/sync/batches', lote,
+                               validar=lambda st, c: esc.validar_acuse(lote, c))
+        if estado == 200:
+            LOTES[self.sesion['email']] = lote['batchId']
+
+    def propiedad(self):
+        """El autor ve su lote (200) y el de otro investigador no (404, mismo cuerpo que inexistente)."""
+        propio = LOTES.get(self.sesion['email'])
+        ajenos = [b for correo, b in LOTES.items() if correo != self.sesion['email']]
+        if not propio:
+            return self.lote_sync()
+        self.pedir('GET', 'offline-sync-service', f'/v1/sync/batches/{propio}', '/v1/sync/batches/:id (propio)',
+                   validar=lambda st, c: esc.validar_lote_propio(propio, c))
+        if ajenos:
+            self.pedir('GET', 'offline-sync-service', f'/v1/sync/batches/{self.rng.choice(ajenos)}',
+                       '/v1/sync/batches/:id (ajeno, 404)', esperados=(404,),
+                       validar=lambda st, c: esc.validar_no_encontrado(c))
 
     def pronostico(self):
         fx = ESTADO['fixtures']
         cuerpo = {'productId': self.rng.choice(fx.productos)['id'], 'zoneId': self.rng.choice(fx.zonas)['id']}
         # 422 es una respuesta de negocio válida (menos de 12 semanas, unidades mezcladas, D-40/DF-2).
         self.pedir('POST', 'demand-forecast-service', '/v1/forecast/run', '/v1/forecast/run', cuerpo,
-                   esperados=(201, 422))
+                   esperados=(201, 422), validar=esc.validar_pronostico)
 
     def proponer_promocion(self):
-        r = self.pedir('POST', 'promotion-service', '/v1/promotions', '/v1/promotions',
-                       esc.promocion(ESTADO['fixtures'], self.rng, ESTADO['corrida']), esperados=(201,))
-        if r.status_code == 201:
-            PENDIENTES.append(r.json()['id'])
+        enviada = esc.promocion(ESTADO['fixtures'], self.rng, ESTADO['corrida'])
+        estado, datos = self.pedir('POST', 'promotion-service', '/v1/promotions', '/v1/promotions', enviada,
+                                   esperados=(201,), validar=lambda st, c: esc.validar_promocion(enviada, c, 'pendiente'))
+        if estado == 201 and datos and datos.get('id'):
+            PENDIENTES.append(datos['id'])
 
     def aprobar_promocion(self):
         try:
             pid = PENDIENTES.popleft()
         except IndexError:
             return self.leer()
-        self.pedir('PATCH', 'promotion-service', f'/v1/promotions/{pid}/approve', '/v1/promotions/:id/approve')
+        self.pedir('PATCH', 'promotion-service', f'/v1/promotions/{pid}/approve', '/v1/promotions/:id/approve',
+                   validar=lambda st, c: esc.validar_promocion({}, c, 'aprobada') or (
+                       None if c.get('id') == pid else 'aprobó otra promoción'))
 
     def asignar(self):
         cuerpo = esc.asignacion(ESTADO['fixtures'])
         if cuerpo is None:
             return self.leer()
         self.pedir('POST', 'recommendations-workflow-service', '/v1/workflow/assignments',
-                   '/v1/workflow/assignments', cuerpo, esperados=(200, 201))
+                   '/v1/workflow/assignments', cuerpo, esperados=(200, 201),
+                   validar=lambda st, c: esc.validar_asignacion(cuerpo, c))
 
 
 class Catalogo(Perfil):
@@ -225,6 +290,14 @@ class Administrador(Perfil):
 
 @events.quitting.add_listener
 def _al_terminar(environment, **_):
+    # El refresh ROTA el refresh token: sin guardar las sesiones renovadas, la siguiente corrida
+    # arrancaría con tokens ya usados (401 en todo).
+    if RENOVADAS and ESTADO.get('archivo_sesiones'):
+        datos = ESTADO['datos_sesiones']
+        sesiones = [RENOVADAS.get(s['email'], s) for s in datos['sesiones']]
+        ESTADO['archivo_sesiones'].write_text(json.dumps({**datos, 'sesiones': sesiones}, ensure_ascii=False, indent=1),
+                                              encoding='utf-8')
+        print(f'Sesiones renovadas guardadas en {ESTADO["archivo_sesiones"].name}: {len(RENOVADAS)}.')
     if SIN_SESION:
         print(f'AVISO: usuarios que arrancaron sin sesión y quedaron inactivos, por perfil: {SIN_SESION}. '
               'Abre más con sesiones.py --por-perfil.')

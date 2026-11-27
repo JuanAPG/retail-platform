@@ -147,5 +147,102 @@ class LecturasTest(unittest.TestCase):
         self.assertAlmostEqual(xml, esc.PROPORCION_XML, delta=0.03)
 
 
+def acuse_de(lote: dict, estados: list[str]) -> dict:
+    """Acuse como lo devuelve offline-sync (contrato §4.5)."""
+    return {'batchId': lote['batchId'], 'summary': {'total': len(lote['captures'])},
+            'results': [{'captureId': c['captureId'], 'type': c['type'], 'status': e,
+                         'reason': None if e != 'rechazada' else {'code': 'FORBIDDEN'}, 'retryable': False}
+                        for c, e in zip(lote['captures'], estados)]}
+
+
+class ValidacionTest(unittest.TestCase):
+    def setUp(self):
+        self.lote = esc.lote_sync(FX, random.Random(9), 'x', AHORA)
+        self.tipos = [c['type'] for c in self.lote['captures']]
+
+    def test_acuse_correcto(self):
+        estados = ['conflicto' if t == 'disponibilidad' else 'aceptada' for t in self.tipos]
+        self.assertIsNone(esc.validar_acuse(self.lote, acuse_de(self.lote, estados)))
+        self.assertIsNone(esc.validar_acuse(self.lote, acuse_de(self.lote, ['aceptada'] * 5)))
+        # D-42 también en pricing: un precio observado con otro más reciente ya registrado.
+        self.assertIsNone(esc.validar_acuse(self.lote, acuse_de(self.lote, ['conflicto'] * 5)))
+        self.assertIn('duplicada', esc.validar_acuse(self.lote, acuse_de(self.lote, ['duplicada'] * 5)))
+
+    def test_acuse_con_rechazo_es_falla_de_negocio(self):
+        estados = ['aceptada'] * 5
+        estados[1] = 'rechazada'
+        self.assertIn('rechazada (FORBIDDEN', esc.validar_acuse(self.lote, acuse_de(self.lote, estados)))
+
+    def test_acuse_incompleto_o_desordenado(self):
+        acuse = acuse_de(self.lote, ['aceptada'] * 5)
+        acuse['results'] = acuse['results'][::-1]
+        self.assertIn('orden del lote', esc.validar_acuse(self.lote, acuse))
+        acuse = acuse_de(self.lote, ['aceptada'] * 5)
+        acuse['summary']['total'] = 4
+        self.assertIn('summary.total', esc.validar_acuse(self.lote, acuse))
+        self.assertEqual(esc.validar_acuse(self.lote, {**acuse, 'batchId': 'otro'}), 'acuse de otro lote')
+
+    def test_propiedad(self):
+        self.assertIsNone(esc.validar_lote_propio('b1', {'batchId': 'b1'}))
+        self.assertIsNotNone(esc.validar_lote_propio('b1', {'batchId': 'b2'}))
+        self.assertIsNone(esc.validar_no_encontrado({'statusCode': 404, 'code': 'NOT_FOUND'}))
+        self.assertIsNotNone(esc.validar_no_encontrado({'statusCode': 404}))
+
+    def test_disponible_false_nunca_con_valor(self):
+        """D-20: no disponible sale con motivo y SIN el valor; un 0 es falla de negocio."""
+        self.assertIsNone(esc.validar_disponible({'disponible': True, 'coverage': 77.78}, 'coverage'))
+        self.assertIsNone(esc.validar_disponible({'disponible': False, 'motivo': 'Sin datos vigentes.'}, 'coverage'))
+        self.assertIn('D-20', esc.validar_disponible({'disponible': False, 'motivo': 'x', 'coverage': 0}, 'coverage'))
+        self.assertIn('sin `motivo`', esc.validar_disponible({'disponible': False}, 'coverage'))
+        self.assertIn('sin `coverage`', esc.validar_disponible({'disponible': True}, 'coverage'))
+        self.assertIn('falta', esc.validar_disponible({'coverage': 50}))
+
+    def test_promocion(self):
+        enviada = esc.promocion(FX, random.Random(10), 'humo', hoy=date(2026, 11, 27))
+        creada = {**enviada, 'id': 'p1', 'status': 'pendiente'}
+        self.assertIsNone(esc.validar_promocion(enviada, creada, 'pendiente'))
+        self.assertIn('`aprobada`', esc.validar_promocion(enviada, creada, 'aprobada'))
+        self.assertIn('`zoneId`', esc.validar_promocion(enviada, {**creada, 'zoneId': 'otra'}, 'pendiente'))
+        aprobada = {'id': 'p1', 'status': 'aprobada', 'resolvedBy': 'u', 'resolvedAt': '2026-11-27T10:00:00Z'}
+        self.assertIsNone(esc.validar_promocion({}, aprobada, 'aprobada'))
+        self.assertIn('resolvedBy', esc.validar_promocion({}, {**aprobada, 'resolvedBy': None}, 'aprobada'))
+
+    def test_asignacion(self):
+        enviada = esc.asignacion(FX)
+        ok = {'recommendationId': FX.recomendacion, 'assigneeUserId': FX.responsable, 'status': 'asignada'}
+        self.assertIsNone(esc.validar_asignacion(enviada, ok))
+        self.assertIsNone(esc.validar_asignacion(enviada, {**ok, 'status': 'evaluada'}))  # reintento: estado actual
+        self.assertIn('responsable', esc.validar_asignacion(enviada, {**ok, 'assigneeUserId': 'otro'}))
+        self.assertIn('desconocido', esc.validar_asignacion(enviada, {**ok, 'status': 'cancelada'}))
+
+    def test_pronostico(self):
+        self.assertIsNone(esc.validar_pronostico(201, {'id': 'r1', 'disponible': True}))
+        self.assertIsNone(esc.validar_pronostico(201, {'id': 'r1', 'disponible': False, 'motivo': 'D-36'}))
+        self.assertIsNone(esc.validar_pronostico(422, {'statusCode': 422, 'code': 'INSUFFICIENT_HISTORY'}))
+        self.assertIsNotNone(esc.validar_pronostico(422, {'message': 'x'}))
+        self.assertIsNotNone(esc.validar_pronostico(201, {'disponible': True}))
+
+    def test_lecturas_especificas_y_listados(self):
+        zona = FX.zonas[0]['id']
+        acc = next(l for l in esc.LECTURAS['gerente'] if l.plantilla == '/v1/accessibility/by-zone/:id')
+        ruta = f'/v1/accessibility/by-zone/{zona}'
+        self.assertIsNone(esc.validar_lectura(acc, {'zoneId': zona, 'indexValue': 0.6}, ruta))
+        self.assertIn('otra zona', esc.validar_lectura(acc, {'zoneId': 'otra'}, ruta))
+        lista = esc.LECTURAS['catalogo'][0]
+        self.assertIsNone(esc.validar_lectura(lista, {'data': [1, 2], 'total': 10}, '/v1/products'))
+        self.assertIn('`total`', esc.validar_lectura(lista, {'data': [1, 2], 'total': 1}, '/v1/products'))
+        self.assertIn('arreglo', esc.validar_lectura(lista, {'data': {}, 'total': 1}, '/v1/products'))
+        canasta = next(l for l in esc.LECTURAS['analista'] if l.plantilla == '/v1/typical-basket')
+        self.assertIn('group', esc.validar_lectura(canasta, {'disponible': True}, '/v1/typical-basket'))
+
+    def test_xml(self):
+        self.assertIsNone(esc.validar_xml('<?xml version="1.0"?><stockListResponse xmlns="availability/v1"/>'))
+        self.assertIn('error', esc.validar_xml('<error xmlns="x"><statusCode>500</statusCode></error>'))
+        self.assertIn('mal formado', esc.validar_xml('<a><b></a>'))
+
+    def test_propiedad_es_accion_del_investigador(self):
+        self.assertEqual(esc.acciones('investigador', False), (['leer', 'lote_sync', 'propiedad'], [7, 3, 1]))
+
+
 if __name__ == '__main__':
     unittest.main()
