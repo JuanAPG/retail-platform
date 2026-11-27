@@ -49,11 +49,15 @@ const tarjeta = page.locator('[data-recomendacion]').first();
 await tarjeta.waitFor({ timeout: 8000 });
 const recomendacionId = await tarjeta.getAttribute('data-recomendacion');
 const opciones = await tarjeta.locator('select option').allInnerTexts();
-ok('seguimientos: lista responsables con nombre y rol', opciones.some((o) => /Analista comercial/.test(o)), opciones.join(' | '));
+ok('seguimientos: lista responsables con nombre y rol', opciones.some((o) => /Analista comercial/.test(o)), opciones.slice(0, 5).join(' | '));
 
 await tarjeta.getByRole('button', { name: 'Asignar' }).click();
 ok('seguimientos: sin responsable se valida', await espera(page, /Elige a quién asignarla/, 3000));
-await tarjeta.locator('select').selectOption({ label: opciones.find((o) => /Analista comercial/.test(o)) });
+// Puede haber varios Analistas (p. ej. las cuentas de carga): se asigna exactamente a la cuenta que
+// luego inicia, por su id (sub del JWT); si no, el inicio responde 403 por no ser el responsable.
+const analista = await login('analista');
+const subAnalista = JSON.parse(Buffer.from(analista.split('.')[1], 'base64url').toString()).sub;
+await tarjeta.locator('select').selectOption({ value: subAnalista });
 await tarjeta.locator('input[placeholder]').fill('Aplicar el ajuste en las tiendas de la zona');
 await tarjeta.getByRole('button', { name: 'Asignar' }).click();
 ok('seguimientos: asigna y avisa', await espera(page, /Asignada a .*aviso para iniciarla/, 6000));
@@ -62,7 +66,6 @@ ok('seguimientos: aparece como Asignada', await espera(page, /Asignada: el respo
 // El responsable (Analista) inicia e implementa: en el producto esto es del escritorio.
 const lista = await (await fetch(`${WF}/v1/workflow/assignments?recommendationId=${recomendacionId}`, { headers: { Authorization: `Bearer ${await login('gerente')}` } })).json();
 const seg = lista.data[0];
-const analista = await login('analista');
 const h = { Authorization: `Bearer ${analista}`, 'Content-Type': 'application/json' };
 const ini = await fetch(`${WF}/v1/workflow/assignments/${seg.id}/start`, { method: 'PATCH', headers: h });
 const imp = await fetch(`${WF}/v1/workflow/assignments/${seg.id}/implement`, { method: 'PATCH', headers: h, body: JSON.stringify({ implementedOn: hoy, note: 'Ajuste aplicado en las tiendas de la zona.' }) });
