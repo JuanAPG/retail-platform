@@ -346,7 +346,9 @@ Claves de `parameters` guardadas: `metodo` (`regresion_log_log`),
 `presentacion_id` (si se filtró), `dateFrom` y `dateTo` (si se filtró por
 fecha — su presencia es lo que distingue una corrida exploratoria de una de
 ventana completa, ver D-22 en `GET /v1/elasticity/current`), `resultados_calculados`,
-`combinaciones_insuficientes`.
+`combinaciones_insuficientes` y `foto_datos`: SHA-256 de las observaciones zona × periodo que se
+usaron (presentación, zona, periodo, cantidad e ingreso con 6 decimales, en orden fijo). Es la foto
+de D-15 de la corrida y la versión de la fuente en su linaje (ver abajo).
 
 Response `201`:
 
@@ -652,11 +654,16 @@ fallida**— deja un evento en audit-service y avisa a quien la lanzó. Un `400`
 |---|---|
 | audit-service `POST /v1/auditoria` | `tabla`: `analysis_runs` (Apriori y FP-Growth, colección de MongoDB, D3) o `analisis_corridas` (elasticidad), `registroId: runId`, `accion: ejecutar_corrida`, `servicio: algorithms-core`, descripción con el resumen y `cambios` de `tipo`, `estado` y `periodo` |
 | notifications-service `POST /v1/notifications` | `corrida.terminada` con `relatedEntityType: corrida`, `relatedEntityId: runId` y `recipientUserId` = quien la lanzó; prioridad `info` si se completó, `warning` si falló |
+| data-governance-service `POST /v1/lineage` (D-43) | **Solo corridas completadas.** `service: algorithms-core`, `resourceType: corrida`, `resourceId: runId`, `source.key: ventas-core-process` y `source.version` = la foto de los datos (D-15): `snapshot.hash` en asociación y `foto_datos` en elasticidad. `description`: algoritmo, umbrales o granularidad, tamaño y periodo. `occurredAt`: cuándo terminó |
 
-Los dos reenvían el `Authorization` del usuario (el actor sale del token) y van
-en paralelo con un límite de 1.5 s cada uno. **Nunca cambian la respuesta de la
-corrida:** si audit o notifications no responden o rechazan el evento, solo
-queda un aviso en el log, y la respuesta tarda a lo más eso de más.
+Los tres reenvían el `Authorization` del usuario (el actor sale del token) y van
+en paralelo con un límite de 1.5 s cada uno; el linaje también reenvía el
+`X-Correlation-Id` si la petición lo trae. **Nunca cambian la respuesta de la
+corrida:** si audit, notifications o data-governance no responden o rechazan el
+evento, solo queda un aviso en el log, y la respuesta tarda a lo más eso de más.
+Sin `DATA_GOVERNANCE_SERVICE_URL` no se registra el linaje. Una corrida fallida no
+produjo resultado, así que no tiene linaje. Registrar dos veces la misma corrida es
+idempotente en data-governance (DG-3).
 
 ## Lo que consume algorithms-core
 

@@ -1,12 +1,18 @@
 import { AuditReporter } from '../audit/audit-reporter.service';
+import { LineageReporter } from '../linaje/lineage-reporter.service';
 import { NotificationsReporter } from '../notifications/notifications-reporter.service';
 import { ReporteDeCorridas } from './reporte-de-corridas.service';
 
 function armar() {
   const auditoria = { reportar: jest.fn().mockResolvedValue(undefined) };
   const avisos = { emitir: jest.fn().mockResolvedValue(undefined) };
-  const reporte = new ReporteDeCorridas(auditoria as unknown as AuditReporter, avisos as unknown as NotificationsReporter);
-  return { reporte, auditoria, avisos };
+  const linaje = { registrar: jest.fn().mockResolvedValue(undefined) };
+  const reporte = new ReporteDeCorridas(
+    auditoria as unknown as AuditReporter,
+    avisos as unknown as NotificationsReporter,
+    linaje as unknown as LineageReporter,
+  );
+  return { reporte, auditoria, avisos, linaje };
 }
 
 const COMPLETADA = {
@@ -89,5 +95,39 @@ describe('ReporteDeCorridas (ALG-10)', () => {
     await reporte.terminada(COMPLETADA, 'u-1');
 
     expect(Date.now() - inicio).toBeLessThan(550);
+  });
+});
+
+describe('ReporteDeCorridas: linaje (D-43)', () => {
+  const CON_FOTO = { ...COMPLETADA, foto: 'a'.repeat(64), descripcion: 'Elasticidad por semana sobre 157 observación(es)' };
+
+  it('una corrida completada con foto se registra con el token del usuario y la correlación', async () => {
+    const { reporte, linaje } = armar();
+
+    await reporte.terminada(CON_FOTO, 'u-precios', { token: 'Bearer t', correlacion: 'corr-1' });
+
+    expect(linaje.registrar).toHaveBeenCalledTimes(1);
+    const [corrida, token, correlacion] = linaje.registrar.mock.calls[0];
+    expect(corrida).toMatchObject({ runId: 'r-1', foto: 'a'.repeat(64), descripcion: CON_FOTO.descripcion });
+    expect(corrida.fecha).toBeInstanceOf(Date);
+    expect([token, correlacion]).toEqual(['Bearer t', 'corr-1']);
+  });
+
+  it('una corrida fallida no se registra: no produjo nada', async () => {
+    const { reporte, linaje } = armar();
+    await reporte.terminada({ ...CON_FOTO, estado: 'fallida' }, 'u-1');
+    expect(linaje.registrar).not.toHaveBeenCalled();
+  });
+
+  it('sin foto no hay versión de la fuente: no se registra', async () => {
+    const { reporte, linaje } = armar();
+    await reporte.terminada(COMPLETADA, 'u-1');
+    expect(linaje.registrar).not.toHaveBeenCalled();
+  });
+
+  it('sin descripción usa el resumen de la corrida', async () => {
+    const { reporte, linaje } = armar();
+    await reporte.terminada({ ...CON_FOTO, descripcion: undefined }, 'u-1');
+    expect(linaje.registrar.mock.calls[0][0].descripcion).toBe(COMPLETADA.resumen);
   });
 });

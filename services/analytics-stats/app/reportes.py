@@ -9,10 +9,17 @@ la cambia ni la retrasa.
 - Corrida de clustering: bitácora + aviso `corrida.terminada` a quien la lanzó.
 - Hipótesis, ANOVA, proporciones: solo bitácora. No se guardan, así que el aviso
   no tendría nada que abrir, y el resultado ya llegó en la respuesta.
+- Linaje (D-43, `POST /v1/lineage` de data-governance-service): solo una corrida de
+  clustering cuya entrada salió de los servicios (`parameters.source = "servicios"`).
+  La versión de la fuente es el SHA-256 de esa entrada, la foto de D-15. Si las zonas
+  vinieron en el cuerpo, los datos los escribió quien hizo la petición y no salen de
+  ninguna fuente registrada: no se registra (decirlo sería falso).
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
 import logging
 import os
 
@@ -21,6 +28,8 @@ from fastapi import Request
 
 SERVICIO = "analytics-stats"
 LIMITE_S = 1.5
+#: Fuente de las corridas en data-governance (contrato de data-governance, "Qué registra cada servicio").
+FUENTE_VENTAS = "ventas-core-process"
 _log = logging.getLogger(SERVICIO)
 
 #: Cómo se nombra cada prueba en la bitácora.
@@ -42,13 +51,17 @@ def _cliente() -> httpx.Client:
     return httpx.Client(timeout=LIMITE_S)
 
 
-def _enviar(variable: str, ruta: str, cuerpo: dict, token: str | None, que: str) -> None:
+def _enviar(variable: str, ruta: str, cuerpo: dict, token: str | None, que: str,
+            correlacion: str | None = None) -> None:
     base = os.getenv(variable)
     if not base:
         return
+    cabeceras = {"Authorization": token} if token else {}
+    if correlacion:
+        cabeceras["X-Correlation-Id"] = correlacion
     try:
         with _cliente() as http:
-            respuesta = http.post(f"{base}{ruta}", json=cuerpo, headers={"Authorization": token} if token else {})
+            respuesta = http.post(f"{base}{ruta}", json=cuerpo, headers=cabeceras)
         if respuesta.status_code >= 400:
             # Un evento rechazado (p. ej. 400) no debe perderse en silencio.
             _log.warning("%s rechazada: HTTP %s", que, respuesta.status_code)
@@ -74,8 +87,15 @@ def prueba_terminada(tipo: str, resultado: dict, token: str | None, ip: str | No
     }, token, f"Auditoría de {tipo}")
 
 
-def clustering_terminado(corrida: dict, token: str | None, ip: str | None) -> None:
-    """Bitácora y aviso de una corrida de clustering ya guardada en Mongo."""
+def foto_de_entrada(entrada: list[dict]) -> str:
+    """SHA-256 de la entrada del clustering (D-15): una zona por renglón en JSON canónico, en orden
+    fijo. No depende del orden en que catalog devolvió las zonas."""
+    renglones = sorted(json.dumps(zona, sort_keys=True, separators=(",", ":"), ensure_ascii=False) for zona in entrada)
+    return hashlib.sha256("\n".join(renglones).encode("utf-8")).hexdigest()
+
+
+def clustering_terminado(corrida: dict, token: str | None, ip: str | None, correlacion: str | None = None) -> None:
+    """Bitácora, aviso y linaje de una corrida de clustering ya guardada en Mongo."""
     grupos, zonas = corrida["parameters"]["k"], len(corrida["assignments"])
     resumen = f"{zonas} zona(s) en {grupos} grupos"
     if corrida["excludedZones"]:
@@ -103,3 +123,14 @@ def clustering_terminado(corrida: dict, token: str | None, ip: str | None) -> No
         "message": resumen,
         "priority": "info",
     }, token, "Aviso de clustering")
+    parametros = corrida["parameters"]
+    if parametros.get("source") == "servicios":
+        _enviar("DATA_GOVERNANCE_SERVICE_URL", "/v1/lineage", {
+            "service": SERVICIO,
+            "resourceType": "corrida",
+            "resourceId": corrida["id"],
+            "description": (f"Clustering de {len(corrida['input'])} zona(s) en {parametros['k']} grupos con "
+                            f"{', '.join(parametros['features'])} (semilla {parametros['seed']})")[:300],
+            "source": {"key": FUENTE_VENTAS, "version": foto_de_entrada(corrida["input"])},
+            "occurredAt": corrida["date"],
+        }, token, "Linaje de clustering", correlacion)

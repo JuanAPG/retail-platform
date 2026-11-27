@@ -244,7 +244,14 @@ Qué registra cada servicio, siempre después de que su operación tuvo éxito:
 |---|---|---|---|
 | transactions-ingestion-service (Juan Ángel) | Al confirmar un lote | `importacion` / id del lote | `ventas-archivo`, versión = SHA-256 del archivo |
 | income-segmentation-service (Pamela) | Al crear un segmento o una versión nueva | `version_segmento` / `"{segmentId}:{version}"` | `inegi-enigh`, versión = el campo `source` de esa versión |
-| algorithms-core, analytics-stats, demand-forecast-service (Leonardo) | Al guardar una corrida | `corrida` / id de la corrida | `ventas-core-process`, versión = SHA-256 de la foto de datos (D-15) |
+| algorithms-core (Leonardo) | Al guardar una corrida **completada** de asociación o elasticidad | `corrida` / `runId` | `ventas-core-process`, versión = foto de datos (D-15): `snapshot.hash` en Apriori y FP-Growth, el parámetro `foto_datos` en elasticidad |
+| analytics-stats (Leonardo) | Al guardar una corrida de clustering **con datos de los servicios** (`parameters.source = "servicios"`) | `corrida` / id de la corrida | `ventas-core-process`, versión = SHA-256 de la entrada (`input`) en JSON canónico, en orden fijo |
+| demand-forecast-service (Leonardo) | Al guardar una corrida con `disponible: true` | `corrida` / id de la corrida | `ventas-core-process`, versión = `dataVersion.sha256` |
+
+Una corrida fallida, no disponible o de clustering con las zonas en el cuerpo no tiene
+linaje: no produjo resultado, o sus datos los escribió quien hizo la petición y no salen
+de una fuente registrada. Los tres servicios reenvían el `Authorization` y el
+`X-Correlation-Id` de la petición original.
 
 Ejemplo ejecutable (con el token de un Analista y el servicio arriba):
 

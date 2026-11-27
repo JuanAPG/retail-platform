@@ -221,7 +221,20 @@ export class AssociationService {
 
     // Fuera del try: el reporte nunca lanza, pero si lo hiciera no debe
     // convertir una corrida ya guardada en "fallida".
-    await this.reporte.terminada({ ...corrida, runId: guardada._id, estado: 'completada', resumen }, user.id, contexto);
+    await this.reporte.terminada(
+      {
+        ...corrida,
+        runId: guardada._id,
+        estado: 'completada',
+        resumen,
+        foto: guardada.snapshot?.hash,
+        descripcion:
+          `${nombre} con soporte ≥ ${params.minSupport} y confianza ≥ ${params.minConfidence} sobre ` +
+          `${guardada.snapshot?.baskets ?? '?'} canasta(s), ${period.start} a ${period.end}`,
+      },
+      user.id,
+      contexto,
+    );
     return this.reglasConProductos(guardada._id, guardada.results);
   }
 

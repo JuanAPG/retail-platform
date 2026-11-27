@@ -45,11 +45,12 @@ export class ElasticityController {
     @Body() params: ElasticityParamsDto,
     @CurrentUser() user: SesionUsuario,
     @Headers('authorization') token: string | undefined,
+    @Headers('x-correlation-id') correlacion: string | undefined,
     @Ip() ip: string,
   ) {
     // El usuario sale del JWT, nunca del cuerpo: no se puede suplantar. El
     // token y la IP van a la bitácora y al aviso de la corrida (ALG-10).
-    return this.elasticityService.calculate(params, user, { token, ip });
+    return this.elasticityService.calculate(params, user, { token, ip, correlacion });
   }
 
   @Get('chart')
