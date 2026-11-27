@@ -60,6 +60,7 @@ export const MODULOS_POR_ROL: Record<RolNombre, ModuloDefinicion[]> = {
     { key: 'catalogo-productos', label: 'Catálogo de productos', icon: <IconProductos /> },
     { key: 'aprobaciones', label: 'Aprobaciones', icon: <IconAprobaciones />, permiso: 'aprueba' },
     { key: 'recomendaciones', label: 'Recomendaciones', icon: <IconRecomendaciones />, permiso: 'aprueba' },
+    { key: 'promociones', label: 'Promociones', icon: <IconProponer />, permiso: 'propone' },
     { key: 'comparar-precios', label: 'Comparar precios', icon: <IconPrecios />, permiso: 'lectura' },
     { key: 'reportes', label: 'Reportes', icon: <IconReportes />, permiso: 'lectura' },
     { key: 'tiendas', label: 'Tiendas', icon: <IconTiendas />, permiso: 'lectura' }, // M02 es del Administrador (Matriz §3)

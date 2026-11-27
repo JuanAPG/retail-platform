@@ -23,6 +23,8 @@ export const SERVICIOS = {
   // Sprint 4 (D-35): los segmentos de ingreso salieron de catalog-service.
   ingestion: { etiqueta: 'transactions-ingestion-service', puerto: 3111, env: 'VITE_INGESTION_URL' },
   segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
+  // D-39: promociones (el Gerente propone; aprueba el Responsable de precios en el escritorio).
+  promotion: { etiqueta: 'promotion-service', puerto: 3115, env: 'VITE_PROMOTION_URL' },
   // T-09: estado de los 20 servicios (solo Administrador).
   monitoring: { etiqueta: 'monitoring-service', puerto: 3120, env: 'VITE_MONITORING_URL' },
 } as const;
@@ -211,5 +213,6 @@ export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
 export const segmentationApi = crearCliente('segmentation');
 export const monitoringApi = crearCliente('monitoring');
+export const promotionApi = crearCliente('promotion');
 
 export const ingestionApi = crearCliente('ingestion');
