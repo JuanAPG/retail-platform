@@ -373,6 +373,8 @@ services:
       # (ALG-10). Si no responden, la corrida igual se completa.
       AUDIT_SERVICE_URL: http://audit-service:3110
       NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+      # Linaje de cada corrida completada (D-43). Sin la variable no se registra.
+      DATA_GOVERNANCE_SERVICE_URL: http://data-governance-service:3119
       # Corridas de Apriori y FP-Growth (D3), coleccion analysis_runs.
       # `authSource=admin` porque el usuario se crea en la base admin.
       MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
@@ -418,6 +420,8 @@ services:
       MONGO_URL: mongodb://retail_admin:retail_pass_2026@mongodb:27017/retaildb?authSource=admin
       AUDIT_SERVICE_URL: http://audit-service:3110
       NOTIFICATIONS_SERVICE_URL: http://notifications-service:3109
+      # Linaje del clustering con datos de los servicios (D-43).
+      DATA_GOVERNANCE_SERVICE_URL: http://data-governance-service:3119
       JWT_ACCESS_SECRET: dev_access_secret_solo_para_local
       REDIS_HOST: redis
       REDIS_PORT: 6379
