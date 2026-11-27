@@ -39,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.udem.retaildecision.ui.components.ConnectivityPill
@@ -48,6 +47,9 @@ import com.udem.retaildecision.ui.components.Pill
 import com.udem.retaildecision.ui.components.RetailCard
 import com.udem.retaildecision.ui.theme.Brand
 import com.udem.retaildecision.ui.theme.BrandLight
+import com.udem.retaildecision.ui.theme.Danger
+import com.udem.retaildecision.ui.theme.OnBrand
+import com.udem.retaildecision.ui.theme.Success
 
 /**
  * Se conserva con el mismo nombre y parámetro por si otra pantalla ya lo usa.
@@ -58,13 +60,13 @@ fun ConnectivityBanner(online: Boolean) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (online) Color(0xFF2E7D32) else Color(0xFFB3261E))
+            .background(if (online) Success else Danger)
             .padding(vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = if (online) "En línea" else "Sin conexión: se guardará en el teléfono",
-            color = Color.White,
+            color = OnBrand,
             style = MaterialTheme.typography.labelLarge,
         )
     }
@@ -148,22 +150,22 @@ private fun HomeHeader(nombre: String, rol: String?, online: Boolean, onLogout: 
             ) {
                 ConnectivityPill(online)
                 IconButton(onClick = onLogout) {
-                    Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Cerrar sesión", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = "Cerrar sesión", tint = OnBrand)
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text("Hola,", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.8f))
-            Text(nombre, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Text("Hola,", style = MaterialTheme.typography.bodyLarge, color = OnBrand.copy(alpha = 0.8f))
+            Text(nombre, style = MaterialTheme.typography.headlineSmall, color = OnBrand)
             Spacer(Modifier.height(10.dp))
             if (rol != null) {
-                Pill(text = rol, background = Color.White.copy(alpha = 0.2f), contentColor = Color.White)
+                Pill(text = rol, background = OnBrand.copy(alpha = 0.2f), contentColor = OnBrand)
             }
             if (!online) {
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "Sin conexión: lo que captures se guardará en el teléfono.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = OnBrand.copy(alpha = 0.9f),
                 )
             }
         }

@@ -180,8 +180,28 @@ object ApiClient {
             .build()
     }
 
+    /** Mismo cliente HTTP, con la URL de income-segmentation-service (clasificación de zonas, D-35). */
+    private val segmentationRetrofit: Retrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SEGMENTATION_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    /** Mismo cliente HTTP, con la URL de availability-service (cobertura de básicos, D-38). */
+    private val availabilityRetrofit: Retrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.AVAILABILITY_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
     val authApi: AuthApi by lazy { retrofit.create(AuthApi::class.java) }
     val catalogApi: CatalogApi by lazy { catalogRetrofit.create(CatalogApi::class.java) }
     val pricingApi: PricingApi by lazy { pricingRetrofit.create(PricingApi::class.java) }
     val syncApi: SyncApi by lazy { syncRetrofit.create(SyncApi::class.java) }
+    val segmentationApi: SegmentationApi by lazy { segmentationRetrofit.create(SegmentationApi::class.java) }
+    val availabilityApi: AvailabilityApi by lazy { availabilityRetrofit.create(AvailabilityApi::class.java) }
 }

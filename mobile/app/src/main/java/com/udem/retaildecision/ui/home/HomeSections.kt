@@ -44,6 +44,8 @@ data class SeccionMovil(
     /** Microservicio que alimenta la sección (se muestra para saber qué se consume). */
     val servicio: String,
     val roles: Set<String>,
+    /** Descripción distinta para algún rol (por ejemplo, lo que el Investigador no ve). Si no está, `descripcion`. */
+    val descripcionPorRol: Map<String, String> = emptyMap(),
 )
 
 val SECCIONES = listOf(
@@ -68,6 +70,8 @@ val SECCIONES = listOf(
         descripcion = "Consulta las zonas y su clasificación de ingreso.",
         servicio = "catalog-service",
         roles = Rol.INTERNOS + Rol.INVESTIGADOR, // GET /v1/zones: 6 internos + Investigador (D-28)
+        // El Investigador no ve el nivel de ingreso (income-segmentation le responde 403, D-28).
+        descripcionPorRol = mapOf(Rol.INVESTIGADOR to "Consulta las zonas y sus tiendas."),
     ),
     SeccionMovil(
         id = "precios",
@@ -120,6 +124,7 @@ val SECCIONES = listOf(
     ),
 )
 
-/** Secciones que ve un rol. Lista vacía si el rol no existe o no tiene acceso. */
+/** Secciones que ve un rol, con la descripción que le toca. Lista vacía si el rol no existe o no tiene acceso. */
 fun seccionesParaRol(rol: String?): List<SeccionMovil> =
-    if (rol == null) emptyList() else SECCIONES.filter { rol in it.roles }
+    if (rol == null) emptyList()
+    else SECCIONES.filter { rol in it.roles }.map { s -> s.descripcionPorRol[rol]?.let { s.copy(descripcion = it) } ?: s }

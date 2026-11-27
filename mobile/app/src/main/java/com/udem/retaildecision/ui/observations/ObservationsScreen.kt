@@ -4,7 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
@@ -34,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -54,6 +59,7 @@ import com.udem.retaildecision.ui.components.SectionTitle
 import com.udem.retaildecision.ui.components.SelectorDesplegable
 import com.udem.retaildecision.ui.components.StatusPill
 import com.udem.retaildecision.ui.home.ConnectivityBanner
+import com.udem.retaildecision.ui.scanner.BarcodeCamera
 import com.udem.retaildecision.ui.theme.Warning
 import com.udem.retaildecision.ui.theme.WarningSoft
 import java.text.SimpleDateFormat
@@ -94,6 +100,19 @@ fun ObservationsScreen(
     val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { resultado ->
         // Basta con el permiso preciso o con el aproximado.
         if (resultado.values.any { it }) viewModel.obtenerUbicacion() else viewModel.permisoDenegado()
+    }
+
+    // Cámara del botón "Escanear" (la misma lectura que la pantalla del escáner).
+    val pedirCamara = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
+        if (concedido) viewModel.abrirEscaner()
+    }
+
+    fun alEscanear() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.abrirEscaner()
+        } else {
+            pedirCamara.launch(Manifest.permission.CAMERA)
+        }
     }
 
     fun alObtenerUbicacion() {
@@ -201,14 +220,59 @@ fun ObservationsScreen(
 
                 // ---------- 2. Producto ----------
                 SectionTitle("2. Producto y presentación")
-                OutlinedTextField(
-                    value = state.busqueda,
-                    onValueChange = viewModel::cambiarBusqueda,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Buscar por nombre o SKU") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.medium,
-                )
+                val productoEscaneado = state.producto
+                val presentacionEscaneada = state.presentacion
+                if (state.codigoEscaneado != null && productoEscaneado != null && presentacionEscaneada != null) {
+                    // Llegó del escáner o de la cámara: solo se confirma, no se edita.
+                    RetailCard {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Producto escaneado", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            LabeledValue(label = "Producto", value = productoEscaneado.nombre)
+                            LabeledValue(
+                                label = "Presentación",
+                                value = presentacionEscaneada.nombre + (presentacionEscaneada.unidadMedida?.clave?.let { " ($it)" } ?: ""),
+                            )
+                            LabeledValue(label = "SKU", value = productoEscaneado.sku)
+                            LabeledValue(label = "Código de barras", value = state.codigoEscaneado ?: "")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { viewModel.cambiarBusqueda("") }) { Text("Cambiar producto") }
+                                TextButton(onClick = ::alEscanear) { Text("Escanear otro") }
+                            }
+                        }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = state.busqueda,
+                            onValueChange = viewModel::cambiarBusqueda,
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Buscar por nombre o SKU") },
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium,
+                        )
+                        OutlinedButton(onClick = ::alEscanear, shape = MaterialTheme.shapes.medium) {
+                            Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                            Text("Escanear")
+                        }
+                    }
+                }
+                if (state.escaneando) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                            .clip(MaterialTheme.shapes.large)
+                            .border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), MaterialTheme.shapes.large),
+                    ) {
+                        BarcodeCamera(modifier = Modifier.fillMaxSize(), onCodigo = viewModel::codigoLeido)
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::cerrarEscaner,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    ) { Text("Cancelar escaneo") }
+                }
+                state.avisoEscaneo?.let { ErrorBanner(it) }
                 val sugerencias = state.sugerencias
                 if (sugerencias.isNotEmpty()) {
                     RetailCard {
@@ -234,7 +298,7 @@ fun ObservationsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                state.producto?.let { producto ->
+                state.producto?.takeIf { state.codigoEscaneado == null }?.let { producto ->
                     val activas = producto.presentaciones.filter { it.activo }
                     if (activas.isEmpty()) {
                         ErrorBanner("Este producto no tiene presentaciones activas.")
@@ -422,6 +486,14 @@ private fun CapturaCard(c: ObservacionGuardada) {
                         EstadoCaptura.RECHAZADA -> StatusPill(text = "Precio no aprobado", positive = false)
                     }
                 }
+            }
+            val identificacion = listOfNotNull(c.sku?.let { "SKU $it" }, c.codigoBarras?.let { "Código $it" })
+            if (identificacion.isNotEmpty()) {
+                Text(
+                    identificacion.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Text(
                 "${coordenada(c.latitud)}, ${coordenada(c.longitud)}" +

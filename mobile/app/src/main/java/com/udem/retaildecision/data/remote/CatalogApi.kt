@@ -24,11 +24,15 @@ interface CatalogApi {
         @Query("limit") limit: Int = 100
     ): Response<PageResponse<ProductDto>>
 
-    /** Tiendas. Las pueden leer los 6 perfiles internos (el Proveedor no). */
+    /**
+     * Tiendas activas. Las leen los 6 perfiles internos y el Investigador de mercado (D-28); el Proveedor no.
+     * `zonaId` (opcional, UUID) deja solo las de esa zona; Retrofit no manda el parámetro si es null.
+     */
     @GET("v1/stores")
     suspend fun getStores(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 100,
+        @Query("zonaId") zonaId: String? = null
     ): Response<PageResponse<StoreDto>>
 
     /** Catálogos planos, sin paginar. Los puede leer cualquier usuario autenticado. */

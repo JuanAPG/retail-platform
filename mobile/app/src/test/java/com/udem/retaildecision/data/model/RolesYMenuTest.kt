@@ -31,6 +31,13 @@ class RolesYMenuTest {
     }
 
     @Test
+    fun `descripción de Zonas según el rol - el Investigador no ve el nivel de ingreso`() {
+        fun descripcion(rol: String) = seccionesParaRol(rol).first { it.id == "zonas" }.descripcion
+        assertEquals("Consulta las zonas y sus tiendas.", descripcion(Rol.INVESTIGADOR))
+        Rol.INTERNOS.forEach { assertEquals(it, "Consulta las zonas y su clasificación de ingreso.", descripcion(it)) }
+    }
+
+    @Test
     fun `capturas en tienda - los tres roles que pueden sincronizar, y el Planeador no`() {
         val conCapturas = (Rol.INTERNOS + Rol.PROVEEDOR + Rol.INVESTIGADOR)
             .filter { rol -> seccionesParaRol(rol).any { it.id == "visitas" } }.toSet()

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.udem.retaildecision.data.local.CatalogCache
+import com.udem.retaildecision.data.local.UltimaTiendaPorUsuario
 import com.udem.retaildecision.data.location.LocationProvider
 import com.udem.retaildecision.data.location.Ubicacion
 import com.udem.retaildecision.data.model.TipoCaptura
@@ -74,6 +75,12 @@ data class ObservationsUiState(
     val mensaje: String? = null,
     val capturas: List<ObservacionGuardada> = emptyList(),
     val actualizandoEstados: Boolean = false,
+    /** Código de barras con el que se eligió el producto (escáner o botón "Escanear"). null = elegido a mano. */
+    val codigoEscaneado: String? = null,
+    /** true = la cámara del botón "Escanear" está abierta. */
+    val escaneando: Boolean = false,
+    /** "Código no encontrado en el catálogo" u otro aviso del escaneo. No borra nada del formulario. */
+    val avisoEscaneo: String? = null,
 ) {
     val esPrecio: Boolean get() = tipo == TipoCaptura.PRECIO_OBSERVADO
 
@@ -102,15 +109,23 @@ class ObservationsViewModel(
     tiposPermitidos: List<String>,
     puedeConsultarDecisiones: Boolean,
     conectividad: Flow<Boolean>,
+    /** Lo que llega elegido desde el Detalle de zona (tienda) o desde el escáner (producto, presentación y tipo). */
+    private val preseleccion: Preseleccion = Preseleccion(),
+    /** Última tienda usada por cada usuario, para preseleccionarla al venir del escáner. */
+    private val ultimaTienda: UltimaTiendaPorUsuario? = null,
+    private val usuarioActual: () -> String? = { null },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         ObservationsUiState(
             tipos = tiposPermitidos,
-            tipo = tiposPermitidos.firstOrNull() ?: TipoCaptura.PRECIO_OBSERVADO,
+            tipo = preseleccion.tipo?.takeIf { it in tiposPermitidos } ?: tiposPermitidos.firstOrNull() ?: TipoCaptura.PRECIO_OBSERVADO,
             puedeConsultarDecisiones = puedeConsultarDecisiones,
         ),
     )
+
+    /** La preselección se aplica una sola vez (no al pulsar "Reintentar" después de que el usuario cambió algo). */
+    private var preseleccionAplicada = false
     val state: StateFlow<ObservationsUiState> = _state.asStateFlow()
 
     init {
@@ -153,13 +168,18 @@ class ObservationsViewModel(
                 }
             } else {
                 val desdeCopia = tiendasRes.isFailure || productosRes.isFailure
+                val activas = tiendas.filter { t -> t.activo }
+                val aplicar = !preseleccionAplicada
+                preseleccionAplicada = true
+                val ultima = if (aplicar && preseleccion.desdeEscaner) ultimaTienda?.de(usuarioActual()) else null
                 _state.update {
-                    it.copy(
+                    val cargado = it.copy(
                         cargandoCatalogo = false,
                         usandoCopiaLocal = desdeCopia,
-                        tiendas = tiendas.filter { t -> t.activo },
+                        tiendas = activas,
                         productos = productos.filter { p -> p.estatus == "activo" },
                     )
+                    if (aplicar) aplicarPreseleccion(cargado, preseleccion, ultima) else cargado
                 }
             }
         }
@@ -177,6 +197,7 @@ class ObservationsViewModel(
                 busqueda = texto.take(80),
                 producto = if (sigue) it.producto else null,
                 presentacion = if (sigue) it.presentacion else null,
+                codigoEscaneado = if (sigue) it.codigoEscaneado else null,
                 mensaje = null,
             )
         }
@@ -189,10 +210,26 @@ class ObservationsViewModel(
                 producto = producto,
                 busqueda = producto.nombre,
                 presentacion = activas.firstOrNull { p -> p.esPredeterminada } ?: activas.firstOrNull(),
+                codigoEscaneado = null,
+                avisoEscaneo = null,
                 mensaje = null,
                 errorGuardar = null,
             )
         }
+    }
+
+    /** Botón "Escanear": abre la cámara. */
+    fun abrirEscaner() {
+        _state.update { it.copy(escaneando = true, avisoEscaneo = null, mensaje = null) }
+    }
+
+    fun cerrarEscaner() {
+        _state.update { it.copy(escaneando = false) }
+    }
+
+    /** La cámara leyó un código. Se ignoran las lecturas repetidas después de la primera. */
+    fun codigoLeido(codigo: String) {
+        _state.update { if (it.escaneando) aplicarCodigoLeido(it, codigo) else it }
     }
 
     fun elegirPresentacion(presentacion: PresentacionDto) {
@@ -252,8 +289,10 @@ class ObservationsViewModel(
         viewModelScope.launch {
             observationRepository.guardar(
                 actual.tipo, tienda, producto, presentacion, valor, ubicacion, distanciaATienda(tienda, ubicacion),
+                codigoEscaneado = actual.codigoEscaneado,
             )
                 .onSuccess {
+                    ultimaTienda?.recordar(usuarioActual(), tienda.id)
                     programarEnvio()
                     // Se limpia el producto, el valor y la ubicación; la tienda y el tipo se quedan para el siguiente.
                     _state.update {
@@ -262,6 +301,7 @@ class ObservationsViewModel(
                             busqueda = "",
                             producto = null,
                             presentacion = null,
+                            codigoEscaneado = null,
                             valorTexto = "",
                             ubicacion = null,
                             mensaje = "Captura guardada en el teléfono. Se enviará sola cuando haya internet.",
@@ -314,12 +354,15 @@ class ObservationsViewModelFactory(
     private val tiposPermitidos: List<String>,
     private val puedeConsultarDecisiones: Boolean,
     private val conectividad: Flow<Boolean>,
+    private val preseleccion: Preseleccion = Preseleccion(),
+    private val ultimaTienda: UltimaTiendaPorUsuario? = null,
+    private val usuarioActual: () -> String? = { null },
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
         return ObservationsViewModel(
             catalogRepository, observationRepository, locationProvider, cache, programarEnvio,
-            tiposPermitidos, puedeConsultarDecisiones, conectividad,
+            tiposPermitidos, puedeConsultarDecisiones, conectividad, preseleccion, ultimaTienda, usuarioActual,
         ) as T
     }
 }
