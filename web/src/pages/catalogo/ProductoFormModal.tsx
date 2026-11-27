@@ -112,11 +112,11 @@ export function ProductoFormModal({
     >
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field id="producto-sku" label="SKU" required disabled={esEdicion} value={sku} onChange={(e) => setSku(e.target.value)} />
-          <Field id="producto-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <Field placeholder="LDN-LEC" id="producto-sku" label="SKU" required disabled={esEdicion} value={sku} onChange={(e) => setSku(e.target.value)} />
+          <Field placeholder="Leche entera" id="producto-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </div>
 
-        <TextArea
+        <TextArea placeholder="Leche entera pasteurizada"
           id="producto-descripcion"
           label="Descripción (opcional)"
           rows={2}
@@ -143,14 +143,14 @@ export function ProductoFormModal({
           <>
             <p className="text-xs font-bold uppercase tracking-wide text-salvia">Primera presentación</p>
             <div className="grid grid-cols-3 gap-3">
-              <Field
+              <Field placeholder="1 L"
                 id="producto-presentacion"
                 label="Nombre"
                 required
                 value={presentacion}
                 onChange={(e) => setPresentacion(e.target.value)}
               />
-              <Field
+              <Field placeholder="1"
                 id="producto-contenido"
                 label="Contenido"
                 type="number"

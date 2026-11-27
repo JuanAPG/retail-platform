@@ -62,7 +62,7 @@ export function ZonaFormModal({ zona, municipios, onCerrar, onGuardado }: ZonaFo
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field id="zona-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <Field placeholder="Zona Centro Monterrey" id="zona-nombre" label="Nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)} />
 
         <Select id="zona-municipio" label="Municipio" value={municipioId} onChange={(e) => setMunicipioId(Number(e.target.value))}>
           {municipios.map((m) => (
@@ -72,7 +72,7 @@ export function ZonaFormModal({ zona, municipios, onCerrar, onGuardado }: ZonaFo
           ))}
         </Select>
 
-        <TextArea
+        <TextArea placeholder="Colonias del primer cuadro de la ciudad"
           id="zona-descripcion"
           label="Descripción (opcional)"
           rows={2}
