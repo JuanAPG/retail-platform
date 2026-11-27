@@ -14,7 +14,9 @@ Nunca toca la base a mano: todo pasa por HTTP con el permiso de la Matriz.
 Idempotente: lo que ya existe se reutiliza. Reimportar un archivo ya confirmado responde 409 en
 core-process y aquí se salta; uno validado que quedó a medias se vuelve a confirmar (core-process
 retoma solo lo pendiente). Uno que quedó con errores detiene la carga: confirmarlo metería solo
-una parte de sus ventas. Correrlo dos veces no duplica ventas.
+una parte de sus ventas. Correrlo dos veces no duplica ventas. Si los folios de un archivo nuevo ya
+existen, la base trae ventas de otra versión del generador y la carga se detiene: core-process no
+reemplaza una venta confirmada.
 
 Las existencias llevan un `captureId` fijo por tienda, presentación y DÍA de carga (UTC): el mismo
 día, availability-service las reconoce como `duplicada` y no crea nada; otro día entran como
@@ -45,6 +47,8 @@ from pathlib import Path
 
 LIMITE_LINEAS_CORE = 65535 // 16  # parámetros de Postgres por consulta / valores por línea del staging
 INTENTOS_CONFIRMACION = 3
+# Motivo con que core-process omite un folio que ya existe en la tienda (transactions.service.ts).
+FOLIO_DUPLICADO = 'FOLIO_DUPLICADO'
 # Espacio de nombres de los captureId (uuid5): mismo dato y mismo día -> mismo id.
 ESPACIO_CAPTURAS = uuid.uuid5(uuid.NAMESPACE_URL, 'retail-platform/generador-parcial3/existencias')
 
@@ -103,6 +107,11 @@ class Cliente:
                 return e.code, texto
         except urllib.error.URLError as e:
             raise ErrorDeCarga(f'{url} no responde: {e.reason}') from e
+        except (ConnectionError, TimeoutError) as e:
+            # La conexión se cortó a media respuesta (visto en local con Docker en Windows): el servidor pudo
+            # completar la operación. Todo paso es reanudable, así que basta con volver a correr.
+            raise ErrorDeCarga(f'{metodo} {url}: se cortó la conexión ({type(e).__name__}). La carga es '
+                               'reanudable: vuelve a correr el mismo comando.') from e
 
     def todas(self, rol: str, servicio: str, ruta: str) -> list[dict]:
         """Recorre un listado paginado completo (`paginacion.md`)."""
@@ -325,15 +334,26 @@ class Cargador:
                 raise ErrorDeCarga(f"{archivo.name}: {r['filasConError']} filas con error, p. ej. {r['errores'][:3]}")
             importacion = r['importacionId']
         inicio = time.perf_counter()
+        duplicados = []
         for _ in range(INTENTOS_CONFIRMACION):  # la confirmación es reanudable: se repite si quedó incompleta
             estado, r = self.c.pedir('analista', 'POST', 'core', '/v1/transactions/import/confirm',
                                      {'previewId': importacion})
             esperar(estado, 200, r, f'confirm {archivo.name}')
+            duplicados += [o['folio'] for o in r.get('omitidos', []) if o.get('motivo', '').startswith(FOLIO_DUPLICADO)]
             if r.get('completa', True):
                 break
         else:
             raise ErrorDeCarga(f"{archivo.name}: la importación {importacion} sigue incompleta tras "
                                f"{INTENTOS_CONFIRMACION} confirmaciones ({r.get('filasPendientes')} filas pendientes).")
+        if duplicados:
+            # Los folios del generador son únicos por semilla: si ya existen, la base trae ventas de OTRA
+            # versión de estos datos (este archivo, con otro SHA-256, no se había subido). core-process
+            # no reemplaza una venta confirmada, así que seguir dejaría la base con las ventas viejas.
+            raise ErrorDeCarga(
+                f"{archivo.name}: {len(duplicados)} folios ya existían en core-process (p. ej. {duplicados[:3]}) y "
+                f"se omitieron (importación {importacion}). La base tiene ventas de otra versión del generador "
+                f"(huella {self.manifiesto['sha256'][:12]}… distinta); core-process no las reemplaza. Recrea la "
+                'base (db/README-generador.md, "Cambiar de versión") o genera con otra --semilla.')
         fila['confirmSegundos'] = round(time.perf_counter() - inicio, 2)
         return {**fila, 'resultado': 'confirmado', 'importacionId': importacion,
                 'transaccionesCreadas': r['transaccionesCreadas'], 'omitidos': len(r.get('omitidos', []))}

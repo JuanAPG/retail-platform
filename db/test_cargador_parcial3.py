@@ -158,6 +158,28 @@ class ImportarTest(unittest.TestCase):
         self.assertNotIn('--max-lineas', str(e.exception))
         self.assertIn('respondió 500', str(e.exception))
 
+    def omitido(self, motivo: str) -> dict:
+        return {'folio': 'G42-T01-000001', 'tienda': 'Tienda', 'tiendaId': UUID, 'motivo': motivo}
+
+    def test_folios_de_otra_version_detienen_la_carga(self):
+        """Archivo nuevo (201 en la vista previa) cuyos folios ya existen: la base trae otra versión de los
+        datos. core-process los omite y no reemplaza la venta; antes la carga parecía exitosa."""
+        confirmado = {**confirmacion(), 'transaccionesCreadas': 0,
+                      'omitidos': [self.omitido('FOLIO_DUPLICADO: ya existe una transacción con este folio en la tienda.')]}
+        with self.assertRaisesRegex(carga.ErrorDeCarga, r'1 folios ya existían.*otra versión del generador'):
+            self.importar((201, preview()), (200, confirmado))
+
+    def test_duplicados_en_la_segunda_pasada_tambien_cuentan(self):
+        primera = {**confirmacion(False), 'omitidos': [self.omitido('FOLIO_DUPLICADO: ya existe…')]}
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'otra versión del generador'):
+            self.importar((201, preview()), (200, primera), (200, confirmacion()))
+
+    def test_otras_omisiones_no_detienen(self):
+        """Una venta omitida por otro motivo (p. ej. un conflicto puntual) se reporta, no aborta."""
+        confirmado = {**confirmacion(), 'omitidos': [self.omitido('PRESENTACION_INACTIVA: …')]}
+        r, _ = self.importar((201, preview()), (200, confirmado))
+        self.assertEqual((r['resultado'], r['omitidos']), ('confirmado', 1))
+
     def test_limite_igual_al_del_generador(self):
         self.assertEqual(carga.LIMITE_LINEAS_CORE, gen.LIMITE_LINEAS_CORE)
 
@@ -311,6 +333,19 @@ class ClienteTest(unittest.TestCase):
         c, _ = self.cliente((401, {'message': 'Credenciales inválidas'}))
         with self.assertRaisesRegex(carga.ErrorDeCarga, 'No se pudo entrar como analista'):
             c.pedir('analista', 'GET', 'core', '/v1/x')
+
+    def test_conexion_cortada_es_error_reanudable(self):
+        """ConnectionResetError a media respuesta: mensaje claro en vez de un traceback."""
+        c = carga.Cliente({'core': 'http://core'}, {}, 'x', timeout=1)
+        original = carga.urllib.request.urlopen
+
+        def cortar(*_, **__):
+            raise ConnectionResetError(10054, 'conexión cerrada por el host remoto')
+
+        carga.urllib.request.urlopen = cortar
+        self.addCleanup(setattr, carga.urllib.request, 'urlopen', original)
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'se cortó la conexión.*reanudable'):
+            c._enviar('POST', 'http://core/v1/transactions/import/confirm', {}, 'T')
 
     def test_todas_recorre_las_paginas(self):
         c = carga.Cliente({}, {}, 'x', timeout=1)
