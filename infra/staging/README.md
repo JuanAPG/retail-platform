@@ -5,15 +5,21 @@ Los resultados y la evidencia de seguridad se registran en
 
 ## Rutas por ambiente
 
-El origen público es `https://<STAGING_HOST>`. Al desplegar, comunica a
+El origen público previsto para la IP reservada es `https://34.51.89.203`.
+Para emitir el certificado y activar la redirección usa la
+[guía de HTTPS por IP](https-por-ip.md). Al desplegar, comunica a
 web, Android, Electron y Locust los prefijos de la tabla. Usa el prefijo
 sin `/v1` como base y añade `/v1/<recurso>` al construir la petición.
 El web ya lo añade al crear el cliente. Android y Electron necesitan
 bases por servicio en staging, con la barra final si su cliente la exige.
-Ejemplo de web `VITE_AUTH_URL=https://<STAGING_HOST>/api/auth-service`.
+El build web con `npm run build -- --mode staging` usa el mismo origen
+por defecto. Un valor explícito como
+`VITE_AUTH_URL=https://34.51.89.203/api/auth-service` tiene prioridad.
 
-El [Caddyfile](Caddyfile) sirve el build estático desde `/srv/web`.
-Termina TLS en 443, redirige 80 y quita `/api/<servicio>` antes de
+Los archivos [Caddyfile.ip](Caddyfile.ip) para IP pública y
+[Caddyfile](Caddyfile) para un dominio comparten [las rutas](routes.caddy).
+Sirven el build estático desde `/srv/web`. En HTTPS, Caddy termina TLS
+en 443, redirige HTTP y quita `/api/<servicio>` antes de
 reenviar al puerto interno. Los health internos, Swagger, consolas de
 datos, las rutas internas de transacciones y los POST de eventos se
 consultan dentro de la red. Si se usa un proxy de salida, incluye los
@@ -77,8 +83,9 @@ flowchart LR
 3. Separa dev, staging y producción con redes, identidades, datos,
    discos y secretos por ambiente. En staging usa datos sintéticos.
    Publica únicamente 80/443 y configura administración por IAP y OS
-   Login. Caddy requiere el DNS resuelto a una IP estable y persistencia
-   en sus directorios de certificados. Verifica el certificado desde
+   Login. Caddy requiere almacenamiento persistente. Para HTTPS por
+   dominio, configura el DNS. Si usas la IP reservada, sigue la
+   [guía de HTTPS por IP](https-por-ip.md). Verifica el certificado desde
    una red externa. El Compose local expone puertos y usa credenciales
    de desarrollo, así que staging requiere un manifiesto dedicado.
 4. Compila los Dockerfiles y el build de Vite con el mismo SHA.

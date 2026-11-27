@@ -158,3 +158,19 @@ Para actualizar una instalación, despliega auth con el registro de
 emisión y espera a que expire el mayor TTL de acceso anterior antes de
 habilitar el correo de recuperación. Así se incluyen los JWT que estaban
 vigentes antes del despliegue. Redis debe persistir sus datos de sesión.
+
+
+## GET /v1/usuarios/asignables (Gerente de categoría, D-41) **(nueva)**
+
+Responsables que el Gerente puede asignar al seguimiento de una recomendación aprobada
+(`POST /v1/workflow/assignments` de recommendations-workflow-service pide `assigneeUserId`).
+Devuelve los usuarios **activos** con rol asignable: Analista comercial, Responsable de precios
+y Planeador (los mismos `ROLES_ASIGNABLES` de recommendations-workflow). **Solo `id`, `nombre` y
+`rol`**: ni correo ni otros datos. Sin paginar (lista corta y acotada).
+
+```json
+{ "data": [ { "id": "uuid", "nombre": "Carlos Ruiz Torres", "rol": "Analista comercial" } ] }
+```
+
+XML: `usuarioAsignableListResponse`. Otro rol → `403`. Resuelve el PENDIENTE del contrato de
+recommendations-workflow (el Gerente no podía leer usuarios).

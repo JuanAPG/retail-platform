@@ -6,8 +6,8 @@ import { claseDeError } from './errores';
 /**
  * El web es CLIENTE de los 10 microservicios (CLAUDE.md): un cliente axios por
  * servicio, todos bajo `/v1/` y con el mismo manejo de sesión y de errores.
- * La URL de cada uno sale de `VITE_<NOMBRE>_URL`; sin ella, localhost con el
- * puerto del docker-compose (3101–3110; 3112 para income-segmentation-service, Sprint 4).
+ * La URL de cada uno sale de `VITE_<NOMBRE>_URL`. En el build de staging se
+ * usa el proxy del mismo origen por defecto. En otros modos se conserva localhost.
  */
 export const SERVICIOS = {
   auth: { etiqueta: 'auth-service', puerto: 3101, env: 'VITE_AUTH_URL' },
@@ -23,6 +23,8 @@ export const SERVICIOS = {
   // Sprint 4 (D-35): los segmentos de ingreso salieron de catalog-service.
   ingestion: { etiqueta: 'transactions-ingestion-service', puerto: 3111, env: 'VITE_INGESTION_URL' },
   segmentation: { etiqueta: 'income-segmentation-service', puerto: 3112, env: 'VITE_SEGMENTATION_URL' },
+  // D-39: promociones (el Gerente propone; aprueba el Responsable de precios en el escritorio).
+  promotion: { etiqueta: 'promotion-service', puerto: 3115, env: 'VITE_PROMOTION_URL' },
   // T-09: estado de los 20 servicios (solo Administrador).
   monitoring: { etiqueta: 'monitoring-service', puerto: 3120, env: 'VITE_MONITORING_URL' },
 } as const;
@@ -33,9 +35,10 @@ type NombreServicio = keyof typeof SERVICIOS;
 const TIMEOUT_MS = 15000;
 
 function urlBase(nombre: NombreServicio): string {
-  const { puerto, env } = SERVICIOS[nombre];
+  const { etiqueta, puerto, env } = SERVICIOS[nombre];
   const configurada = (import.meta.env as Record<string, string | undefined>)[env];
-  const base = (configurada ?? `http://localhost:${puerto}`).replace(/\/$/, '');
+  const predeterminada = import.meta.env.MODE === 'staging' ? `/api/${etiqueta}` : `http://localhost:${puerto}`;
+  const base = (configurada ?? predeterminada).replace(/\/$/, '');
   return `${base}/v1`;
 }
 
@@ -211,5 +214,6 @@ export const notificationsApi = crearCliente('notifications');
 export const auditApi = crearCliente('audit');
 export const segmentationApi = crearCliente('segmentation');
 export const monitoringApi = crearCliente('monitoring');
+export const promotionApi = crearCliente('promotion');
 
 export const ingestionApi = crearCliente('ingestion');

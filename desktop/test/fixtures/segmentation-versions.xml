@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<segmentVersionListResponse xmlns="segmentation/v1">
+  <data>
+    <item>
+      <segmentId>1</segmentId>
+      <version>2</version>
+      <name>Ingreso bajo</name>
+      <incomeRangeMin>0.00</incomeRangeMin>
+      <incomeRangeMax>15000.00</incomeRangeMax>
+      <source>INEGI - ENIGH</source>
+      <updateFrequency>Anual</updateFrequency>
+      <zoneRelation>Zona agregada.</zoneRelation>
+      <limitations>Ninguna.</limitations>
+      <validFrom>2026-10-30T16:00:00.000Z</validFrom>
+      <current>true</current>
+      <createdBy>27f05c81-c6bf-456a-a273-150e4edb9900</createdBy>
+      <changeReason>ENIGH 2024</changeReason>
+    </item>
+    <item>
+      <segmentId>1</segmentId>
+      <version>1</version>
+      <name>Ingreso bajo</name>
+      <incomeRangeMin>0.00</incomeRangeMin>
+      <incomeRangeMax>12000.00</incomeRangeMax>
+      <source>INEGI - ENIGH 2022</source>
+      <updateFrequency>Anual</updateFrequency>
+      <zoneRelation>Zona agregada.</zoneRelation>
+      <limitations>Ninguna.</limitations>
+      <validFrom>2026-09-25T19:21:10.262Z</validFrom>
+      <validTo>2026-10-30T16:00:00.000Z</validTo>
+      <current>false</current>
+      <createdBy>27f05c81-c6bf-456a-a273-150e4edb9900</createdBy>
+    </item>
+  </data>
+  <total>2</total>
+  <page>1</page>
+  <limit>100</limit>
+</segmentVersionListResponse>

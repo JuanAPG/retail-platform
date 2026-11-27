@@ -1,8 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import axios from 'axios';
 import * as authApi from '../api/authApi';
-import { setAuthToken, setRefreshHandler } from '../api/httpClient';
+import { ApiError, setAuthToken, setRefreshHandler } from '../api/httpClient';
 import { decodeJwt, expiracionMs, msParaExpirar } from '../utils/jwt';
+import { mensajeAccesoNoPermitido, rolAdmitido } from '../config/menu';
+
+/** El perfil inició sesión bien, pero no entra al escritorio (D-31). */
+export class AccesoNoPermitidoError extends Error {
+  constructor(public readonly rol: string) {
+    super(mensajeAccesoNoPermitido(rol));
+    this.name = 'AccesoNoPermitidoError';
+  }
+}
 
 export interface SesionUsuario {
   nombre: string;
@@ -23,6 +32,8 @@ interface AuthContextValue {
   usuario: SesionUsuario | null;
   /** Momento (ms) en que vence el access token actual; null sin sesión. */
   expiraEn: number | null;
+  /** Aviso para el login (p. ej. una sesión guardada de un perfil que ya no entra). */
+  aviso: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -40,7 +51,7 @@ let renovacionEnCurso: Promise<boolean> | null = null;
 
 /** Error sin respuesta del servidor (apagado, sin red): ahí NO se debe cerrar la sesión. */
 function esErrorDeRed(e: unknown): boolean {
-  return axios.isAxiosError(e) && !e.response;
+  return (e instanceof ApiError && e.code === 'NETWORK') || (axios.isAxiosError(e) && !e.response);
 }
 
 async function readStoredSession(): Promise<StoredSession | null> {
@@ -64,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [usuario, setUsuario] = useState<SesionUsuario | null>(null);
   const [expiraEn, setExpiraEn] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const limpiarSesion = useCallback(async () => {
     setAuthToken(null);
@@ -119,6 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 2) El rol guardado debe coincidir con el que dice el token (el menú depende de él).
       if (payload.rol && payload.rol !== stored.usuario.rol) return limpiarSesion();
 
+      // 2b) D-31: un perfil que no entra al escritorio no recupera su sesión (se queda en el login con el aviso).
+      if (!rolAdmitido(stored.usuario.rol)) {
+        setAviso(mensajeAccesoNoPermitido(stored.usuario.rol));
+        return limpiarSesion();
+      }
+
       // 3) Si el refresh token ya venció, no hay forma de recuperar la sesión.
       const msRefresh = msParaExpirar(stored.refreshToken);
       if (msRefresh !== null && msRefresh <= 0) return limpiarSesion();
@@ -166,7 +184,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [expiraEn, renovarSesion]);
 
   async function login(email: string, password: string) {
+    setAviso(null);
     const result = await authApi.login(email, password);
+
+    // D-31: solo Analista comercial, Responsable de precios y Planeador. Otro perfil no se
+    // guarda ni entra: se cierra la sesión que acaba de abrir en el servidor y el login muestra
+    // el aviso. Sin navegación, así que no hay bucle entre /login y /.
+    if (!rolAdmitido(result.usuario.rol)) {
+      setAuthToken(result.accessToken);
+      try {
+        await authApi.logout();
+      } catch {
+        // Si el logout falla, la sesión del servidor vence sola; aquí no se guarda nada.
+      } finally {
+        setAuthToken(null);
+      }
+      throw new AccesoNoPermitidoError(result.usuario.rol);
+    }
     const sesionUsuario: SesionUsuario = {
       nombre: result.usuario.nombre,
       email: result.usuario.email,
@@ -193,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, isLoading, usuario, expiraEn, login, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, isLoading, usuario, expiraEn, aviso, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

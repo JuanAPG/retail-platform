@@ -46,3 +46,9 @@ export interface UsuarioSolicitante {
   rolId: number;
   activo: boolean;
 }
+
+/**
+ * D-41: roles a los que el Gerente puede asignar el seguimiento de una recomendación.
+ * Igual que ROLES_ASIGNABLES de recommendations-workflow-service; si cambia allá, aquí también.
+ */
+export const ROLES_ASIGNABLES = [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS, ROL.PLANEADOR] as const;

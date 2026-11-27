@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="auth/v1">
+  <statusCode>401</statusCode>
+  <message>Credenciales inválidas.</message>
+  <code>UNAUTHORIZED</code>
+  <path>/v1/auth/login</path>
+  <timestamp>2026-11-25T18:00:00.000Z</timestamp>
+</error>

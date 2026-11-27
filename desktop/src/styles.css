@@ -149,3 +149,19 @@ tr.detalle p { margin: 4px 0; }
 
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 .sesion-info { color: var(--muted); font-size: 0.8rem; }
+/* Servicio que alimenta la sección (encabezado). */
+.servicio-actual { margin-left: 12px; font-size: 12px; }
+
+/* Importar ventas: archivo y mensaje de control lado a lado. */
+.dos-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dos-columnas .panel { display: flex; flex-direction: column; gap: 8px; }
+pre { background: #f4f4f6; padding: 8px; overflow: auto; font-size: 12px; }
+
+/* Gráfica de elasticidad por zona o segmento. */
+.grafica { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.barra-fila { display: grid; grid-template-columns: 180px 1fr 160px; gap: 8px; align-items: center; }
+.barra-etiqueta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra-pista { background: #eef0f4; height: 14px; border-radius: 4px; display: block; }
+.barra { display: block; height: 14px; border-radius: 4px; background: #3b6fd8; }
+.barra.atipica { background: #d8873b; }
+.barra-valor { font-variant-numeric: tabular-nums; }

@@ -39,7 +39,7 @@ function numberOrNull(value: unknown): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-/** GET /v1/zones → envoltura paginada { data, total, page, limit } (ver paginacion.md). */
+/** GET /v1/zones → <zoneListResponse>: { data, total, page, limit } (ver paginacion.md). */
 export function parseZonePage(root: any): ZonePage {
   return {
     zones: asList(root.data?.item).map((z: any) => ({
@@ -56,12 +56,12 @@ export function parseZonePage(root: any): ZonePage {
   };
 }
 
-/** GET /v1/municipalities → arreglo plano (sin paginar), llega como <item>. */
+/** GET /v1/municipalities → <municipalityListResponse> con <item> (sin paginar). */
 export function parseMunicipalities(root: any): Municipality[] {
   return asList(root.item).map((m: any) => ({ id: Number(m.id), nombre: text(m.nombre) }));
 }
 
-/** GET /v1/zones/compare → arreglo plano; los indicadores sin calcular llegan vacíos (null). */
+/** GET /v1/zones/compare → <zoneCompareResponse> con <item>; los indicadores sin calcular llegan vacíos (null). */
 export function parseComparison(root: any): ZoneComparison[] {
   return asList(root.item).map((c: any) => ({
     zoneId: text(c.zoneId),
@@ -72,4 +72,35 @@ export function parseComparison(root: any): ZoneComparison[] {
     population: numberOrNull(c.population),
     availability: nullIfEmpty(c.availability),
   }));
+}
+export interface Presentacion {
+  id: string;
+  nombre: string;
+  activo: boolean;
+}
+
+export interface Producto {
+  id: string;
+  sku: string;
+  nombre: string;
+  estatus: string;
+  presentaciones: Presentacion[];
+}
+
+/** GET /v1/products → <productListResponse> paginado; cada producto trae sus presentaciones. */
+export function parseProductPage(root: any): { productos: Producto[]; total: number } {
+  return {
+    productos: asList(root?.data?.item).map((p: any) => ({
+      id: text(p.id),
+      sku: text(p.sku),
+      nombre: text(p.nombre),
+      estatus: text(p.estatus),
+      presentaciones: asList(p.presentaciones?.item).map((pr: any) => ({
+        id: text(pr.id),
+        nombre: text(pr.nombre),
+        activo: bool(pr.activo),
+      })),
+    })),
+    total: Number(root?.total ?? 0),
+  };
 }

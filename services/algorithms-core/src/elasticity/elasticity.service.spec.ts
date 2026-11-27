@@ -9,6 +9,10 @@ import {
   MAX_STORABLE_ELASTICITY,
   SalesRow,
 } from './elasticity.service';
+import { ReglasElasticidad } from './elasticity.math';
+
+/** Reglas de antes (3 observaciones, 2 precios): estas pruebas verifican el CÁLCULO con casos de QA chicos. */
+const REGLAS_QA: ReglasElasticidad = { minObservaciones: 3, minPreciosDistintos: 2 };
 
 const venta = (presentationId: string, period: string, quantity: number, price: number, zoneId = 'zona-a'): SalesRow => ({
   presentationId,
@@ -27,7 +31,7 @@ const ZONAS = new Map([
   ['zona-b', 'Zona B'],
 ]);
 const nacional = (rows: SalesRow[]) => {
-  const { results, insufficient } = estimateElasticities(rows, NOMBRES, ZONAS);
+  const { results, insufficient } = estimateElasticities(rows, NOMBRES, ZONAS, REGLAS_QA);
   return {
     calculado: results.find((r) => r.zoneId === null),
     insuficiente: insufficient.find((r) => r.zoneId === null),
@@ -73,18 +77,18 @@ describe('estimateElasticities: agregado nacional', () => {
 describe('estimateElasticities', () => {
   it('un valor que no cabe en numeric(10,4) va a insufficient y no tumba a las demás presentaciones', () => {
     const rows = [
-      // Caso de la revisión del PR #56: 1 u a $10 dos días; el tercero,
-      // 999 900 u a $10 más 100 u a $11 → E ≈ 1 381 557.96.
-      venta('extrema', '2026-09-01', 1, 10),
-      venta('extrema', '2026-09-02', 1, 10),
-      { presentationId: 'extrema', zoneId: 'zona-a', period: '2026-09-03', quantity: 1_000_000, revenue: 999_900 * 10 + 100 * 11 },
+      // 1 u a $1 000.00 dos días; el tercero, 1 000 000 u a $1 000.01 (un centavo más, sí es otro
+      // precio) → E ≈ 1.38 millones: no cabe en numeric(10,4).
+      venta('extrema', '2026-09-01', 1, 1000),
+      venta('extrema', '2026-09-02', 1, 1000),
+      venta('extrema', '2026-09-03', 1_000_000, 1000.01),
       // q = 400 · p^-2 → E = −2 exacto.
       venta('normal', '2026-09-01', 100, 2),
       venta('normal', '2026-09-02', 25, 4),
       venta('normal', '2026-09-03', 16, 5),
     ];
 
-    const { results, insufficient } = estimateElasticities(rows, NOMBRES, ZONAS);
+    const { results, insufficient } = estimateElasticities(rows, NOMBRES, ZONAS, REGLAS_QA);
 
     expect(results.map((r) => [r.presentationId, r.zoneId, r.value])).toEqual([
       ['normal', null, -2],
@@ -100,8 +104,26 @@ describe('estimateElasticities', () => {
     }
   });
 
+  it('caso de la revisión del PR #56: un precio promedio de $10.0001 es $10 al centavo → un solo precio', () => {
+    // 1 u a $10 dos días; el tercero, 999 900 u a $10 más 100 u a $11. Antes daba E ≈ 1 381 557.96
+    // (ruido de la cuarta decimal del promedio); ahora es lo que es: no hubo cambio de precio.
+    const { results, insufficient } = estimateElasticities(
+      [
+        venta('extrema', '2026-09-01', 1, 10),
+        venta('extrema', '2026-09-02', 1, 10),
+        { presentationId: 'extrema', zoneId: 'zona-a', period: '2026-09-03', quantity: 1_000_000, revenue: 999_900 * 10 + 100 * 11 },
+      ],
+      NOMBRES,
+      ZONAS,
+      REGLAS_QA,
+    );
+    expect(results).toEqual([]);
+    expect(insufficient.map((r) => [r.zoneName, r.distinctPrices])).toEqual([['Nacional', 1], ['Zona A', 1]]);
+    expect(insufficient[0].reason).toContain('Un solo precio');
+  });
+
   const deZonaA = (rows: SalesRow[]) =>
-    estimateElasticities(rows, NOMBRES, ZONAS).results.find((r) => r.zoneId === 'zona-a');
+    estimateElasticities(rows, NOMBRES, ZONAS, REGLAS_QA).results.find((r) => r.zoneId === 'zona-a');
 
   it('caso A del plan de QA por el camino del cálculo: guarda −2.3624 y R² 0.99997, el redondeo que va a la base', () => {
     // Día 1 con dos ventas (60 + 40 a $10): se suman en una sola observación.
@@ -142,6 +164,7 @@ describe('estimateElasticities', () => {
       [venta('normal', '2026-09-01', 100, 2), venta('normal', '2026-09-02', 0, 4), venta('normal', '2026-09-03', 16, 5)],
       NOMBRES,
       ZONAS,
+      REGLAS_QA,
     );
 
     expect(results).toEqual([]);
@@ -345,5 +368,47 @@ describe('ElasticityService (base simulada)', () => {
       ['Zona Oriente', 'vieja', '2026-08-02', '2026-09-20', true],
       ['Nacional', 'nueva', '2026-08-05', '2026-08-10', false],
     ]);
+  });
+});
+
+describe('estimateElasticities con las reglas vigentes (8 observaciones, 3 precios, efectos fijos)', () => {
+  const NOMBRE = new Map([['arroz', { product: 'Arroz blanco', presentation: '500 g' }]]);
+  const TRES_ZONAS = new Map([['baja', 'Zona Oriente'], ['media', 'Zona Centro'], ['alta', 'Zona Valle']]);
+  // Semanas con precio en ciclo; cada zona sigue q = k · p^-0.6, pero la zona alta cobra 20 % más
+  // y vende el triple (tamaño e ingreso): es lo que volteaba el signo del agregado nacional.
+  const semanas = (zona: string, nivelPrecio: number, nivelCantidad: number, n = 8) =>
+    Array.from({ length: n }, (_, t) => {
+      const precio = nivelPrecio * [0.9, 1, 1.1, 0.95][t % 4];
+      return venta('arroz', `2026-W${10 + t}`, nivelCantidad * 100 * precio ** -0.6, precio, zona);
+    });
+
+  it('el nacional recupera la elasticidad de las zonas aunque la zona grande cobre más', () => {
+    const { results } = estimateElasticities(
+      [...semanas('baja', 16, 1), ...semanas('media', 18, 1.5), ...semanas('alta', 19.2, 3)],
+      NOMBRE,
+      TRES_ZONAS,
+    );
+    const nacional = results.find((r) => r.zoneId === null)!;
+    expect(nacional).toMatchObject({ zoneName: 'Nacional', observations: 24, atypical: false });
+    expect(nacional.value).toBeCloseTo(-0.6, 3);
+    for (const zona of results.filter((r) => r.zoneId !== null)) expect(zona.value).toBeCloseTo(-0.6, 3);
+  });
+
+  it('con 3 semanas no publica: el motivo dice el mínimo nuevo', () => {
+    const { results, insufficient } = estimateElasticities(semanas('baja', 16, 1, 3), NOMBRE, TRES_ZONAS);
+    expect(results).toEqual([]);
+    expect(insufficient.map((r) => r.reason)).toEqual([
+      'Solo 3 observación(es); se necesitan al menos 8.',
+      'Solo 3 observación(es); se necesitan al menos 8.',
+    ]);
+  });
+
+  it('cantidad constante sale como insuficiente con su motivo, nunca E = 0 inelástica', () => {
+    const fijas = Array.from({ length: 8 }, (_, t) => venta('arroz', `2026-W${10 + t}`, 20, [16, 17, 18][t % 3], 'baja'));
+    const { results, insufficient } = estimateElasticities(fijas, NOMBRE, TRES_ZONAS);
+    expect(results).toEqual([]);
+    expect(insufficient[0].reason).toBe(
+      'La cantidad vendida no cambió en el periodo: no se puede medir cómo reacciona la demanda al precio.',
+    );
   });
 });

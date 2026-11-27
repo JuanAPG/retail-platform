@@ -5,6 +5,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Connection } from 'mongoose';
 import { DataSource } from 'typeorm';
 import { getRedis } from '../common/auth/redis.client';
+import { asegurarMongo } from '../common/mongo/asegurar-mongo';
 
 /**
  * Salud del servicio — NO CAMBIAR su forma ni su ruta.
@@ -41,11 +42,16 @@ export class HealthController {
     },
   })
   async check() {
-    const [postgres, redis] = await Promise.all([this.verificarPostgres(), verificarRedis()]);
+    // asegurarMongo: con `lazyConnection`, el health también reabre la conexión si Mongo volvió.
+    const [postgres, redis, mongo] = await Promise.all([
+      this.verificarPostgres(),
+      verificarRedis(),
+      asegurarMongo(this.mongo),
+    ]);
     const checks = {
       postgres,
       redis,
-      mongodb: this.mongo.readyState === 1 ? 'ok' : 'error: sin conexión a MongoDB',
+      mongodb: mongo ? 'ok' : 'error: sin conexión a MongoDB',
     };
     return {
       status: Object.values(checks).every((c) => c === 'ok') ? 'ok' : 'degraded',

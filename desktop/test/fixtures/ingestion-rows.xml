@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transactionImportRows xmlns="ingestion/v1">
+  <data>
+    <item><row>1</row><status>valida</status></item>
+    <item><row>2</row><status>rechazada</status><code>PRECIO_INVALIDO</code><message>El precio debe ser mayor que cero.</message></item>
+    <item><row>3</row><status>conflicto</status><code>CONFLICTO</code><message>Misma tienda y folio con otro total.</message></item>
+  </data>
+  <total>3</total>
+  <page>1</page>
+  <limit>100</limit>
+</transactionImportRows>

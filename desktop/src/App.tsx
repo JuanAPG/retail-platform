@@ -5,11 +5,13 @@ import Layout from './components/Layout';
 import RoleRoute from './components/RoleRoute';
 import Login from './pages/Login';
 import Home from './pages/Home';
-import SeccionPendiente from './pages/SeccionPendiente';
 import Zonas from './pages/Zonas';
 import Asociacion from './pages/Asociacion';
-import { MENU, MenuItem } from './config/menu';
+import Elasticidad from './pages/Elasticidad';
 import Segmentos from './pages/Segmentos';
+import Simulacion from './pages/Simulacion';
+import Ventas from './pages/Ventas';
+import Reportes from './pages/Reportes';
 
 /** Exige sesión iniciada; si no, manda a /login. */
 function PrivateRoute({ children }: { children: ReactElement }) {
@@ -18,28 +20,9 @@ function PrivateRoute({ children }: { children: ReactElement }) {
   return isLoggedIn ? children : <Navigate to="/login" replace />;
 }
 
-function seccion(path: string): MenuItem {
-  return MENU.find((m) => m.path === path)!;
-}
-
-/**
- * Ruta protegida por rol. Si la sección ya tiene pantalla real se pasa como
- * `pantalla`; si no, muestra la pantalla pendiente.
- */
-function rutaSeccion(path: string, pantalla?: ReactElement) {
-  const item = seccion(path);
-  return (
-    <Route
-      path={item.path.slice(1)}
-      element={
-        <RoleRoute roles={item.roles}>
-          {pantalla ?? (
-            <SeccionPendiente titulo={item.label} descripcion={item.description} servicio={item.servicio} />
-          )}
-        </RoleRoute>
-      }
-    />
-  );
+/** Ruta protegida por rol: la misma regla que el menú (config/menu.ts). */
+function rutaSeccion(path: string, pantalla: ReactElement) {
+  return <Route path={path.slice(1)} element={<RoleRoute path={path}>{pantalla}</RoleRoute>} />;
 }
 
 function AppRoutes() {
@@ -56,9 +39,11 @@ function AppRoutes() {
         <Route index element={<Home />} />
         {rutaSeccion('/zonas', <Zonas />)}
         {rutaSeccion('/asociacion', <Asociacion />)}
-        {rutaSeccion('/elasticidad')}
+        {rutaSeccion('/elasticidad', <Elasticidad />)}
         {rutaSeccion('/segmentos', <Segmentos />)}
-        {rutaSeccion('/ventas')}
+        {rutaSeccion('/simulacion', <Simulacion />)}
+        {rutaSeccion('/ventas', <Ventas />)}
+        {rutaSeccion('/reportes', <Reportes />)}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
