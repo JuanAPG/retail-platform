@@ -4,7 +4,9 @@ Nunca toca la base a mano: todo pasa por HTTP con el permiso de la Matriz.
   1. catalog-service (Administrador): la zona chica y las tiendas nuevas.
   2. income-segmentation-service (Analista comercial): clasifica la zona nueva con su segmento.
   3. catalog-service (Gerente de categoría): categorías, productos y presentaciones.
-  4. core-process-service (Analista comercial): cada ventas-*.csv por la importación CSV
+  4. availability-service (Investigador de mercado, D-28): una captura de existencia por tienda y
+     presentación de existencias.json, fechada desde la hora de la carga (D-38: vale 7 días).
+  5. core-process-service (Analista comercial): cada ventas-*.csv por la importación CSV
      (vista previa + confirmación). El importador acepta hasta 5 MB por archivo y, mientras la
      vista previa guarde el staging en un solo INSERT, hasta 4,095 líneas; el generador parte
      los archivos por debajo de los dos topes (`--max-mb`, `--max-lineas`).
@@ -14,12 +16,17 @@ core-process y aquí se salta; uno validado que quedó a medias se vuelve a conf
 retoma solo lo pendiente). Uno que quedó con errores detiene la carga: confirmarlo metería solo
 una parte de sus ventas. Correrlo dos veces no duplica ventas.
 
+Las existencias llevan un `captureId` fijo por tienda, presentación y DÍA de carga (UTC): el mismo
+día, availability-service las reconoce como `duplicada` y no crea nada; otro día entran como
+capturas nuevas y renuevan la vigencia (vuelve a correrlo antes de la demo si pasaron más de 4 días).
+
 Mide cada paso y escribe `manifiesto-carga.json` junto a los datos.
 
 Uso:
   python db/cargar_datos_parcial3.py --datos db/generados/10000
   python db/cargar_datos_parcial3.py --datos db/generados/10000 --solo-catalogo
-Requiere arriba: auth, catalog, income-segmentation y core-process (y Redis/Postgres).
+  python db/cargar_datos_parcial3.py --datos db/generados/10000 --sin-existencias
+Requiere arriba: auth, catalog, income-segmentation, availability y core-process (y Redis/Postgres).
 """
 from __future__ import annotations
 
@@ -33,11 +40,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 LIMITE_LINEAS_CORE = 65535 // 16  # parámetros de Postgres por consulta / valores por línea del staging
 INTENTOS_CONFIRMACION = 3
+# Espacio de nombres de los captureId (uuid5): mismo dato y mismo día -> mismo id.
+ESPACIO_CAPTURAS = uuid.uuid5(uuid.NAMESPACE_URL, 'retail-platform/generador-parcial3/existencias')
 
 
 class ErrorDeCarga(Exception):
@@ -113,6 +122,20 @@ def esperar(estado: int, esperado: int | tuple, cuerpo, que: str) -> None:
         raise ErrorDeCarga(f'{que}: respondió {estado}: {cuerpo}')
 
 
+def id_captura(huella: str, tienda: str, sku: str, presentacion: str, dia: str) -> str:
+    """captureId determinista (D-42): reenviarlo el mismo día no duplica la captura."""
+    return str(uuid.uuid5(ESPACIO_CAPTURAS, f'{huella}|{tienda}|{sku}|{presentacion}|{dia}'))
+
+
+def capturado_en(ahora: datetime, hace_horas: int) -> str:
+    """`capturedAt` = la hora en punto de la carga menos la antigüedad: siempre en el pasado
+    (availability-service rechaza con 400 una captura más de 5 min en el futuro)."""
+    if hace_horas < 1:
+        raise ErrorDeCarga(f'haceHoras debe ser al menos 1 (llegó {hace_horas}).')
+    instante = ahora.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0) - timedelta(hours=hace_horas)
+    return instante.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+
 class Cargador:
     def __init__(self, cliente: Cliente, datos: Path):
         self.c = cliente
@@ -120,6 +143,8 @@ class Cargador:
         self.catalogo = json.loads((datos / 'catalogo.json').read_text(encoding='utf-8'))
         self.manifiesto = json.loads((datos / 'manifiesto.json').read_text(encoding='utf-8'))
         self.registro: dict = {'pasos': {}, 'archivos': []}
+        self.tienda_id: dict[str, str] = {}
+        self.presentacion_id: dict[tuple[str, str], str] = {}
 
     def medir(self, paso: str, funcion):
         inicio = time.perf_counter()
@@ -165,7 +190,7 @@ class Cargador:
     # --- 1: tiendas
 
     def tiendas(self) -> dict:
-        existentes = {t['nombre'] for t in self.c.todas('admin', 'catalog', '/v1/stores')}
+        existentes = {t['nombre']: t['id'] for t in self.c.todas('admin', 'catalog', '/v1/stores')}
         estado, codigos = self.c.pedir('admin', 'GET', 'catalog', '/v1/stores/catalog/postal-codes')
         esperar(estado, 200, codigos, 'GET postal-codes')
         cp_de_municipio = {}
@@ -180,7 +205,9 @@ class Cargador:
                 'numeroSucursal': t['numeroSucursal'], 'calle': 'Av. del Generador', 'numeroExterior': str(100 + i),
                 'codigoPostal': cp_de_municipio[self.municipio_de_zona[t['zona']]]})
             esperar(estado, 201, r, f"POST /v1/stores {t['nombre']}")
+            existentes[t['nombre']] = r['id']
             creadas += 1
+        self.tienda_id = existentes
         return {'creadas': creadas, 'total': len(self.catalogo['tiendas'])}
 
     # --- 3: categorías, productos y presentaciones
@@ -215,6 +242,8 @@ class Cargador:
                                                   f"/v1/products/{existente['id']}/presentations")
             esperar(estado, 200, presentaciones, f"GET presentaciones {p['sku']}")
             nombres = {x['nombre'] for x in presentaciones}
+            for x in presentaciones:
+                self.presentacion_id[(p['sku'], x['nombre'])] = x['id']
             for pres in p['presentaciones']:
                 if pres['nombre'] in nombres:
                     continue
@@ -222,11 +251,43 @@ class Cargador:
                                          {'nombre': pres['nombre'], 'contenido': pres['contenido'],
                                           'unidadMedida': pres['unidadMedida']})
                 esperar(estado, 201, r, f"POST presentación {p['sku']} {pres['nombre']}")
+                self.presentacion_id[(p['sku'], pres['nombre'])] = r['id']
                 nuevas_pres += 1
         return {'categoriasNuevas': nuevas_cat, 'productosNuevos': nuevos, 'presentacionesNuevas': nuevas_pres,
                 'productos': len(self.catalogo['productos'])}
 
-    # --- 4: ventas
+    # --- 4: existencias
+
+    def existencias(self, ahora: datetime | None = None) -> dict:
+        entrada = self.manifiesto.get('existencias')
+        if entrada is None:
+            print('  aviso: estos datos no traen existencias.json (generador < 1.2.0); regenera para cargarlas.')
+            return {'omitido': 'sin existencias.json'}
+        archivo = self.datos / entrada['archivo']
+        contenido = archivo.read_bytes()
+        if hashlib.sha256(contenido).hexdigest() != entrada['sha256']:
+            raise ErrorDeCarga(f'{archivo.name} no coincide con el manifiesto (SHA-256): regenera los datos.')
+        filas = json.loads(contenido)['filas']
+        ahora = ahora or datetime.now(timezone.utc)
+        dia = ahora.astimezone(timezone.utc).date().isoformat()
+        conteo = {'aceptada': 0, 'conflicto': 0, 'duplicada': 0}
+        for f in filas:
+            llave = (f['sku'], f['presentacion'])
+            if f['tienda'] not in self.tienda_id or llave not in self.presentacion_id:
+                raise ErrorDeCarga(f"Existencia de {f['tienda']} / {f['sku']} {f['presentacion']}: la tienda o la "
+                                   'presentación no está en catalog-service; corre antes el paso de catálogo.')
+            cuerpo = {'captureId': id_captura(entrada['sha256'], f['tienda'], f['sku'], f['presentacion'], dia),
+                      'storeId': self.tienda_id[f['tienda']], 'presentationId': self.presentacion_id[llave],
+                      'stock': f['stock'], 'capturedAt': capturado_en(ahora, f['haceHoras']), 'origin': 'movil'}
+            estado, r = self.c.pedir('investigador', 'POST', 'availability', '/v1/availability/captures', cuerpo)
+            if estado == 403:
+                raise ErrorDeCarga('POST /v1/availability/captures respondió 403: el usuario --investigador debe '
+                                   'tener el rol Investigador de mercado (D-28).')
+            esperar(estado, (200, 201), r, f"captura {f['tienda']} / {f['sku']} {f['presentacion']}")
+            conteo[r['status']] += 1
+        return {**conteo, 'filas': len(filas), 'dia': dia}
+
+    # --- 5: ventas
 
     def transacciones_en_core(self) -> int:
         estado, r = self.c.pedir('analista', 'GET', 'core', '/v1/transactions?limit=1')
@@ -296,16 +357,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--catalog', default='http://localhost:3102')
     parser.add_argument('--core', default='http://localhost:3104')
     parser.add_argument('--segmentacion', default='http://localhost:3112')
+    parser.add_argument('--availability', default='http://localhost:3114')
     parser.add_argument('--admin', default='admin@retail.mx')
     parser.add_argument('--gerente', default='gercategoria@retail.mx')
     parser.add_argument('--analista', default='analista@retail.mx')
+    parser.add_argument('--investigador', default='investigador@retail.mx')
     parser.add_argument('--password', default='Passw0rd123!', help='Contraseña de los usuarios del seed (solo local)')
     parser.add_argument('--timeout', type=float, default=900, help='Segundos por petición (la confirmación es lenta)')
-    parser.add_argument('--solo-catalogo', action='store_true', help='Da de alta el catálogo sin importar ventas')
+    parser.add_argument('--solo-catalogo', action='store_true',
+                        help='Da de alta el catálogo y las existencias sin importar ventas')
+    parser.add_argument('--sin-existencias', action='store_true', help='No envía existencias a availability-service')
     args = parser.parse_args(argv)
 
-    cliente = Cliente({'auth': args.auth, 'catalog': args.catalog, 'core': args.core, 'segmentacion': args.segmentacion},
-                      {'admin': args.admin, 'gerente': args.gerente, 'analista': args.analista},
+    cliente = Cliente({'auth': args.auth, 'catalog': args.catalog, 'core': args.core, 'segmentacion': args.segmentacion,
+                       'availability': args.availability},
+                      {'admin': args.admin, 'gerente': args.gerente, 'analista': args.analista,
+                       'investigador': args.investigador},
                       args.password, args.timeout)
     cargador = Cargador(cliente, args.datos)
     inicio = time.perf_counter()
@@ -315,6 +382,8 @@ def main(argv: list[str] | None = None) -> int:
         cargador.medir('zonas', cargador.zonas)
         cargador.medir('tiendas', cargador.tiendas)
         cargador.medir('productos', cargador.productos)
+        if not args.sin_existencias:
+            cargador.medir('existencias', cargador.existencias)
         if not args.solo_catalogo:
             cargador.medir('ventas', cargador.ventas)
     except ErrorDeCarga as e:
