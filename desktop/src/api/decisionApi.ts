@@ -4,9 +4,9 @@ import { asList, numberOrNull, text, textOrNull } from './xml';
 /*
  * decision-service (3107). Contrato: docs/contratos/decision-service.md, XSD decision-service.xsd
  * (namespace decision/v1). Simular (M13) es SOLO del Planeador (D-31); los demás internos leen
- * los escenarios guardados. El servicio NO lee XML de entrada (aunque el XSD declare
- * `simulacionPrecioRequest` y `simulacionPresentacionRequest`): el cuerpo va en JSON.
- * promotion-service (3115) no existe todavía: el escritorio no lo llama.
+ * los escenarios guardados. Los dos POST de simulación se mandan en XML (`Content-Type:
+ * application/xml`), raíces `simulacionPrecioRequest` y `simulacionPresentacionRequest` del XSD
+ * (contrato, "Cuerpo XML de entrada"). Las promociones están en promotionApi.ts (promotion-service).
  */
 
 export interface ResultadoIndicador {
@@ -143,10 +143,32 @@ export function parseEscenarios(r: any): { escenarios: Escenario[]; total: numbe
   };
 }
 
-/** POST /v1/simulation/price (Planeador): un descuento o cambio de precio con la elasticidad vigente. */
+/** Cuerpo de <simulacionPrecioRequest> en el orden del XSD (xs:sequence): presentationId, zoneId, newPrice. */
+export function cuerpoSimulacionPrecio(c: { presentationId: string; zoneId: string; newPrice: number }): Record<string, unknown> {
+  return { presentationId: c.presentationId, zoneId: c.zoneId, newPrice: c.newPrice.toFixed(2) };
+}
+
+/**
+ * Cuerpo de <simulacionPresentacionRequest> (xs:all): productId y, si vienen, zoneId y
+ * presentationIds como lista de <item>.
+ */
+export function cuerpoSimulacionEmpaque(c: { productId: string; zoneId?: string; presentationIds?: string[] }): Record<string, unknown> {
+  const cuerpo: Record<string, unknown> = { productId: c.productId };
+  if (c.zoneId) cuerpo.zoneId = c.zoneId;
+  if (c.presentationIds && c.presentationIds.length > 0) cuerpo.presentationIds = c.presentationIds;
+  return cuerpo;
+}
+
+/** POST /v1/simulation/price (Planeador), cuerpo XML: un descuento o cambio de precio con la elasticidad vigente. */
 export async function simularPrecio(cuerpo: { presentationId: string; zoneId: string; newPrice: number }): Promise<SimulacionPrecio> {
   return parseSimulacionPrecio(
-    await pedir({ servicio: 'decision', metodo: 'POST', ruta: 'v1/simulation/price', json: cuerpo, raiz: 'simulacionPrecioResponse' }),
+    await pedir({
+      servicio: 'decision',
+      metodo: 'POST',
+      ruta: 'v1/simulation/price',
+      xml: { raiz: 'simulacionPrecioRequest', datos: cuerpoSimulacionPrecio(cuerpo) },
+      raiz: 'simulacionPrecioResponse',
+    }),
   );
 }
 
@@ -156,15 +178,12 @@ export async function simularEmpaque(cuerpo: {
   zoneId?: string;
   presentationIds?: string[];
 }): Promise<SimulacionEmpaque> {
-  const json: Record<string, unknown> = { productId: cuerpo.productId };
-  if (cuerpo.zoneId) json.zoneId = cuerpo.zoneId;
-  if (cuerpo.presentationIds && cuerpo.presentationIds.length > 0) json.presentationIds = cuerpo.presentationIds;
   return parseSimulacionEmpaque(
     await pedir({
       servicio: 'decision',
       metodo: 'POST',
       ruta: 'v1/simulation/presentation',
-      json,
+      xml: { raiz: 'simulacionPresentacionRequest', datos: cuerpoSimulacionEmpaque(cuerpo) },
       raiz: 'simulacionPresentacionResponse',
     }),
   );
@@ -175,4 +194,31 @@ export async function listarEscenarios(page = 1, limit = 50): Promise<{ escenari
   return parseEscenarios(
     await pedir({ servicio: 'decision', ruta: 'v1/simulation/scenarios', params: { page, limit }, raiz: 'simulacionEscenariosResponse' }),
   );
+}
+
+/** Lo que dice una recomendación (qué, por qué, impacto), para el detalle de su seguimiento. */
+export interface RecomendacionResumen {
+  recommendationId: string;
+  title: string;
+  whatRecommends: string;
+  why: string;
+  estimatedImpact: string;
+  status: string;
+}
+
+/** <recomendacion> (xs:all). */
+export function parseRecomendacion(r: any): RecomendacionResumen {
+  return {
+    recommendationId: text(r?.recommendationId),
+    title: text(r?.title),
+    whatRecommends: text(r?.whatRecommends),
+    why: text(r?.why),
+    estimatedImpact: text(r?.estimatedImpact),
+    status: text(r?.status),
+  };
+}
+
+/** GET /v1/recommendations/:id/explain (lectura de los perfiles internos). */
+export async function explicarRecomendacion(id: string): Promise<RecomendacionResumen> {
+  return parseRecomendacion(await pedir({ servicio: 'decision', ruta: `v1/recommendations/${id}/explain`, raiz: 'recomendacion' }));
 }

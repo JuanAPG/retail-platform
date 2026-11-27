@@ -23,13 +23,13 @@ describe('archivos de entorno', () => {
     expect(Object.values(entorno).join(' ')).not.toMatch(/localhost|127\.0\.0\.1|:\d{2,5}\//);
   });
 
-  it('.env.development define las 7 URLs locales (y NO pasaría como entrega)', () => {
+  it('.env.development define las 9 URLs locales (y NO pasaría como entrega)', () => {
     const entorno = leerEnv('.env.development');
     expect(Object.keys(entorno).sort()).toEqual([...VARIABLES_URL].sort());
     expect(validarUrlsDeEntrega(entorno).length).toBeGreaterThan(0);
   });
 
-  it('.env.example documenta las mismas 7 variables', () => {
+  it('.env.example documenta las mismas 9 variables', () => {
     expect(Object.keys(leerEnv('.env.example')).sort()).toEqual([...VARIABLES_URL].sort());
   });
 });

@@ -29,7 +29,7 @@ describe('acceso a la app (D-31)', () => {
 describe('menú por rol', () => {
   it('Analista comercial: todas las secciones, incluida Importar ventas', () => {
     expect(rutas(ROL.ANALISTA)).toEqual([
-      '/zonas', '/asociacion', '/elasticidad', '/segmentos', '/simulacion', '/ventas', '/reportes',
+      '/zonas', '/asociacion', '/elasticidad', '/segmentos', '/simulacion', '/ventas', '/promociones', '/seguimiento', '/reportes',
     ]);
   });
 

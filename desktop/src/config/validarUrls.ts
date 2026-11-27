@@ -12,6 +12,8 @@ export const VARIABLES_URL = [
   'VITE_DOCUMENTS_URL',
   'VITE_INGESTION_URL',
   'VITE_SEGMENTATION_URL',
+  'VITE_PROMOTION_URL',
+  'VITE_WORKFLOW_URL',
 ] as const;
 
 const HOSTS_LOCALES = ['localhost', '127.0.0.1', '0.0.0.0', '10.0.2.2', '::1', '[::1]'];

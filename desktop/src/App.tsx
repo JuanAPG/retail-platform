@@ -12,6 +12,8 @@ import Segmentos from './pages/Segmentos';
 import Simulacion from './pages/Simulacion';
 import Ventas from './pages/Ventas';
 import Reportes from './pages/Reportes';
+import Promociones from './pages/Promociones';
+import Seguimiento from './pages/Seguimiento';
 
 /** Exige sesión iniciada; si no, manda a /login. */
 function PrivateRoute({ children }: { children: ReactElement }) {
@@ -43,6 +45,8 @@ function AppRoutes() {
         {rutaSeccion('/segmentos', <Segmentos />)}
         {rutaSeccion('/simulacion', <Simulacion />)}
         {rutaSeccion('/ventas', <Ventas />)}
+        {rutaSeccion('/promociones', <Promociones />)}
+        {rutaSeccion('/seguimiento', <Seguimiento />)}
         {rutaSeccion('/reportes', <Reportes />)}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -8,6 +8,11 @@ import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna } from '../utils/exportar';
+import { fijo, miles, proporcion } from '../utils/formato';
+import Aviso from '../components/Aviso';
+import { Cargando, FilaVacia } from '../components/EstadosTabla';
+import { InsigniaSiNo } from '../components/Insignias';
+import { Eye, Network, Play } from 'lucide-react';
 
 const NOMBRE_ALGORITMO: Record<string, string> = { apriori: 'Apriori', fpgrowth: 'FP-Growth' };
 
@@ -200,20 +205,21 @@ export default function Asociacion() {
           </label>
           <div className="form-actions">
             <button type="submit" disabled={ejecutando}>
-              {ejecutando ? 'Ejecutando...' : `Ejecutar ${NOMBRE_ALGORITMO[algoritmo]}`}
+              <Play size={16} aria-hidden="true" />
+              {ejecutando ? 'Ejecutando…' : `Ejecutar ${NOMBRE_ALGORITMO[algoritmo]}`}
             </button>
           </div>
         </form>
       ) : (
-        <p className="alert-info">
+        <Aviso tipo="info">
           Tu rol ({usuario?.rol}) puede consultar las corridas; solo el Analista comercial las ejecuta (D-31).
-        </p>
+        </Aviso>
       )}
 
-      {errorForm && <p className="alert-error">{errorForm}</p>}
-      {aviso && <p className="alert-info">{aviso}</p>}
+      {errorForm && <Aviso tipo="error">{errorForm}</Aviso>}
+      {aviso && <Aviso tipo="info">{aviso}</Aviso>}
 
-      {abriendo && <p>Cargando corrida...</p>}
+      {abriendo && <Cargando texto="Cargando corrida…" />}
 
       {detalle && (
         <section>
@@ -221,7 +227,7 @@ export default function Asociacion() {
             Corrida {NOMBRE_ALGORITMO[detalle.algoritmo] ?? detalle.algoritmo} del {fechaHora(detalle.date)}
           </h2>
           {detalle.status === 'fallida' && (
-            <p className="alert-error">La corrida falló: {detalle.errorMessage ?? 'sin detalle'}</p>
+            <Aviso tipo="error">La corrida falló: {detalle.errorMessage ?? 'sin detalle'}</Aviso>
           )}
           <p className="muted">
             Periodo de los datos: {detalle.periodStart ?? vacio} a {detalle.periodEnd ?? vacio} · Canastas analizadas:{' '}
@@ -262,6 +268,7 @@ export default function Asociacion() {
             />
             <input
               type="search"
+              aria-label="Buscar regla por producto"
               placeholder="Buscar por producto"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -282,28 +289,24 @@ export default function Asociacion() {
                 <tr>
                   <th>Si compra…</th>
                   <th>…también compra</th>
-                  <th>Soporte</th>
-                  <th>Confianza</th>
-                  <th>Lift</th>
-                  <th>Canastas</th>
+                  <th className="num">Soporte</th>
+                  <th className="num">Confianza</th>
+                  <th className="num">Lift</th>
+                  <th className="num">Canastas</th>
                 </tr>
               </thead>
               <tbody>
                 {reglasVisibles.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted">
-                      {detalle.results.length === 0 ? 'Esta corrida no generó reglas.' : 'Ninguna regla coincide.'}
-                    </td>
-                  </tr>
+                  <FilaVacia columnas={6} icono={Network}>{detalle.results.length === 0 ? 'Esta corrida no generó reglas.' : 'Ninguna regla coincide.'}</FilaVacia>
                 )}
                 {reglasVisibles.map((r) => (
                   <tr key={r.id}>
                     <td>{r.antecedente.join(', ')}</td>
                     <td>{r.consecuente.join(', ')}</td>
-                    <td>{(r.support * 100).toFixed(1)}%</td>
-                    <td>{(r.confidence * 100).toFixed(1)}%</td>
-                    <td>{r.lift === null ? vacio : r.lift.toFixed(2)}</td>
-                    <td>{r.transactionCount ?? vacio}</td>
+                    <td className="num">{proporcion(r.support)}</td>
+                    <td className="num">{proporcion(r.confidence)}</td>
+                    <td className="num">{fijo(r.lift, 2)}</td>
+                    <td className="num">{miles(r.transactionCount, 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -316,9 +319,9 @@ export default function Asociacion() {
       )}
 
       <h2>Historial de corridas</h2>
-      {errorLista && <p className="alert-error">{errorLista}</p>}
+      {errorLista && <Aviso tipo="error">{errorLista}</Aviso>}
       {cargando ? (
-        <p>Cargando corridas...</p>
+        <Cargando texto="Cargando corridas…" />
       ) : (
         <div className="table-wrap">
           <table>
@@ -327,32 +330,33 @@ export default function Asociacion() {
                 <th>Fecha</th>
                 <th>Algoritmo</th>
                 <th>Estado</th>
-                <th>Soporte / Confianza</th>
-                <th>Canastas</th>
+                <th className="num">Soporte / Confianza</th>
+                <th className="num">Canastas</th>
                 <th>Ejecutó</th>
-                <th></th>
+                <th className="acciones">
+                  <span className="sr-only">Acciones</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {corridas.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="muted">
-                    Todavía no hay corridas.
-                  </td>
-                </tr>
+                <FilaVacia columnas={7}>Todavía no hay corridas.</FilaVacia>
               )}
               {corridas.map((c) => (
                 <tr key={c.id}>
                   <td>{fechaHora(c.date)}</td>
                   <td>{NOMBRE_ALGORITMO[c.algoritmo] ?? c.algoritmo}</td>
-                  <td>{c.status === 'completada' ? 'Completada' : 'Fallida'}</td>
                   <td>
+                    <InsigniaSiNo si={c.status === 'completada'} textoSi="Completada" textoNo="Fallida" />
+                  </td>
+                  <td className="num">
                     {c.parameters.soporte_minimo ?? vacio} / {c.parameters.confianza_minima ?? vacio}
                   </td>
-                  <td>{c.basketsConsidered ?? vacio}</td>
+                  <td className="num">{miles(c.basketsConsidered, 0)}</td>
                   <td>{c.userName ?? vacio}</td>
-                  <td>
-                    <button onClick={() => abrirCorrida(c.id)} disabled={abriendo}>
+                  <td className="acciones">
+                    <button className="btn-secondary btn-sm" onClick={() => abrirCorrida(c.id)} disabled={abriendo}>
+                      <Eye size={15} aria-hidden="true" />
                       Ver
                     </button>
                   </td>

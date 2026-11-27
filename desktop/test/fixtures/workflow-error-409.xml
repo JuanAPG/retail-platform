@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="workflow/v1">
+  <statusCode>409</statusCode>
+  <message>Transición fuera de orden.</message>
+  <code>CONFLICT</code>
+  <details>
+    <item>estado actual: asignada</item>
+    <item>transición pedida: implementada</item>
+    <item>primero se inicia (start)</item>
+  </details>
+  <path>/v1/workflow/assignments/6b7c8d9e-0f1a-4b2c-8d3e-4f5a6b7c8d9e/implement</path>
+  <timestamp>2026-10-31T15:00:00.000Z</timestamp>
+</error>

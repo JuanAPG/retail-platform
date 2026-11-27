@@ -4,14 +4,29 @@ import { Municipality, Zone, ZoneComparison } from '../api/catalogParsers';
 import { extractErrorMessage } from '../api/httpClient';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { Cargando, FilaVacia } from '../components/EstadosTabla';
+import { InsigniaIngreso, InsigniaSiNo } from '../components/Insignias';
+import { GitCompareArrows, MapPinned } from 'lucide-react';
+import { aNumero, miles, mxn, proporcion } from '../utils/formato';
 
 /** Minúsculas y sin acentos, para que "Garza" encuentre "garza" y "Garzá". */
 function normalizar(texto: string): string {
   return texto.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
-const dinero = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 const vacio = '—';
+
+/**
+ * Disponibilidad de básicos de la zona: llega como proporción (0.95) y se muestra como porcentaje
+ * (95 %). Nula = todavía no se calcula para la zona (nunca 0).
+ */
+const disponibilidadPct = (c: ZoneComparison): number | null => {
+  const n = aNumero(c.availability);
+  return n === null ? null : Math.round(n * 1000) / 10;
+};
+
+const NOTA_DISPONIBILIDAD = 'Porcentaje de productos de la canasta básica que se encuentran en las tiendas de la zona.';
 
 const COLUMNAS_COMPARACION: Columna<ZoneComparison>[] = [
   { clave: 'zona', titulo: 'Zona', valor: (c) => c.zoneName },
@@ -19,7 +34,7 @@ const COLUMNAS_COMPARACION: Columna<ZoneComparison>[] = [
   { clave: 'clasificacion', titulo: 'Clasificación', valor: (c) => c.classification },
   { clave: 'ingreso_estimado', titulo: 'Ingreso estimado', valor: (c) => c.estimatedIncome },
   { clave: 'poblacion', titulo: 'Población', valor: (c) => c.population },
-  { clave: 'disponibilidad', titulo: 'Disponibilidad', valor: (c) => c.availability },
+  { clave: 'disponibilidad_basicos_pct', titulo: 'Disponibilidad de básicos (%)', valor: disponibilidadPct },
 ];
 
 export default function Zonas() {
@@ -82,8 +97,8 @@ export default function Zonas() {
     }
   }
 
-  if (cargando) return <p>Cargando zonas...</p>;
-  if (error) return <p className="alert-error">{error}</p>;
+  if (cargando) return <Cargando texto="Cargando zonas…" />;
+  if (error) return <Aviso tipo="error">{error}</Aviso>;
 
   return (
     <div>
@@ -92,36 +107,50 @@ export default function Zonas() {
         Selecciona dos o más zonas y compáralas por clasificación, ingreso, población y disponibilidad.
       </p>
 
-      <div className="toolbar">
-        <input
-          type="search"
-          placeholder="Buscar por nombre, municipio o descripción"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <select value={municipioId} onChange={(e) => setMunicipioId(e.target.value)}>
-          <option value="">Todos los municipios</option>
-          {municipios.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nombre}
-            </option>
-          ))}
-        </select>
-        <select value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)}>
-          <option value="todas">Todas</option>
-          <option value="activas">Solo activas</option>
-          <option value="inactivas">Solo inactivas</option>
-        </select>
-        <button onClick={comparar} disabled={seleccion.size < 2 || comparando}>
-          {comparando ? 'Comparando...' : `Comparar (${seleccion.size})`}
-        </button>
+      <div className="panel form-grid">
+        <label className="wide">
+          Buscar
+          <input
+            type="search"
+            placeholder="Nombre, municipio o descripción"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </label>
+        <label>
+          Municipio
+          <select value={municipioId} onChange={(e) => setMunicipioId(e.target.value)}>
+            <option value="">Todos los municipios</option>
+            {municipios.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Estado
+          <select value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)}>
+            <option value="todas">Todas</option>
+            <option value="activas">Solo activas</option>
+            <option value="inactivas">Solo inactivas</option>
+          </select>
+        </label>
+        <div className="form-actions">
+          <button onClick={comparar} disabled={seleccion.size < 2 || comparando}>
+            <GitCompareArrows size={16} aria-hidden="true" />
+            {comparando ? 'Comparando…' : `Comparar (${seleccion.size})`}
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th></th>
+              <th className="check-col">
+                <span className="sr-only">Seleccionar</span>
+              </th>
               <th>Zona</th>
               <th>Municipio</th>
               <th>Descripción</th>
@@ -130,15 +159,13 @@ export default function Zonas() {
           </thead>
           <tbody>
             {visibles.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Ninguna zona coincide con la búsqueda.
-                </td>
-              </tr>
+              <FilaVacia columnas={5} icono={MapPinned}>
+                Ninguna zona coincide con la búsqueda.
+              </FilaVacia>
             )}
             {visibles.map((z) => (
               <tr key={z.id}>
-                <td>
+                <td className="check-col">
                   <input
                     type="checkbox"
                     aria-label={`Seleccionar ${z.nombre}`}
@@ -146,20 +173,24 @@ export default function Zonas() {
                     onChange={() => alternar(z.id)}
                   />
                 </td>
-                <td>{z.nombre}</td>
+                <td>
+                  <strong>{z.nombre}</strong>
+                </td>
                 <td>{z.municipio}</td>
                 <td>{z.descripcion || vacio}</td>
-                <td>{z.activo ? 'Activa' : 'Inactiva'}</td>
+                <td>
+                  <InsigniaSiNo si={z.activo} textoSi="Activa" textoNo="Inactiva" />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="muted">
-        {visibles.length} de {zonas.length} zonas
+      <p className="tabla-pie">
+        {visibles.length} de {zonas.length} zonas · elige dos o más para compararlas
       </p>
 
-      {errorComparacion && <p className="alert-error">{errorComparacion}</p>}
+      {errorComparacion && <Aviso tipo="error">{errorComparacion}</Aviso>}
 
       {comparacion && (
         <section>
@@ -179,29 +210,36 @@ export default function Zonas() {
                 <tr>
                   <th>Zona</th>
                   <th>Municipio</th>
-                  <th>Clasificación</th>
-                  <th>Ingreso estimado</th>
-                  <th>Población</th>
-                  <th>Disponibilidad</th>
+                  <th>Nivel de ingreso</th>
+                  <th className="num">Ingreso estimado</th>
+                  <th className="num">Población</th>
+                  <th className="num" title={NOTA_DISPONIBILIDAD}>
+                    Disponibilidad de básicos
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {comparacion.map((c) => (
                   <tr key={c.zoneId}>
-                    <td>{c.zoneName}</td>
+                    <td>
+                      <strong>{c.zoneName}</strong>
+                    </td>
                     <td>{c.municipality}</td>
-                    <td>{c.classification ?? vacio}</td>
-                    <td>{c.estimatedIncome === null ? vacio : dinero(c.estimatedIncome)}</td>
-                    <td>{c.population === null ? vacio : c.population.toLocaleString('es-MX')}</td>
-                    <td>{c.availability ?? vacio}</td>
+                    <td>
+                      <InsigniaIngreso nivel={c.classification} />
+                    </td>
+                    <td className="num">{mxn(c.estimatedIncome)}</td>
+                    <td className="num">{miles(c.population, 0)}</td>
+                    <td className="num">{proporcion(aNumero(c.availability), 1)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="muted">
-            «—» significa que Analítica todavía no calcula ese indicador para la zona.
+          <p className="tabla-pie">
+            <strong>Disponibilidad de básicos:</strong> {NOTA_DISPONIBILIDAD}
           </p>
+          <p className="tabla-pie">«—» significa que Analítica todavía no calcula ese indicador para la zona.</p>
         </section>
       )}
     </div>

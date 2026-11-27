@@ -11,6 +11,12 @@
  *  2. Matriz §3 y §3.2 (lectura de cada módulo).
  *  3. Los contratos de cada servicio (qué rol acepta cada ruta).
  *
+ * Promociones (D-39) y Seguimiento de recomendaciones (D-41), reparto aprobado por el Product
+ * Owner: en el escritorio va lo del Responsable de precios (aprobar o rechazar promociones) y lo
+ * del responsable ASIGNADO (iniciar y marcar implementado). Lo del Gerente de categoría (proponer
+ * promociones, asignar y evaluar seguimientos) va en la web: el Gerente no entra al escritorio
+ * (D-31), así que aquí esos botones no existen para nadie.
+ *
  * La UI solo REFLEJA los permisos: cada servicio los vuelve a revisar y responde 403.
  * Los nombres de rol son EXACTOS (con acentos), como los devuelve auth-service.
  */
@@ -60,12 +66,46 @@ export const ACCIONES = {
   simular: [ROL.PLANEADOR],
   /** POST/confirm/DELETE /v1/transaction-imports: el Analista crea, confirma y descarta (contrato 3111). */
   importarVentas: SOLO_ANALISTA,
+  /** PATCH /v1/promotions/:id/approve|reject: solo el Responsable de precios (D-39, contrato promotion-service §2). */
+  resolverPromociones: [ROL.RESPONSABLE_PRECIOS],
+  /** POST /v1/promotions: Gerente de categoría, que no entra al escritorio (D-31). Nadie aquí. */
+  proponerPromocion: [],
+  /** POST /v1/workflow/assignments: Gerente de categoría (D-41). Va en la web; nadie aquí. */
+  asignarSeguimiento: [],
+  /** PATCH /v1/workflow/assignments/:id/evaluate: Gerente de categoría (D-41). Va en la web; nadie aquí. */
+  evaluarSeguimiento: [],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Accion = keyof typeof ACCIONES;
 
 export function puede(rol: string | null | undefined, accion: Accion): boolean {
   return !!rol && (ACCIONES[accion] as readonly string[]).includes(rol);
+}
+
+/**
+ * Roles que pueden ser responsables asignados de un seguimiento (contrato workflow §2, PROPUESTA
+ * de D-41): los tres perfiles operativos, que son justo los del escritorio.
+ */
+export const ROLES_ASIGNABLES: readonly string[] = [ROL.ANALISTA, ROL.RESPONSABLE_PRECIOS, ROL.PLANEADOR];
+
+export type AccionSeguimiento = 'iniciar' | 'implementar';
+
+/**
+ * Botones de un seguimiento para quien lo mira. SOLO el usuario asignado (id del token =
+ * `assigneeUserId`) mueve el estado, y solo el paso que sigue: `asignada` → Iniciar,
+ * `en_implementacion` → Marcar implementada. Evaluar es del Gerente (web). Los demás, aunque lean
+ * el seguimiento, no ven botones (el servicio les respondería 403).
+ */
+export function accionesSeguimiento(
+  usuarioId: string | null | undefined,
+  rol: string | null | undefined,
+  seguimiento: { assigneeUserId: string; status: string },
+): AccionSeguimiento[] {
+  if (!usuarioId || !rol || !ROLES_ASIGNABLES.includes(rol)) return [];
+  if (usuarioId.toLowerCase() !== seguimiento.assigneeUserId.toLowerCase()) return [];
+  if (seguimiento.status === 'asignada') return ['iniciar'];
+  if (seguimiento.status === 'en_implementacion') return ['implementar'];
+  return [];
 }
 
 export interface MenuItem {
@@ -119,6 +159,20 @@ export const MENU: MenuItem[] = [
     description: 'Sube archivos de ventas, revisa la vista previa con errores por fila y confirma el lote.',
     servicio: 'transactions-ingestion-service',
     roles: SOLO_ANALISTA, // contrato 3111: los demás roles reciben 403 (el Administrador no entra al escritorio)
+  },
+  {
+    path: '/promociones',
+    label: 'Promociones',
+    description: 'Consulta promociones, su precio unitario y compáralas; el Responsable de precios aprueba o rechaza.',
+    servicio: 'promotion-service · catalog-service (productos, zonas y tiendas)',
+    roles: TODOS, // GET: 6 internos (contrato §2); aprobar/rechazar: solo Responsable (ACCIONES)
+  },
+  {
+    path: '/seguimiento',
+    label: 'Seguimiento de recomendaciones',
+    description: 'Avance de las recomendaciones aceptadas; el responsable asignado las inicia y marca implementadas.',
+    servicio: 'recommendations-workflow-service · decision-service (recomendación)',
+    roles: TODOS, // GET: 6 internos (contrato §2); mover estado: solo el asignado (accionesSeguimiento)
   },
   {
     path: '/reportes',

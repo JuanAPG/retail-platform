@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<storeListResponse xmlns="catalog/v1">
+  <data>
+    <item>
+      <id>27f05c81-c6bf-456a-a273-150e4edb9900</id>
+      <nombre>Abarrotes Constitución</nombre>
+      <direccionId>65abaa34-0000-4000-8000-000000000001</direccionId>
+      <zonaId>f2670df2-6c1a-4b8e-9d3f-7a5b2c1e0d44</zonaId>
+      <formato>minimarket</formato>
+      <numeroSucursal>SUC-002</numeroSucursal>
+      <activo>true</activo>
+      <createdAt>2026-09-25T19:21:10.262Z</createdAt>
+      <updatedAt>2026-09-29T17:23:03.947Z</updatedAt>
+      <direccion>
+        <id>65abaa34-0000-4000-8000-000000000001</id>
+        <calle>Av. Constitución</calle>
+        <numeroExterior>1050</numeroExterior>
+        <colonia>Centro</colonia>
+        <codigoPostal>64000</codigoPostal>
+        <codigoPostalRef>
+          <codigoPostal>64000</codigoPostal>
+          <municipioId>2</municipioId>
+          <municipio><id>2</id><nombre>Monterrey</nombre></municipio>
+        </codigoPostalRef>
+      </direccion>
+      <zona>
+        <id>f2670df2-6c1a-4b8e-9d3f-7a5b2c1e0d44</id>
+        <nombre>Zona Centro</nombre>
+        <municipioId>2</municipioId>
+        <activo>true</activo>
+        <createdAt>2026-09-01T10:00:00.000Z</createdAt>
+        <updatedAt>2026-09-01T10:00:00.000Z</updatedAt>
+        <municipio><id>2</id><nombre>Monterrey</nombre></municipio>
+      </zona>
+    </item>
+  </data>
+  <total>1</total>
+  <page>1</page>
+  <limit>100</limit>
+</storeListResponse>

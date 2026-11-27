@@ -15,6 +15,10 @@ import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { Cargando, FilaVacia } from '../components/EstadosTabla';
+import { Insignia, InsigniaIngreso } from '../components/Insignias';
+import { History, Layers, Plus } from 'lucide-react';
 
 const vacio = '—';
 const COLUMNAS_SEGMENTOS: Columna<Segment>[] = [
@@ -251,7 +255,7 @@ export default function Segmentos() {
     }
   }
 
-  if (cargando) return <p>Cargando segmentos...</p>;
+  if (cargando) return <Cargando texto="Cargando segmentos…" />;
 
   return (
     <div>
@@ -262,11 +266,11 @@ export default function Segmentos() {
       </p>
 
       {!puedeEditar && (
-        <p className="alert-info">Tu rol ({rol}) puede consultar los segmentos, pero no modificarlos.</p>
+        <Aviso tipo="info">Tu rol ({rol}) puede consultar los segmentos, pero no modificarlos.</Aviso>
       )}
 
-      {error && <p className="alert-error">{error}</p>}
-      {aviso && <p className="alert-info">{aviso}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      {aviso && <Aviso tipo="exito">{aviso}</Aviso>}
 
       <div className="toolbar">
         <BotonesExportar
@@ -278,11 +282,17 @@ export default function Segmentos() {
         />
         <input
           type="search"
+          aria-label="Buscar segmento"
           placeholder="Buscar por código, nombre o fuente"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
-        {puedeEditar && !formAbierto && <button onClick={abrirNuevo}>Nuevo segmento</button>}
+        {puedeEditar && !formAbierto && (
+          <button onClick={abrirNuevo}>
+            <Plus size={16} aria-hidden="true" />
+            Nuevo segmento
+          </button>
+        )}
       </div>
 
       {formAbierto && (
@@ -354,7 +364,7 @@ export default function Segmentos() {
               Cancelar
             </button>
           </div>
-          {errorForm && <p className="alert-error wide">{errorForm}</p>}
+          {errorForm && <Aviso tipo="error" className="wide">{errorForm}</Aviso>}
         </form>
       )}
 
@@ -364,45 +374,52 @@ export default function Segmentos() {
             <tr>
               <th>Código</th>
               <th>Nombre</th>
-              <th>Rango de ingreso</th>
+              <th className="num">Rango de ingreso</th>
               <th>Frecuencia de actualización</th>
-              <th>Versión</th>
-              <th></th>
+              <th className="num">Versión</th>
+              <th className="acciones">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {visibles.length === 0 && (
-              <tr>
-                <td colSpan={6} className="muted">
-                  {segmentos.length === 0 ? 'Todavía no hay segmentos.' : 'Ningún segmento coincide con la búsqueda.'}
-                </td>
-              </tr>
+              <FilaVacia columnas={6} icono={Layers}>{segmentos.length === 0 ? 'Todavía no hay segmentos.' : 'Ningún segmento coincide con la búsqueda.'}</FilaVacia>
             )}
             {visibles.map((s) => (
               <Fragment key={s.id}>
                 <tr>
-                  <td>{s.code}</td>
-                  <td>{s.name}</td>
-                  <td>{rango(s)}</td>
+                  <td>
+                    <code>{s.code}</code>
+                  </td>
+                  <td>
+                    <InsigniaIngreso nivel={s.name} />
+                  </td>
+                  <td className="num">{rango(s)}</td>
                   <td>{s.updateFrequency || vacio}</td>
-                  <td title={`Vigente desde ${fechaHora(s.versionValidFrom)}`}>v{s.version}</td>
-                  <td className="row-actions">
-                    <button className="btn-secondary" onClick={() => setExpandido(expandido === s.id ? null : s.id)}>
-                      {expandido === s.id ? 'Ocultar' : 'Detalle'}
-                    </button>
-                    <button className="btn-secondary" onClick={() => verVersiones(s)}>
-                      Versiones
-                    </button>
-                    {puedeEditar && (
-                      <button className="btn-secondary" onClick={() => abrirEdicion(s)}>
-                        Nueva versión
+                  <td className="num" title={`Vigente desde ${fechaHora(s.versionValidFrom)}`}>
+                    v{s.version}
+                  </td>
+                  <td className="acciones">
+                    <div className="row-actions">
+                      <button className="btn-secondary" onClick={() => setExpandido(expandido === s.id ? null : s.id)}>
+                        {expandido === s.id ? 'Ocultar' : 'Detalle'}
                       </button>
-                    )}
-                    {puedeBorrar && (
-                      <button className="btn-danger" onClick={() => borrar(s)}>
-                        Eliminar
+                      <button className="btn-secondary" onClick={() => verVersiones(s)}>
+                        <History size={15} aria-hidden="true" />
+                        Versiones
                       </button>
-                    )}
+                      {puedeEditar && (
+                        <button className="btn-secondary" onClick={() => abrirEdicion(s)}>
+                          Nueva versión
+                        </button>
+                      )}
+                      {puedeBorrar && (
+                        <button className="btn-danger" onClick={() => borrar(s)}>
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 {expandido === s.id && (
@@ -434,7 +451,7 @@ export default function Segmentos() {
         {visibles.length} de {segmentos.length} segmentos
       </p>
 
-      {errorVersiones && <p className="alert-error">{errorVersiones}</p>}
+      {errorVersiones && <Aviso tipo="error">{errorVersiones}</Aviso>}
       {versiones && (
         <section className="panel">
           <h2>
@@ -456,8 +473,7 @@ export default function Segmentos() {
                 {versiones.lista.map((v) => (
                   <tr key={v.version}>
                     <td>
-                      v{v.version}
-                      {v.current && <strong> (vigente)</strong>}
+                      v{v.version} {v.current && <Insignia tono="verde">Vigente</Insignia>}
                     </td>
                     <td>{v.name}</td>
                     <td>{rango(v)}</td>

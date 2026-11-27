@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<error xmlns="promotion/v1">
+  <statusCode>409</statusCode>
+  <message>La vigencia de la promoción terminó el 2026-11-15; ya no se puede aprobar.</message>
+  <code>CONFLICT</code>
+  <path>/v1/promotions/3e5f7a91-2b4c-4d6e-8f10-a2b3c4d5e6f7/approve</path>
+  <timestamp>2026-11-16T15:00:00.000Z</timestamp>
+</error>

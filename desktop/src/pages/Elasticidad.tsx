@@ -15,6 +15,10 @@ import BotonesExportar from '../components/BotonesExportar';
 import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import { Columna } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { Cargando, FilaVacia } from '../components/EstadosTabla';
+import { InsigniaElasticidad, Insignia } from '../components/Insignias';
+import { Calculator, ChartColumn, TrendingDown } from 'lucide-react';
 
 /*
  * Elasticidad precio-demanda (M11, algorithms-core). D-31: el Analista (y los demás perfiles del
@@ -61,34 +65,32 @@ function TablaResultados({ filas, vigente }: { filas: ElasticidadResultado[]; vi
             <th>Producto</th>
             <th>Presentación</th>
             <th>Zona</th>
-            <th>E</th>
+            <th className="num">E</th>
             <th>Clasificación</th>
-            <th>R²</th>
-            <th>Obs.</th>
+            <th className="num">R²</th>
+            <th className="num">Obs.</th>
             {vigente && <th>Periodo</th>}
           </tr>
         </thead>
         <tbody>
           {filas.length === 0 && (
-            <tr>
-              <td colSpan={vigente ? 8 : 7} className="muted">
-                Sin elasticidades calculadas.
-              </td>
-            </tr>
+            <FilaVacia columnas={vigente ? 8 : 7} icono={TrendingDown}>Sin elasticidades calculadas.</FilaVacia>
           )}
           {filas.map((r, i) => (
             <tr key={`${r.presentationId}-${r.zoneId ?? 'nacional'}-${i}`}>
               <td>{r.productName}</td>
               <td>{r.presentationName}</td>
               <td>{r.zoneName}</td>
-              <td>{fmt(r.value)}</td>
+              <td className="num">{fmt(r.value)}</td>
               <td>
-                {clase(r.classification)}
-                {r.atypical && <span className="muted"> · atípica (E &gt; 0)</span>}
-                {vigente && (r as ElasticidadVigente).outdated && <span className="muted"> · desactualizada</span>}
+                <span className="insignias">
+                  <InsigniaElasticidad clase={r.classification} />
+                  {r.atypical && <Insignia tono="ambar">Atípica (E &gt; 0)</Insignia>}
+                  {vigente && (r as ElasticidadVigente).outdated && <Insignia tono="gris">Desactualizada</Insignia>}
+                </span>
               </td>
-              <td>{fmt(r.rSquared, 2)}</td>
-              <td>{r.observations}</td>
+              <td className="num">{fmt(r.rSquared, 2)}</td>
+              <td className="num">{r.observations.toLocaleString('es-MX')}</td>
               {vigente && (
                 <td>
                   {(r as ElasticidadVigente).periodStart} a {(r as ElasticidadVigente).periodEnd}
@@ -230,7 +232,7 @@ export default function Elasticidad() {
     </select>
   );
 
-  if (cargando) return <p>Cargando elasticidades...</p>;
+  if (cargando) return <Cargando texto="Cargando elasticidades…" />;
 
   return (
     <div>
@@ -239,13 +241,13 @@ export default function Elasticidad() {
         Cuánto cambia la cantidad vendida cuando cambia el precio. Unitaria si 0.95 ≤ |E| ≤ 1.05 (D-18). Servicios:
         algorithms-core (cálculo y consultas) y catalog-service (presentaciones).
       </p>
-      {error && <p className="alert-error">{error}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
 
       <h2>Calcular</h2>
       {!puedeCalcular && (
-        <p className="alert-info">
+        <Aviso tipo="info">
           Tu rol ({usuario?.rol}) consulta la elasticidad; solo el Responsable de precios la calcula (D-31).
-        </p>
+        </Aviso>
       )}
       <form className="panel form-grid" onSubmit={calcular}>
         <label>
@@ -270,7 +272,8 @@ export default function Elasticidad() {
         </label>
         <div className="form-actions">
           <button type="submit" disabled={!puedeCalcular || calculando} title={puedeCalcular ? '' : 'Solo Responsable de precios'}>
-            {calculando ? 'Calculando...' : 'Calcular elasticidad'}
+            <Calculator size={16} aria-hidden="true" />
+            {calculando ? 'Calculando…' : 'Calcular elasticidad'}
           </button>
         </div>
         {(dateFrom || dateTo) && (
@@ -279,7 +282,7 @@ export default function Elasticidad() {
           </p>
         )}
       </form>
-      {errorCalculo && <p className="alert-error">{errorCalculo}</p>}
+      {errorCalculo && <Aviso tipo="error">{errorCalculo}</Aviso>}
       {calculo && (
         <section>
           <h3>
@@ -335,11 +338,12 @@ export default function Elasticidad() {
         </label>
         <div className="form-actions">
           <button type="submit" disabled={!presentacionGrafica}>
+            <ChartColumn size={16} aria-hidden="true" />
             Ver comparación
           </button>
         </div>
       </form>
-      {errorGrafica && <p className="alert-error">{errorGrafica}</p>}
+      {errorGrafica && <Aviso tipo="error">{errorGrafica}</Aviso>}
       {grafica && (
         <section>
           <p className="muted">
