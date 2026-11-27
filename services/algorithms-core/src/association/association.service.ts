@@ -163,7 +163,7 @@ export class AssociationService {
     if (params.dateFrom && params.dateTo && diaDelFiltro(params.dateTo) < diaDelFiltro(params.dateFrom)) {
       throw new BadRequestException('La fecha final no puede ser anterior a la inicial.');
     }
-    this.corridas.exigirMongo();
+    await this.corridas.exigirMongo();
 
     const lines = await this.fuente.lineasDeCanasta(params);
     if (lines.length === 0) {
