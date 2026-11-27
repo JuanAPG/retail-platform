@@ -112,7 +112,7 @@ export function ObservacionesPrecioPanel() {
       {aRechazar && (
         <Modal titulo="Rechazar precio observado" onCerrar={() => setARechazar(null)}>
           <div className="flex flex-col gap-3">
-            <TextArea id="motivo-rechazo-obs" label="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+            <TextArea placeholder="La foto del anaquel no coincide con el precio" id="motivo-rechazo-obs" label="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             {errorModal && <ErrorText>{errorModal}</ErrorText>}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setARechazar(null)} className="rounded-full px-5 py-2.5 text-sm font-bold text-teal hover:bg-arena">

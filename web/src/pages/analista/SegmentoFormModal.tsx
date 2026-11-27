@@ -116,7 +116,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field
+          <Field placeholder="45000.01"
             id="segmento-min"
             label="Ingreso mínimo"
             type="number"
@@ -127,7 +127,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
             onChange={(e) => setIncomeRangeMin(e.target.value)}
             dataFont
           />
-          <Field
+          <Field placeholder="80000"
             id="segmento-max"
             label="Ingreso máximo (vacío = sin tope)"
             type="number"
@@ -178,7 +178,7 @@ export function SegmentoFormModal({ segmento, onCerrar, onGuardado }: SegmentoFo
           placeholder="No captura variación de ingreso dentro de la misma zona."
         />
 
-        <Field
+        <Field placeholder="Hogares con ingreso mensual entre 45 y 80 mil pesos"
           id="segmento-descripcion"
           label="Descripción (opcional)"
           value={description}

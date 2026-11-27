@@ -83,11 +83,11 @@ export function CambioPrecioPanel({ productos, puedeProponer }: { productos: Pro
           </label>
           <label className={labelClass}>
             Precio propuesto (MXN)
-            <input type="number" min="0" step="0.01" className={inputClass} value={precio} onChange={(e) => setPrecio(e.target.value)} />
+            <input placeholder="42.50" type="number" min="0" step="0.01" className={inputClass} value={precio} onChange={(e) => setPrecio(e.target.value)} />
           </label>
           <label className={labelClass}>
             Unidad de compra (opcional)
-            <input type="text" maxLength={30} className={inputClass} value={unidadCompra} onChange={(e) => setUnidadCompra(e.target.value)} />
+            <input placeholder="Caja con 12 piezas" type="text" maxLength={30} className={inputClass} value={unidadCompra} onChange={(e) => setUnidadCompra(e.target.value)} />
           </label>
           <CtaButton type="submit" disabled={enviando}>
             {enviando ? 'Enviando…' : 'Proponer precio'}

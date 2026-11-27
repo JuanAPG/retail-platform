@@ -100,7 +100,7 @@ export function UsuarioFormModal({
       onCerrar={onCerrar}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field
+        <Field placeholder="María López García"
           id="usuario-nombre"
           label="Nombre completo"
           required

@@ -39,7 +39,7 @@ export function PasswordRecoveryPage() {
         <form className="grid gap-4" onSubmit={submit}>
           <label>
             {token ? 'Nueva contraseña' : 'Correo electrónico'}
-            <input className="mt-2 block w-full rounded border border-teal/30 p-2"
+            <input placeholder="tu.correo@empresa.mx" className="mt-2 block w-full rounded border border-teal/30 p-2"
               type={token ? 'password' : 'email'} autoComplete={token ? 'new-password' : 'email'}
               minLength={token ? 8 : undefined} maxLength={token ? 72 : 150} required value={value}
               onChange={(event) => setValue(event.target.value)} />
