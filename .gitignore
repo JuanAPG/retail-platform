@@ -20,4 +20,5 @@ db/generados/
 
 # Carga (Locust): tokens de las sesiones previas y salidas de las corridas
 carga/.sesiones.json
+carga/.fixtures.json
 carga/resultados/
