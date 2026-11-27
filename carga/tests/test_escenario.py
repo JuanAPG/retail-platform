@@ -239,6 +239,9 @@ class ValidacionTest(unittest.TestCase):
         self.assertIsNone(esc.validar_xml('<?xml version="1.0"?><stockListResponse xmlns="availability/v1"/>'))
         self.assertIn('error', esc.validar_xml('<error xmlns="x"><statusCode>500</statusCode></error>'))
         self.assertIn('mal formado', esc.validar_xml('<a><b></a>'))
+        # Un 404 esperado (sonda de transactions-ingestion, propiedad) en XML ES un <error>.
+        self.assertIsNone(esc.validar_xml('<error xmlns="x"><statusCode>404</statusCode></error>', error_esperado=True))
+        self.assertIn('se esperaba', esc.validar_xml('<stockListResponse/>', error_esperado=True))
 
     def test_propiedad_es_accion_del_investigador(self):
         self.assertEqual(esc.acciones('investigador', False), (['leer', 'lote_sync', 'propiedad'], [7, 3, 1]))

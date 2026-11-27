@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import re
 import sys
@@ -153,8 +154,12 @@ def resumir(prefijo: Path, ambiente: str, escala_tiempo: float = 1.0) -> dict:
         archivo = Path(f'{prefijo}{sufijo}')
         if not archivo.exists():
             return []
-        with archivo.open(encoding='utf-8', newline='') as f:
-            return list(csv.DictReader(f))
+        crudo = archivo.read_bytes()
+        try:
+            texto = crudo.decode('utf-8')
+        except UnicodeDecodeError:   # Locust en Windows escribe los CSV con la página de códigos local
+            texto = crudo.decode('cp1252', errors='replace')
+        return list(csv.DictReader(io.StringIO(texto, newline='')))
     stats = leer_stats(leer('_stats.csv'))
     if stats['total'] is None:
         raise SystemExit(f'No encontré {prefijo}_stats.csv con la fila Aggregated.')
