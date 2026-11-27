@@ -19,6 +19,10 @@ import BotonesExportar from '../components/BotonesExportar';
 import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import { Columna, descargar } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { FilaVacia } from '../components/EstadosTabla';
+import { Insignia, Tono } from '../components/Insignias';
+import { Check, Download, Eye, Trash2, Upload } from 'lucide-react';
 
 /*
  * Importar ventas (transactions-ingestion-service, 3111, D-33/D-34; contrato en
@@ -43,6 +47,15 @@ const NOMBRE_ESTADO_FILA: Record<string, string> = {
   conflicto: 'Conflicto (misma tienda y folio, otro contenido)',
 };
 
+const TONO_FILA: Record<string, Tono> = { valida: 'verde', repetida: 'gris', rechazada: 'rojo', conflicto: 'ambar' };
+const TONO_LOTE: Record<string, Tono> = {
+  vista_previa: 'azul',
+  confirmando: 'azul',
+  conciliacion: 'ambar',
+  confirmado: 'verde',
+  descartado: 'gris',
+};
+
 const fechaHora = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('es-MX');
@@ -51,27 +64,19 @@ const fechaHora = (iso: string) => {
 function Conteos({ lote }: { lote: LoteImportacion }) {
   const c = lote.counts;
   return (
-    <div className="cards">
-      <div className="card">
-        <h3>{c.valid}</h3>
-        <p>Válidas</p>
-      </div>
-      <div className="card">
-        <h3>{c.repeated}</h3>
-        <p>Repetidas</p>
-      </div>
-      <div className="card">
-        <h3>{c.rejected}</h3>
-        <p>Rechazadas</p>
-      </div>
-      <div className="card">
-        <h3>{c.conflicts}</h3>
-        <p>En conflicto</p>
-      </div>
-      <div className="card">
-        <h3>{c.inserted}</h3>
-        <p>Ventas nuevas</p>
-      </div>
+    <div className="metricas">
+      {[
+        [c.valid, 'Válidas'],
+        [c.repeated, 'Repetidas'],
+        [c.rejected, 'Rechazadas'],
+        [c.conflicts, 'En conflicto'],
+        [c.inserted, 'Ventas nuevas'],
+      ].map(([valor, etiqueta]) => (
+        <div className="metrica" key={etiqueta}>
+          <strong>{Number(valor).toLocaleString('es-MX')}</strong>
+          <span>{etiqueta}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -172,7 +177,7 @@ export default function Ventas() {
   const puedeDescartar = lote && lote.state === 'vista_previa';
 
   if (!puedeImportar) {
-    return <p className="alert-info">Solo el Analista comercial importa ventas (D-31).</p>;
+    return <Aviso tipo="info">Solo el Analista comercial importa ventas (D-31).</Aviso>;
   }
 
   return (
@@ -182,8 +187,8 @@ export default function Ventas() {
         Servicio: transactions-ingestion-service. Una venta se identifica por tienda
         y folio (D-34): reimportar no duplica, y el mismo folio con otro contenido queda en conflicto.
       </p>
-      {error && <p className="alert-error">{error}</p>}
-      {aviso && <p className="alert-info">{aviso}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      {aviso && <Aviso tipo="exito">{aviso}</Aviso>}
 
       <div className="dos-columnas">
         <form className="panel" onSubmit={enviarArchivo}>
@@ -192,10 +197,14 @@ export default function Ventas() {
             Los datos: CSV (coma o punto y coma), JSON o XML <code>salesFile</code>. Máximo 8 MB. Columnas: folio, fecha,
             tienda, sku, presentación, cantidad y precio.
           </p>
-          <input type="file" accept=".csv,.json,.xml" onChange={elegirArchivo} />
+          <label>
+            Archivo (.csv, .json o .xml)
+            <input type="file" accept=".csv,.json,.xml" onChange={elegirArchivo} />
+          </label>
           <div className="form-actions">
             <button type="submit" disabled={trabajando || !archivo}>
-              {trabajando ? 'Enviando...' : 'Subir y ver vista previa'}
+              <Upload size={16} aria-hidden="true" />
+              {trabajando ? 'Enviando…' : 'Subir y ver vista previa'}
             </button>
             <button
               type="button"
@@ -210,6 +219,7 @@ export default function Ventas() {
                 )
               }
             >
+              <Download size={16} aria-hidden="true" />
               Descargar plantilla XML
             </button>
           </div>
@@ -244,7 +254,7 @@ export default function Ventas() {
       {lote && (
         <section className="panel">
           <h2>
-            Lote {lote.id} · {NOMBRE_ESTADO_LOTE[lote.state] ?? lote.state}
+            Lote {lote.id} <Insignia tono={TONO_LOTE[lote.state] ?? 'gris'}>{NOMBRE_ESTADO_LOTE[lote.state] ?? lote.state}</Insignia>
           </h2>
           <p className="muted">
             Formato {lote.format} · {lote.sizeBytes} bytes · SHA-256 {lote.sha256.slice(0, 16)}… · creado{' '}
@@ -252,10 +262,10 @@ export default function Ventas() {
           </p>
           <Conteos lote={lote} />
           {lote.state === 'conciliacion' && (
-            <p className="alert-info">
+            <Aviso tipo="info">
               El lote tiene filas en conflicto y requiere revisión. Cómo se resuelve la conciliación no está definido en el
               contrato (pendiente).
-            </p>
+            </Aviso>
           )}
           <div className="toolbar">
             <button
@@ -267,6 +277,7 @@ export default function Ventas() {
                 )
               }
             >
+              <Check size={16} aria-hidden="true" />
               Confirmar importación
             </button>
             <button
@@ -281,6 +292,7 @@ export default function Ventas() {
                 }
               }}
             >
+              <Trash2 size={16} aria-hidden="true" />
               Descartar
             </button>
             <label className="check">
@@ -299,7 +311,7 @@ export default function Ventas() {
             <table>
               <thead>
                 <tr>
-                  <th>Fila</th>
+                  <th className="num">Fila</th>
                   <th>Estado</th>
                   <th>Código</th>
                   <th>Mensaje</th>
@@ -307,16 +319,14 @@ export default function Ventas() {
               </thead>
               <tbody>
                 {visibles.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="muted">
-                      {soloProblemas ? 'Ninguna fila con error o conflicto.' : 'El lote no tiene filas.'}
-                    </td>
-                  </tr>
+                  <FilaVacia columnas={4}>{soloProblemas ? 'Ninguna fila con error o conflicto.' : 'El lote no tiene filas.'}</FilaVacia>
                 )}
                 {visibles.map((f) => (
                   <tr key={f.row}>
-                    <td>{f.row}</td>
-                    <td>{NOMBRE_ESTADO_FILA[f.status] ?? f.status}</td>
+                    <td className="num">{f.row}</td>
+                    <td>
+                      <Insignia tono={TONO_FILA[f.status] ?? 'gris'}>{NOMBRE_ESTADO_FILA[f.status] ?? f.status}</Insignia>
+                    </td>
                     <td>{f.code ?? '—'}</td>
                     <td>{f.message ?? '—'}</td>
                   </tr>
@@ -332,7 +342,7 @@ export default function Ventas() {
 
       <h2>Historial de lotes</h2>
       <div className="toolbar">
-        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+        <select aria-label="Estado del lote" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
           <option value="">Todos los estados</option>
           {Object.entries(NOMBRE_ESTADO_LOTE).map(([k, v]) => (
             <option key={k} value={k}>
@@ -348,30 +358,32 @@ export default function Ventas() {
               <th>Creado</th>
               <th>Estado</th>
               <th>Formato</th>
-              <th>Válidas / rechazadas / conflictos</th>
-              <th>Ventas nuevas</th>
-              <th></th>
+              <th className="num">Válidas / rechazadas / conflictos</th>
+              <th className="num">Ventas nuevas</th>
+              <th className="acciones">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {historial.length === 0 && (
-              <tr>
-                <td colSpan={6} className="muted">
-                  Todavía no hay lotes.
-                </td>
-              </tr>
+              <FilaVacia columnas={6}>Todavía no hay lotes.</FilaVacia>
             )}
             {historial.map((l) => (
               <tr key={l.id}>
                 <td>{fechaHora(l.createdAt)}</td>
-                <td>{NOMBRE_ESTADO_LOTE[l.state] ?? l.state}</td>
-                <td>{l.format}</td>
                 <td>
-                  {l.counts.valid} / {l.counts.rejected} / {l.counts.conflicts}
+                  <Insignia tono={TONO_LOTE[l.state] ?? 'gris'}>{NOMBRE_ESTADO_LOTE[l.state] ?? l.state}</Insignia>
                 </td>
-                <td>{l.counts.inserted}</td>
-                <td>
-                  <button className="btn-secondary" onClick={() => abrirLote(l)}>
+                <td>{l.format.toUpperCase()}</td>
+                <td className="num">
+                  {l.counts.valid.toLocaleString('es-MX')} / {l.counts.rejected.toLocaleString('es-MX')} /{' '}
+                  {l.counts.conflicts.toLocaleString('es-MX')}
+                </td>
+                <td className="num">{l.counts.inserted.toLocaleString('es-MX')}</td>
+                <td className="acciones">
+                  <button className="btn-secondary btn-sm" onClick={() => abrirLote(l)}>
+                    <Eye size={15} aria-hidden="true" />
                     Ver
                   </button>
                 </td>

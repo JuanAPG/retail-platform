@@ -29,7 +29,10 @@ import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import { Columna } from '../utils/exportar';
 import type { FilaComparacion } from '../api/promotionApi';
-
+import Aviso from '../components/Aviso';
+import { FilaVacia } from '../components/EstadosTabla';
+import { InsigniaEstadoPromocion, InsigniaVigencia } from '../components/Insignias';
+import { Calculator, Check, Eye, Filter, GitCompareArrows, Inbox, Tag, X } from 'lucide-react';
 /*
  * Promociones (promotion-service, D-39). Los 3 perfiles del escritorio leen, calculan el precio
  * unitario y comparan. Solo el Responsable de precios aprueba o rechaza. Nadie propone desde aquí:
@@ -242,8 +245,8 @@ export default function Promociones() {
         productos, zonas y tiendas). Las promociones no tocan el histórico de precios ni la elasticidad (D-39). Las
         propone el Gerente de categoría desde la web.
       </p>
-      {error && <p className="alert-error">{error}</p>}
-      {aviso && <p className="alert-info">{aviso}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      {aviso && <Aviso tipo="exito">{aviso}</Aviso>}
 
       {puedeResolver && (
         <>
@@ -258,16 +261,16 @@ export default function Promociones() {
                   <th>Tipo</th>
                   <th>Condición</th>
                   <th>Vigencia</th>
-                  <th />
+                  <th className="acciones">
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {pendientes.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted">
-                      No hay promociones pendientes.
-                    </td>
-                  </tr>
+                  <FilaVacia columnas={6} icono={Inbox}>
+                    No hay promociones pendientes.
+                  </FilaVacia>
                 )}
                 {pendientes.map((p) => (
                   <tr key={p.id}>
@@ -276,10 +279,13 @@ export default function Promociones() {
                     <td>{NOMBRE_TIPO[p.type] ?? p.type}</td>
                     <td>{camposDelTipo(p)}</td>
                     <td>
-                      {p.validFrom} a {p.validTo} {p.validity && <span className="pill">{NOMBRE_VIGENCIA[p.validity]}</span>}
+                      <span className="celda-vigencia">
+                        {p.validFrom} a {p.validTo} <InsigniaVigencia vigencia={p.validity} />
+                      </span>
                     </td>
-                    <td>
-                      <button type="button" onClick={() => abrir(p)}>
+                    <td className="acciones">
+                      <button type="button" className="btn-sm" onClick={() => abrir(p)}>
+                        <Eye size={15} aria-hidden="true" />
                         Revisar
                       </button>
                     </td>
@@ -295,7 +301,9 @@ export default function Promociones() {
         <section className="panel">
           <div className="toolbar">
             <h2 style={{ margin: 0 }}>{seleccion.name}</h2>
-            <button type="button" className="btn-secondary" onClick={() => setSeleccion(null)}>
+            <InsigniaEstadoPromocion estado={seleccion.status} />
+            <button type="button" className="btn-ghost" onClick={() => setSeleccion(null)}>
+              <X size={16} aria-hidden="true" />
               Cerrar
             </button>
           </div>
@@ -313,10 +321,12 @@ export default function Promociones() {
             <dt>Vigencia</dt>
             <dd>
               {seleccion.validFrom} a {seleccion.validTo} (inclusive){' '}
-              {seleccion.validity && <span className="pill">{NOMBRE_VIGENCIA[seleccion.validity]}</span>}
+              <InsigniaVigencia vigencia={seleccion.validity} />
             </dd>
             <dt>Estado</dt>
-            <dd>{NOMBRE_ESTADO[seleccion.status] ?? seleccion.status}</dd>
+            <dd>
+              <InsigniaEstadoPromocion estado={seleccion.status} />
+            </dd>
             <dt>Propuesta</dt>
             <dd>
               {fecha(seleccion.proposedAt)} · usuario {seleccion.proposedBy}
@@ -339,7 +349,7 @@ export default function Promociones() {
 
           <h3>Precio unitario en una tienda</h3>
           <div className="toolbar">
-            <select value={tiendaCalculo} onChange={(e) => setTiendaCalculo(e.target.value)}>
+            <select aria-label="Tienda para calcular el precio unitario" value={tiendaCalculo} onChange={(e) => setTiendaCalculo(e.target.value)}>
               <option value="">{seleccion.storeId ? 'Su tienda' : 'Elige una tienda de la zona'}</option>
               {tiendasDe(seleccion).map((t) => (
                 <option key={t.id} value={t.id}>
@@ -347,21 +357,23 @@ export default function Promociones() {
                 </option>
               ))}
             </select>
-            <button type="button" onClick={calcularUnitario}>
+            <button type="button" className="btn-secondary" onClick={calcularUnitario}>
+              <Calculator size={16} aria-hidden="true" />
               Calcular precio unitario
             </button>
           </div>
-          {errorUnitario && <p className="alert-error">{errorUnitario}</p>}
+          {errorUnitario && <Aviso tipo="error">{errorUnitario}</Aviso>}
           {unitario && (
-            <div className="table-wrap">
-              {!unitario.disponible && <p className="alert-info">No disponible: {unitario.motivo ?? 'sin motivo'}</p>}
+            <div>
+              {!unitario.disponible && <Aviso tipo="info">No disponible: {unitario.motivo ?? 'sin motivo'}</Aviso>}
+              <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th />
-                    <th>Precio de compra</th>
-                    <th>Contenido</th>
-                    <th>Precio por {unitario.baseUnit}</th>
+                    <th>Precio</th>
+                    <th className="num">Precio de compra</th>
+                    <th className="num">Contenido</th>
+                    <th className="num">Precio por {unitario.baseUnit}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -369,14 +381,16 @@ export default function Promociones() {
                     <td>Regular</td>
                     {unitario.regular.disponible ? (
                       <>
-                        <td>
+                        <td className="num">
                           {dinero(unitario.regular.price)}
                           {unitario.regular.effectiveDate ? ` (desde ${unitario.regular.effectiveDate})` : ''}
                         </td>
-                        <td>
+                        <td className="num">
                           {cantidad(unitario.regular.contentBase)} {unitario.baseUnit}
                         </td>
-                        <td>{dinero(unitario.regular.unitPrice)} MXN/{unitario.baseUnit}</td>
+                        <td className="num">
+                          {dinero(unitario.regular.unitPrice)} / {unitario.baseUnit}
+                        </td>
                       </>
                     ) : (
                       <td colSpan={3} className="muted">
@@ -388,14 +402,14 @@ export default function Promociones() {
                     <td>Promocional</td>
                     {unitario.promotional ? (
                       <>
-                        <td>
+                        <td className="num">
                           {dinero(unitario.promotional.purchasePrice)} ({unitario.promotional.items} pza)
                         </td>
-                        <td>
+                        <td className="num">
                           {cantidad(unitario.promotional.contentBase)} {unitario.baseUnit}
                         </td>
-                        <td>
-                          <strong>{dinero(unitario.promotional.unitPrice)}</strong> MXN/{unitario.baseUnit}
+                        <td className="num">
+                          <strong>{dinero(unitario.promotional.unitPrice)}</strong> / {unitario.baseUnit}
                         </td>
                       </>
                     ) : (
@@ -406,6 +420,7 @@ export default function Promociones() {
                   </tr>
                 </tbody>
               </table>
+              </div>
               <p>
                 Ahorro por unidad:{' '}
                 <strong>{unitario.savingsPct === null ? 'no disponible (falta el precio regular)' : pct(unitario.savingsPct)}</strong>
@@ -418,6 +433,7 @@ export default function Promociones() {
               <h3>Resolver</h3>
               <div className="toolbar">
                 <button type="button" onClick={aprobar} disabled={resolviendo}>
+                  <Check size={16} aria-hidden="true" />
                   Aprobar
                 </button>
               </div>
@@ -428,13 +444,14 @@ export default function Promociones() {
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="btn-danger" disabled={resolviendo}>
+                    <X size={16} aria-hidden="true" />
                     Rechazar
                   </button>
                 </div>
               </form>
             </>
           )}
-          {errorDetalle && <p className="alert-error">{errorDetalle}</p>}
+          {errorDetalle && <Aviso tipo="error">{errorDetalle}</Aviso>}
         </section>
       )}
 
@@ -490,15 +507,19 @@ export default function Promociones() {
         </label>
         <div className="form-actions">
           <button type="submit" disabled={cargando}>
-            {cargando ? 'Buscando...' : 'Filtrar'}
+            <Filter size={16} aria-hidden="true" />
+            {cargando ? 'Buscando…' : 'Filtrar'}
           </button>
         </div>
       </form>
 
       <div className="toolbar">
         <BotonesExportar nombreArchivo="promociones" raizXml="promociones" filaXml="promocion" columnas={columnas} filas={lista} />
-        <span className="muted">Comparar ({marcadas.length} elegidas, del mismo producto, de 2 a 10):</span>
-        <select value={tiendaComparar} onChange={(e) => setTiendaComparar(e.target.value)}>
+        <span className="toolbar-espacio" />
+        <span className="muted" title="De 2 a 10 promociones del mismo producto">
+          {marcadas.length} elegidas para comparar
+        </span>
+        <select aria-label="Tienda donde se comparan" value={tiendaComparar} onChange={(e) => setTiendaComparar(e.target.value)}>
           <option value="">Tienda</option>
           {tiendas.map((t) => (
             <option key={t.id} value={t.id}>
@@ -507,16 +528,19 @@ export default function Promociones() {
           ))}
         </select>
         <button type="button" onClick={comparar} disabled={marcadas.length < 2}>
+          <GitCompareArrows size={16} aria-hidden="true" />
           Comparar
         </button>
       </div>
-      {errorComparar && <p className="alert-error">{errorComparar}</p>}
+      {errorComparar && <Aviso tipo="error">{errorComparar}</Aviso>}
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Comparar</th>
+              <th className="check-col">
+                <span className="sr-only">Comparar</span>
+              </th>
               <th>Promoción</th>
               <th>Tipo</th>
               <th>Condición</th>
@@ -524,32 +548,35 @@ export default function Promociones() {
               <th>Ámbito</th>
               <th>Vigencia</th>
               <th>Estado</th>
-              <th />
+              <th className="acciones">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {lista.length === 0 && (
-              <tr>
-                <td colSpan={9} className="muted">
-                  No hay promociones con esos filtros.
-                </td>
-              </tr>
+              <FilaVacia columnas={9} icono={Tag}>
+                No hay promociones con esos filtros.
+              </FilaVacia>
             )}
             {lista.map((p) => {
               const elegida = marcadas.includes(p.id);
               const otroProducto = productoMarcado !== null && p.productId !== productoMarcado;
               return (
                 <tr key={p.id}>
-                  <td>
+                  <td className="check-col">
                     <input
                       type="checkbox"
+                      aria-label={`Comparar ${p.name}`}
                       checked={elegida}
                       disabled={!elegida && (otroProducto || marcadas.length >= 10)}
                       title={otroProducto ? 'Solo se comparan promociones del mismo producto' : undefined}
                       onChange={(e) => marcar(p, e.target.checked)}
                     />
                   </td>
-                  <td>{p.name}</td>
+                  <td>
+                    <strong>{p.name}</strong>
+                  </td>
                   <td>{NOMBRE_TIPO[p.type] ?? p.type}</td>
                   <td>{camposDelTipo(p)}</td>
                   <td>
@@ -557,11 +584,16 @@ export default function Promociones() {
                   </td>
                   <td>{ambito(p)}</td>
                   <td>
-                    {p.validFrom} a {p.validTo} {p.validity && <span className="pill">{NOMBRE_VIGENCIA[p.validity]}</span>}
+                    <span className="celda-vigencia">
+                        {p.validFrom} a {p.validTo} <InsigniaVigencia vigencia={p.validity} />
+                      </span>
                   </td>
-                  <td>{NOMBRE_ESTADO[p.status] ?? p.status}</td>
                   <td>
-                    <button type="button" className="btn-secondary" onClick={() => abrir(p)}>
+                    <InsigniaEstadoPromocion estado={p.status} />
+                  </td>
+                  <td className="acciones">
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => abrir(p)}>
+                      <Eye size={15} aria-hidden="true" />
                       Detalle
                     </button>
                   </td>
@@ -592,27 +624,27 @@ export default function Promociones() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th className="num">#</th>
                   <th>Tipo</th>
                   <th>Presentación</th>
-                  <th>Precio promocional / {comparacion.baseUnit}</th>
-                  <th>Regular / {comparacion.baseUnit}</th>
-                  <th>Ahorro</th>
+                  <th className="num">Precio promocional / {comparacion.baseUnit}</th>
+                  <th className="num">Regular / {comparacion.baseUnit}</th>
+                  <th className="num">Ahorro</th>
                 </tr>
               </thead>
               <tbody>
                 {comparacion.filas.map((f, i) => (
                   <tr key={f.promotionId}>
-                    <td>{i + 1}</td>
+                    <td className="num">{i + 1}</td>
                     <td>{NOMBRE_TIPO[f.type] ?? f.type}</td>
                     <td>{nombrePresentacion(comparacion.productId, f.presentationId)}</td>
                     {f.disponible ? (
                       <>
-                        <td>
+                        <td className="num">
                           <strong>{dinero(f.unitPrice)}</strong>
                         </td>
-                        <td>{dinero(f.regularUnitPrice)}</td>
-                        <td>{pct(f.savingsPct)}</td>
+                        <td className="num">{dinero(f.regularUnitPrice)}</td>
+                        <td className="num">{pct(f.savingsPct)}</td>
                       </>
                     ) : (
                       <td colSpan={3} className="muted">

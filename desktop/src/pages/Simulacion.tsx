@@ -16,6 +16,9 @@ import BotonesExportar from '../components/BotonesExportar';
 import { puede } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import { Columna } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { FilaVacia } from '../components/EstadosTabla';
+import { Calculator, Package } from 'lucide-react';
 
 /*
  * Simulación (M13, decision-service). D-31: SOLO el Planeador simula; el Analista (y el
@@ -68,18 +71,18 @@ function TablaIndicadores({ filas }: { filas: ResultadoIndicador[] }) {
         <thead>
           <tr>
             <th>Indicador</th>
-            <th>Base</th>
-            <th>Simulado</th>
-            <th>Variación</th>
+            <th className="num">Base</th>
+            <th className="num">Simulado</th>
+            <th className="num">Variación</th>
           </tr>
         </thead>
         <tbody>
           {filas.map((r, i) => (
             <tr key={`${r.indicatorKey}-${i}`}>
               <td>{NOMBRE_INDICADOR[r.indicatorKey] ?? r.indicatorKey}</td>
-              <td>{fmt(r.baseValue)}</td>
-              <td>{fmt(r.simulatedValue)}</td>
-              <td>{r.variationPct === null ? vacio : `${fmt(r.variationPct)} %`}</td>
+              <td className="num">{fmt(r.baseValue)}</td>
+              <td className="num">{fmt(r.simulatedValue)}</td>
+              <td className="num">{r.variationPct === null ? vacio : `${fmt(r.variationPct)} %`}</td>
             </tr>
           ))}
         </tbody>
@@ -181,12 +184,12 @@ export default function Simulacion() {
         Servicios: decision-service (simula y guarda el escenario) y catalog-service (productos y zonas). Modelo de
         elasticidad constante (D-01); es un análisis, no una predicción.
       </p>
-      {error && <p className="alert-error">{error}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
 
       {!puedeSimular ? (
-        <p className="alert-info">
+        <Aviso tipo="info">
           Tu rol ({usuario?.rol}) consulta los escenarios guardados; solo el Planeador simula (D-31).
-        </p>
+        </Aviso>
       ) : (
         <>
           <h2>Descuento o cambio de precio</h2>
@@ -232,11 +235,12 @@ export default function Simulacion() {
             </label>
             <div className="form-actions">
               <button type="submit" disabled={simulando}>
-                {simulando ? 'Simulando...' : 'Simular precio'}
+                <Calculator size={16} aria-hidden="true" />
+                {simulando ? 'Simulando…' : 'Simular precio'}
               </button>
             </div>
           </form>
-          {errorPrecio && <p className="alert-error">{errorPrecio}</p>}
+          {errorPrecio && <Aviso tipo="error">{errorPrecio}</Aviso>}
           {resultadoPrecio && (
             <section>
               <p className="muted">
@@ -280,7 +284,8 @@ export default function Simulacion() {
             </label>
             <div className="form-actions">
               <button type="submit" disabled={simulando}>
-                {simulando ? 'Simulando...' : 'Comparar empaques'}
+                <Package size={16} aria-hidden="true" />
+                {simulando ? 'Simulando…' : 'Comparar empaques'}
               </button>
             </div>
             {productoEmpaque && empaquesActivos < 3 && (
@@ -289,7 +294,7 @@ export default function Simulacion() {
               </p>
             )}
           </form>
-          {errorEmpaque && <p className="alert-error">{errorEmpaque}</p>}
+          {errorEmpaque && <Aviso tipo="error">{errorEmpaque}</Aviso>}
           {resultadoEmpaque && (
             <section>
               <p className="muted">
@@ -315,10 +320,10 @@ export default function Simulacion() {
                     <tr>
                       <th>Presentación</th>
                       <th>Precio</th>
-                      <th>Desembolso</th>
-                      <th>Precio unitario</th>
-                      <th>Demanda estimada</th>
-                      <th>% del ingreso</th>
+                      <th className="num">Desembolso</th>
+                      <th className="num">Precio unitario</th>
+                      <th className="num">Demanda estimada</th>
+                      <th className="num">% del ingreso</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -326,13 +331,13 @@ export default function Simulacion() {
                       <tr key={p.presentationId}>
                         <td>{p.presentationName}</td>
                         <td>{p.priceStatus}</td>
-                        <td>{dinero(p.outlay)}</td>
-                        <td>
+                        <td className="num">{dinero(p.outlay)}</td>
+                        <td className="num">
                           {dinero(p.unitPrice)}
                           {p.baseUnit ? ` / ${p.baseUnit}` : ''}
                         </td>
-                        <td>{fmt(p.estimatedDemand)}</td>
-                        <td>{p.incomeSharePct === null ? vacio : `${fmt(p.incomeSharePct)} %`}</td>
+                        <td className="num">{fmt(p.estimatedDemand)}</td>
+                        <td className="num">{p.incomeSharePct === null ? vacio : `${fmt(p.incomeSharePct)} %`}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -360,25 +365,21 @@ export default function Simulacion() {
             <tr>
               <th>Escenario</th>
               <th>Tipo</th>
-              <th>Precio actual → nuevo</th>
-              <th>Elasticidad</th>
+              <th className="num">Precio actual → nuevo</th>
+              <th className="num">Elasticidad</th>
               <th>Creado</th>
             </tr>
           </thead>
           <tbody>
             {escenarios.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Todavía no hay escenarios.
-                </td>
-              </tr>
+              <FilaVacia columnas={5}>Todavía no hay escenarios.</FilaVacia>
             )}
             {escenarios.map((e) => (
               <tr key={e.id}>
                 <td>{e.name}</td>
                 <td>{e.type}</td>
-                <td>{e.currentPrice === null ? vacio : `${dinero(e.currentPrice)} → ${dinero(e.newPrice)}`}</td>
-                <td>{fmt(e.elasticity, 4)}</td>
+                <td className="num">{e.currentPrice === null ? vacio : `${dinero(e.currentPrice)} → ${dinero(e.newPrice)}`}</td>
+                <td className="num">{fmt(e.elasticity, 4)}</td>
                 <td>{e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : vacio}</td>
               </tr>
             ))}

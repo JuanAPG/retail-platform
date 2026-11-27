@@ -3,6 +3,10 @@ import { FormatoReporte, Indicador, Reporte, exportarReporte, listarReportes, ob
 import { extractErrorMessage } from '../api/httpClient';
 import BotonesExportar from '../components/BotonesExportar';
 import { Columna, descargarBinario } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { Cargando, FilaVacia } from '../components/EstadosTabla';
+import { Insignia } from '../components/Insignias';
+import { Eye, FileDown, FileText } from 'lucide-react';
 
 /*
  * Reportes ejecutivos (documents-service, M16). Los perfiles del escritorio listan, consultan y
@@ -63,12 +67,13 @@ export default function Reportes() {
 
   const botones = (r: Reporte) =>
     (['pdf', 'xlsx', 'csv'] as FormatoReporte[]).map((f) => (
-      <button key={f} className="btn-secondary" disabled={descargando !== null} onClick={() => exportar(r, f)}>
-        {descargando === `${r.id}-${f}` ? 'Descargando...' : f === 'xlsx' ? 'Excel' : f.toUpperCase()}
+      <button key={f} className="btn-secondary btn-sm" disabled={descargando !== null} onClick={() => exportar(r, f)}>
+        <FileDown size={15} aria-hidden="true" />
+        {descargando === `${r.id}-${f}` ? 'Descargando…' : f === 'xlsx' ? 'Excel' : f.toUpperCase()}
       </button>
     ));
 
-  if (cargando) return <p>Cargando reportes...</p>;
+  if (cargando) return <Cargando texto="Cargando reportes…" />;
 
   return (
     <div>
@@ -77,7 +82,7 @@ export default function Reportes() {
         Servicio: documents-service. Los genera el Gerente de categoría; aquí se consultan y se descargan. Un indicador no
         disponible muestra su motivo, nunca 0 (D-20).
       </p>
-      {error && <p className="alert-error">{error}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
 
       <div className="table-wrap">
         <table>
@@ -86,17 +91,15 @@ export default function Reportes() {
               <th>Creado</th>
               <th>Periodo</th>
               <th>Estado</th>
-              <th>Indicadores disponibles</th>
-              <th></th>
+              <th className="num">Indicadores disponibles</th>
+              <th className="acciones">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {reportes.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Todavía no hay reportes.
-                </td>
-              </tr>
+              <FilaVacia columnas={5} icono={FileText}>Todavía no hay reportes.</FilaVacia>
             )}
             {reportes.map((r) => (
               <tr key={r.id}>
@@ -104,13 +107,20 @@ export default function Reportes() {
                 <td>
                   {r.dateFrom} a {r.dateTo}
                 </td>
-                <td>{r.estado}</td>
                 <td>
+                  <Insignia tono="azul">{r.estado}</Insignia>
+                </td>
+                <td className="num">
                   {r.secciones.filter((s) => s.disponible).length} de {r.secciones.length}
                 </td>
-                <td className="row-actions">
-                  <button onClick={() => abrir(r.id)}>Ver</button>
-                  {botones(r)}
+                <td className="acciones">
+                  <div className="row-actions">
+                    <button className="btn-sm" onClick={() => abrir(r.id)}>
+                      <Eye size={15} aria-hidden="true" />
+                      Ver
+                    </button>
+                    {botones(r)}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -139,7 +149,7 @@ export default function Reportes() {
                 <tr>
                   <th>Indicador</th>
                   <th>Servicio</th>
-                  <th>Valor</th>
+                  <th className="num">Valor</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,7 +157,7 @@ export default function Reportes() {
                   <tr key={s.clave}>
                     <td>{s.nombre}</td>
                     <td>{s.servicio}</td>
-                    <td>
+                    <td className="num">
                       {s.disponible ? (
                         s.valor ?? <span className="muted">sin datos en el periodo</span>
                       ) : (

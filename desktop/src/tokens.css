@@ -1,0 +1,118 @@
+/*
+ * Tokens del sistema de diseño del escritorio. Todo color, espacio, radio, sombra y tamaño de
+ * letra sale de aquí. Paleta del sistema web: verde petróleo #003C3E (principal), rojo vino
+ * #8E0A0A (acento), verde salvia #708D81 (secundario), crema #FAF8F2 (fondo) y arena #F0ECDF
+ * (superficies). Contrastes de texto calculados con la fórmula WCAG 2.1 (mínimo 4.5:1).
+ */
+:root {
+  /* Principal: verde petróleo (barra lateral, encabezados de tabla, botón primario, foco) */
+  --brand: #003c3e;
+  --brand-hover: #002a2c;
+  --brand-dark: #002a2c;
+  --brand-light: #3d6e68; /* pasos hechos y barras; crema encima: 5.5:1 */
+  --brand-soft: #e3ebe6; /* fondo de insignias/avisos de información; petróleo encima: 10.1:1 */
+  --brand-soft-border: #c3d3cb;
+  /* Texto sobre el verde petróleo (crema): 11.5:1 */
+  --on-brand: #faf8f2;
+  --on-brand-muted: #c3d2ca; /* textos secundarios en la barra lateral: 7.8:1 */
+  --on-brand-faint: #a9bfb5; /* etiquetas pequeñas en la barra lateral: 6.3:1 */
+  --on-brand-overlay: rgba(250, 248, 242, 0.12);
+  --on-brand-overlay-strong: rgba(250, 248, 242, 0.6);
+
+  /* Acento: rojo vino (sección activa del menú, botón de peligro, destacados) */
+  --accent: #8e0a0a; /* crema encima: 9.0:1 */
+  --accent-hover: #6e0707;
+  --accent-soft: #f6e4e1; /* rojo vino encima: 7.8:1 */
+  --accent-border: #e3bcb6;
+
+  /* Secundario: verde salvia (íconos secundarios, avatares). 3.1-3.4:1: solo íconos (mínimo 3:1); como texto se usa --muted. */
+  --secondary: #708d81;
+
+  /* Superficies y texto */
+  --bg: #faf8f2; /* crema */
+  --surface: #f0ecdf; /* arena: tarjetas, campos, buscador */
+  --surface-table: #faf8f2; /* filas impares de las tablas */
+  --surface-alt: #f0ecdf; /* arena: filas alternadas */
+  --surface-hover: #f4f0e6; /* superficie clara: hover y botones de ícono */
+  --topbar-bg: rgba(250, 248, 242, 0.96);
+  --border: #e2dccb;
+  --border-strong: #c9bfa6;
+  --text: #040404; /* 19:1 sobre crema, 17:1 sobre arena */
+  --text-secondary: #2f3d36; /* 9.7:1 sobre arena */
+  --muted: #546d62; /* salvia oscurecida: 5.3:1 sobre crema, 4.7:1 sobre arena */
+
+  /* Estados */
+  --success: #2a6339; /* 5.9:1 sobre su fondo */
+  --success-soft: #e2ede0;
+  --success-border: #b9d2b8;
+  --danger: var(--accent);
+  --danger-hover: var(--accent-hover);
+  --danger-soft: var(--accent-soft);
+  --danger-border: var(--accent-border);
+  --danger-text: var(--accent);
+  --warning: #84470a; /* 6.0:1 sobre su fondo */
+  --warning-soft: #f6e9cc;
+  --warning-border: #e6cf98;
+  --info: var(--brand);
+  --info-soft: var(--brand-soft);
+  --info-border: var(--brand-soft-border);
+
+  /* Insignias: nivel de ingreso (bajo ámbar, medio azul, alto verde azulado) y otras */
+  --ambar: #84470a; /* 6.0:1 */
+  --ambar-soft: #f6e9cc;
+  --azul: #2c5274; /* 6.7:1 */
+  --azul-soft: #e2e9ef;
+  --teal: #0d5c57; /* 6.4:1 */
+  --teal-soft: #dbebe8;
+  --morado: #5c3d7f; /* 7.0:1 */
+  --morado-soft: #ece5f0;
+  --gris: #4b5f55; /* 5.6:1 */
+  --gris-soft: #e6e9e2;
+
+  /* Tablas, carga y gráfica */
+  --table-head-bg: var(--brand);
+  --table-head-text: var(--on-brand);
+  --table-head-border: var(--brand-dark);
+  --skeleton-base: #e8e2d2;
+  --skeleton-shine: #f4f0e6;
+  --skeleton-head: #ddd6c3;
+  --barra-atipica: #a65a1e;
+
+  /* Fondo del login: tintes del verde petróleo y la salvia */
+  --login-tint-1: rgba(0, 60, 62, 0.12);
+  --login-tint-2: rgba(112, 141, 129, 0.18);
+
+  /* Espacios */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  /* Radios y sombras */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(4, 4, 4, 0.06);
+  --shadow-md: 0 1px 3px rgba(4, 4, 4, 0.08), 0 4px 12px rgba(4, 4, 4, 0.06);
+  --shadow-lg: 0 12px 32px rgba(4, 4, 4, 0.14);
+  --focus: 0 0 0 3px rgba(0, 60, 62, 0.4); /* foco: verde petróleo */
+
+  /* Tipografía */
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-base: 0.9375rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.625rem;
+
+  /* Estructura */
+  --sidebar-w: 248px;
+  --topbar-h: 64px;
+}

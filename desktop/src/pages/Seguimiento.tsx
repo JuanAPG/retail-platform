@@ -24,6 +24,10 @@ import BotonesExportar from '../components/BotonesExportar';
 import { accionesSeguimiento } from '../config/menu';
 import { useAuth } from '../context/AuthContext';
 import { Columna } from '../utils/exportar';
+import Aviso from '../components/Aviso';
+import { FilaVacia } from '../components/EstadosTabla';
+import { Insignia, InsigniaSeguimiento, Tono } from '../components/Insignias';
+import { Check, CheckCheck, Eye, ListChecks, Play, X } from 'lucide-react';
 
 /*
  * Seguimiento de recomendaciones (recommendations-workflow-service, D-41). Los 3 perfiles leen.
@@ -39,16 +43,30 @@ const hoy = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const TONO_ENTREGA: Record<string, Tono> = { enviado: 'verde', fallido: 'rojo', pendiente: 'ambar', no_aplica: 'gris' };
+const Entrega = ({ estado }: { estado: string }) => <Insignia tono={TONO_ENTREGA[estado] ?? 'gris'}>{NOMBRE_ENTREGA[estado] ?? estado}</Insignia>;
+
 /** Línea de pasos: Asignada → En implementación → Implementada → Evaluada. */
 function LineaPasos({ estado }: { estado: string }) {
   const actual = indicePaso(estado);
   return (
     <ol className="pasos" aria-label="Estado del seguimiento">
-      {PASOS.map((p, i) => (
-        <li key={p.estado} className={i < actual ? 'paso hecho' : i === actual ? 'paso actual' : 'paso'}>
-          {p.titulo}
-        </li>
-      ))}
+      {PASOS.map((p, i) => {
+        // El último paso (evaluada) también cuenta como hecho: es el estado final.
+        const hecho = i < actual || (i === actual && i === PASOS.length - 1);
+        return (
+          <li
+            key={p.estado}
+            className={hecho ? 'paso hecho' : i === actual ? 'paso actual' : 'paso'}
+            aria-current={i === actual ? 'step' : undefined}
+          >
+            <span className="paso-circulo" aria-hidden="true">
+              {hecho ? <Check size={16} strokeWidth={3} /> : i + 1}
+            </span>
+            {p.titulo}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -158,10 +176,14 @@ export default function Seguimiento() {
         recomendación). El Gerente de categoría asigna y evalúa desde la web; aquí el responsable asignado inicia y
         marca implementado.
       </p>
-      {error && <p className="alert-error">{error}</p>}
+      {error && <Aviso tipo="error">{error}</Aviso>}
 
       <div className="toolbar">
+        <label htmlFor="filtro-estado-seguimiento" className="sr-only">
+          Estado
+        </label>
         <select
+          id="filtro-estado-seguimiento"
           value={estado}
           onChange={(e) => {
             setEstado(e.target.value);
@@ -186,6 +208,7 @@ export default function Seguimiento() {
           />
           Mis seguimientos
         </label>
+        <span className="toolbar-espacio" />
         <BotonesExportar nombreArchivo="seguimientos" raizXml="seguimientos" filaXml="seguimiento" columnas={columnas} filas={lista} />
       </div>
 
@@ -198,26 +221,29 @@ export default function Seguimiento() {
               <th>Asignado a</th>
               <th>Asignada</th>
               <th>Compromiso</th>
-              <th />
+              <th className="acciones">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {lista.length === 0 && (
-              <tr>
-                <td colSpan={6} className="muted">
-                  {mios ? 'No tienes seguimientos asignados.' : 'No hay seguimientos.'}
-                </td>
-              </tr>
+              <FilaVacia columnas={6} icono={ListChecks}>{mios ? 'No tienes seguimientos asignados.' : 'No hay seguimientos.'}</FilaVacia>
             )}
             {lista.map((s) => (
               <tr key={s.id}>
-                <td>{s.recommendationId}</td>
-                <td>{NOMBRE_ESTADO_SEGUIMIENTO[s.status] ?? s.status}</td>
+                <td>
+                  <code>{s.recommendationId}</code>
+                </td>
+                <td>
+                  <InsigniaSeguimiento estado={s.status} />
+                </td>
                 <td>{quien(s.assigneeUserId)}</td>
                 <td>{fecha(s.assignedAt)}</td>
                 <td>{s.dueDate ?? vacio}</td>
-                <td>
-                  <button type="button" className="btn-secondary" onClick={() => abrir(s.id)}>
+                <td className="acciones">
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => abrir(s.id)}>
+                    <Eye size={15} aria-hidden="true" />
                     Detalle
                   </button>
                 </td>
@@ -227,19 +253,21 @@ export default function Seguimiento() {
         </table>
       </div>
 
-      {errorDetalle && !seleccion && <p className="alert-error">{errorDetalle}</p>}
+      {errorDetalle && !seleccion && <Aviso tipo="error">{errorDetalle}</Aviso>}
 
       {seleccion && (
         <section className="panel">
           <div className="toolbar">
             <h2 style={{ margin: 0 }}>{recomendacion?.title || `Recomendación ${seleccion.recommendationId}`}</h2>
-            <button type="button" className="btn-secondary" onClick={() => setSeleccion(null)}>
+            <InsigniaSeguimiento estado={seleccion.status} />
+            <button type="button" className="btn-ghost" onClick={() => setSeleccion(null)}>
+              <X size={16} aria-hidden="true" />
               Cerrar
             </button>
           </div>
           <LineaPasos estado={seleccion.status} />
-          {aviso && <p className="alert-info">{aviso}</p>}
-          {errorDetalle && <p className="alert-error">{errorDetalle}</p>}
+          {aviso && <Aviso tipo="exito">{aviso}</Aviso>}
+          {errorDetalle && <Aviso tipo="error">{errorDetalle}</Aviso>}
 
           <dl className="detalle">
             {recomendacion && (
@@ -278,12 +306,13 @@ export default function Seguimiento() {
           {acciones.includes('iniciar') && (
             <div className="toolbar">
               <button type="button" disabled={moviendo} onClick={() => mover(() => iniciarSeguimiento(seleccion.id), 'Seguimiento iniciado.')}>
+                <Play size={16} aria-hidden="true" />
                 Iniciar
               </button>
             </div>
           )}
           {acciones.includes('implementar') && (
-            <form className="form-grid" onSubmit={implementar}>
+            <form className="panel form-grid" onSubmit={implementar}>
               <label>
                 Implementada el
                 <input type="date" value={implementadoEl} max={hoy()} onChange={(e) => setImplementadoEl(e.target.value)} />
@@ -294,6 +323,7 @@ export default function Seguimiento() {
               </label>
               <div className="form-actions">
                 <button type="submit" disabled={moviendo}>
+                  <CheckCheck size={16} aria-hidden="true" />
                   Marcar implementada
                 </button>
               </div>
@@ -359,15 +389,21 @@ export default function Seguimiento() {
               <tbody>
                 {eventos.map((e, i) => (
                   <tr key={`${e.event}-${i}`}>
-                    <td>{NOMBRE_EVENTO[e.event] ?? e.event}</td>
+                    <td>
+                      <strong>{NOMBRE_EVENTO[e.event] ?? e.event}</strong>
+                    </td>
                     <td>
                       {e.fromStatus ? `${NOMBRE_ESTADO_SEGUIMIENTO[e.fromStatus] ?? e.fromStatus} → ` : ''}
                       {NOMBRE_ESTADO_SEGUIMIENTO[e.toStatus] ?? e.toStatus}
                     </td>
                     <td>{quien(e.actorId)}</td>
                     <td>{fecha(e.at)}</td>
-                    <td>{NOMBRE_ENTREGA[e.audit] ?? e.audit}</td>
-                    <td>{NOMBRE_ENTREGA[e.notification] ?? e.notification}</td>
+                    <td>
+                      <Entrega estado={e.audit} />
+                    </td>
+                    <td>
+                      <Entrega estado={e.notification} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
