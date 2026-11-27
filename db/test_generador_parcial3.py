@@ -8,6 +8,7 @@ desde el código que los sembró.
 import csv
 import hashlib
 import json
+import math
 import sys
 import tempfile
 import unittest
@@ -278,6 +279,76 @@ class GeneradorTest(unittest.TestCase):
         """Ingreso alto compra más productos por canasta que ingreso bajo."""
         media = lambda zona: sum(len(v['lineas']) for v in self.ventas_de(zona)) / len(self.ventas_de(zona))
         self.assertGreater(media('Zona Valle'), media('Zona Oriente'))
+
+    # --- elasticidad (D-18): el log-log de algorithms-core recupera la E sembrada
+
+    def elasticidades(self) -> dict:
+        """(sku, presentación) -> {'nacional': E, zona: E}, desde los CSV, como algorithms-core:
+        zona × semana (lunes), Σ unidades, precio = ingreso / unidades al centavo; mínimo 8
+        observaciones y 3 precios (ALG-E1/E2); nacional con efectos fijos por zona (ALG-E4)."""
+        celdas = defaultdict(lambda: [0, 0.0])
+        for v in self.ventas.values():
+            dia = date.fromisoformat(v['fecha'][:10])
+            lunes = dia - timedelta(days=dia.weekday())
+            for l in v['lineas']:
+                c = celdas[(l['sku'], l['presentacion'], self.zona_de[v['tienda']], lunes)]
+                c[0] += int(l['cantidad'])
+                c[1] += int(l['cantidad']) * float(l['precio'])
+        obs = defaultdict(lambda: defaultdict(list))
+        for (sku, pres, zona, _), (q, ingreso) in celdas.items():
+            obs[(sku, pres)][zona].append((math.log(round(ingreso / q, 2)), math.log(q)))
+
+        def pendiente(grupos):
+            puntos = [p for g in grupos for p in g]
+            if len(puntos) < 8 or len({round(math.exp(x), 2) for x, _ in puntos}) < 3:
+                return None
+            sxx = sxy = 0.0
+            for g in grupos:
+                mx, my = sum(x for x, _ in g) / len(g), sum(y for _, y in g) / len(g)
+                sxx += sum((x - mx) ** 2 for x, _ in g)
+                sxy += sum((x - mx) * (y - my) for x, y in g)
+            return sxy / sxx if sxx > 1e-12 else None
+
+        resultado = {}
+        for llave, por_zona in obs.items():
+            r = {'nacional': pendiente(list(por_zona.values()))}
+            r.update({z: pendiente([g]) for z, g in por_zona.items()})
+            resultado[llave] = {k: e for k, e in r.items() if e is not None}
+        return resultado
+
+    def test_elasticidad_nacional_recuperada(self):
+        """Las 32 presentaciones, nacional con efectos fijos: E sembrada ± 0.15, ninguna positiva."""
+        control = next(c for c in self.manifiesto['controles'] if c['id'] == 'elasticidad')
+        calculadas = {k: r['nacional'] for k, r in self.elasticidades().items() if 'nacional' in r}
+        self.assertEqual(len(calculadas), 32)
+        for (sku, pres), e in calculadas.items():
+            self.assertAlmostEqual(e, control['esperado'][sku], delta=control['tolerancia']['nacional'],
+                                   msg=f'{sku} {pres}')
+
+    def test_elasticidad_por_zona_recuperada(self):
+        """Cada zona × presentación publicable: E sembrada ± 0.3 (antes: R² ≈ 0 y signos al revés)."""
+        filas = [(sku, pres, z, e) for (sku, pres), r in self.elasticidades().items()
+                 for z, e in r.items() if z != 'nacional']
+        self.assertGreaterEqual(len(filas), 90)
+        for sku, pres, zona, e in filas:
+            self.assertAlmostEqual(e, gen.POR_SKU[sku].elasticidad, delta=gen.TOLERANCIA_E_ZONA,
+                                   msg=f'{sku} {pres} {zona}')
+
+    def test_canastas_iguales_a_la_version_1_2_0(self):
+        """Solo cambian las unidades: qué lleva cada venta, cuándo, dónde y a qué precio, igual que en 1.2.0
+        (D-36, D-37 y las asociaciones no se mueven). Huella medida con la 1.2.0 y 6,000 ventas."""
+        h = hashlib.sha256()
+        for archivo in sorted(self.dir.glob('ventas-*.csv')):
+            with archivo.open(encoding='utf-8', newline='') as f:
+                for r in csv.DictReader(f):
+                    h.update(f"{r['folio']},{r['fecha']},{r['tienda']},{r['sku']},{r['presentacion']},"
+                             f"{r['precio']}\n".encode())
+        self.assertEqual(h.hexdigest(), '2feff4b9855c1834a1e193eb08684ae0527ad7ba9273545064f4a321b3429526')
+
+    def test_unidades_promedio_por_linea(self):
+        lineas = [int(l['cantidad']) for v in self.ventas.values() for l in v['lineas']]
+        self.assertTrue(all(q >= 1 for q in lineas))
+        self.assertAlmostEqual(sum(lineas) / len(lineas), gen.UNIDADES_POR_LINEA, delta=0.3)
 
     # --- existencias (availability-service, D-38)
 
