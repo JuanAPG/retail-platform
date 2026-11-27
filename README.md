@@ -105,6 +105,9 @@ local; se protegen antes del despliegue en GCP).
 
 ## Pruebas
 
+Consulta la [matriz de cierre de pruebas del Parcial 3](docs/matriz-cierre-pruebas-parcial-3.md)
+para ver resultados, versiones ensayadas y alcance pendiente.
+
 ```bash
 # unitarias de un servicio NestJS (sin stack)
 cd services/<servicio> && npm test
