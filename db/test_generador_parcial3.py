@@ -279,6 +279,103 @@ class GeneradorTest(unittest.TestCase):
         media = lambda zona: sum(len(v['lineas']) for v in self.ventas_de(zona)) / len(self.ventas_de(zona))
         self.assertGreater(media('Zona Valle'), media('Zona Oriente'))
 
+    # --- existencias (availability-service, D-38)
+
+    def existencias(self, carpeta: Path | None = None) -> list[dict]:
+        return json.loads(((carpeta or self.dir) / 'existencias.json').read_text(encoding='utf-8'))['filas']
+
+    def control(self, id_: str) -> dict:
+        return next(c for c in self.manifiesto['controles'] if c['id'] == id_)
+
+    def test_existencias_no_tocan_las_ventas(self):
+        """Usan su propio generador aleatorio: los CSV salen igual que sin ellas."""
+        g = gen.Generador(TRANSACCIONES, 52, date(2026, 11, 22), 4, 42)
+        g.generar()
+        antes = g.rng.getstate()
+        gen.existencias(g)
+        self.assertEqual(g.rng.getstate(), antes)
+
+    def test_existencias_una_por_tienda_y_presentacion(self):
+        filas = self.existencias()
+        presentaciones = sum(len(p['presentaciones']) for p in self.catalogo['productos'])
+        self.assertEqual(len(filas), len(self.catalogo['tiendas']) * presentaciones)
+        self.assertEqual(len({(f['tienda'], f['sku'], f['presentacion']) for f in filas}), len(filas))
+        nombres = {p['sku']: {x['nombre'] for x in p['presentaciones']} for p in self.catalogo['productos']}
+        for f in filas:
+            self.assertIn(f['presentacion'], nombres[f['sku']])
+            self.assertIsInstance(f['stock'], int)
+            self.assertGreaterEqual(f['stock'], 0)
+            self.assertGreaterEqual(f['haceHoras'], 1)   # nunca en el futuro al cargar
+        entrada = self.manifiesto['existencias']
+        contenido = (self.dir / 'existencias.json').read_bytes()
+        self.assertEqual((entrada['filas'], entrada['bytes'], entrada['sha256']),
+                         (len(filas), len(contenido), hashlib.sha256(contenido).hexdigest()))
+
+    def test_existencias_reproducibles(self):
+        otro = generar(Path(self.tmp.name) / 'e')
+        self.assertEqual(otro['existencias']['sha256'], self.manifiesto['existencias']['sha256'])
+        semilla = generar(Path(self.tmp.name) / 'f', '--semilla', '7')
+        self.assertNotEqual(semilla['existencias']['sha256'], self.manifiesto['existencias']['sha256'])
+
+    def test_cobertura_de_la_tienda_de_control(self):
+        """9 básicos: Arroz faltante, Pasta vencida (8 días), Aceite cubierto con una sola presentación."""
+        c = self.control('D-38-cobertura-tienda')
+        self.assertEqual(c['tienda'], 'Abarrotes Juárez')
+        self.assertEqual(c['esperado'], {'basics': 9, 'covered': 7, 'missing': 1, 'expired': 1, 'noData': 0,
+                                         'coverage': 77.78, 'faltantes': ['GEN-ARR-1KG'],
+                                         'vencidos': ['GEN-PAS-200']})
+        aceite = {f['presentacion']: f['stock'] for f in self.existencias()
+                  if (f['tienda'], f['sku']) == ('Abarrotes Juárez', 'GEN-ACE-1L')}
+        self.assertEqual(aceite['1 l'], 0)
+        self.assertGreater(aceite['500 ml'], 0)
+        pasta = next(f for f in self.existencias() if (f['tienda'], f['sku']) == ('Abarrotes Juárez', 'GEN-PAS-200'))
+        self.assertGreater(pasta['haceHoras'], 7 * 24)
+
+    def test_faltante_en_toda_una_zona(self):
+        """Huevo en 0 en todas las tiendas de Zona Oriente: faltante de la zona; en las otras, no."""
+        zonas = self.control('D-38-cobertura-zonas')['esperado']
+        self.assertIn('GEN-HUE-12', zonas['Zona Oriente']['faltantes'])
+        self.assertLess(zonas['Zona Oriente']['coverage'], 100)
+        for nombre in ('Zona Valle', 'Zona Centro'):
+            self.assertNotIn('GEN-HUE-12', zonas[nombre]['faltantes'])
+
+    def test_agotados_segun_el_segmento(self):
+        """Fuera de los controles, más presentaciones en 0 donde el ingreso es menor."""
+        segmento = {z['nombre']: z['segmento'] for z in self.catalogo['zonas']}
+        tasa = defaultdict(list)
+        for f in self.existencias():
+            zona = self.zona_de[f['tienda']]
+            if f['tienda'] == 'Abarrotes Juárez' or (zona, f['sku']) == gen.CTRL_ZONA_FALTANTE:
+                continue
+            tasa[segmento[zona]].append(f['stock'] == 0)
+        tasa = {s: sum(v) / len(v) for s, v in tasa.items()}
+        self.assertGreater(tasa['ING_1'], tasa['ING_2'])
+        self.assertGreater(tasa['ING_2'], tasa['ING_3'])
+        for s, objetivo in (('ING_1', 0.20), ('ING_2', 0.10), ('ING_3', 0.05)):
+            self.assertAlmostEqual(tasa[s], objetivo, delta=0.08, msg=s)
+
+    def test_calculo_con_los_casos_del_contrato(self):
+        """`cobertura_esperada` reproduce los dos casos de control de availability-service."""
+        hoy, ayer, hace_8 = 1, 24, 8 * 24
+        a = [{'tienda': 'A', 'sku': 'Arroz', 'presentacion': '1 kg', 'stock': 5, 'haceHoras': hoy},
+             {'tienda': 'A', 'sku': 'Frijol', 'presentacion': 'La Sierra', 'stock': 0, 'haceHoras': ayer},
+             {'tienda': 'A', 'sku': 'Frijol', 'presentacion': 'La Costeña', 'stock': 3, 'haceHoras': ayer},
+             {'tienda': 'A', 'sku': 'Leche', 'presentacion': '1 L', 'stock': 0, 'haceHoras': hoy},
+             {'tienda': 'A', 'sku': 'Huevo', 'presentacion': '12 pzas', 'stock': 10, 'haceHoras': hace_8}]
+        basicos = ['Arroz', 'Frijol', 'Leche', 'Huevo']
+        tienda = gen.cobertura_esperada(a, ['A'], basicos)
+        self.assertEqual((tienda['covered'], tienda['missing'], tienda['expired'], tienda['noData'],
+                          tienda['coverage']), (2, 1, 1, 0, 50.0))
+        b = [{'tienda': 'B', 'sku': 'Leche', 'presentacion': '1 L', 'stock': 8, 'haceHoras': hoy}]
+        zona = gen.cobertura_esperada(a + b, ['A', 'B'], basicos)
+        self.assertEqual((zona['covered'], zona['coverage'], zona['vencidos']), (3, 75.0, ['Huevo']))
+
+    def test_vigencia_de_7_dias_exactos(self):
+        fila = lambda horas: [{'stock': 5, 'haceHoras': horas}]
+        self.assertEqual(gen.estado_basico(fila(7 * 24)), 'cubierto')
+        self.assertEqual(gen.estado_basico(fila(7 * 24 + 1)), 'vencido')
+        self.assertEqual(gen.estado_basico([]), 'sin_dato')
+
     def test_parametros_invalidos(self):
         with self.assertRaises(ValueError):
             gen.Generador(10000, 52, date(2026, 11, 21), 4, 42)   # no es domingo

@@ -11,6 +11,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -177,6 +178,109 @@ class VentasTest(unittest.TestCase):
         self.assertEqual(r['nuevas'], 0)
         self.assertEqual([a['resultado'] for a in cargador.registro['archivos']], ['ya cargado'] * 2)
         self.assertNotIn('/v1/transactions/import/confirm', segunda.rutas())
+
+
+TIENDA, PRESENTACION = '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'
+AHORA = datetime(2026, 11, 26, 18, 42, 7, tzinfo=timezone.utc)
+
+
+def captura(status: str) -> dict:
+    """Respuesta de availability-service (`captureResponse`)."""
+    return {'captureId': UUID, 'status': status, 'storeId': TIENDA, 'presentationId': PRESENTACION}
+
+
+class ExistenciasTest(unittest.TestCase):
+    def setUp(self):
+        self.datos = Datos()
+        self.addCleanup(self.datos.tmp.cleanup)
+        filas = [{'tienda': 'Tienda', 'sku': 'SKU', 'presentacion': '1 kg', 'stock': 0, 'haceHoras': 5},
+                 {'tienda': 'Tienda', 'sku': 'SKU', 'presentacion': '500 g', 'stock': 12, 'haceHoras': 193}]
+        contenido = json.dumps({'vigenciaHoras': 168, 'filas': filas}).encode()
+        (self.datos.dir / 'existencias.json').write_bytes(contenido)
+        manifiesto = json.loads((self.datos.dir / 'manifiesto.json').read_text())
+        manifiesto['existencias'] = {'archivo': 'existencias.json', 'filas': 2,
+                                     'sha256': hashlib.sha256(contenido).hexdigest()}
+        (self.datos.dir / 'manifiesto.json').write_text(json.dumps(manifiesto))
+
+    def cargar(self, *respuestas, ahora=AHORA):
+        cliente = ClienteFalso(*respuestas)
+        cargador = self.datos.cargador(cliente)
+        cargador.tienda_id = {'Tienda': TIENDA}
+        cargador.presentacion_id = {('SKU', '1 kg'): PRESENTACION, ('SKU', '500 g'): PRESENTACION}
+        return cargador.existencias(ahora), cliente
+
+    def test_envia_una_captura_por_fila(self):
+        r, cliente = self.cargar((201, captura('aceptada')), (201, captura('aceptada')))
+        self.assertEqual(r, {'aceptada': 2, 'conflicto': 0, 'duplicada': 0, 'filas': 2, 'dia': '2026-11-26'})
+        self.assertEqual(cliente.rutas(), ['/v1/availability/captures'] * 2)
+        cuerpo = cliente.peticiones[0][2]
+        self.assertEqual(set(cuerpo), {'captureId', 'storeId', 'presentationId', 'stock', 'capturedAt', 'origin'})
+        self.assertEqual((cuerpo['storeId'], cuerpo['stock'], cuerpo['origin']), (TIENDA, 0, 'movil'))
+        self.assertEqual(cuerpo['capturedAt'], '2026-11-26T13:00:00.000Z')   # 18:00 en punto - 5 h
+        # 193 h: más de 7 días -> availability-service lo marca vencido (control D-38).
+        self.assertEqual(cliente.peticiones[1][2]['capturedAt'], '2026-11-18T17:00:00.000Z')
+
+    def test_mismo_dia_mismo_id_otro_dia_otro(self):
+        _, hoy = self.cargar((201, captura('aceptada')), (201, captura('aceptada')))
+        _, mas_tarde = self.cargar((200, captura('duplicada')), (200, captura('duplicada')),
+                                   ahora=AHORA.replace(hour=23, minute=59))
+        _, manana = self.cargar((201, captura('aceptada')), (201, captura('aceptada')),
+                                ahora=AHORA + timedelta(days=1))
+        ids = lambda c: [p[2]['captureId'] for p in c.peticiones]
+        self.assertEqual(ids(hoy), ids(mas_tarde))
+        self.assertTrue(set(ids(hoy)).isdisjoint(ids(manana)))
+        self.assertEqual(len(set(ids(hoy))), 2)   # una por presentación
+
+    def test_segunda_corrida_del_dia_no_crea_nada(self):
+        r, _ = self.cargar((200, captura('duplicada')), (200, captura('duplicada')))
+        self.assertEqual((r['aceptada'], r['duplicada']), (0, 2))
+
+    def test_capturado_en_nunca_en_el_futuro(self):
+        for minuto in (0, 1, 59):
+            ahora = AHORA.replace(minute=minuto, second=0)
+            self.assertLess(datetime.fromisoformat(carga.capturado_en(ahora, 1).replace('Z', '+00:00')), ahora)
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'haceHoras'):
+            carga.capturado_en(AHORA, 0)
+
+    def test_conflicto_se_cuenta_y_sigue(self):
+        r, _ = self.cargar((201, captura('conflicto')), (201, captura('aceptada')))
+        self.assertEqual((r['aceptada'], r['conflicto']), (1, 1))
+
+    def test_409_aborta(self):
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'respondió 409'):
+            self.cargar((409, {'message': 'captureId ya usado por otro usuario'}))
+
+    def test_403_explica_el_rol(self):
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'Investigador de mercado'):
+            self.cargar((403, {'message': 'Forbidden'}))
+
+    def test_sha256_distinto_aborta_sin_enviar(self):
+        (self.datos.dir / 'existencias.json').write_text('{"filas": []}')
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'SHA-256'):
+            self.cargar()
+
+    def test_presentacion_sin_id_aborta_sin_enviar(self):
+        cliente = ClienteFalso()
+        cargador = self.datos.cargador(cliente)
+        cargador.tienda_id = {'Tienda': TIENDA}
+        with self.assertRaisesRegex(carga.ErrorDeCarga, 'no está en catalog-service'):
+            cargador.existencias(AHORA)
+        self.assertEqual(cliente.peticiones, [])
+
+    def test_datos_sin_existencias_se_omiten(self):
+        (self.datos.dir / 'manifiesto.json').write_text(json.dumps({'archivos': [], 'sha256': 'x'}))
+        cliente = ClienteFalso()
+        r = self.datos.cargador(cliente).existencias(AHORA)
+        self.assertIn('omitido', r)
+        self.assertEqual(cliente.peticiones, [])
+
+    def test_con_el_archivo_del_generador(self):
+        """Las filas reales del generador pasan las reglas del DTO de availability-service."""
+        g = gen.Generador(6000, 52, date(2026, 11, 22), 4, 42)
+        for f in gen.existencias(g):
+            self.assertGreaterEqual(f['haceHoras'], 1)
+            self.assertIsInstance(f['stock'], int)
+            self.assertGreaterEqual(f['stock'], 0)
 
 
 class ClienteTest(unittest.TestCase):
