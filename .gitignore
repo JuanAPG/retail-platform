@@ -22,3 +22,6 @@ db/generados/
 carga/.sesiones.json
 carga/.fixtures.json
 carga/resultados/
+
+# Mediciones de algorithms-core (scripts/medir-asociacion.ts): salida de tsc
+services/algorithms-core/scripts/build/
