@@ -20,6 +20,9 @@ val Success = Color(0xFF2E7D32)
 val SuccessSoft = Color(0xFFE5F3E6)
 val Warning = Color(0xFFB54708)
 val WarningSoft = Color(0xFFFEF0C7)
+// Insignia de nivel de ingreso "alto" (bajo usa Warning y medio el color de marca). No indica bueno ni malo.
+val Teal = Color(0xFF0F766E)
+val TealSoft = Color(0xFFDDF3F0)
 
 // Modo oscuro
 val DarkBackground = Color(0xFF10151C)

@@ -28,7 +28,9 @@ class CatalogRepository(
 
     suspend fun zonas(): Result<List<ZoneDto>> = cargarTodo { page -> api.getZones(page = page) }
 
-    suspend fun tiendas(): Result<List<StoreDto>> = cargarTodo { page -> api.getStores(page = page) }
+    /** Tiendas activas; con `zonaId`, solo las de esa zona (GET /v1/stores?zonaId=…). */
+    suspend fun tiendas(zonaId: String? = null): Result<List<StoreDto>> =
+        cargarTodo { page -> api.getStores(page = page, zonaId = zonaId) }
 
     suspend fun categorias(): Result<List<CategoriaDto>> = listaPlana("las categorías") { api.getCategories() }
 

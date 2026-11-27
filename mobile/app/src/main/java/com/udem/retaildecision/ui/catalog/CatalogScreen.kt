@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.Store
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +41,7 @@ import com.udem.retaildecision.data.remote.dto.ZoneDto
 import com.udem.retaildecision.ui.components.AppTopBar
 import com.udem.retaildecision.ui.components.EmptyState
 import com.udem.retaildecision.ui.components.ErrorBanner
+import com.udem.retaildecision.ui.components.InfoBanner
 import com.udem.retaildecision.ui.components.LabeledValue
 import com.udem.retaildecision.ui.components.LoadingBox
 import com.udem.retaildecision.ui.components.Pill
@@ -46,6 +50,9 @@ import com.udem.retaildecision.ui.components.SearchField
 import com.udem.retaildecision.ui.components.StatusPill
 import com.udem.retaildecision.ui.theme.Warning
 import com.udem.retaildecision.ui.theme.WarningSoft
+import com.udem.retaildecision.ui.zones.IngresoPill
+import com.udem.retaildecision.ui.zones.NivelIngreso
+import com.udem.retaildecision.ui.zones.textoTiendas
 import java.text.Normalizer
 
 /** Minúsculas y sin acentos, para que "leche" encuentre "Léche". */
@@ -57,6 +64,8 @@ fun CatalogScreen(
     viewModel: CatalogViewModel,
     /** 0 = abre en Productos, 1 = abre en Zonas. */
     pestanaInicial: Int,
+    /** Abre el Detalle de zona. */
+    onAbrirZona: (zonaId: String) -> Unit,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
@@ -131,7 +140,29 @@ fun CatalogScreen(
                         LazyColumn(
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) { items(visibles, key = { it.id }) { ZonaCard(it) } }
+                        ) {
+                            if (state.zonasDesdeCopia) {
+                                item { InfoBanner("Sin conexión: se muestran las zonas de la última copia guardada.") }
+                            }
+                            // Solo llega para los 6 perfiles internos cuyo nivel de ingreso no se pudo leer.
+                            state.avisoIngreso?.let { aviso ->
+                                item {
+                                    Text(
+                                        "Nivel de ingreso: ${aviso.lowercase()}.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            items(visibles, key = { it.id }) { z ->
+                                ZonaCard(
+                                    z = z,
+                                    tiendas = state.tiendasPorZona?.let { it[z.id] ?: 0 },
+                                    nivel = state.niveles[z.id],
+                                    onClick = { onAbrirZona(z.id) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -189,9 +220,14 @@ private fun ProductoCard(p: ProductDto) {
     }
 }
 
+/**
+ * @param tiendas tiendas activas de la zona; null = no se pudo saber (sin red y sin copia), y no se muestra.
+ * @param nivel nivel de ingreso vigente; siempre null para el Investigador de mercado (D-28).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ZonaCard(z: ZoneDto) {
-    RetailCard {
+private fun ZonaCard(z: ZoneDto, tiendas: Int?, nivel: NivelIngreso?, onClick: () -> Unit) {
+    RetailCard(onClick = onClick) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -206,8 +242,39 @@ private fun ZonaCard(z: ZoneDto) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 z.descripcion?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (tiendas != null || nivel != null) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        if (tiendas != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(
+                                    Icons.Rounded.Store,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    textoTiendas(tiendas),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        nivel?.let { IngresoPill(it) }
+                    }
+                }
             }
-            StatusPill(text = if (z.activo) "Activa" else "Inactiva", positive = z.activo)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusPill(text = if (z.activo) "Activa" else "Inactiva", positive = z.activo)
+                Icon(
+                    Icons.Rounded.ChevronRight,
+                    contentDescription = "Ver detalle",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

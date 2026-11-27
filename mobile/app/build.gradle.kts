@@ -18,6 +18,8 @@ val urlsLocales = mapOf(
     "API_BASE_URL" to "http://10.0.2.2:3101/", // auth-service
     "CATALOG_BASE_URL" to "http://10.0.2.2:3102/", // catalog-service
     "PRICING_BASE_URL" to "http://10.0.2.2:3103/", // pricing-service
+    "SEGMENTATION_BASE_URL" to "http://10.0.2.2:3112/", // income-segmentation-service
+    "AVAILABILITY_BASE_URL" to "http://10.0.2.2:3114/", // availability-service
     "SYNC_BASE_URL" to "http://10.0.2.2:3118/", // offline-sync-service
 )
 
@@ -28,6 +30,8 @@ val urlsEntrega = mapOf(
     "API_BASE_URL" to urlDeEntrega("retail.release.authUrl", "https://auth-service.PENDIENTE-GCP.invalid/"),
     "CATALOG_BASE_URL" to urlDeEntrega("retail.release.catalogUrl", "https://catalog-service.PENDIENTE-GCP.invalid/"),
     "PRICING_BASE_URL" to urlDeEntrega("retail.release.pricingUrl", "https://pricing-service.PENDIENTE-GCP.invalid/"),
+    "SEGMENTATION_BASE_URL" to urlDeEntrega("retail.release.segmentationUrl", "https://income-segmentation-service.PENDIENTE-GCP.invalid/"),
+    "AVAILABILITY_BASE_URL" to urlDeEntrega("retail.release.availabilityUrl", "https://availability-service.PENDIENTE-GCP.invalid/"),
     "SYNC_BASE_URL" to urlDeEntrega("retail.release.syncUrl", "https://offline-sync-service.PENDIENTE-GCP.invalid/"),
 )
 
