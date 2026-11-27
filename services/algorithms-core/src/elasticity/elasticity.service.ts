@@ -34,6 +34,8 @@ import {
   MIN_DISTINCT_PRICES,
   MIN_OBSERVATIONS,
   PriceQuantity,
+  REGLAS_ELASTICIDAD,
+  ReglasElasticidad,
   roundTo,
 } from './elasticity.math';
 
@@ -60,9 +62,8 @@ const ASSUMPTIONS = (granularity: Granularity) => [
   'Los periodos sin ventas no se observan: no se registra la demanda cero.',
   'No se controlan otros factores que mueven la demanda (promociones, temporada, ingreso, precio de otros productos).',
   'Una elasticidad positiva (la demanda sube con el precio) se marca como atípica.',
-  'El agregado nacional junta las observaciones zona × periodo de todas las zonas en una sola regresión.',
-  'El agregado nacional no separa las diferencias entre zonas (tamaño, ingreso): si la zona que más vende también cobra menos, esa diferencia se lee como efecto del precio.',
-  `Indicador analítico: se exigen al menos ${MIN_OBSERVATIONS} observaciones y ${MIN_DISTINCT_PRICES} precios distintos; con muestras chicas, leer junto con el R² y el número de observaciones.`,
+  'El agregado nacional junta las observaciones zona × periodo de todas las zonas y estima el efecto del precio DENTRO de cada zona (efectos fijos por zona): que una zona venda más y cobre más por su tamaño o ingreso no se lee como efecto del precio.',
+  `Indicador analítico: se exigen al menos ${MIN_OBSERVATIONS} observaciones y ${MIN_DISTINCT_PRICES} precios distintos (al centavo); con pocas observaciones, leer junto con el R² y el número de observaciones.`,
 ];
 
 /** Corridas graficables: solo de elasticidad y completadas. Quien la use agrega `AND …`. */
@@ -91,10 +92,12 @@ const EMPTY_VALUE: ElasticityChartValue = {
  */
 export const MAX_STORABLE_ELASTICITY = 999_999.9999;
 
-const REASONS: Record<InsufficientReason, (observations: number) => string> = {
-  'single-price': () => 'Un solo precio en el periodo: no se puede medir cómo reacciona la demanda al precio.',
+export const REASONS: Record<InsufficientReason, (observations: number) => string> = {
+  'single-price': () => 'Un solo precio en el periodo (o sin cambio de precio dentro de cada zona): no se puede medir cómo reacciona la demanda al precio.',
+  'few-prices': () => `Menos de ${MIN_DISTINCT_PRICES} precios distintos en el periodo: muy poca variación de precio para estimar la elasticidad.`,
   'few-observations': (n) => `Solo ${n} observación(es); se necesitan al menos ${MIN_OBSERVATIONS}.`,
   'invalid-values': () => 'Hay precios o cantidades no positivos.',
+  'constant-quantity': () => 'La cantidad vendida no cambió en el periodo: no se puede medir cómo reacciona la demanda al precio.',
 };
 
 const OUT_OF_RANGE_REASON = (value: number) =>
@@ -644,6 +647,7 @@ export function estimateElasticities(
   rows: SalesRow[],
   names: Map<string, Names>,
   zones: Map<string, string>,
+  reglas: ReglasElasticidad = REGLAS_ELASTICIDAD,
 ): { results: ElasticityResultItem[]; insufficient: InsufficientElasticity[] } {
   const byPresentation = new Map<string, SalesRow[]>();
   for (const row of rows) {
@@ -670,7 +674,7 @@ export function estimateElasticities(
     ];
 
     for (const target of targets) {
-      const outcome = logLogRegression(observationsOf(target.rows));
+      const outcome = logLogRegression(observationsOf(target.rows), reglas);
       const base = {
         presentationId,
         productName: name.product,
@@ -697,7 +701,7 @@ export function estimateElasticities(
         ...base,
         value,
         classification: classifyElasticity(value),
-        rSquared: outcome.rSquared === null ? null : roundTo(outcome.rSquared, 5),
+        rSquared: roundTo(outcome.rSquared, 5),
         atypical: value > 0,
       });
     }
@@ -722,6 +726,7 @@ function baseParameters(params: ElasticityParamsDto, granularity: Granularity): 
     ['granularidad', granularity],
     ['observaciones_minimas', MIN_OBSERVATIONS],
     ['precios_distintos_minimos', MIN_DISTINCT_PRICES],
+    ['agregado_nacional', 'efectos_fijos_por_zona'],
     ...(params.presentationId ? [['presentacion_id', params.presentationId] as [string, string]] : []),
     // Solo si se pidieron: su presencia es lo que distingue una corrida de
     // ventana completa (vigente, D-22) de una exploratoria. diaDelFiltro
@@ -749,5 +754,6 @@ function observationsOf(rows: SalesRow[]): PriceQuantity[] {
   }
   return [...byZonePeriod.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, { quantity, revenue }]) => ({ price: revenue / quantity, quantity }));
+    // La zona va como grupo: el nacional estima la pendiente dentro de cada zona (efectos fijos).
+    .map(([clave, { quantity, revenue }]) => ({ price: revenue / quantity, quantity, group: clave.split('|')[1] }));
 }
