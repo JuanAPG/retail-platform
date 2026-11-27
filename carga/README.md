@@ -142,11 +142,75 @@ perfil** (`sesiones.py --por-perfil 12`). Si faltan, los usuarios extra quedan i
 
 | Qué pide la guía | Herramienta | Estado |
 |---|---|---|
-| Tiempos por servicio y por etapa, errores, 429 aparte | `locust` + `medir/resumen.py` | Listo; corrida real en staging pendiente de los datos |
-| CPU, RAM y disco | `medir/recursos.py` (en la VM) | Listo |
-| Planes de consulta e índices en PostgreSQL y Mongo | `medir/planes.py` | Listo (10k local abajo) |
+| Tiempos por servicio y por etapa, errores, 429 aparte | `locust` + `medir/resumen.py` | **Medido en staging con 10k** (abajo), sin el perfil investigador |
+| CPU, RAM y disco | `medir/recursos.py` (en la VM) | Listo; en staging falta correrlo **en la VM** junto a Locust |
+| Planes de consulta e índices en PostgreSQL y Mongo | `medir/planes.py` | Listo (10k local abajo); en staging se corre en la VM |
 | Caída completa de Redis y su 503 controlado | `medir/redis_caido.py` | Listo **en local**; en staging, Juan Ángel en una ventana acordada (`infra/staging/pruebas-de-fallos.md`) |
 | Caché activa contra omitida, con la sesión vigente | — | **Pendiente con Pamela**: catalog-service cachea en Redis categorías, unidades, municipios y códigos postales (`catalog:*`, TTL 1 h) sin forma de apagarlo. Hay que acordar el control. |
+
+### Staging, 27 de noviembre de 2026 (10k ventas)
+
+**Condiciones.** SHA `309d381` en los 20 servicios (con el arreglo de Redis, #163). Datos: generador
+1.3.0 con 10,000 ventas más las 179 del seed, cargados y verificados por la API (totales iguales a los
+CSV, cobertura de control 77.78 % y 88.89 %). VM de 2 vCPU y 7.5 GiB
+(`docs/evidencia-rendimiento-staging.md`). Corrida `stg-10k` de 05:35 a 05:48 UTC con la forma
+completa y **4 perfiles** (catálogo, analista, gerente, administrador): staging no tiene el rol
+Investigador de mercado, así que los lotes de sync y la propiedad no se midieron. 15 sesiones por
+perfil, 60 usuarios en el pico.
+
+**Locust corrió desde un equipo del equipo, por internet**, no desde la VM: los tiempos incluyen la red
+y la inspección HTTPS del antivirus de ese equipo (ver Limitaciones). Son una cota superior de lo que
+ve un cliente; los de la VM (`docs/evidencia-rendimiento-staging.md`) no tienen esa capa.
+
+| Total | |
+|---|---|
+| Peticiones | 10,061 en 13 min (12.9 por segundo en promedio) |
+| Fallas HTTP | 13 (0.13 %): todas `503 SERVICE_UNAVAILABLE` controlados (ver abajo) |
+| Fallas de negocio | 0 reales. Hubo 17 falsos positivos del validador (el 404 esperado en XML se marcaba como error); corregido después de la corrida |
+| 429 | 0 |
+| p50 / p95 / p99 | 94 / 640 / 2,300 ms |
+
+| Etapa | Usuarios | Peticiones/s | p95 (mediana por segundo) | p95 peor segundo |
+|---|---|---|---|---|
+| calentamiento | 5 | 2.2 | 260 ms | 480 ms |
+| baja | 10 | 4.5 | 250 ms | 640 ms |
+| media | 25 | 11.3 | 320 ms | 650 ms |
+| alta | 50 | 21.3 | 550 ms | 11 s |
+| pico | 60 | 25.5 | 1,400 ms | 3.4 s |
+| recuperación | 10 | 5.6 | 290 ms | 20 s |
+
+| Ruta | Peticiones | p50 | p95 | Comentario |
+|---|---|---|---|---|
+| core-process `/v1/transactions` | 189 | 200 ms | 1,600 ms | La más lenta de las lecturas propias |
+| basket-analysis `/v1/typical-basket` | 294 | 540 ms | 3,600 ms | Lee canastas de core-process por HTTP |
+| demand-forecast `POST /v1/forecast/run` | 138 | 550 ms | 3,900 ms | Lee ventas semanales de core-process y ajusta Holt-Winters |
+| promotion `POST /v1/promotions` | 398 | 150 ms | 510 ms | Valida contra catalog y pricing por HTTP |
+| promotion `PATCH …/approve` | 278 | 96 ms | 300 ms | |
+| workflow `POST /v1/workflow/assignments` | 190 | 130 ms | 370 ms | Reintento idempotente, verifica la recomendación en decision |
+| auth `POST /v1/auth/refresh` | 55 | 360 ms | 1,800 ms | Llegan en ráfaga: las sesiones se abrieron juntas |
+| documents, notifications, monitoring, income-segmentation, decision | — | ≤ 100 ms | 120–180 ms | Sin presión |
+
+**Hallazgos.**
+
+1. **core-process es el cuello de botella.** Su listado de transacciones llega a p95 de 1.6 s, y los
+   que leen de él por HTTP con tope de 3 s se caen en cascada: las **13 fallas** son
+   `503 "core-process-service no respondió en 3 s"` de basket-analysis (12) y demand-forecast (1), en las
+   etapas alta y pico. El 503 es el comportamiento acordado (D-25: dependencia caída, respuesta
+   controlada), pero marca el límite: con 50–60 usuarios simultáneos core-process ya no contesta a tiempo.
+2. **Saturación entre 50 y 60 usuarios.** Pasar de 50 a 60 usuarios subió el rendimiento solo de 21.3 a
+   25.5 peticiones/s, mientras el p95 típico pasó de 550 a 1,400 ms. Coincide con la VM de 2 vCPU
+   (Juan midió el mejor rendimiento con 5 solicitudes simultáneas y caída con 10 en un banco más
+   pesado por petición).
+3. **Dos pausas globales** (segundo 428–433 en la etapa alta, y 678 en el pico): todos los servicios a
+   la vez dejaron de responder 6–20 s (0.1–4 peticiones/s). Al afectar a todos juntos apunta a la
+   infraestructura (VM, Caddy, red o el cliente) y no a un servicio. **Sin `recursos.py` en la VM no se
+   puede atribuir**: es lo primero a medir en la siguiente corrida.
+4. **Sin rate limit ni fallas de sesión:** 0 respuestas 429 y 0 respuestas 401 en 13 min, con 55
+   renovaciones de token.
+
+**Pendiente para cerrar la medición en staging:** el rol Investigador (perfil de sync y propiedad),
+`recursos.py` y `planes.py` en la VM durante y después de la corrida, la caída de Redis (Juan Ángel) y la
+caché activa contra omitida (con Pamela). Con eso, repetir con 100k (carga de ~52 min a 32 ventas/s).
 
 ### Resultados locales (no son la medición de nube)
 
@@ -181,6 +245,12 @@ demand-forecast respondían **500**; se corrigió en `fix/fastapi-redis-503`.
   ciclo de gevent de Locust, ensuciando los tiempos de todos (se vieron respuestas de 10 s en
   servicios que contestaban en 60 ms). En local, usa `--saltar-caidos`. En staging no se usa: ahí un
   servicio caído es una falla que hay que medir.
+- **Antivirus que inspecciona HTTPS** (Avast en el equipo de la medición): re-firma cada certificado
+  con su raíz, que está en el almacén de Windows pero no en `certifi`, el paquete de `requests`. Sin
+  arreglo, todas las peticiones de Locust fallan con status 0 (`CERTIFICATE_VERIFY_FAILED`) aunque
+  `sesiones.py` y `preparar.py` sí conecten. El locustfile junta las raíces del sistema y las de certifi
+  en `carga/.ca-sistema.pem` y verifica contra él (la verificación sigue activa). La inspección agrega
+  latencia: para cifras limpias, exceptúa el host en el antivirus o corre Locust desde la VM.
 - **`/v1/health` no se publica en staging** (`routes.caddy`, `@interno`): Locust revisa el estado con
   `GET /v1/monitoring/services` y una sesión de administrador.
 - **Un solo proceso:** la cola de promociones por aprobar y el registro de lotes para la propiedad viven
