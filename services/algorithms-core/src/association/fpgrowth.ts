@@ -14,6 +14,7 @@ import {
   buildResult,
   checkThresholds,
   compareItems,
+  EstadisticasAsociacion,
   FrequentItemset,
   minCountOf,
 } from './apriori';
@@ -32,7 +33,11 @@ interface Path {
   count: number;
 }
 
-export function fpGrowth(baskets: string[][], params: AprioriParams): AprioriResult {
+export function fpGrowth(
+  baskets: string[][],
+  params: AprioriParams,
+  estadisticas?: EstadisticasAsociacion,
+): AprioriResult {
   checkThresholds(params);
   const { minSupport, minConfidence, maxItemsetSize } = params;
 
@@ -41,6 +46,11 @@ export function fpGrowth(baskets: string[][], params: AprioriParams): AprioriRes
 
   const minCount = minCountOf(minSupport, total);
   const itemsets: FrequentItemset[] = [];
+  const e = estadisticas;
+  if (e) {
+    Object.assign(e, { canastas: total, conteoMinimo: minCount,
+                       productos: new Set(baskets.flat()).size });
+  }
 
   // Un producto repetido en la misma canasta cuenta una sola vez.
   mine(
@@ -48,6 +58,9 @@ export function fpGrowth(baskets: string[][], params: AprioriParams): AprioriRes
     [],
   );
 
+  if (e) {
+    for (const { items } of itemsets) e.frecuentesPorTamano[items.length] = (e.frecuentesPorTamano[items.length] ?? 0) + 1;
+  }
   return buildResult(itemsets, total, minConfidence);
 
   /**
@@ -56,7 +69,14 @@ export function fpGrowth(baskets: string[][], params: AprioriParams): AprioriRes
    * ese producto (los caminos que llevan a él) hasta `maxItemsetSize`.
    */
   function mine(paths: Path[], suffix: string[]) {
-    for (const [item, nodes] of buildTree(paths, minCount)) {
+    const arbol = buildTree(paths, minCount);
+    if (e) {
+      const nodos = [...arbol.values()].reduce((suma, lista) => suma + lista.length, 0);
+      if (e.arboles === 0) e.nodosArbolInicial = nodos;
+      e.arboles++;
+      e.nodos += nodos;
+    }
+    for (const [item, nodes] of arbol) {
       const count = nodes.reduce((sum, node) => sum + node.count, 0);
       const items = [item, ...suffix];
       itemsets.push({ items: [...items].sort(), count, support: count / total });
